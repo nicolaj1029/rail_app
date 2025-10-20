@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "PL", "operator": "PKP", "service_type_hint": "IC", "dep_station": "Warszawa Wschodnia", "arr_station": "Brest Centralny", "dep_time": "2025-12-01T07:00:00", "arr_time": "2025-12-01T12:00:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": true,
+    "is_long_domestic": false
+  }
+}

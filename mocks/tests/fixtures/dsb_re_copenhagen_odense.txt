@@ -1,0 +1,9 @@
+PNR: DSB-55K7
+Operator: DSB
+Train: RE 123
+From: København H
+To: Odense
+Date: 20/11/2025 14:22
+Scheduled Arr: 16:12
+Bike reservation required
+Complaints

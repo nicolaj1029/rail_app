@@ -1,0 +1,10 @@
+PNR: ABC123
+Operator: SNCF
+Train: TGV 1234
+From: Paris Gare de Lyon
+To: Lyon Part-Dieu
+Date: 12/11/2025 08:10
+Scheduled Arr: 10:10
+CIV
+Fastest
+Non-refundable

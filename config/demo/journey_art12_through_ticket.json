@@ -1,0 +1,11 @@
+{
+  "journey": {
+    "bookingRef": "PNR-ALL-ONE",
+    "seller_type": "operator",
+    "segments": [
+      {"carrier": "SNCF", "pnr": "PNR-ALL-ONE"},
+      {"carrier": "DB", "pnr": "PNR-ALL-ONE"}
+    ]
+  },
+  "meta": {"through_ticket_disclosure": "Gennemgående", "single_txn_operator": "Ja"}
+}

@@ -1,0 +1,8 @@
+SNCF e-ticket
+Passenger: Dupont
+PNR: TGVABC
+Train: TGV 8412
+Paris Gare de Lyon (08:04) → Lyon Part-Dieu (10:41)
+Class: 2
+Ticket: 1187-1234567890
+Date: 20/03/2025

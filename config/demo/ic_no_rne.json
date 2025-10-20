@@ -1,0 +1,26 @@
+{
+  "journey": {
+    "bookingRef": {"value": "JKL567", "score": 0.85},
+    "operatorName": {"value": "DSB", "score": 0.8},
+    "trainNo": {"value": "IC 128", "score": 0.8},
+    "trainCategory": {"value": "IC", "score": 0.8},
+    "ticketPrice": {"value": "299.00 DKK", "score": 0.85},
+    "depStation": {"value": "Aalborg St.", "score": 0.85},
+    "arrStation": {"value": "København H", "score": 0.85},
+    "depDate": {"value": "2025-10-01", "score": 0.85},
+    "schedDepTime": {"value": "08:12", "score": 0.8},
+    "schedArrTime": {"value": "12:02", "score": 0.8},
+    "segments": [
+      {
+        "trainNo": "IC 128",
+        "operator": "DSB",
+        "origin": "Aalborg St.",
+        "destination": "København H",
+        "schedDep": "2025-10-01T08:12:00+02:00",
+        "schedArr": "2025-10-01T12:02:00+02:00",
+        "euTerritory": true
+      }
+    ],
+    "sourceHashes": ["sha256:demo-ic-norne"]
+  }
+}

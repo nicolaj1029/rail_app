@@ -1,0 +1,33 @@
+{
+  "journey": {
+    "bookingRef": {"value": "XYZ789", "score": 0.9},
+    "operatorName": {"value": "SNCF", "score": 0.9},
+    "trainNo": {"value": "TGV INOUI 8452", "score": 0.92},
+    "trainCategory": {"value": "TGV INOUI", "score": 0.9},
+    "classOfService": {"value": "1", "score": 0.7},
+    "ticketPrice": {"value": "62.00 EUR", "score": 0.95},
+    "depStation": {"value": "Paris Gare de Lyon", "score": 0.9},
+    "arrStation": {"value": "Lyon Part-Dieu", "score": 0.9},
+    "depDate": {"value": "2025-08-02", "score": 0.9},
+    "schedDepTime": {"value": "10:12", "score": 0.9},
+    "schedArrTime": {"value": "12:14", "score": 0.9},
+    "actualDepTime": {"value": "10:25", "score": 0.6},
+    "actualArrDate": {"value": "2025-08-02", "score": 0.9},
+    "actualArrTime": {"value": "12:48", "score": 0.85},
+    "segments": [
+      {
+        "trainNo": "TGV INOUI 8452",
+        "operator": "SNCF",
+        "origin": "Paris Gare de Lyon",
+        "destination": "Lyon Part-Dieu",
+        "schedDep": "2025-08-02T10:12:00+02:00",
+        "schedArr": "2025-08-02T12:14:00+02:00",
+        "actDep": "2025-08-02T10:25:00+02:00",
+        "actArr": "2025-08-02T12:48:00+02:00",
+        "delayMinutes": 34,
+        "euTerritory": true
+      }
+    ],
+    "sourceHashes": ["sha256:demo-tgv-30m"]
+  }
+}

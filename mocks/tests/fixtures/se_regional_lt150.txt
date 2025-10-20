@@ -1,0 +1,14 @@
+SJ Regional (SE) — <150 km
+Scope: regional_domestic_lt150
+Operator: SJ
+PNR: SE-RG-7412XK
+From: Uppsala
+To: Stockholm C
+Date: 12/03/2025 08:12
+Scheduled Arr: 08:48
+Train: R 8172
+Category: REG
+Class: 2nd
+Through ticket disclosure: Not applicable
+Contract type: Single (domestic)
+Price: 129 SEK

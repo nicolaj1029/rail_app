@@ -1,0 +1,14 @@
+ZSSK Rýchlik (SK) — Long domestic
+Scope: long_domestic
+Operator: ZSSK
+PNR: SK-LD-55Q9NM
+From: Košice
+To: Bratislava hl.st.
+Date: 15/03/2025 13:07
+Scheduled Arr: 18:05
+Train: R 614
+Category: R
+Class: 2nd
+Contract type: Single (domestic long-distance)
+Through ticket disclosure: Not applicable
+Price: 21.90 EUR

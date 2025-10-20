@@ -1,0 +1,6 @@
+Trenitalia - Frecciabianca BASE
+Da: Bologna Centrale
+A: Milano Centrale
+Partenza: 7/4 11.17
+Arrivo: 7/4 13.25
+Treno: FB 8621

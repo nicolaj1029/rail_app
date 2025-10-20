@@ -1,0 +1,14 @@
+PKP Intercity IC (PL) — Intl beyond EU
+Scope: intl_beyond_eu
+Operator: PKP Intercity
+PNR: PL-INT-8ZD2RA
+From: Warszawa Centralna
+To: Lviv
+Date: 10/03/2025 09:10
+Scheduled Arr: 15:45
+Train: IC 23105
+Category: IC
+Class: 2nd
+Contract type: Separate segments (agency)
+Through ticket disclosure: Separate contracts
+Price: 39.00 EUR

@@ -1,0 +1,10 @@
+PNR: LIL-PAR-447
+Operator: SNCF
+Train: TGV 8123
+From: Lille Europe
+To: Paris Nord
+Date: 29/11/2025 08:05
+Scheduled Arr: 09:04
+CIV
+Fastest
+Non-refundable

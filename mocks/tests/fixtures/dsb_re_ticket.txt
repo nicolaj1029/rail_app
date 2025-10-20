@@ -1,0 +1,7 @@
+DSB Billet
+PNR: DSB7788   Train: RE 2245
+Fra: København H
+Til: Odense
+Afgang: 12/05/2025 15:02
+Klasse: 2
+Billetnr.: DK-20250512-0001

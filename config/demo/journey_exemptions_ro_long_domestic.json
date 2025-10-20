@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "RO", "operator": "CFR", "service_type_hint": "IC", "dep_station": "București Nord", "arr_station": "Cluj-Napoca", "dep_time": "2025-10-06T09:15:00", "arr_time": "2025-10-06T15:45:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": true
+  }
+}

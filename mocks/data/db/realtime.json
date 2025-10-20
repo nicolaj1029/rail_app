@@ -1,0 +1,10 @@
+{
+  "segments":[
+    {
+      "trainId":"ICE706_20250405",
+      "dep":{"scheduled":"2025-04-05T09:14:00+02:00","actual":"2025-04-05T09:55:00+02:00","delayMin":41},
+      "arr":{"scheduled":"2025-04-05T12:28:00+02:00","actual":"2025-04-05T13:30:00+02:00","delayMin":62},
+      "causeCode":"INFRA"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "segments": [
+    {
+      "carrier":"DB","trainNo":"706","category":"ICE",
+      "dep":{"time":"2025-04-05T09:14:00+02:00","station":{"name":"Frankfurt(Main) Hbf","uic":"008000105","country":"DE"}},
+      "arr":{"time":"2025-04-05T12:28:00+02:00","station":{"name":"Berlin Hbf","uic":"008011160","country":"DE"}}
+    }
+  ]
+}

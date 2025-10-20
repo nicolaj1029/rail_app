@@ -1,0 +1,19 @@
+{
+  "name": "rail_app",
+  "version": "1.0.0",
+  "description": "Jeg er jurist med speciale i EU-passagerrettigheder og erstatningsret, og udvikler en automatisk portal, hvor togpassagerer kan få udbetalt kompensation eller refusion inden for 24 timer — i fuld overensstemmelse med EU-forordning 2021/782 og CIV-reglerne.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "groq-cli": "^0.4.1"
+  }
+}

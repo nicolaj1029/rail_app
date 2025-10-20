@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Print A6 Ticket</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    @page{size:A6;margin:10mm}
+    .sheet{width:105mm;height:148mm;padding:8mm;background:var(--bg);border:1px solid #E5ECF5;display:grid;grid-template-rows:auto 1fr auto;gap:8mm}
+    .top{display:flex;justify-content:space-between;align-items:center}
+    .logo{width:18mm;height:18mm;background:#E5ECF5;border-radius:3mm}
+    .qr{width:40mm;height:40mm}
+    .grid{display:grid;gap:3mm}
+    .row{display:flex;gap:6mm}
+    .tag{font-size:10pt}
+    .small{font-size:9pt}
+  </style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div>
+      <div class="h1">DEPARTURE TICKET — Trenitalia | 2nd</div>
+      <div class="small">Valid: 2025-10-20 08:00–23:59</div>
+    </div>
+    <div class="qr">QR: (scanbar)</div>
+  </div>
+
+  <div class="grid">
+    <div class="row"><span class="tag">From</span> Bologna Centrale</div>
+    <div class="row"><span class="tag">To</span> Milano Centrale</div>
+    <div class="row"><span class="tag">Coach</span> 5 <span class="tag">Seat</span> 12B <span class="tag">Class</span> 2nd</div>
+    <div class="row"><span class="tag">Name</span> Jane Doe</div>
+    <div class="row"><span class="tag">Price</span> 49.90 EUR</div>
+    <div class="row"><span class="tag">Ticket</span> AB12C3 <span class="tag">PNR</span> ZX8QK1</div>
+  </div>
+
+  <div class="small">T&Cs: Non-transferable; refunds per operator policy. Support: +39 123 456 789 — help.rail.example</div>
+</div>
+</body>
+</html>

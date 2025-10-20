@@ -1,0 +1,11 @@
+{
+  "name": "rail-app-groq-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "groq-js": "^1.12.0"
+  },
+  "scripts": {
+    "query": "node ./query.mjs"
+  }
+}

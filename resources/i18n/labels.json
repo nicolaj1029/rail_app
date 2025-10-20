@@ -1,0 +1,101 @@
+{
+  "date": [
+    "Date","Dato","Datum","Data","Fecha","Päivä","Ημερομηνία","Дата",
+    "Dátum","Data (RO)","Data (PL)","Data (PT)","Data (IT)","Data (ES)","Data (MT)",
+    "Diena","Diena (LV)","Diena (LT)","Kuupäev","Kuupäev (ET)",
+    "Data uscita","Data partenza","Data e ora","Data/Ora",
+    "Reisedato","Reisedatum","Reisedag",
+    "Datum odjezdu","Datum příjezdu","Valutad","Valørdato"
+  ],
+  "dep_time": [
+    "Dep time","Dep.","Departure","Departure time","Time of departure",
+    "Départ","Heure de départ","Abfahrt","Abf.","Abfahrtszeit",
+    "Afgang","Afg.","Avgång","Avgångstid","Partenza","Ora partenza","Ora di partenza",
+    "Salida","Hora de salida","Partida","Hora de partida",
+    "Vertrek","Vertrektijd","Lähtö","Lähtöaika",
+    "Αναχώρηση","Čas odjezdu","Odjezd","Godzina odjazdu","Plecarea","Ora plecării",
+    "Време на заминаване","Vreme polaska","Vrijeme polaska",
+    "Udgår kl.","Afgang kl."
+  ],
+  "arr_time": [
+    "Arr time","Arr.","Arrival","Arrival time","Time of arrival",
+    "Arrivée","Heure d'arrivée","Ankunft","Ank.","Ankunftszeit",
+    "Ankomst","Ankomsttid","Arrivo","Ora arrivo","Ora di arrivo",
+    "Llegada","Hora de llegada","Chegada","Hora de chegada",
+    "Aankomst","Aankomsttijd","Saapuminen","Saapumisaika",
+    "Άφιξη","Příjezd","Čas příjezdu","Przyjazd","Godzina przyjazdu",
+    "Sosire","Ora sosirii","Пристигане","Dolazak","Vrijeme dolaska"
+  ],
+  "dep_station": [
+    "Departure station","Station of departure","Gare de départ","Abfahrtsbahnhof","Abf. Bhf.",
+    "Afgangsstation","Avgångsstation","Stazione di partenza","Partenza (stazione)","Partenza",
+    "Estación de origen","Estación de salida","Estação de partida","Vertrekstation",
+    "Lähtöasema","Σταθμός αναχώρησης","Stanice odjezdu","Stacja odjazdu",
+    "Stația de plecare","Гара на заминаване","Postaja polaska","Postaja odhoda",
+    "Stacija izbraukšanai","Išeinanti stotis","Väljumisjaam","From station","From","Da","De","Von","Från"
+  ],
+  "arr_station": [
+    "Arrival station","Destination station","Destination","Gare d'arrivée","Ankunftsbahnhof","Ank. Bhf.",
+    "Bestemmelsesstation","Ankomststation","Stazione di arrivo","Arrivo (stazione)","Arrivo",
+    "Estación de destino","Estación de llegada","Estação de chegada","Bestemmingsstation",
+    "Saapumisasema","Σταθμός άφιξης","Stanice příjezdu","Stacja przyjazdu",
+    "Stația de sosire","Гара на пристигане","Odredišna postaja","Ciljna postaja",
+    "Stacija ierašanās","Atvykimo stotis","Saabumisjaam","To station","To","A","À","Til","Till","Nach","Vers"
+  ],
+  "from": [
+    "From","Fra","Da","De","Von","Från","Ab","Desde","Di","Uit","Frá","No",
+    "Od","Z","Iz","Din","От"
+  ],
+  "to": [
+    "To","Til","Till","Nach","Vers","À","A","Para","Hasta","Per","Até","Kuni",
+    "Do","Na","Către","До","U","Za","Uz","Į","I"
+  ],
+  "train_no": [
+    "Train no","Train number","N° train","Numéro de train",
+    "Zugnummer","Zug-Nr.","Train-Nr.","Tognummer","Tog nr.","Tog-nr.",
+    "Tågnummer","Treno","N. treno","Numero treno","Número de tren","Nº tren",
+    "Número do comboio","Nº comboio","Treinnummer","Trein nr.",
+    "Junannumero","Αρ. τρένου","Číslo vlaku","Nr pociągu","Număr tren",
+    "Номер на влака","Broj vlaka","Številka vlaka","Numri i trenit"
+  ],
+  "price": [
+    "Price","Ticket price","Total price","Fare","Amount",
+    "Pris","Billetpris","Sum","Beløb",
+    "Preis","Fahrpreis","Gesamtpreis","Betrag",
+    "Prix","Tarif","Montant","Total",
+    "Precio","Importe","Tarifa","Total (ES)","Total",
+    "Preço","Tarifa","Total (PT)","Valor",
+    "Prezzo","Tariffa","Importo","Totale","Tot. Bigl.","Tot. biglietto",
+    "Prijs","Tarief","Bedrag",
+    "Hinta","Summa",
+    "Τιμή","Ποσό",
+    "Cena","Částka",
+    "Cena (PL)","Kwota",
+    "Preț","Suma",
+    "Цена","Iznos","EUR","€"
+  ],
+  "class": [
+    "Class","Classe","Klasse","Clase","Classement",
+    "Classe (IT)","Class (EN)","2ª Classe","1ª Classe","2. Klasse","1. Klasse",
+    "2nd class","1st class","2ª","1ª","2e classe","1re classe"
+  ],
+  "carriage": [
+    "Carrozza","Car.","Coach","Vettura","Wagen","Vogn","Vagn","Car","Voiture","Coche","Carruagem","Vagon"
+  ],
+  "seat": [
+    "Posti","Posto","Seat","Sitzplatz","Place","Asiento","Assento","Miejsce","Sæde","Sits","Loc","Mesto"
+  ],
+  "window": [
+    "Finestrino","Window","Fenêtre","Fenster","Vindue","Ventana","Janela","Okno"
+  ],
+  "platform": [
+    "Platform","Voie","Gleis","Binario","Peron","Perron","Andén","Quai","Spor","Bahnsteig","Laituri","Perão"
+  ],
+  "pnr": [
+    "PNR","Codice PNR","Codice prenotazione","Booking code","Riferimento prenotazione","Ref. prenotazione",
+    "Locator","Record locator","Codice","Reservation code"
+  ],
+  "tax_code": [
+    "P.IVA","Partita IVA","Codice fiscale","VAT No","IVA","Non fiscale","Cod. fiscale"
+  ]
+}

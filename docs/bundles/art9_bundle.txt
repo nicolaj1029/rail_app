@@ -1,0 +1,76 @@
+==============================
+Art. 9 Bundle (Routes, Controllers, Services, Templates)
+Generated: 2025-10-16
+==============================
+
+NOTE: This bundle collects relevant source for Article 9 (information duties) end-to-end so an external checker/chatbot can review it in one file. Paths are relative to project root.
+
+---
+File: config/routes.php (relevant excerpts)
+---
+[BEGIN]
+<PASTE: config/routes.php>
+[END]
+
+---
+File: src/Controller/Api/ComputeController.php
+---
+[BEGIN]
+<PASTE: src/Controller/Api/ComputeController.php>
+[END]
+
+---
+File: src/Service/ExemptionProfileBuilder.php
+---
+[BEGIN]
+<PASTE: src/Service/ExemptionProfileBuilder.php>
+[END]
+
+---
+File: config/data/exemption_matrix.json
+---
+[BEGIN]
+<PASTE: config/data/exemption_matrix.json>
+[END]
+
+---
+File: src/Service/Art9Evaluator.php
+---
+[BEGIN]
+<PASTE: src/Service/Art9Evaluator.php>
+[END]
+
+---
+File: src/Service/OcrHeuristicsMapper.php
+---
+[BEGIN]
+<PASTE: src/Service/OcrHeuristicsMapper.php>
+[END]
+
+---
+File: src/Controller/UploadController.php (upload → analyze flow)
+---
+[BEGIN]
+<PASTE: src/Controller/UploadController.php>
+[END]
+
+---
+File: src/Controller/Api/DemoController.php (mock tickets)
+---
+[BEGIN]
+<PASTE: src/Controller/Api/DemoController.php>
+[END]
+
+---
+File: templates/Upload/index.php
+---
+[BEGIN]
+<PASTE: templates/Upload/index.php>
+[END]
+
+---
+File: templates/Upload/result.php
+---
+[BEGIN]
+<PASTE: templates/Upload/result.php>
+[END]

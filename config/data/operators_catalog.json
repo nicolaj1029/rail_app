@@ -1,0 +1,38 @@
+{
+  "operators": [
+    { "name": "SNCF", "aliases": ["sncf", "voyages sncf", "inoui", "oui.sncf", "sncf connect"], "country": "FR", "products": ["TGV", "TER", "Intercités", "TGV INOUI", "OUIGO"] },
+    { "name": "Deutsche Bahn", "aliases": ["db", "db fernverkehr", "deutsche bahn"], "country": "DE", "products": ["ICE", "IC", "EC", "RE"] },
+    { "name": "DSB", "aliases": ["dsb"], "country": "DK", "products": ["IC", "Lyn", "R"] },
+    { "name": "SJ", "aliases": ["sj ab", "sj"], "country": "SE", "products": ["Snabbtåg", "IC", "Regional"] },
+    { "name": "ÖBB", "aliases": ["oebb", "öbb", "oebb pj", "oebbpj"], "country": "AT", "products": ["Railjet", "RJ", "Nightjet", "NJ", "EC", "IC"] },
+    { "name": "SBB CFF FFS", "aliases": ["sbb", "cff", "ffs"], "country": "CH", "products": ["IC", "IR", "EC"] },
+    { "name": "Trenitalia", "aliases": ["trenitalia", "fs"], "country": "IT", "products": ["Frecciarossa", "FR", "Frecciargento", "FA", "Frecciabianca", "FB", "IC"] },
+    { "name": "Renfe", "aliases": ["renfe"], "country": "ES", "products": ["AVE", "Alvia", "Avlo", "IC"] },
+    { "name": "NS", "aliases": ["ns"], "country": "NL", "products": ["IC", "Sprinter"] },
+    { "name": "PKP Intercity", "aliases": ["pkp", "pkp ic", "intercity", "pkp intercity"], "country": "PL", "products": ["EIP", "EIC", "IC", "TLK"] },
+    { "name": "SNCB/NMBS", "aliases": ["sncb", "nmbs"], "country": "BE", "products": ["IC", "S", "P"] },
+    { "name": "ČD", "aliases": ["cd", "ceske drahy", "čd"], "country": "CZ", "products": ["EC", "IC", "RJ"] },
+    { "name": "ZSSK", "aliases": ["zssk"], "country": "SK", "products": ["IC", "R"] },
+    { "name": "VR", "aliases": ["vr"], "country": "FI", "products": ["IC", "Pendolino"] },
+    { "name": "Eurostar", "aliases": ["eurostar", "es"], "country": "GB", "products": ["Eurostar"] },
+    { "name": "Thalys", "aliases": ["thalys"], "country": "FR", "products": ["Thalys"] }
+  ],
+  "product_aliases": {
+    "tgv": "TGV",
+    "inoui": "TGV INOUI",
+    "ouigo": "OUIGO",
+    "ice": "ICE",
+    "ic": "IC",
+    "ec": "EC",
+    "re": "RE",
+    "rj": "Railjet",
+    "railjet": "Railjet",
+    "nj": "Nightjet",
+    "nightjet": "Nightjet",
+    "ave": "AVE",
+    "fr": "Frecciarossa",
+    "fa": "Frecciargento",
+    "fb": "Frecciabianca",
+    "pendolino": "Pendolino"
+  }
+}

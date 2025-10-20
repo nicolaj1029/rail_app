@@ -1,0 +1,275 @@
+{
+  "scenarios": [
+    {
+      "id": "db_pdf_separate_contracts_agency",
+      "media": {
+        "pdf": "tests/fixtures/db_ticket_separate.pdf"
+      },
+      "journey": {
+        "segments": [
+          {
+            "operator": "DB",
+            "trainCategory": "ICE",
+            "country": "DE",
+            "pnr": "X1",
+            "schedArr": "2025-03-05T12:00:00",
+            "actArr": "2025-03-05T14:30:00"
+          },
+          {
+            "operator": "CD",
+            "trainCategory": "EC",
+            "country": "CZ",
+            "pnr": "Y2",
+            "schedArr": "2025-03-05T16:00:00",
+            "actArr": "2025-03-05T17:45:00"
+          }
+        ],
+        "ticketPrice": {
+          "value": "89.00 EUR"
+        },
+        "operatorName": {
+          "value": "DB"
+        },
+        "trainCategory": {
+          "value": "ICE"
+        },
+        "country": {
+          "value": "DE"
+        },
+        "seller_type": "agency",
+        "is_international_inside_eu": true
+      },
+      "art12_meta": {
+        "through_ticket_disclosure": "Særskilte",
+        "separate_contract_notice": "Nej"
+      },
+      "art9_meta": {
+        "info_before_purchase": "Delvist",
+        "info_on_rights": "Nej",
+        "info_during_disruption": "Nej",
+        "language_accessible": "unknown",
+        "accessibility_format": "unknown"
+      },
+      "refusion_meta": {
+        "reason_missed_conn": true,
+        "claim_rerouting": true,
+        "reroute_info_within_100min": "Nej",
+        "meal_offered": "Nej",
+        "alt_transport_provided": "Nej"
+      },
+      "compute": {
+        "euOnly": true,
+        "extraordinary": false,
+        "minPayout": 4
+      }
+    },
+    {
+      "id": "long_domestic_sk_exemptions",
+      "media": {
+        "png": "tests/fixtures/sk_ticket.png"
+      },
+      "journey": {
+        "segments": [
+          {
+            "operator": "ZSSK",
+            "trainCategory": "R",
+            "country": "SK",
+            "pnr": "ZZ9",
+            "schedArr": "2025-02-10T09:00:00",
+            "actArr": "2025-02-10T10:05:00"
+          }
+        ],
+        "ticketPrice": {
+          "value": "12.00 EUR"
+        },
+        "operatorName": {
+          "value": "ZSSK"
+        },
+        "trainCategory": {
+          "value": "R"
+        },
+        "country": {
+          "value": "SK"
+        },
+        "is_long_domestic": true
+      },
+      "art12_meta": [],
+      "art9_meta": {
+        "info_before_purchase": "unknown",
+        "info_on_rights": "unknown",
+        "info_during_disruption": "unknown",
+        "language_accessible": "unknown",
+        "accessibility_format": "unknown"
+      },
+      "refusion_meta": {
+        "reason_delay": true,
+        "claim_refund_ticket": false,
+        "claim_rerouting": true,
+        "reroute_info_within_100min": "Ved ikke",
+        "meal_offered": "Ved ikke"
+      },
+      "compute": {
+        "euOnly": true,
+        "minPayout": 4
+      }
+    },
+    {
+      "id": "intl_beyond_eu_partial",
+      "media": {
+        "pdf": "tests/fixtures/int_beyond_eu.pdf"
+      },
+      "journey": {
+        "segments": [
+          {
+            "operator": "PKP",
+            "trainCategory": "IC",
+            "country": "PL",
+            "pnr": "PL1",
+            "schedArr": "2025-04-01T18:00:00",
+            "actArr": "2025-04-01T19:20:00"
+          },
+          {
+            "operator": "BY",
+            "trainCategory": "INT",
+            "country": "BY",
+            "pnr": "BY2",
+            "schedArr": "2025-04-01T22:00:00",
+            "actArr": "2025-04-01T22:00:00"
+          }
+        ],
+        "ticketPrice": {
+          "value": "60.00 EUR"
+        },
+        "operatorName": {
+          "value": "PKP"
+        },
+        "trainCategory": {
+          "value": "IC"
+        },
+        "country": {
+          "value": "PL"
+        },
+        "is_international_beyond_eu": true
+      },
+      "art12_meta": {
+        "through_ticket_disclosure": "unknown"
+      },
+      "art9_meta": {
+        "info_before_purchase": "unknown",
+        "info_on_rights": "Delvist",
+        "info_during_disruption": "Ja",
+        "language_accessible": "Delvist",
+        "accessibility_format": "unknown"
+      },
+      "refusion_meta": {
+        "reason_cancellation": true,
+        "claim_refund_ticket": true,
+        "refund_requested": "Nej",
+        "meal_offered": "Ja"
+      },
+      "compute": {
+        "euOnly": false,
+        "minPayout": 0
+      }
+    },
+    {
+      "id": "sncf_png_through_ticket_ok",
+      "media": {
+        "png": "tests/fixtures/sncf_ticket_through.png"
+      },
+      "journey": {
+        "segments": [
+          {
+            "operator": "SNCF",
+            "trainCategory": "TGV",
+            "country": "FR",
+            "pnr": "ABC123",
+            "schedArr": "2025-01-02T10:00:00",
+            "actArr": "2025-01-02T11:15:00"
+          }
+        ],
+        "ticketPrice": {
+          "value": "120.00 EUR"
+        },
+        "operatorName": {
+          "value": "SNCF"
+        },
+        "trainCategory": {
+          "value": "TGV"
+        },
+        "country": {
+          "value": "FR"
+        },
+        "is_international_inside_eu": true
+      },
+      "art12_meta": {
+        "through_ticket_disclosure": "Gennemgående",
+        "single_txn_operator": "Ja",
+        "separate_contract_notice": "unknown"
+      },
+      "art9_meta": {
+        "info_before_purchase": "Ja",
+        "info_on_rights": "Delvist",
+        "info_during_disruption": "unknown",
+        "language_accessible": "Ja",
+        "accessibility_format": "unknown"
+      },
+      "refusion_meta": {
+        "reason_delay": true,
+        "claim_refund_ticket": false,
+        "claim_rerouting": true,
+        "reroute_info_within_100min": "Ja",
+        "meal_offered": "Ja"
+      },
+      "compute": {
+        "euOnly": true,
+        "minPayout": 4
+      }
+    },
+    {
+      "id": "denial_paths_extraordinary_refund",
+      "media": {
+        "png": "tests/fixtures/denial_sample.png"
+      },
+      "journey": {
+        "segments": [
+          {
+            "operator": "DSB",
+            "trainCategory": "REG",
+            "country": "DK",
+            "pnr": "DK9",
+            "schedArr": "2025-05-01T08:00:00",
+            "actArr": "2025-05-01T08:40:00"
+          }
+        ],
+        "ticketPrice": {
+          "value": "8.00 EUR"
+        },
+        "operatorName": {
+          "value": "DSB"
+        },
+        "trainCategory": {
+          "value": "REG"
+        },
+        "country": {
+          "value": "DK"
+        }
+      },
+      "art12_meta": {
+        "through_ticket_disclosure": "unknown"
+      },
+      "art9_meta": {
+        "info_on_rights": "unknown"
+      },
+      "refusion_meta": {
+        "reason_delay": true,
+        "claim_refund_ticket": true
+      },
+      "compute": {
+        "euOnly": true,
+        "extraordinary": true,
+        "minPayout": 4
+      }
+    }
+  ]
+}

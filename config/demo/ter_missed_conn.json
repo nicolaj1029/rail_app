@@ -1,0 +1,29 @@
+{
+  "journey": {
+    "operatorName": {"value": "SNCF TER", "score": 0.8},
+    "trainNo": {"value": "TER 872345", "score": 0.75},
+    "trainCategory": {"value": "TER", "score": 0.8},
+    "ticketPrice": {"value": "19.50 EUR", "score": 0.8},
+    "depStation": {"value": "Dijon", "score": 0.8},
+    "arrStation": {"value": "Besançon Viotte", "score": 0.8},
+    "depDate": {"value": "2025-07-19", "score": 0.8},
+    "schedDepTime": {"value": "09:30", "score": 0.7},
+    "schedArrTime": {"value": "10:45", "score": 0.7},
+    "actualArrTime": {"value": "11:25", "score": 0.6},
+    "missedConnectionAt": {"value": "Besançon Franche-Comté TGV", "score": 0.4},
+    "segments": [
+      {
+        "trainNo": "TER 872345",
+        "operator": "SNCF TER",
+        "origin": "Dijon",
+        "destination": "Besançon Viotte",
+        "schedDep": "2025-07-19T09:30:00+02:00",
+        "schedArr": "2025-07-19T10:45:00+02:00",
+        "actArr": "2025-07-19T11:25:00+02:00",
+        "delayMinutes": 40,
+        "euTerritory": true
+      }
+    ],
+    "sourceHashes": ["sha256:demo-ter-missed"]
+  }
+}

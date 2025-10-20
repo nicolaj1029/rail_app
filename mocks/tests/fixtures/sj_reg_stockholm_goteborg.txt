@@ -1,0 +1,9 @@
+PNR: SJ-7788
+Operator: SJ
+Train: REG 456
+From: Stockholm Central
+To: Göteborg C
+Date: 22/11/2025 07:30
+Scheduled Arr: 10:45
+Alternatives shown
+MCT ok

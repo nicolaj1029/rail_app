@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ticket preview card</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .card{width:1200px;height:630px;margin:0 auto;padding:24px;background:var(--bg);border:1px solid #E5ECF5;display:grid;grid-template-columns:1fr 320px;gap:20px}
+    .left{display:grid;align-content:start;gap:12px}
+    .logo{width:64px;height:64px;background:#E5ECF5;border-radius:12px}
+    .route{font-size:42px;font-weight:600}
+    .qr{height:100%}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="left">
+    <div class="h1">Afgangsbillet — DSB | 2. klasse</div>
+    <div class="route">København H → Odense</div>
+    <div class="p">Valid: 2025-10-20 08:00–23:59 · Price: 249,00 DKK · PNR: Q1W2E3</div>
+    <div class="small">Scan ved ombordstigning. Ikke-overdragelig. Refusion iht. operatør.</div>
+  </div>
+  <div class="qr">QR: (scanbar)</div>
+</div>
+</body>
+</html>

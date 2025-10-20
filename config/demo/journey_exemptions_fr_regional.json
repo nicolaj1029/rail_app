@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "FR", "operator": "SNCF", "service_type_hint": "TER", "dep_station": "Lyon Part-Dieu", "arr_station": "Villefranche-sur-Saône", "dep_time": "2025-10-01T09:05:00", "arr_time": "2025-10-01T09:35:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": false
+  }
+}

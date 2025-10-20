@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "PL", "operator": "Koleje Mazowieckie", "service_type_hint": "regional", "dep_station": "Warszawa Wschodnia", "arr_station": "Warszawa Zachodnia", "dep_time": "2025-10-01T08:00:00", "arr_time": "2025-10-01T08:20:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": false
+  }
+}

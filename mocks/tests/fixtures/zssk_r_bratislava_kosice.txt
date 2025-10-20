@@ -1,0 +1,8 @@
+PNR: SK-3321
+Operator: ZSSK
+Train: R 610
+From: Bratislava hl.st.
+To: Košice
+Date: 25/11/2025 15:20
+Scheduled Arr: 21:50
+CIV

@@ -1,0 +1,20 @@
+{
+  "name": "rail-app-mocks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mocks": "tsx ./server.ts",
+    "gen:tickets": "tsx ./generate_tickets.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "tsx": "^4.19.0"
+  },
+  "dependencies": {
+    "bwip-js": "^4.5.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.3"
+  }
+}

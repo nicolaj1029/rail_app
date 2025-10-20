@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "seller_type": "agency",
+    "segments": [
+      {"carrier": "SNCF", "pnr": "AA1111"},
+      {"carrier": "DB",   "pnr": "BB2222"}
+    ]
+  },
+  "meta": {"through_ticket_disclosure": "Særskilte", "separate_contract_notice": "Ja"}
+}

@@ -1,0 +1,11 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "FR", "operator": "SNCF", "service_type_hint": "TGV", "dep_station": "Lille Europe", "arr_station": "Bruxelles-Midi", "dep_time": "2025-11-03T14:10:00", "arr_time": "2025-11-03T15:10:00"},
+      {"country": "BE", "operator": "SNCB", "service_type_hint": "IC", "dep_station": "Bruxelles-Midi", "arr_station": "Liège-Guillemins", "dep_time": "2025-11-03T15:30:00", "arr_time": "2025-11-03T16:15:00"}
+    ],
+    "is_international_inside_eu": true,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": false
+  }
+}

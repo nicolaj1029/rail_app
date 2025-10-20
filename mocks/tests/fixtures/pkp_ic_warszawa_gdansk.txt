@@ -1,0 +1,9 @@
+PNR: PL-IC-9011
+Operator: PKP Intercity
+Train: IC 3502
+From: Warszawa Centralna
+To: Gdańsk Główny
+Date: 27/11/2025 11:55
+Scheduled Arr: 14:55
+Bike reservation required
+Complaints

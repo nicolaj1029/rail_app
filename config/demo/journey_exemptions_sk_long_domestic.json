@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "SK", "operator": "ZSSK", "service_type_hint": "IC", "dep_station": "Bratislava hl.st.", "arr_station": "Košice", "dep_time": "2025-10-05T07:30:00", "arr_time": "2025-10-05T13:15:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": true
+  }
+}

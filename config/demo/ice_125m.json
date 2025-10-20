@@ -1,0 +1,33 @@
+{
+  "journey": {
+    "bookingRef": {"value": "ABC123", "score": 0.9},
+    "operatorName": {"value": "DB", "score": 0.9},
+    "trainNo": {"value": "ICE 612", "score": 0.92},
+    "trainCategory": {"value": "ICE", "score": 0.9},
+    "classOfService": {"value": "2", "score": 0.7},
+    "ticketPrice": {"value": "85.00 EUR", "score": 0.95},
+    "depStation": {"value": "Berlin Hbf", "score": 0.9},
+    "arrStation": {"value": "Frankfurt(Main)Hbf", "score": 0.9},
+    "depDate": {"value": "2025-09-14", "score": 0.9},
+    "schedDepTime": {"value": "14:40", "score": 0.9},
+    "schedArrTime": {"value": "18:12", "score": 0.9},
+    "actualDepTime": {"value": "14:55", "score": 0.7},
+    "actualArrDate": {"value": "2025-09-15", "score": 0.9},
+    "actualArrTime": {"value": "20:20", "score": 0.88},
+    "segments": [
+      {
+        "trainNo": "ICE 612",
+        "operator": "DB",
+        "origin": "Berlin Hbf",
+        "destination": "Frankfurt(Main)Hbf",
+        "schedDep": "2025-09-14T14:40:00+02:00",
+        "schedArr": "2025-09-14T18:12:00+02:00",
+        "actDep": "2025-09-14T14:55:00+02:00",
+        "actArr": "2025-09-14T20:20:00+02:00",
+        "delayMinutes": 128,
+        "euTerritory": true
+      }
+    ],
+    "sourceHashes": ["sha256:demo-ice-125m"]
+  }
+}

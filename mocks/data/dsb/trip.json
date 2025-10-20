@@ -1,0 +1,10 @@
+{
+  "segments":[
+    {
+      "carrier":"DSB","trainNo":"RE 2245","category":"RE",
+      "dep":{"time":"2025-05-12T15:02:00+02:00","station":{"name":"København H","uic":"008600100","country":"DK"}},
+      "arr":{"time":"2025-05-12T16:15:00+02:00","station":{"name":"Odense","uic":"008607002","country":"DK"}},
+      "class":"2","ticketNo":"DK-20250512-0001"
+    }
+  ]
+}

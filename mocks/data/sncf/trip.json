@@ -1,0 +1,9 @@
+{
+  "segments": [
+    {
+      "carrier":"SNCF","trainNo":"8412","category":"TGV INOUI",
+      "dep":{"time":"2025-03-20T08:04:00+01:00","station":{"name":"Paris Gare de Lyon","uic":"008798600","country":"FR"}},
+      "arr":{"time":"2025-03-20T10:41:00+01:00","station":{"name":"Lyon Part-Dieu","uic":"008778700","country":"FR"}}
+    }
+  ]
+}

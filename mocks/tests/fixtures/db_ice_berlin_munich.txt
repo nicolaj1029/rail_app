@@ -1,0 +1,9 @@
+PNR: ZX9-88Q
+Operator: DB
+Train: ICE 789
+From: Berlin Hbf
+To: München Hbf
+Date: 18/11/2025 09:05
+Scheduled Arr: 13:05
+Flexible
+Complaints

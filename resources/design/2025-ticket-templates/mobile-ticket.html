@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile e-ticket</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .canvas{width:1080px;height:1920px;margin:0 auto;padding:40px;background:var(--bg);display:flex;flex-direction:column;gap:20px;border:1px solid #E5ECF5}
+    .header{display:flex;justify-content:space-between;align-items:center}
+    .op{display:flex;align-items:center;gap:12px}
+    .op .logo{width:56px;height:56px;background:#E5ECF5;border-radius:10px}
+    .cta{display:flex;gap:8px;align-items:center}
+    .hero{background:var(--bg-alt);border-radius:16px;padding:20px}
+    .row{display:flex;justify-content:space-between;gap:16px}
+    .col{flex:1}
+    .big{font-weight:600;font-size:28px}
+    .qr-wrap{margin-top:auto;background:var(--bg-alt);border-radius:16px;padding:24px}
+    .qr-box{height:520px}
+  </style>
+</head>
+<body>
+<div class="canvas">
+  <div class="header">
+    <div class="op">
+      <div class="logo"></div>
+      <div>
+        <div class="h1">DEPARTURE TICKET — Trenitalia | 2nd Class</div>
+        <div class="small">Afgangsbillet — DSB | 2. klasse</div>
+      </div>
+    </div>
+    <div class="badge">One-way</div>
+  </div>
+
+  <div class="hero h-grid">
+    <div class="row">
+      <div class="col">
+        <div class="h2">Valid</div>
+        <div class="big">2025-10-20 08:00–23:59</div>
+      </div>
+      <div class="col h-grid">
+        <div><span class="tag">Coach</span> 5</div>
+        <div><span class="tag">Seat</span> 12B</div>
+        <div><span class="tag">Class</span> 2nd</div>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="h-grid">
+      <div class="h2">Route</div>
+      <div class="big">Bologna Centrale → Milano Centrale</div>
+      <div class="p">Passenger: Jane Doe</div>
+    </div>
+
+    <div class="row">
+      <div class="col h-grid">
+        <div><span class="tag">Price</span> 49.90 EUR</div>
+        <div><span class="tag">Ticket ID</span> AB12C3</div>
+        <div><span class="tag">PNR</span> ZX8QK1</div>
+      </div>
+      <div class="col h-grid">
+        <div class="small">T&Cs: Non-transferable; refunds per operator policy.</div>
+        <div class="small">Support: +39 123 456 789 — help.rail.example</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qr-wrap">
+    <div class="h2">Scan at boarding / Scan ved ombordstigning</div>
+    <div class="qr qr-box">QR: (scanbar)</div>
+  </div>
+</div>
+</body>
+</html>

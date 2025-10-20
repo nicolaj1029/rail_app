@@ -1,0 +1,10 @@
+{
+  "segments": [
+    {
+      "trainId": "TGV_8412_20250320",
+      "dep": {"scheduled":"2025-03-20T08:04:00+01:00","actual":"2025-03-20T08:20:00+01:00","delayMin":16},
+      "arr": {"scheduled":"2025-03-20T10:41:00+01:00","actual":"2025-03-20T10:58:00+01:00","delayMin":17},
+      "causeCode": "TECH"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "journey": {
+    "segments": [
+      {"country": "HU", "operator": "MAV", "service_type_hint": "IC", "dep_station": "Budapest Keleti", "arr_station": "Debrecen", "dep_time": "2025-10-02T10:00:00", "arr_time": "2025-10-02T12:30:00"}
+    ],
+    "is_international_inside_eu": false,
+    "is_international_beyond_eu": false,
+    "is_long_domestic": true
+  }
+}

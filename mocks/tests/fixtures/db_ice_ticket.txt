@@ -1,0 +1,7 @@
+DB Online-Ticket
+PNR: DB1234   Train: ICE 706
+From: Frankfurt(Main) Hbf
+To: Berlin Hbf
+Date: 05/04/2025 09:14
+Seat: 23A   Coach: 12
+Price: 89.00 EUR

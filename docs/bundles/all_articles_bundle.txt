@@ -1,0 +1,1384 @@
+ALL ARTICLES BUNDLE (Art. 9 / 10 / 12 / 18 / 19 / 20)
+
+- Purpose: One-file view of key routes, controllers, services, templates, and config related to the Articles listed above.
+- Source of truth remains the original files in the repository. This bundle is for review/sharing only.
+
+============================================================
+config/routes.php
+============================================================
+
+[BEGIN FILE: config/routes.php]
+[CONTENT START]
+<?php
+/**
+ * Routes configuration.
+ *
+ * In this file, you set up routes to your controllers and their actions.
+ * Routes are very important mechanism that allows you to freely connect
+ * different URLs to chosen controllers and their actions (functions).
+ *
+ * It's loaded within the context of `Application::routes()` method which
+ * receives a `RouteBuilder` instance `$routes` as method argument.
+ *
+ * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
+ * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
+ *
+ * Licensed under The MIT License
+ * For full copyright and license information, please see the LICENSE.txt
+ * Redistributions of files must retain the above copyright notice.
+ *
+ * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
+ * @link          https://cakephp.org CakePHP(tm) Project
+ * @license       https://opensource.org/licenses/mit-license.php MIT License
+ */
+
+use Cake\Routing\Route\DashedRoute;
+use Cake\Routing\RouteBuilder;
+
+/*
+ * This file is loaded in the context of the `Application` class.
+ * So you can use `$this` to reference the application class instance
+ * if required.
+ */
+return function (RouteBuilder $routes): void {
+	/*
+	 * The default class to use for all routes
+	 *
+	 * The following route classes are supplied with CakePHP and are appropriate
+	 * to set as the default:
+	 *
+	 * - Route
+	 * - InflectedRoute
+	 * - DashedRoute
+	 *
+	 * If no call is made to `Router::defaultRouteClass()`, the class used is
+	 * `Route` (`Cake\Routing\Route\Route`)
+	 *
+	 * Note that `Route` does not do any inflections on URLs which will result in
+	 * inconsistently cased URLs when used with `{plugin}`, `{controller}` and
+	 * `{action}` markers.
+	 */
+	$routes->setRouteClass(DashedRoute::class);
+
+	$routes->scope('/', function (RouteBuilder $builder): void {
+		/*
+		 * Here, we are connecting '/' (base path) to a controller called 'Pages',
+		 * its action called 'display', and we pass a param to select the view file
+		 * to use (in this case, templates/Pages/home.php)...
+		 */
+		$builder->connect('/', ['controller' => 'Pages', 'action' => 'display', 'home']);
+
+		/*
+		 * ...and connect the rest of 'Pages' controller's URLs.
+		 */
+		$builder->connect('/pages/*', 'Pages::display');
+
+		// Project documents routes
+		$builder->connect('/project', ['controller' => 'Project', 'action' => 'index']);
+		$builder->connect('/project/links', ['controller' => 'Project', 'action' => 'links']);
+		$builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
+			->setPass(['slug']);
+		$builder->connect('/project/annotate/{slug}', ['controller' => 'Project', 'action' => 'annotate'])
+			->setPass(['slug']);
+		$builder->connect('/project/text/{slug}', ['controller' => 'Project', 'action' => 'text'])
+			->setPass(['slug']);
+
+		// Claims wizard routes
+		$builder->connect('/claims', ['controller' => 'Claims', 'action' => 'start']);
+		$builder->connect('/claims/compute', ['controller' => 'Claims', 'action' => 'compute']);
+
+	// Reimbursement demo routes
+	$builder->connect('/reimbursement', ['controller' => 'Reimbursement', 'action' => 'start']);
+	$builder->connect('/reimbursement/generate', ['controller' => 'Reimbursement', 'action' => 'generate']);
+	$builder->connect('/reimbursement/official', ['controller' => 'Reimbursement', 'action' => 'official']);
+
+	// Upload flow (client starts here)
+	$builder->connect('/upload', ['controller' => 'Upload', 'action' => 'index']);
+	$builder->connect('/upload/analyze', ['controller' => 'Upload', 'action' => 'analyze']);
+
+		// Client claims routes
+		$builder->connect('/start', ['controller' => 'ClientClaims', 'action' => 'start']);
+		$builder->connect('/submit', ['controller' => 'ClientClaims', 'action' => 'submit']);
+
+	// Client wizard (live MVP)
+	$builder->connect('/wizard', ['controller' => 'ClientWizard', 'action' => 'start']);
+	$builder->connect('/wizard/questions', ['controller' => 'ClientWizard', 'action' => 'questions']);
+	$builder->connect('/wizard/expenses', ['controller' => 'ClientWizard', 'action' => 'expenses']);
+	$builder->connect('/wizard/summary', ['controller' => 'ClientWizard', 'action' => 'summary']);
+
+		// Admin area (non-auth demo)
+		$builder->connect('/admin/claims', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'index']);
+		$builder->connect('/admin/claims/view/{id}', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'view'])
+			->setPass(['id']);
+		$builder->connect('/admin/claims/update-status/{id}', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'updateStatus'])
+			->setPass(['id']);
+		$builder->connect('/admin/claims/mark-paid/{id}', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'markPaid'])
+			->setPass(['id']);
+
+		/*
+		 * Connect catchall routes for all controllers.
+		 *
+		 * The `fallbacks` method is a shortcut for
+		 *
+		 * ```
+		 * $builder->connect('/{controller}', ['action' => 'index']);
+		 * $builder->connect('/{controller}/{action}/*', []);
+		 * ```
+		 *
+		 * It is NOT recommended to use fallback routes after your initial prototyping phase!
+		 * See https://book.cakephp.org/5/en/development/routing.html#fallbacks-method for more information
+		 */
+		$builder->fallbacks();
+	});
+
+	// API prefix (JSON)
+	$routes->prefix('Api', function (RouteBuilder $builder): void {
+		$builder->setRouteClass(DashedRoute::class);
+		// Demo fixtures endpoint
+		$builder->connect('/demo/fixtures', ['controller' => 'Demo', 'action' => 'fixtures']);
+	$builder->connect('/demo/exemption-fixtures', ['controller' => 'Demo', 'action' => 'exemptionFixtures']);
+	$builder->connect('/demo/art12-fixtures', ['controller' => 'Demo', 'action' => 'art12Fixtures']);
+	$builder->connect('/demo/scenarios', ['controller' => 'Demo', 'action' => 'scenarios']);
+	$builder->connect('/demo/mock-tickets', ['controller' => 'Demo', 'action' => 'mockTickets']);
+	$builder->connect('/demo/run-scenarios', ['controller' => 'Demo', 'action' => 'runScenarios']);
+	$builder->connect('/demo/generate-mocks', ['controller' => 'Demo', 'action' => 'generateMocks']);
+		// Pipeline stubs
+		$builder->connect('/ingest/ticket', ['controller' => 'Ingest', 'action' => 'ticket']);
+		$builder->connect('/rne/trip', ['controller' => 'Rne', 'action' => 'trip']);
+		$builder->connect('/operator/{operatorCode}/trip', ['controller' => 'Operator', 'action' => 'trip'])
+			->setPass(['operatorCode']);
+		$builder->connect('/compute/compensation', ['controller' => 'Compute', 'action' => 'compensation']);
+		$builder->connect('/compute/exemptions', ['controller' => 'Compute', 'action' => 'exemptions']);
+	$builder->connect('/compute/art12', ['controller' => 'Compute', 'action' => 'art12']);
+	$builder->connect('/compute/art9', ['controller' => 'Compute', 'action' => 'art9']);
+	$builder->connect('/compute/refund', ['controller' => 'Compute', 'action' => 'refund']);
+	$builder->connect('/compute/refusion', ['controller' => 'Compute', 'action' => 'refusion']);
+	$builder->connect('/compute/claim', ['controller' => 'Compute', 'action' => 'claim']);
+
+	// Unified pipeline (OCR ingest + all evaluators in one)
+	$builder->connect('/pipeline/run', ['controller' => 'Pipeline', 'action' => 'run']);
+
+		// Provider stubs for SNCF / DB / DSB / RNE / Open
+		$builder->connect('/providers/sncf/booking/validate', ['controller' => 'Providers', 'action' => 'sncfBookingValidate']);
+		$builder->connect('/providers/sncf/trains', ['controller' => 'Providers', 'action' => 'sncfTrains']);
+		$builder->connect('/providers/sncf/realtime', ['controller' => 'Providers', 'action' => 'sncfRealtime']);
+
+		$builder->connect('/providers/db/lookup', ['controller' => 'Providers', 'action' => 'dbLookup']);
+		$builder->connect('/providers/db/trip', ['controller' => 'Providers', 'action' => 'dbTrip']);
+		$builder->connect('/providers/db/realtime', ['controller' => 'Providers', 'action' => 'dbRealtime']);
+
+		$builder->connect('/providers/dsb/trip', ['controller' => 'Providers', 'action' => 'dsbTrip']);
+		$builder->connect('/providers/dsb/realtime', ['controller' => 'Providers', 'action' => 'dsbRealtime']);
+
+		$builder->connect('/providers/rne/realtime', ['controller' => 'Providers', 'action' => 'rneRealtime']);
+		$builder->connect('/providers/open/rt', ['controller' => 'Providers', 'action' => 'openRealtime']);
+		$builder->fallbacks();
+	});
+
+	/*
+	 * If you need a different set of middleware or none at all,
+	 * open new scope and define routes there.
+	 *
+	 * ```
+	 * $routes->scope('/api', function (RouteBuilder $builder): void {
+	 *     // No $builder->applyMiddleware() here.
+	 *
+	 *     // Parse specified extensions from URLs
+	 *     // $builder->setExtensions(['json', 'xml']);
+	 *
+	 *     // Connect API actions here.
+	 * });
+	 * ```
+	 */
+};
+
+?>
+[CONTENT END]
+[END FILE]
+
+============================================================
+src/Controller/UploadController.php
+============================================================
+[BEGIN FILE: src/Controller/UploadController.php]
+[CONTENT START]
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use Cake\Filesystem\File;
+use Cake\Utility\Text;
+use App\Service\ExemptionProfileBuilder;
+use App\Service\TrainDataService;
+use Cake\Core\Configure;
+
+class UploadController extends AppController
+{
+	public function index(): void
+	{
+		// Renders templates/Upload/index.php
+	}
+
+	public function analyze(): void
+	{
+		$this->request->allowMethod(['post']);
+		$file = $this->request->getData('ticket');
+		$extJourneyRaw = $this->request->getData('journey'); // optional JSON pasted (string)
+		$manualDelayInput = $this->request->getData('manual_delay_minutes');
+		$manualDelay = null;
+		if ($manualDelayInput !== null && $manualDelayInput !== '') {
+			$manualDelay = (int)$manualDelayInput;
+			if ($manualDelay < 0) { $manualDelay = 0; }
+		}
+
+		$journey = [];
+		$errors = [];
+		$meta = [];
+		$ocrLogs = [];
+	$ocrUsed = false;
+		$ocrAutoCount = 0;
+	$filenameHints = [];
+	$textHints = [];
+
+		// If user pasted JSON journey, use that (developer shortcut)
+		if (is_string($extJourneyRaw) && trim($extJourneyRaw) !== '') {
+			$decoded = json_decode($extJourneyRaw, true);
+			if (is_array($decoded)) {
+				$journey = $decoded;
+			} else {
+				$errors[] = 'Ugyldigt JSON i Journey-feltet.';
+			}
+		}
+
+		// Handle file upload (image/pdf/pkpass) – store only; real parsing can be added later
+		$savedPath = null;
+		if ($file && is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+			$tmp = $file['tmp_name'];
+			$name = $file['name'] ?? ('ticket_' . Text::uuid());
+			$safe = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$name) ?: ('ticket_' . Text::uuid());
+			$destDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads';
+			if (!is_dir($destDir)) { mkdir($destDir, 0775, true); }
+			$dest = $destDir . DIRECTORY_SEPARATOR . $safe;
+			if (@move_uploaded_file($tmp, $dest)) {
+				$savedPath = $dest;
+				// Try simple OCR/text extraction for PDFs/TXT to feed Art. 9 auto hooks
+				$ext = strtolower((string)pathinfo($savedPath, PATHINFO_EXTENSION));
+				$textBlob = '';
+				try {
+					if ($ext === 'pdf' && class_exists('Smalot\\PdfParser\\Parser')) {
+						$parser = new \Smalot\PdfParser\Parser();
+						$pdf = $parser->parseFile($savedPath);
+						$textBlob = $pdf->getText() ?? '';
+					} elseif (in_array($ext, ['txt','text'], true)) {
+						$textBlob = (string)file_get_contents($savedPath);
+					} elseif (in_array($ext, ['png','jpg','jpeg'], true)) {
+						// Try to find a mock TXT with same basename under mocks/tests/fixtures for testing
+						$base = (string)pathinfo($safe, PATHINFO_FILENAME);
+						$mockDir = ROOT . DIRECTORY_SEPARATOR . 'mocks' . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'fixtures' . DIRECTORY_SEPARATOR;
+						$candidates = [
+							$mockDir . $base . '.txt',
+							$mockDir . strtolower($base) . '.txt',
+							$mockDir . str_replace('-', '_', strtolower($base)) . '.txt',
+						];
+						foreach ($candidates as $cand) {
+							if (is_file($cand)) { $textBlob = (string)file_get_contents($cand); $ocrLogs[] = 'AUTO: indlæst mock TXT: ' . basename($cand); break; }
+						}
+					}
+				} catch (\Throwable $e) {
+					$textBlob = '';
+				}
+				if ($textBlob !== '') {
+					$ocrUsed = true;
+					$map = (new \App\Service\OcrHeuristicsMapper())->mapText($textBlob);
+					foreach (($map['auto'] ?? []) as $k => $v) { $meta['_auto'][$k] = $v; }
+					$ocrLogs = array_merge($ocrLogs, $map['logs'] ?? []);
+					$ocrAutoCount = count((array)($map['auto'] ?? []));
+					// Derive coarse country/operator/product hints from OCR text
+					$textHints = $this->deriveJourneyFromText($textBlob);
+				}
+				// Heuristics from filename for images (png/jpg) or when OCR is not available
+				if (empty($journey)) {
+					$fname = strtolower((string)pathinfo($safe, PATHINFO_FILENAME));
+					$fh = $this->deriveJourneyFromFilename($fname);
+					if (!empty($fh['journey'])) { $journey = $fh['journey']; }
+					if (!empty($fh['auto'])) {
+						foreach ($fh['auto'] as $k => $v) { $meta['_auto'][$k] = $v; }
+						$ocrAutoCount += count($fh['auto']);
+					}
+					if (!empty($fh['logs'])) { $ocrLogs = array_merge($ocrLogs, $fh['logs']); }
+					if (!empty($fh['hints'])) { $filenameHints = $fh['hints']; }
+				}
+				// If we already have a journey but OCR-derived hints indicate a different country, prefer OCR
+				if (!empty($journey) && !empty($textHints['country'])) {
+					$seg0 = $journey['segments'][0] ?? [];
+					$jc = strtoupper((string)($seg0['country'] ?? ''));
+					$tc = strtoupper((string)$textHints['country']);
+					if ($tc !== '' && $tc !== $jc) {
+						$journey['segments'][0]['country'] = $textHints['country'];
+						$journey['country']['value'] = $textHints['country'];
+						if (!empty($textHints['is_long_domestic'])) { $journey['is_long_domestic'] = true; }
+						$ocrLogs[] = 'AUTO: land korrigeret fra OCR-tekst: ' . $tc;
+					}
+				}
+			} else {
+				$errors[] = 'Kunne ikke gemme den uploadede fil';
+			}
+		}
+
+		// Minimal placeholder: if no journey provided, create a single-segment journey using a heuristic country hint
+		if (empty($journey)) {
+			// Prefer OCR-derived hints over filename, then user-specified, else EU
+			$countryHint = (string)($textHints['country'] ?? $filenameHints['country'] ?? $this->request->getData('country') ?? 'EU');
+			$isLongDomestic = (bool)($textHints['is_long_domestic'] ?? $filenameHints['is_long_domestic'] ?? false);
+			$journey = [
+				'segments' => [[ 'country' => $countryHint ]]],
+				'is_international_inside_eu' => false,
+				'is_international_beyond_eu' => false,
+				'is_long_domestic' => $isLongDomestic,
+				'country' => ['value' => $countryHint],
+			];
+			if (!empty($textHints) || !empty($filenameHints)) { $ocrLogs[] = 'AUTO: fallback med land fra hints: ' . $countryHint; }
+		}
+
+		// Compute exemptions profile (focus på Art. 12 til at starte med)
+		$builder = new ExemptionProfileBuilder();
+		$profile = $builder->build($journey);
+		$art12_applies = (bool)($profile['articles']['art12'] ?? true);
+
+		// Run evaluators for a quick end-to-end summary
+		$art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, []);
+		$art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta);
+		$refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['refundAlready' => false]);
+		$refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, []);
+
+		// Build a minimal ClaimInput from the journey (best-effort until OCR/mocks er koblet på)
+		$segments = (array)($journey['segments'] ?? []);
+		$last = !empty($segments) ? $segments[array_key_last($segments)] : [];
+		$country = (string)($journey['country']['value'] ?? ($last['country'] ?? 'EU'));
+		$priceRaw = (string)($journey['ticketPrice']['value'] ?? '0 EUR');
+		$currency = 'EUR';
+		if (preg_match('/([A-Z]{3})/i', $priceRaw, $m)) { $currency = strtoupper($m[1]); }
+		$price = 0.0;
+		if (preg_match('/([0-9]+(?:\.[0-9]{1,2})?)/', $priceRaw, $m)) { $price = (float)$m[1]; }
+		$legs = [];
+		foreach ($segments as $s) {
+			$legs[] = [
+				'from' => $s['from'] ?? '',
+				'to' => $s['to'] ?? '',
+				'eu' => true,
+				'scheduled_dep' => $s['schedDep'] ?? '',
+				'scheduled_arr' => $s['schedArr'] ?? '',
+				'actual_dep' => $s['actDep'] ?? null,
+				'actual_arr' => $s['actArr'] ?? null,
+			];
+		}
+		// Optionally fetch live delay minutes if enabled
+		$liveDelay = null;
+		try {
+			$trainSvc = new TrainDataService();
+			$liveDelay = $trainSvc->getDelayMinutes($journey);
+		} catch (\Throwable $e) {
+			$liveDelay = null;
+		}
+        
+		// Determine delay minutes: manual > live > computed
+		$delayMins = $this->computeDelayFromJourney($journey);
+		$delaySource = 'computed_from_journey';
+		if (is_int($liveDelay)) { $delayMins = $liveDelay; $delaySource = 'live_api'; }
+		if (is_int($manualDelay)) { $delayMins = $manualDelay; $delaySource = 'manual_override'; }
+
+		$claimInput = [
+			'country_code' => $country,
+			'currency' => $currency,
+			'ticket_price_total' => $price,
+			'trip' => [ 'through_ticket' => true, 'legs' => $legs ],
+			'disruption' => [
+				'delay_minutes_final' => $delayMins,
+				'notified_before_purchase' => false,
+				'extraordinary' => false,
+				'self_inflicted' => false,
+			],
+			'choices' => [ 'wants_refund' => false, 'wants_reroute_same_soonest' => false, 'wants_reroute_later_choice' => false ],
+			'expenses' => [ 'meals' => 0, 'hotel' => 0, 'alt_transport' => 0, 'other' => 0 ],
+			'already_refunded' => 0,
+		];
+		$claim = (new \App\Service\ClaimCalculator())->calculate($claimInput);
+
+		// For result view context
+		$this->set(compact(
+			'profile', 'art12_applies', 'art12', 'art9', 'refund', 'refusion', 'claim', 'savedPath', 'errors',
+			'liveDelay', 'ocrUsed', 'ocrLogs', 'ocrAutoCount', 'journey', 'legs', 'price', 'currency', 'manualDelay', 'delayMins', 'delaySource'
+		));
+		$this->viewBuilder()->setTemplate('result');
+	}
+
+	/** Compute delay minutes from a Journey-like array */
+	private function computeDelayFromJourney(array $journey): int
+	{
+		$segments = (array)($journey['segments'] ?? []);
+		$last = !empty($segments) ? $segments[array_key_last($segments)] : [];
+		$schedArr = (string)($last['schedArr'] ?? '');
+		$actArr = (string)($last['actArr'] ?? '');
+		if ($schedArr !== '' && $actArr !== '') {
+			$t1 = strtotime($schedArr); $t2 = strtotime($actArr);
+			if ($t1 && $t2) { return max(0, (int)round(($t2 - $t1)/60)); }
+		}
+		// Fallback fields
+		$depDate = (string)($journey['depDate']['value'] ?? '');
+		$sched = (string)($journey['schedArrTime']['value'] ?? '');
+		$act = (string)($journey['actualArrTime']['value'] ?? '');
+		if ($depDate && $sched && $act) {
+			$t1 = strtotime($depDate . 'T' . $sched . ':00');
+			$t2 = strtotime(($journey['actualArrDate']['value'] ?? $depDate) . 'T' . $act . ':00');
+			if ($t1 && $t2) { return max(0, (int)round(($t2 - $t1)/60)); }
+		}
+		return 0;
+	}
+
+	/**
+	 * Derive basic journey and Art.9 AUTO hints from filename patterns like 'db_ice_berlin_munich'.
+	* @return array{journey?:array, auto?:array, logs?:array, hints?:array}
+	 */
+	private function deriveJourneyFromFilename(string $fname): array
+	{
+		$logs = [];
+		$auto = [];
+		$segments = [];
+		$country = null; $operator = null; $product = null;
+		$orig = $fname;
+		$fname = $this->normalizeMojibake($fname);
+		$fname = str_replace(['__','-'], '_', strtolower($fname));
+	if (str_starts_with($fname, 'sncf_')) { $country = 'FR'; $operator = 'SNCF'; }
+	if (str_starts_with($fname, 'db_')) { $country = 'DE'; $operator = 'DB'; }
+	if (str_starts_with($fname, 'dsb_')) { $country = 'DK'; $operator = 'DSB'; }
+	if (str_starts_with($fname, 'sj_')) { $country = 'SE'; $operator = 'SJ'; }
+	if (str_starts_with($fname, 'zssk_')) { $country = 'SK'; $operator = 'ZSSK'; }
+	if (str_starts_with($fname, 'pkp_')) { $country = 'PL'; $operator = 'PKP Intercity'; }
+
+		if (str_contains($fname, '_tgv_') || str_ends_with($fname, '_tgv')) { $product = 'TGV'; }
+		elseif (str_contains($fname, '_ice_')) { $product = 'ICE'; }
+		elseif (str_contains($fname, '_ic_') || str_ends_with($fname, '_ic')) { $product = 'IC'; }
+		elseif (str_contains($fname, '_reg_')) { $product = 'REG'; }
+		elseif (preg_match('/(^|_)r(_|$)/', $fname)) { $product = 'R'; }
+		elseif (str_contains($fname, '_re_') || str_ends_with($fname, '_re')) { $product = 'RE'; }
+
+		// City → country hints for when operator/product not present in filename
+		$cityMap = [
+			// FR
+			'paris' => 'FR', 'lyon' => 'FR', 'lille' => 'FR', 'bordeaux' => 'FR',
+			// DE
+			'berlin' => 'DE', 'munich' => 'DE', 'muenchen' => 'DE', 'münchen' => 'DE', 'hamburg' => 'DE',
+			// DK
+			'kobenhavn' => 'DK', 'københavn' => 'DK', 'odense' => 'DK', 'aarhus' => 'DK', 'århus' => 'DK',
+			// SE
+			'stockholm' => 'SE', 'gothenburg' => 'SE', 'goteborg' => 'SE', 'göteborg' => 'SE',
+			// SK
+			'bratislava' => 'SK', 'kosice' => 'SK', 'košice' => 'SK',
+			// PL
+			'warszawa' => 'PL', 'gdansk' => 'PL', 'gdańsk' => 'PL',
+		];
+		$parts = preg_split('/[_\s]+/', $fname) ?: [];
+		$cities = array_values(array_filter($parts, fn($p) => isset($cityMap[$p])));
+		if ($country === null && !empty($cities)) {
+			$country = $cityMap[$cities[0]];
+		}
+		// Infer operator from country + long-distance product
+		if ($operator === null && $country) {
+			if ($country === 'FR' && $product === 'TGV') { $operator = 'SNCF'; }
+			if ($country === 'DE' && in_array($product, ['ICE','IC'], true)) { $operator = 'DB'; }
+			if ($country === 'DK' && in_array($product, ['IC','RE'], true)) { $operator = 'DSB'; }
+		}
+
+		// From/To: last two tokens often city names
+		if (count($parts) >= 2) {
+			$from = ucfirst($parts[count($parts)-2] ?? '');
+			$to = ucfirst($parts[count($parts)-1] ?? '');
+			$segments[] = [
+				'from' => str_replace('-', ' ', $from),
+				'to' => str_replace('-', ' ', $to),
+				'country' => $country ?? 'EU',
+				'operator' => $operator,
+				'trainCategory' => $product,
+			];
+		}
+
+		// Long-distance if product suggests it
+		$longDistance = in_array($product, ['TGV','ICE','IC'], true);
+		// If two known cities from the same country and product absent, prefer long-domestic for typical intercity routes
+		if (!$longDistance && count($cities) >= 2) {
+			$c0 = $cityMap[$cities[0]]; $c1 = $cityMap[$cities[1]];
+			if ($c0 === $c1 && in_array($c0, ['FR','DE','DK','SE','PL','SK'], true)) {
+				$longDistance = true;
+			}
+		}
+		$journey = [];
+		if (!empty($segments)) {
+			$journey = [
+				'segments' => $segments,
+				'is_international_inside_eu' => false,
+				'is_international_beyond_eu' => false,
+				'is_long_domestic' => $longDistance,
+				'country' => ['value' => $country ?? 'EU'],
+			];
+			$logs[] = 'AUTO: journey fra filnavn (' . $orig . ')';
+		}
+
+		// Auto hooks: train specificity and fare flex from product hints (weak)
+		if ($product) { $auto['train_specificity'] = ['value' => 'Kun specifikt tog', 'source' => 'filename']; }
+		return [
+			'journey' => $journey,
+			'auto' => $auto,
+			'logs' => $logs,
+			'hints' => [
+				'country' => $country,
+				'operator' => $operator,
+				'product' => $product,
+				'is_long_domestic' => $longDistance,
+			],
+		];
+	}
+
+	/**
+	 * Derive coarse hints from OCR text: country/operator/product and long-distance.
+	 * @return array{country?:string, operator?:string, product?:string, is_long_domestic?:bool}
+	 */
+	private function deriveJourneyFromText(string $text): array
+	{
+		$t = $this->normalizeMojibake($text);
+		$t = mb_strtolower($t, 'UTF-8');
+		$country = null; $operator = null; $product = null; $long = false;
+		// Operators and products
+		if (preg_match('/\bdeutsche\s*bahn\b|\bdb\b/u', $t)) { $operator = 'DB'; $country = $country ?? 'DE'; }
+		if (preg_match('/\bsncf\b|\bter\b|\btgv\b/u', $t)) { $operator = $operator ?? 'SNCF'; $country = $country ?? 'FR'; }
+		if (preg_match('/\bdsb\b/u', $t)) { $operator = 'DSB'; $country = $country ?? 'DK'; }
+		if (preg_match('/\bsj\b/u', $t)) { $operator = $operator ?? 'SJ'; $country = $country ?? 'SE'; }
+
+		if (preg_match('/\bice\b/u', $t)) { $product = 'ICE'; $country = $country ?? 'DE'; }
+		elseif (preg_match('/\b(ic|intercity)\b/u', $t)) { $product = 'IC'; }
+		elseif (preg_match('/\btgv\b/u', $t)) { $product = 'TGV'; $country = $country ?? 'FR'; }
+		elseif (preg_match('/\bre(g|gio)\b|\bregional\b/u', $t)) { $product = $product ?? 'REG'; }
+
+		// City hints
+		$cityMap = [
+			'paris' => 'FR', 'lyon' => 'FR', 'lille' => 'FR', 'bordeaux' => 'FR',
+			'berlin' => 'DE', 'munich' => 'DE', 'muenchen' => 'DE', 'münchen' => 'DE', 'munchen' => 'DE', 'hamburg' => 'DE', 'frankfurt' => 'DE', 'köln' => 'DE', 'koln' => 'DE', 'cologne' => 'DE', 'düsseldorf' => 'DE', 'duesseldorf' => 'DE', 'dusseldorf' => 'DE', 'stuttgart' => 'DE',
+			'kobenhavn' => 'DK', 'københavn' => 'DK', 'odense' => 'DK', 'aarhus' => 'DK', 'århus' => 'DK',
+			'stockholm' => 'SE', 'gothenburg' => 'SE', 'goteborg' => 'SE', 'göteborg' => 'SE',
+			'bratislava' => 'SK', 'kosice' => 'SK', 'košice' => 'SK',
+			'warszawa' => 'PL', 'gdansk' => 'PL', 'gdańsk' => 'PL',
+		];
+		$foundCities = [];
+		foreach ($cityMap as $city => $cc) {
+			if (preg_match('/\b' . preg_quote($city, '/') . '\b/u', $t)) { $foundCities[] = [$city, $cc]; }
+		}
+		if ($country === null && !empty($foundCities)) { $country = $foundCities[0][1]; }
+
+		// Long-distance heuristics
+		if (in_array($product, ['ICE','IC','TGV'], true)) { $long = true; }
+		if (!$long && count($foundCities) >= 2) {
+			if ($foundCities[0][1] === $foundCities[1][1]) { $long = true; }
+		}
+
+		return array_filter([
+			'country' => $country,
+			'operator' => $operator,
+			'product' => $product,
+			'is_long_domestic' => $long ?: null,
+		], fn($v) => $v !== null && $v !== '');
+	}
+
+	/** Normalize common UTF-8 mojibake to real characters (e.g., MÃ¼nchen -> München). */
+	private function normalizeMojibake(string $s): string
+	{
+		// Quick fixes for frequent sequences
+		$map = [
+			'Ã¼' => 'ü', 'Ã¶' => 'ö', 'Ã¤' => 'ä', 'ÃŸ' => 'ß',
+			'Ãœ' => 'Ü', 'Ã–' => 'Ö', 'Ã„' => 'Ä',
+			'Ã¥' => 'å', 'Ã¸' => 'ø', 'Ã¦' => 'æ',
+			'Ã…' => 'Å', 'Ã˜' => 'Ø', 'Ã†' => 'Æ',
+			'Ã©' => 'é', 'Ã¨' => 'è', 'Ã¡' => 'á', 'Ã ' => 'à', 'Ã³' => 'ó', 'Ãº' => 'ú', 'Ã±' => 'ñ',
+			'â€“' => '–', 'â€”' => '—', 'â€˜' => '‘', 'â€™' => '’', 'â€œ' => '“', 'â€	9d' => '”', 'â€¢' => '•', 'â€¦' => '…',
+			'Â ' => ' ',
+			// Specific full words often seen
+			'MÃ¼nchen' => 'München', 'KÃ¶ln' => 'Köln', 'DÃ¼sseldorf' => 'Düsseldorf',
+			'GÃ¶teborg' => 'Göteborg', 'KÃ¸benhavn' => 'København', 'Aarhus' => 'Aarhus',
+		];
+		// Replace case-sensitively first
+		$s = strtr($s, $map);
+		// Then handle any remaining generic uppercase variants
+		$s = strtr($s, [ 'Ã' => 'Å', 'Â' => '' ]);
+		return $s;
+	}
+}
+
+?>
+[CONTENT END]
+[END FILE]
+
+============================================================
+src/Controller/ReimbursementController.php
+============================================================
+[BEGIN FILE: src/Controller/ReimbursementController.php]
+[CONTENT START]
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use setasign\Fpdi\Fpdi;
+use setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException;
+use FPDF; // autoloaded by setasign/fpdf
+
+class ReimbursementController extends AppController
+{
+	public function start(): void
+	{
+		// Render the form
+	}
+
+	public function generate(): void
+	{
+		$this->request->allowMethod(['post', 'get']);
+		$data = $this->request->is('post') ? (array)$this->request->getData() : (array)$this->request->getQueryParams();
+		if ($this->request->is('get')) {
+			// If user navigated directly without any params, send them to the form
+			$hasAny = array_filter($data, fn($v) => $v !== null && $v !== '');
+			if (empty($hasAny)) {
+				$this->redirect(['action' => 'start']);
+				return;
+			}
+		}
+
+		// Minimal PDF summary (not filling the original PDF yet)
+	$this->disableAutoRender();
+		$pdf = new FPDF('P', 'mm', 'A4');
+		$pdf->AddPage();
+		$pdf->SetFont('Arial', 'B', 16);
+		$pdf->Cell(0, 10, 'Reimbursement Claim Summary', 0, 1);
+
+		$pdf->SetFont('Arial', '', 12);
+		foreach ([
+			'name' => 'Applicant Name',
+			'email' => 'Email',
+			'operator' => 'Railway Undertaking',
+			'dep_date' => 'Scheduled departure date',
+			'dep_station' => 'Departure station',
+			'arr_station' => 'Destination station',
+			'dep_time' => 'Scheduled departure time',
+			'arr_time' => 'Scheduled arrival time',
+			'train_no' => 'Train no./category',
+			'ticket_no' => 'Ticket number/PNR',
+			'price' => 'Ticket price',
+			'actual_arrival_date' => 'Actual arrival date',
+			'actual_dep_time' => 'Actual departure time',
+			'actual_arr_time' => 'Actual arrival time',
+			'missed_connection_station' => 'Missed connection station',
+		] as $key => $label) {
+			$val = (string)($data[$key] ?? '');
+			$pdf->MultiCell(0, 7, sprintf('%s: %s', $label, $val));
+		}
+
+		$pdf->Ln(5);
+		$pdf->MultiCell(0, 7, 'Reason: ' . implode(', ', array_keys(array_filter([
+			'delay' => !empty($data['reason_delay']),
+			'cancellation' => !empty($data['reason_cancellation']),
+			'missed connection' => !empty($data['reason_missed_conn']),
+		]))));
+
+		// Output inline for now
+		$this->response = $this->response->withType('pdf');
+		$this->response = $this->response->withStringBody($pdf->Output('S'));
+		return;
+	}
+
+	public function official(): void
+	{
+		$this->request->allowMethod(['post', 'get']);
+		$data = $this->request->is('post') ? (array)$this->request->getData() : (array)$this->request->getQueryParams();
+		if ($this->request->is('get')) {
+			$hasAny = array_filter($data, fn($v) => $v !== null && $v !== '');
+			if (empty($hasAny)) {
+				$this->redirect(['action' => 'start']);
+				return;
+			}
+		}
+
+		// Allow overriding template via query parameter for diagnostics, but only within webroot or webroot/files
+		$source = null;
+		$forceName = (string)($this->request->getQuery('template') ?? '');
+		if ($forceName !== '') {
+			$try = [WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . $forceName, WWW_ROOT . $forceName];
+			foreach ($try as $p) {
+				if (is_file($p)) { $source = $p; break; }
+			}
+		}
+		if ($source === null) {
+			$source = $this->findOfficialTemplatePath();
+		}
+		if ($source === null || !is_file($source)) {
+			// Fallback to summary if template missing
+			$this->disableAutoRender();
+			$pdf = new FPDF('P', 'mm', 'A4');
+			$pdf->AddPage();
+			$pdf->SetFont('Arial', 'B', 14);
+			$pdf->Cell(0, 10, 'Official Form template missing', 0, 1);
+			$pdf->SetFont('Arial', '', 12);
+			$pdf->MultiCell(0, 7, "Looked in: webroot/files and webroot. Filenames tried include 'reimbursement_form_uncompressed.pdf' and '(reimboursement|reimbursement) form - EN - accessible.pdf' (spaces or %20).\nYou can also force a file with ?template=FILENAME.pdf");
+			$this->response = $this->response->withType('pdf')->withStringBody($pdf->Output('S'));
+			return;
+		}
+
+	$map = $this->loadFieldMap() ?: $this->officialFieldMap();
+	$debug = (bool)$this->request->getQuery('debug');
+	$dx = (float)($this->request->getQuery('dx') ?? 0);
+	$dy = (float)($this->request->getQuery('dy') ?? 0);
+
+	$this->disableAutoRender();
+	$fpdi = new Fpdi('P', 'mm', 'A4');
+		try {
+			$pageCount = $fpdi->setSourceFile($source);
+		} catch (CrossReferenceException $e) {
+			// Handle compressed xref (unsupported by free parser)
+			$this->disableAutoRender();
+			$pdf = new FPDF('P', 'mm', 'A4');
+			$pdf->AddPage();
+			$pdf->SetFont('Arial', 'B', 14);
+			$pdf->MultiCell(0, 8, 'Cannot import template: compressed cross-reference (XRef) stream');
+			$pdf->SetFont('Arial', '', 12);
+			$pdf->Ln(2);
+			$pdf->MultiCell(0, 6, "This PDF uses a compression technique that the free FPDI parser can't handle. Options:\n\n1) Provide an uncompressed PDF (save as PDF 1.4 / 'reduced size').\n2) Convert locally using qpdf to disable object streams.\n3) Use the commercial fpdi-pdf-parser add-on.\n\nTried file:\n" . $source);
+			$pdf->Ln(2);
+			$pdf->SetFont('Courier', '', 10);
+			$pdf->MultiCell(0, 5, "qpdf --qdf --object-streams=disable \"in.pdf\" \"out.pdf\"");
+			$this->response = $this->response->withType('pdf')->withStringBody($pdf->Output('S'));
+			return;
+		} catch (\Throwable $e) {
+			$this->disableAutoRender();
+			$pdf = new FPDF('P', 'mm', 'A4');
+			$pdf->AddPage();
+			$pdf->SetFont('Arial', 'B', 14);
+			$pdf->MultiCell(0, 8, 'Cannot import template');
+			$pdf->SetFont('Arial', '', 12);
+			$pdf->MultiCell(0, 6, 'Error: ' . $e->getMessage() . "\nFile: " . $source);
+			$this->response = $this->response->withType('pdf')->withStringBody($pdf->Output('S'));
+			return;
+		}
+		for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+			$tpl = $fpdi->importPage($pageNo);
+			$size = $fpdi->getTemplateSize($tpl);
+			$fpdi->AddPage($size['orientation'], [$size['width'], $size['height']]);
+			$fpdi->useTemplate($tpl, 0, 0, $size['width'], $size['height']);
+
+			// Optional debug grid overlay to calibrate coordinates
+			if ($debug) {
+				// Draw grid; offset labels to reflect dx/dy
+				$this->drawDebugGrid($fpdi, (float)$size['width'], (float)$size['height']);
+				if ($dx != 0 || $dy != 0) {
+					$fpdi->SetTextColor(255, 0, 0);
+					$fpdi->SetFont('Helvetica', '', 7);
+					$fpdi->SetXY(4, 4);
+					$fpdi->Cell(0, 4, sprintf('nudge dx=%.1fmm dy=%.1fmm', $dx, $dy));
+					$fpdi->SetTextColor(0, 0, 0);
+				}
+			}
+
+			// Write fields for this page
+			if (!empty($map[$pageNo])) {
+				$fpdi->SetFont('Helvetica', '', 9);
+				foreach ($map[$pageNo] as $field => $cfg) {
+					$type = $cfg['type'] ?? 'text';
+					$x = (float)$cfg['x'] + $dx;
+					$y = (float)$cfg['y'] + $dy;
+					$w = isset($cfg['w']) ? (float)$cfg['w'] : 0;
+					if ($type === 'checkbox') {
+						$checked = !empty($data[$field]);
+						if ($checked) {
+							$fpdi->SetDrawColor(0,0,0);
+							$fpdi->SetLineWidth(0.3);
+							// Draw X in ~4mm box
+							$fpdi->Line($x, $y, $x+4, $y+4);
+							$fpdi->Line($x, $y+4, $x+4, $y);
+						}
+						continue;
+					}
+					$srcField = $cfg['source'] ?? $field;
+					$val = (string)($data[$srcField] ?? '');
+					if ($val === '') { continue; }
+					$fpdi->SetXY($x, $y);
+					if (!empty($cfg['multiline'])) {
+						$fpdi->MultiCell($w > 0 ? $w : 100, 4, $val);
+					} else {
+						$fpdi->Cell($w > 0 ? $w : 0, 4, $val, 0, 0);
+					}
+				}
+			}
+		}
+
+		$this->response = $this->response->withType('pdf')->withStringBody($fpdi->Output('S'));
+		return;
+	}
+
+	/**
+	 * Minimal coordinate map for key fields on the official form.
+	 * Coordinates are in mm relative to the top-left of each page.
+	 * Adjust iteratively by viewing the output.
+	 * @return array<int,array<string,array{x:float,y:float,w?:float,multiline?:bool}>>
+	 */
+	private function officialFieldMap(): array
+	{
+		return [
+			1 => [
+				'name' => ['x' => 30, 'y' => 40, 'w' => 80, 'type' => 'text'],
+				'email' => ['x' => 130, 'y' => 40, 'w' => 60, 'type' => 'text'],
+				'operator' => ['x' => 30, 'y' => 55, 'w' => 80, 'type' => 'text'],
+				'train_no' => ['x' => 130, 'y' => 55, 'w' => 60, 'type' => 'text'],
+				'dep_station' => ['x' => 30, 'y' => 70, 'w' => 80, 'type' => 'text'],
+				'arr_station' => ['x' => 130, 'y' => 70, 'w' => 60, 'type' => 'text'],
+				'dep_date' => ['x' => 30, 'y' => 85, 'w' => 40, 'type' => 'text'],
+				'arr_time' => ['x' => 130, 'y' => 85, 'w' => 40, 'type' => 'text'],
+				'ticket_no' => ['x' => 30, 'y' => 100, 'w' => 160, 'type' => 'text'],
+				'price' => ['x' => 30, 'y' => 115, 'w' => 40, 'type' => 'text'],
+				'actual_arrival_date' => ['x' => 30, 'y' => 130, 'w' => 40, 'type' => 'text'],
+				'missed_connection_station' => ['x' => 30, 'y' => 145, 'w' => 160, 'multiline' => true, 'type' => 'text'],
+				// Section 6: Additional information (arguments/evidence) – wide multiline area
+				'additional_info' => ['x' => 30, 'y' => 200, 'w' => 160, 'multiline' => true, 'type' => 'text'],
+			],
+		];
+	}
+
+	/**
+	 * Attempt to locate the official template PDF, handling filenames with spaces or literal %20,
+	 * and both reimbursement/reimboursement spellings.
+	 */
+	private function findOfficialTemplatePath(): ?string
+	{
+		$dirs = [
+			WWW_ROOT . 'files' . DIRECTORY_SEPARATOR,
+			WWW_ROOT,
+		];
+		// Prefer locally converted/uncompressed files first
+		$candidates = [
+			'reimbursement_form_uncompressed.pdf',
+			'reimbursement_form_converted.pdf',
+			// then the known official names (may be compressed)
+			'reimboursement form - EN - accessible.pdf',
+			'reimboursement%20form%20-%20EN%20-%20accessible.pdf',
+			'reimbursement form - EN - accessible.pdf',
+			'reimbursement%20form%20-%20EN%20-%20accessible.pdf',
+		];
+		foreach ($dirs as $dir) {
+			foreach ($candidates as $file) {
+				$p = $dir . $file;
+				if (is_file($p)) { return $p; }
+			}
+		}
+		// Fallback glob scan in both locations
+		foreach ($dirs as $dir) {
+			$patterns = [
+				$dir . '*reimbours*form*EN*accessible*.pdf',
+				$dir . '*reimburs*form*EN*accessible*.pdf',
+			];
+			foreach ($patterns as $glob) {
+				$hits = glob($glob) ?: [];
+				if (!empty($hits)) { return $hits[0]; }
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Load a field map from config/pdf/reimbursement_map.json if present.
+	 * @return array<int,array<string,array<string,mixed>>>|null
+	 */
+	private function loadFieldMap(): ?array
+	{
+		$path = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'reimbursement_map.json';
+		if (!is_file($path)) {
+			return null;
+		}
+		$json = (string)file_get_contents($path);
+		$data = json_decode($json, true);
+		return is_array($data) ? $data : null;
+	}
+
+	/**
+	 * Draw a light grid to calibrate coordinates (in mm).
+	 */
+	private function drawDebugGrid(Fpdi $pdf, float $w, float $h): void
+	{
+		$pdf->SetDrawColor(200, 200, 200);
+		$pdf->SetTextColor(120, 120, 120);
+		$pdf->SetFont('Helvetica', '', 6);
+		for ($x = 0; $x <= $w; $x += 10) {
+			$pdf->Line($x, 0, $x, $h);
+			if ($x % 20 === 0) { $pdf->SetXY($x + 1, 2); $pdf->Cell(8, 3, (string)$x, 0, 0); }
+		}
+		for ($y = 0; $y <= $h; $y += 10) {
+			$pdf->Line(0, $y, $w, $y);
+			if ($y % 20 === 0) { $pdf->SetXY(2, $y + 1); $pdf->Cell(8, 3, (string)$y, 0, 0); }
+		}
+	}
+}
+
+?>
+[CONTENT END]
+[END FILE]
+
+============================================================
+src/Controller/Api/ComputeController.php
+============================================================
+[BEGIN FILE: src/Controller/Api/ComputeController.php]
+[CONTENT START]
+<?php
+declare(strict_types=1);
+
+namespace App\Controller\Api;
+
+use App\Controller\AppController;
+use App\Service\EligibilityService;
+use App\Service\ExemptionsRepository;
+use App\Service\NationalOverridesRepository;
+
+class ComputeController extends AppController
+{
+	public function initialize(): void
+	{
+		parent::initialize();
+		$this->viewBuilder()->setClassName('Json');
+	}
+
+	public function compensation(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+		$art9meta = (array)($payload['meta'] ?? []);
+
+		$segments = (array)($journey['segments'] ?? []);
+		$last = !empty($segments) ? $segments[array_key_last($segments)] : [];
+
+		$schedArr = (string)($last['schedArr'] ?? '');
+		$actArr = (string)($last['actArr'] ?? '');
+		$minutes = null;
+		if ($schedArr !== '' && $actArr !== '') {
+			$t1 = strtotime($schedArr);
+			$t2 = strtotime($actArr);
+			if ($t1 && $t2) {
+				$minutes = max(0, (int)round(($t2 - $t1) / 60));
+			}
+		}
+
+		// Fallback to journey.actualArrTime + dep date when segment info missing
+		if ($minutes === null) {
+			$depDate = (string)($journey['depDate']['value'] ?? '');
+			$sched = (string)($journey['schedArrTime']['value'] ?? '');
+			$act = (string)($journey['actualArrTime']['value'] ?? '');
+			if ($depDate && $sched && $act) {
+				$t1 = strtotime($depDate . 'T' . $sched . ':00');
+				$t2 = strtotime(($journey['actualArrDate']['value'] ?? $depDate) . 'T' . $act . ':00');
+				if ($t1 && $t2) {
+					$minutes = max(0, (int)round(($t2 - $t1) / 60));
+				}
+			}
+		}
+
+		$minutes = $minutes ?? 0;
+		// E4: allow caller to provide EU-only delay; if euOnly=true and provided, prefer it
+		$euOnlyFlag = (bool)($payload['euOnly'] ?? true);
+		if ($euOnlyFlag && isset($payload['delayMinEU'])) {
+			$euMin = (int)$payload['delayMinEU'];
+			if ($euMin >= 0) { $minutes = $euMin; }
+		}
+
+		// Parse price and currency from simple "99.99 EUR" style value
+		$priceRaw = (string)($journey['ticketPrice']['value'] ?? '0');
+		$price = 0.0;
+		$currency = 'EUR';
+		if (preg_match('/([0-9]+(?:\.[0-9]{1,2})?)/', $priceRaw, $m)) {
+			$price = (float)$m[1];
+		}
+		if (preg_match('/([A-Z]{3})/i', $priceRaw, $m)) {
+			$currency = strtoupper($m[1]);
+		}
+
+	// Map JourneyRecord -> eligibility inputs
+		$operator = (string)($journey['operatorName']['value'] ?? ($last['operator'] ?? ''));
+		$product = (string)($journey['trainCategory']['value'] ?? ($last['trainCategory'] ?? ''));
+	$country = (string)($journey['country']['value'] ?? ($payload['country'] ?? ''));
+
+		$svc = new EligibilityService(new ExemptionsRepository(), new NationalOverridesRepository());
+		// Bridge: if Art.9 preinformed_disruption is 'Ja' and caller didn't set knownDelayBeforePurchase,
+		// respect the Art.9 signal.
+		$knownDelayBeforePurchase = (bool)($payload['knownDelayBeforePurchase'] ?? false);
+		if (!$knownDelayBeforePurchase && (($art9meta['preinformed_disruption'] ?? 'unknown') === 'Ja')) {
+			$knownDelayBeforePurchase = true;
+		}
+
+		$res = $svc->computeCompensation([
+			'delayMin' => $minutes,
+			'euOnly' => $euOnlyFlag,
+			'refundAlready' => (bool)($payload['refundAlready'] ?? false),
+			'art18Option' => (string)($payload['art18Option'] ?? ''),
+			'knownDelayBeforePurchase' => $knownDelayBeforePurchase,
+			'extraordinary' => (bool)($payload['extraordinary'] ?? false),
+			'selfInflicted' => (bool)($payload['selfInflicted'] ?? false),
+			'throughTicket' => (bool)($payload['throughTicket'] ?? true),
+			'operator' => $operator ?: null,
+			'product' => $product ?: null,
+			'country' => $country ?: null,
+		]);
+		// E3: apportionment for return tickets or per-leg price if provided
+		$pct = ((int)($res['percent'] ?? 0)) / 100;
+		$amountBase = $price;
+		$returnFlag = (bool)($payload['returnTicket'] ?? false);
+		$legPrice = isset($payload['legPrice']) ? (float)$payload['legPrice'] : null;
+		if ($legPrice !== null && $legPrice > 0) {
+			$amountBase = $legPrice;
+		} elseif ($returnFlag) {
+			$amountBase = $price / 2;
+		}
+		$amount = round($amountBase * $pct, 2);
+		$minPayout = isset($payload['minPayout']) ? (float)$payload['minPayout'] : 0.0;
+		$source = $res['source'] ?? 'eu';
+		$notes = $res['notes'] ?? null;
+		if ($minPayout > 0 && $amount > 0 && $amount < $minPayout) {
+			$amount = 0.0;
+			$source = 'denied';
+			$notes = trim(((string)$notes) . ' Min payout threshold');
+		}
+
+		$out = [
+			'minutes' => $minutes,
+			'pct' => $pct,
+			'amount' => $amount,
+			'currency' => $currency,
+			'source' => $source,
+			'notes' => $notes,
+		];
+		$this->set($out);
+		$this->viewBuilder()->setOption('serialize', array_keys($out));
+	}
+
+	public function art12(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+		$meta = (array)($payload['meta'] ?? []);
+		$svc = new \App\Service\Art12Evaluator();
+		$res = $svc->evaluate($journey, $meta);
+		$this->set($res);
+		$this->viewBuilder()->setOption('serialize', array_keys($res));
+	}
+
+	public function exemptions(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+
+		$builder = new \App\Service\ExemptionProfileBuilder();
+		$profile = $builder->build($journey);
+
+		$this->set(['profile' => $profile]);
+		$this->viewBuilder()->setOption('serialize', ['profile']);
+	}
+
+	public function art9(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+		$meta = (array)($payload['meta'] ?? []);
+		$svc = new \App\Service\Art9Evaluator();
+		$res = $svc->evaluate($journey, $meta);
+		$this->set($res);
+		$this->viewBuilder()->setOption('serialize', array_keys($res));
+	}
+
+	public function refund(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+		$meta = (array)($payload['meta'] ?? []);
+		$svc = new \App\Service\RefundEvaluator();
+		$res = $svc->evaluate($journey, $meta);
+		$this->set($res);
+		$this->viewBuilder()->setOption('serialize', array_keys($res));
+	}
+
+	public function refusion(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$journey = (array)($payload['journey'] ?? []);
+		$meta = (array)($payload['meta'] ?? []);
+		$svc = new \App\Service\Art18RefusionEvaluator();
+		$res = $svc->evaluate($journey, $meta);
+		$this->set($res);
+		$this->viewBuilder()->setOption('serialize', array_keys($res));
+	}
+
+	public function claim(): void
+	{
+		$this->request->allowMethod(['get','post']);
+		$input = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
+		$calc = new \App\Service\ClaimCalculator();
+		$out = $calc->calculate($input);
+		$this->set($out);
+		$this->viewBuilder()->setOption('serialize', array_keys($out));
+	}
+}
+
+?>
+[CONTENT END]
+[END FILE]
+
+============================================================
+src/Controller/Api/DemoController.php
+============================================================
+[BEGIN FILE: src/Controller/Api/DemoController.php]
+[CONTENT START]
+<?php
+declare(strict_types=1);
+
+namespace App\Controller\Api;
+
+use App\Controller\AppController;
+
+class DemoController extends AppController
+{
+	public function initialize(): void
+	{
+		parent::initialize();
+		$this->viewBuilder()->setClassName('Json');
+	}
+
+	/**
+	 * Scan generated mock tickets under mocks/tests/fixtures and run full analysis on each.
+	 * Optional query: baseDir to override directory.
+	 */
+	public function mockTickets(): void
+	{
+		$baseDir = (string)($this->request->getQuery('baseDir') ?? (ROOT . DIRECTORY_SEPARATOR . 'mocks' . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'fixtures'));
+		$withRne = (string)($this->request->getQuery('withRne') ?? '0') === '1';
+		if (!is_dir($baseDir)) {
+			$this->set(['error' => 'not_found', 'baseDir' => $baseDir]);
+			$this->viewBuilder()->setOption('serialize', ['error','baseDir']);
+			return;
+		}
+
+		// Group files by basename (without extension)
+		$entries = scandir($baseDir) ?: [];
+		$groups = [];
+		foreach ($entries as $fn) {
+			if ($fn === '.' || $fn === '..') { continue; }
+			$ext = strtolower((string)pathinfo($fn, PATHINFO_EXTENSION));
+			if (!in_array($ext, ['pdf','png','txt'], true)) { continue; }
+			$base = (string)pathinfo($fn, PATHINFO_FILENAME);
+			if (!isset($groups[$base])) { $groups[$base] = ['pdf' => null, 'png' => null, 'txt' => null]; }
+			$groups[$base][$ext] = $baseDir . DIRECTORY_SEPARATOR . $fn;
+		}
+
+		$results = [];
+		foreach ($groups as $base => $media) {
+			// Parse TXT if present; otherwise attempt heuristics from filename
+			$txt = '';
+			if (!empty($media['txt']) && is_file($media['txt'])) {
+				$txt = (string)file_get_contents((string)$media['txt']);
+			}
+
+			$parsed = $this->parseMockText($base, $txt);
+			$journey = (array)($parsed['journey'] ?? []);
+			// Accept both snake_case (preferred) and camelCase from parser
+			$art12Meta = (array)($parsed['art12_meta'] ?? ($parsed['art12Meta'] ?? []));
+			$art9Meta = (array)($parsed['art9_meta'] ?? ($parsed['art9Meta'] ?? []));
+			$refusionMeta = (array)($parsed['refusion_meta'] ?? ($parsed['refusionMeta'] ?? []));
+			$compute = (array)($parsed['compute'] ?? []);
+
+			// Profile and evaluations
+			$profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+			$art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $art12Meta);
+
+			// Prepare auto values for Art.9 from OCR text and overlaps; RNE added below if available
+			$auto = [];
+			foreach (['through_ticket_disclosure','single_txn_operator','single_txn_retailer','separate_contract_notice'] as $k) {
+				if (isset($art12Meta[$k])) { $auto[$k] = ['value' => $art12Meta[$k], 'source' => 'art12_meta']; }
+			}
+			if ($txt !== '') {
+				if (preg_match('/\bCIV\b/i', $txt) || stripos($txt, 'conditions of carriage') !== false) {
+					$auto['civ_marking_present'] = ['value' => 'Ja', 'source' => 'ticket_ocr'];
+				}
+				$trainLine = $this->matchOne($txt, '/^Train:\s*([^\r\n]+)/mi');
+				if ($trainLine && preg_match('/\d+/', $trainLine)) {
+					$auto['train_specificity'] = ['value' => 'Kun specifikt tog', 'source' => 'ticket_ocr'];
+				}
+			}
+			$comp = $this->computeCompensationPreview($journey, $compute);
+			$refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['refundAlready' => (bool)($compute['refundAlready'] ?? false)]);
+			$refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, $refusionMeta);
+
+			$scenario = [
+				'journey' => $journey,
+				'refusion_meta' => $refusionMeta,
+				'compute' => $compute,
+			];
+			$claimOut = (new \App\Service\ClaimCalculator())->calculate($this->mapScenarioToClaimInput($scenario));
+
+			$rne = null;
+			if ($withRne) {
+				// naive extraction for demo: use product+number or PNR as trainId and schedDep date
+				$trainId = $this->matchOne($txt, '/^Train:\s*([^\r\n]+)/mi') ?: ($pnr ?? '');
+				$dateIso = $this->dateToIso($this->matchOne($txt, '/^Date:\s*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/mi'));
+				if ($trainId && $dateIso) {
+					$rne = (new \App\Service\RneClient())->realtime($trainId, substr($dateIso, 0, 10));
+				} else {
+					$rne = [];
+				}
+			}
+			// Add conservative RNE auto hints (if data fetched)
+			if (!empty($rne)) {
+				$auto['station_board_updates'] = ['value' => 'Ja', 'source' => 'rne'];
+				// Bike AUTO mapping (Bilag II I.5) — tolerant to common key variants
+				$valOf = function($v): string {
+					$s = strtolower(trim((string)$v));
+					if ($s === '1' || $s === 'true' || $s === 'yes' || $s === 'ja') return 'Ja';
+					if ($s === '0' || $s === 'false' || $s === 'no' || $s === 'nej') return 'Nej';
+					return 'unknown';
+				};
+				// bikesAllowed → if false, set reservation type to 'Ikke muligt'
+				$bikesAllowed = $rne['bikesAllowed'] ?? ($rne['bike_allowed'] ?? null);
+				if ($bikesAllowed !== null) {
+					$ba = $valOf($bikesAllowed);
+					if ($ba === 'Nej') {
+						$auto['bike_reservation_type'] = ['value' => 'Ikke muligt', 'source' => 'rne'];
+					}
+				}
+				// bikeReservationRequired → bike_res_required Ja/Nej
+				$bikeReq = $rne['bikeReservationRequired'] ?? ($rne['bike_res_required'] ?? null);
+				if ($bikeReq !== null) {
+					$auto['bike_res_required'] = ['value' => $valOf($bikeReq), 'source' => 'rne'];
+				}
+			}
+
+			if (!empty($auto)) { $art9Meta['_auto'] = $auto + (array)($art9Meta['_auto'] ?? []); }
+			$art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $art9Meta);
+
+			$results[] = [
+				'id' => $base,
+				'media' => [
+					'pdf' => $media['pdf'],
+					'png' => $media['png'],
+					'txt' => $media['txt'],
+				],
+				'rne' => $rne,
+				'profile' => $profile,
+				'art12' => $art12,
+				'art9' => $art9,
+				'compensation' => $comp,
+				'refund' => $refund,
+				'refusion' => $refusion,
+				'claim' => $claimOut,
+			];
+		}
+
+		$this->set(['results' => $results, 'count' => count($results), 'baseDir' => $baseDir]);
+		$this->viewBuilder()->setOption('serialize', ['results','count','baseDir']);
+	}
+
+	/** Generate a set of mock tickets (TXT + PNG + PDF) with QR/barcode-like graphics */
+	public function generateMocks(): void
+	{
+		$this->request->allowMethod(['post', 'get']);
+		$baseDir = (string)($this->request->getQuery('baseDir') ?? (ROOT . DIRECTORY_SEPARATOR . 'mocks' . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'fixtures'));
+		if (!is_dir($baseDir)) { @mkdir($baseDir, 0775, true); }
+
+		$tickets = [
+			['base' => 'sncf_tgv_paris_lyon', 'pnr' => 'ABC123', 'operator' => 'SNCF', 'product' => 'TGV', 'train' => 'TGV 1234', 'from' => 'Paris Gare de Lyon', 'to' => 'Lyon Part-Dieu', 'date' => '12/11/2025 08:10', 'schedArr' => '10:10', 'notes' => ['CIV','Fastest','Non-refundable']],
+			['base' => 'db_ice_berlin_munich', 'pnr' => 'ZX9-88Q', 'operator' => 'DB', 'product' => 'ICE', 'train' => 'ICE 789', 'from' => 'Berlin Hbf', 'to' => 'München Hbf', 'date' => '18/11/2025 09:05', 'schedArr' => '13:05', 'notes' => ['Flexible','Complaints']],
+			['base' => 'dsb_re_copenhagen_odense', 'pnr' => 'DSB-55K7', 'operator' => 'DSB', 'product' => 'RE', 'train' => 'RE 123', 'from' => 'København H', 'to' => 'Odense', 'date' => '20/11/2025 14:22', 'schedArr' => '16:12', 'notes' => ['Bike reservation required','Complaints']],
+			['base' => 'sj_reg_stockholm_goteborg', 'pnr' => 'SJ-7788', 'operator' => 'SJ', 'product' => 'REG', 'train' => 'REG 456', 'from' => 'Stockholm Central', 'to' => 'Göteborg C', 'date' => '22/11/2025 07:30', 'schedArr' => '10:45', 'notes' => ['Alternatives shown','MCT ok']],
+			['base' => 'zssk_r_bratislava_kosice', 'pnr' => 'SK-3321', 'operator' => 'ZSSK', 'product' => 'R', 'train' => 'R 610', 'from' => 'Bratislava hl.st.', 'to' => 'Košice', 'date' => '25/11/2025 15:20', 'schedArr' => '21:50', 'notes' => ['CIV']],
+			['base' => 'pkp_ic_warszawa_gdansk', 'pnr' => 'PL-IC-9011', 'operator' => 'PKP Intercity', 'product' => 'IC', 'train' => 'IC 3502', 'from' => 'Warszawa Centralna', 'to' => 'Gdańsk Główny', 'date' => '27/11/2025 11:55', 'schedArr' => '14:55', 'notes' => ['Bike reservation required','Complaints']],
+			['base' => 'sncf_tgv_lille_paris', 'pnr' => 'LIL-PAR-447', 'operator' => 'SNCF', 'product' => 'TGV', 'train' => 'TGV 8123', 'from' => 'Lille Europe', 'to' => 'Paris Nord', 'date' => '29/11/2025 08:05', 'schedArr' => '09:04', 'notes' => ['CIV','Fastest','Non-refundable']],
+		];
+
+		$created = [];
+		foreach ($tickets as $t) {
+			$txt = $this->renderTxt($t);
+			$txtPath = $baseDir . DIRECTORY_SEPARATOR . $t['base'] . '.txt';
+			file_put_contents($txtPath, $txt);
+
+			$pngPath = $baseDir . DIRECTORY_SEPARATOR . $t['base'] . '.png';
+			$this->renderPngTicket($t, $pngPath);
+
+			$pdfPath = $baseDir . DIRECTORY_SEPARATOR . $t['base'] . '.pdf';
+			$this->renderPdfTicket($t, $pdfPath, $pngPath);
+
+			$created[] = ['base' => $t['base'], 'txt' => $txtPath, 'png' => $pngPath, 'pdf' => $pdfPath];
+		}
+
+		$this->set(['created' => $created, 'baseDir' => $baseDir]);
+		$this->viewBuilder()->setOption('serialize', ['created','baseDir']);
+	}
+
+	private function renderTxt(array $t): string
+	{
+		$lines = [
+			'PNR: ' . $t['pnr'],
+			'Operator: ' . $t['operator'],
+			'Train: ' . $t['train'],
+			'From: ' . $t['from'],
+			'To: ' . $t['to'],
+			'Date: ' . $t['date'],
+			'Scheduled Arr: ' . $t['schedArr'],
+		];
+		foreach ((array)($t['notes'] ?? []) as $n) { $lines[] = $n; }
+		return implode("\n", $lines) . "\n";
+	}
+
+	private function renderPngTicket(array $t, string $path): void
+	{
+		if (!extension_loaded('gd')) { $this->renderPngFallback($path); return; }
+		$w = 1200; $h = 600;
+		$im = imagecreatetruecolor($w, $h);
+		$white = imagecolorallocate($im, 255, 255, 255);
+		$black = imagecolorallocate($im, 0, 0, 0);
+		$gray = imagecolorallocate($im, 220, 220, 220);
+		imagefilledrectangle($im, 0, 0, $w, $h, $white);
+
+		// Prefer TTF rendering (UTF-8 capable) if FreeType is available and font file exists
+		$fontPath = ROOT . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'fonts' . DIRECTORY_SEPARATOR . 'DejaVuSans.ttf';
+		$canTtf = function_exists('imagettftext') && is_file($fontPath);
+
+		$drawText = function($text, int $x, int $y, int $size = 16) use ($im, $black, $canTtf, $fontPath) {
+			if ($canTtf) {
+				// Render as UTF-8 with TrueType
+				imagettftext($im, $size, 0, $x, $y + (int)($size*0.8), $black, $fontPath, $text);
+			} else {
+				// Fallback: transliterate to ASCII and draw with bitmap font
+				$ascii = $this->utf8ToAscii($text);
+				imagestring($im, max(1, min(5, (int)round($size/6))), $x, $y, $ascii, $black);
+			}
+		};
+
+		// Header and details
+		$drawText($t['operator'] . ' ' . $t['product'] . ' – ' . $t['train'], 20, 20, 24);
+		$drawText('PNR: ' . $t['pnr'], 20, 60, 18);
+		$drawText('From: ' . $t['from'], 20, 90, 18);
+		$drawText('To:   ' . $t['to'], 20, 120, 18);
+		$drawText('Date: ' . $t['date'] . '  |  Scheduled Arr: ' . $t['schedArr'], 20, 150, 18);
+
+		// QR-like block (not scannable, but structured) – right side
+		$qrX = 900; $qrY = 60; $qrSize = 250; $cells = 29;
+		imagefilledrectangle($im, $qrX-10, $qrY-10, $qrX+$qrSize+10, $qrY+$qrSize+10, $gray);
+		$this->drawPseudoQr($im, $qrX, $qrY, $qrSize, $cells, $t['pnr']);
+
+		// Simple barcode-like bars under header
+		$this->drawPseudoBarcode($im, 20, 200, 800, 70, $t['pnr']);
+
+		imagepng($im, $path);
+		imagedestroy($im);
+	}
+

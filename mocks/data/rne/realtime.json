@@ -1,0 +1,16 @@
+{
+  "segments":[
+    {
+      "trainId":"GENERIC_2LEGS_20250520_A",
+      "dep":{"scheduled":"2025-05-20T07:15:00+02:00","actual":"2025-05-20T07:35:00+02:00","delayMin":20},
+      "arr":{"scheduled":"2025-05-20T08:30:00+02:00","actual":"2025-05-20T08:55:00+02:00","delayMin":25},
+      "causeCode":"WEATHER"
+    },
+    {
+      "trainId":"GENERIC_2LEGS_20250520_B",
+      "dep":{"scheduled":"2025-05-20T09:05:00+02:00","actual":"2025-05-20T09:15:00+02:00","delayMin":10},
+      "arr":{"scheduled":"2025-05-20T10:45:00+02:00","actual":"2025-05-20T11:22:00+02:00","delayMin":37},
+      "causeCode":"CONNECTION_MISSED"
+    }
+  ]
+}

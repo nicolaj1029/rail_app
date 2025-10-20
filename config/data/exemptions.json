@@ -1,0 +1,23 @@
+[
+  {
+    "country": "Hungary",
+    "scope": "long_domestic",
+    "articlesExempt": ["19", "20(2)"],
+    "until": "2029-12-03",
+    "note": "Domestic long distance exemptions under Art. 2.B.4"
+  },
+  {
+    "country": "Portugal",
+    "scope": "long_domestic",
+    "articlesExempt": ["17", "19", "20(2)"],
+    "until": "2029-12-03",
+    "note": "Domestic long distance exemptions under Art. 2.B.4"
+  },
+  {
+    "country": "Sweden",
+    "scope": "regional",
+    "articlesExempt": [],
+    "until": "2029-12-03",
+    "note": "Distance-gated via profile (SE <150 km) — handled in ExemptionProfileBuilder, not here."
+  }
+]

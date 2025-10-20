@@ -1,0 +1,18 @@
+{
+  "pnr": "TGVABC",
+  "undertaking": "SNCF",
+  "passengers": [{"lastName": "DUPONT"}],
+  "price": {"currency": "EUR", "amount": 89.0},
+  "segments": [
+    {
+      "carrier": "SNCF",
+      "trainNo": "8412",
+      "category": "TGV INOUI",
+      "dep": {"time": "2025-03-20T08:04:00+01:00", "station": {"name":"Paris Gare de Lyon","uic":"008798600"}},
+      "arr": {"time": "2025-03-20T10:41:00+01:00", "station": {"name":"Lyon Part-Dieu","uic":"008778700"}},
+      "class": "2",
+      "pnr": "TGVABC",
+      "ticketNo": "1187-1234567890"
+    }
+  ]
+}

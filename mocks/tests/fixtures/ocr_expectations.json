@@ -1,0 +1,42 @@
+{
+  "sncf_tgv_paris_lyon.txt": {
+    "dep_station": "Paris Gare de Lyon",
+    "arr_station": "Lyon Part-Dieu",
+    "dep_date": "2025-11-12",
+    "dep_time": "08:10",
+    "arr_time": "10:10",
+    "train_no": "TGV 1234"
+  },
+  "sncf_tgv_ticket.txt": {
+    "dep_station": "Paris Gare de Lyon",
+    "arr_station": "Lyon Part-Dieu",
+    "dep_date": "2025-03-20",
+    "dep_time": "08:04",
+    "arr_time": "10:41",
+    "train_no": "TGV 8412"
+  },
+  "dsb_re_ticket.txt": {
+    "dep_station": "København H",
+    "arr_station": "Odense",
+    "dep_date": "2025-05-12",
+    "dep_time": "15:02",
+    "train_no": "RE 2245"
+  },
+  "sj_reg_stockholm_goteborg.txt": {
+    "dep_station": "Stockholm Central",
+    "arr_station": "Göteborg C",
+    "dep_date": "2025-11-22",
+    "dep_time": "07:30",
+    "arr_time": "10:45",
+    "train_no": "REG 456"
+  }
+  ,
+  "trenitalia_frecciabianca_bologna_milano.txt": {
+    "dep_station": "Bologna Centrale",
+    "arr_station": "Milano Centrale",
+    "dep_date": "2025-04-07",
+    "dep_time": "11:17",
+    "arr_time": "13:25",
+    "train_no": "FB 8621"
+  }
+}
