@@ -92,6 +92,16 @@ class UploadController extends AppController
                     $ocrAutoCount = count((array)($map['auto'] ?? []));
                     // Derive coarse country/operator/product hints from OCR text
                     $textHints = $this->deriveJourneyFromText($textBlob);
+                    // If operator_country was auto-detected, use it to set journey country for exemptions profile
+                    try {
+                        $opCountry = (string)($meta['_auto']['operator_country']['value'] ?? '');
+                        if ($opCountry !== '') {
+                            if (empty($journey['segments']) || !is_array($journey['segments'])) { $journey['segments'] = [[]]; }
+                            $journey['segments'][0]['country'] = $opCountry;
+                            $journey['country']['value'] = $opCountry;
+                            $ocrLogs[] = 'AUTO: journey country set from operator_country=' . $opCountry;
+                        }
+                    } catch (\Throwable $e) { /* ignore */ }
                 }
                 // Heuristics from filename for images (png/jpg) or when OCR is not available
                 if (empty($journey)) {

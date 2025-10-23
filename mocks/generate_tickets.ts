@@ -1,9 +1,9 @@
+import bwipjs from 'bwip-js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
-import bwipjs from 'bwip-js';
 
 // Ensure outputs stay within the mocks folder regardless of CWD
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -14,7 +14,7 @@ type TicketSpec = {
   filenameBase: string;
   title: string;
   lines: string[];
-  barcode: { type: 'qr'|'code128'; text: string };
+  barcode: { type: 'qr' | 'code128'; text: string };
 };
 
 const specs: TicketSpec[] = [

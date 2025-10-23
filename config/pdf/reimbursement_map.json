@@ -1,46 +1,201 @@
 {
   "1": {
-    "name": {"x": 28, "y": 38, "w": 85, "type": "text"},
-    "email": {"x": 128, "y": 38, "w": 65, "type": "text"},
-    "operator": {"x": 28, "y": 52, "w": 85, "type": "text"},
-    "train_no": {"x": 128, "y": 52, "w": 65, "type": "text"},
-    "dep_station": {"x": 28, "y": 66, "w": 85, "type": "text"},
-    "arr_station": {"x": 128, "y": 66, "w": 65, "type": "text"},
-    "dep_date": {"x": 28, "y": 80, "w": 45, "type": "text"},
-    "arr_time": {"x": 128, "y": 80, "w": 45, "type": "text"},
-    "ticket_no": {"x": 28, "y": 94, "w": 165, "type": "text"},
-    "price": {"x": 28, "y": 108, "w": 45, "type": "text"},
-    "actual_arrival_date": {"x": 28, "y": 122, "w": 45, "type": "text"},
-    
-    "reason_delay": {"x": 22, "y": 114, "type": "checkbox"},
-    "reason_cancellation": {"x": 22, "y": 121, "type": "checkbox"},
-    "reason_missed_conn": {"x": 22, "y": 128, "type": "checkbox"},
-
-    "additional_info": {"x": 28, "y": 200, "w": 165, "type": "text", "multiline": true}
+    "name": {
+      "x": 28,
+      "y": 38,
+      "w": 85,
+      "type": "text"
+    },
+    "email": {
+      "x": 128,
+      "y": 38,
+      "w": 65,
+      "type": "text"
+    },
+    "operator": {
+      "x": 28,
+      "y": 52,
+      "w": 85,
+      "type": "text"
+    },
+    "train_no": {
+      "x": 128,
+      "y": 52,
+      "w": 65,
+      "type": "text"
+    },
+    "dep_station": {
+      "x": 28,
+      "y": 66,
+      "w": 85,
+      "type": "text"
+    },
+    "arr_station": {
+      "x": 128,
+      "y": 66,
+      "w": 65,
+      "type": "text"
+    },
+    "dep_date": {
+      "x": 28,
+      "y": 80,
+      "w": 45,
+      "type": "text"
+    },
+    "arr_time": {
+      "x": 128,
+      "y": 80,
+      "w": 45,
+      "type": "text"
+    },
+    "ticket_no": {
+      "x": 28,
+      "y": 94,
+      "w": 165,
+      "type": "text"
+    },
+    "price": {
+      "x": 28,
+      "y": 108,
+      "w": 45,
+      "type": "text"
+    },
+    "actual_arrival_date": {
+      "x": 28,
+      "y": 122,
+      "w": 45,
+      "type": "text"
+    },
+    "reason_delay": {
+      "x": 22,
+      "y": 114,
+      "type": "checkbox"
+    },
+    "reason_cancellation": {
+      "x": 22,
+      "y": 121,
+      "type": "checkbox"
+    },
+    "reason_missed_conn": {
+      "x": 22,
+      "y": 128,
+      "type": "checkbox"
+    },
+    "additional_info": {
+      "x": 28,
+      "y": 200,
+      "w": 165,
+      "type": "text",
+      "multiline": true
+    }
   },
-
   "2": {
-    "operator": {"x": 30, "y": 112, "w": 85, "type": "text"},
-    "dep_date": {"x": 98, "y": 133, "w": 45, "type": "text"},
-    "dep_station": {"x": 72, "y": 141, "w": 85, "type": "text"},
-    "arr_station": {"x": 74, "y": 149, "w": 65, "type": "text"},
-    "arr_time": {"x": 135, "y": 165, "w": 45, "type": "text"},
-    "train_no": {"x": 87, "y": 173, "w": 65, "type": "text"},
-    "ticket_no": {"x": 108, "y": 181, "w": 165, "type": "text"},
-    "price": {"x": 68, "y": 189, "w": 45, "type": "text"},
-
-    "actual_arrival_date": {"x": 108, "y": 211, "w": 45, "type": "text"}
+    "operator": {
+      "x": 30,
+      "y": 112,
+      "w": 85,
+      "type": "text"
+    },
+    "dep_date": {
+      "x": 98,
+      "y": 133,
+      "w": 45,
+      "type": "text"
+    },
+    "dep_station": {
+      "x": 72,
+      "y": 141,
+      "w": 85,
+      "type": "text"
+    },
+    "arr_station": {
+      "x": 74,
+      "y": 149,
+      "w": 65,
+      "type": "text"
+    },
+    "arr_time": {
+      "x": 135,
+      "y": 165,
+      "w": 45,
+      "type": "text"
+    },
+    "train_no": {
+      "x": 87,
+      "y": 173,
+      "w": 65,
+      "type": "text"
+    },
+    "ticket_no": {
+      "x": 108,
+      "y": 181,
+      "w": 165,
+      "type": "text"
+    },
+    "price": {
+      "x": 68,
+      "y": 189,
+      "w": 45,
+      "type": "text"
+    },
+    "actual_arrival_date": {
+      "x": 108,
+      "y": 211,
+      "w": 45,
+      "type": "text"
+    }
   },
-
   "3": {
-    "payment_bank_transfer": {"x": 22, "y": 220, "type": "checkbox"},
-    "payment_voucher": {"x": 22, "y": 227, "type": "checkbox"},
-    "payment_other": {"x": 22, "y": 234, "type": "checkbox"},
-    "iban": {"x": 28, "y": 246, "w": 80, "type": "text"},
-    "bic": {"x": 118, "y": 246, "w": 40, "type": "text"},
-    "accountHolderName": {"x": 28, "y": 258, "w": 165, "type": "text"},
-    "signature_place": {"x": 28, "y": 272, "w": 60, "type": "text"},
-    "signature_date": {"x": 120, "y": 272, "w": 35, "type": "text"},
-    "signature_name": {"x": 28, "y": 286, "w": 165, "type": "text"}
+    "payment_bank_transfer": {
+      "x": 22,
+      "y": 220,
+      "type": "checkbox"
+    },
+    "payment_voucher": {
+      "x": 22,
+      "y": 227,
+      "type": "checkbox"
+    },
+    "payment_other": {
+      "x": 22,
+      "y": 234,
+      "type": "checkbox"
+    },
+    "iban": {
+      "x": 28,
+      "y": 246,
+      "w": 80,
+      "type": "text"
+    },
+    "bic": {
+      "x": 118,
+      "y": 246,
+      "w": 40,
+      "type": "text"
+    },
+    "accountHolderName": {
+      "x": 28,
+      "y": 258,
+      "w": 165,
+      "type": "text"
+    },
+    "signature_place": {
+      "x": 28,
+      "y": 272,
+      "w": 60,
+      "type": "text"
+    },
+    "signature_date": {
+      "x": 120,
+      "y": 272,
+      "w": 35,
+      "type": "text"
+    },
+    "signature_name": {
+      "x": 28,
+      "y": 286,
+      "w": 165,
+      "type": "text"
+    }
   }
 }

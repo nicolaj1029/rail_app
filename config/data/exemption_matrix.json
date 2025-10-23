@@ -2,20 +2,29 @@
   "FI": [
     {
       "scope": "regional",
-      "exemptions": ["Art.19", "Art.20(2)"],
+      "exemptions": [
+        "Art.19",
+        "Art.20(2)"
+      ],
       "notes": [
         "Pendler-strækninger i FI: Art. 19 + 20(2)(a)-(b) undtaget jf. decree 166/2023 (Finlex)."
       ]
     },
     {
       "scope": "intl_beyond_eu",
-      "notes": ["Intl services til/fra Rusland kan være undtaget jf. Art. 2(6)(b)."]
+      "notes": [
+        "Intl services til/fra Rusland kan være undtaget jf. Art. 2(6)(b)."
+      ]
     }
   ],
   "DE": [
     {
       "scope": "regional",
-      "exemptions": ["Art.9(2)", "Art.20(2)", "Art.30(1)"],
+      "exemptions": [
+        "Art.9(2)",
+        "Art.20(2)",
+        "Art.30(1)"
+      ],
       "notes": [
         "DE regional: undtagelser bl.a. Art. 9(2), 20(2)(a) og 30(1) (første sætning)."
       ]
@@ -24,7 +33,14 @@
   "SE": [
     {
       "scope": "regional",
-      "exemptions": ["Art.8", "Art.9(1)", "Art.17", "Art.18", "Art.19", "Art.20"],
+      "exemptions": [
+        "Art.8",
+        "Art.9(1)",
+        "Art.17",
+        "Art.18",
+        "Art.19",
+        "Art.20"
+      ],
       "notes": [
         "SE <150 km domestic: undtaget for Art. 8, 9(1), 17–20.",
         "I koden: aktiver kun disse undtagelser når distance<150 km (Step Billetinformationer)."
@@ -34,7 +50,10 @@
   "HU": [
     {
       "scope": "long_domestic",
-      "exemptions": ["Art.19", "Art.20(2)"],
+      "exemptions": [
+        "Art.19",
+        "Art.20(2)"
+      ],
       "notes": [
         "HU long-distance domestic: Art. 19 (kompensation) og 20(2) (assistance) undtaget til 2029."
       ]
@@ -44,16 +63,54 @@
       "blocked": true,
       "reason": "National/regional exemptions: EU-flow disabled for regional services."
     },
-    { "scope": "regional", "exemptions": ["Art.10"], "notes": ["HU: Art. 10 (realtidsdata) undtaget til 7. juni 2030."] },
-    { "scope": "long_domestic", "exemptions": ["Art.10"], "notes": ["HU: Art. 10 undtagelse gælder også long domestic."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["HU: Art. 10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["HU: Art. 10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "regional",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HU: Art. 10 (realtidsdata) undtaget til 7. juni 2030."
+      ]
+    },
+    {
+      "scope": "long_domestic",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HU: Art. 10 undtagelse gælder også long domestic."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HU: Art. 10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HU: Art. 10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "PT": [
     {
       "scope": "long_domestic",
-      "exemptions": ["Art.17", "Art.19", "Art.20(2)"],
-      "notes": ["PT long-distance domestic: Art. 17, 19 og 20(2) undtaget (forlænget fra 1371/2007-regimet)."]
+      "exemptions": [
+        "Art.17",
+        "Art.19",
+        "Art.20(2)"
+      ],
+      "notes": [
+        "PT long-distance domestic: Art. 17, 19 og 20(2) undtaget (forlænget fra 1371/2007-regimet)."
+      ]
     },
     {
       "scope": "regional",
@@ -64,7 +121,10 @@
   "PL": [
     {
       "scope": "intl_beyond_eu",
-      "exemptions": ["Art.12", "Art.18(3)"],
+      "exemptions": [
+        "Art.12",
+        "Art.18(3)"
+      ],
       "notes": [
         "PL intl beyond EU: Art. 12 og 18(3) undtaget.",
         "Ingen gennemgående-billet-beskyttelse/100-minuters regel på disse stræk."
@@ -74,19 +134,53 @@
       "scope": "regional",
       "blocked": true,
       "reason": "National/regional exemptions: EU-flow disabled for regional services.",
-      "notes": ["PL regional: EU-flow ikke anvendt; brug lokale ordninger hvor muligt."]
+      "notes": [
+        "PL regional: EU-flow ikke anvendt; brug lokale ordninger hvor muligt."
+      ]
     },
-    { "scope": "regional", "exemptions": ["Art.10"], "notes": ["PL: Art. 10 (realtidsdata) undtaget til 7. juni 2030."] },
-    { "scope": "long_domestic", "exemptions": ["Art.10"], "notes": ["PL: Art. 10 undtagelse gælder også long domestic."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["PL: Art. 10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["PL: Art. 10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "regional",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "PL: Art. 10 (realtidsdata) undtaget til 7. juni 2030."
+      ]
+    },
+    {
+      "scope": "long_domestic",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "PL: Art. 10 undtagelse gælder også long domestic."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "PL: Art. 10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "PL: Art. 10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "CZ": [
     {
       "scope": "intl_beyond_eu",
       "notes": [
-  "CZ: Medtages (inkluderes): alle tjenester som udgangspunkt.",
-  "Udelades (undtagelser gælder) kun hvis tjenesten har første eller sidste station i et tredjeland (undtagen Schweiz). I så fald er Art. 12 og Art. 18(3) undtaget.",
+        "CZ: Medtages (inkluderes): alle tjenester som udgangspunkt.",
+        "Udelades (undtagelser gælder) kun hvis tjenesten har første eller sidste station i et tredjeland (undtagen Schweiz). I så fald er Art. 12 og Art. 18(3) undtaget.",
         "Implementationsnote: Kræver rute-/endestation-data; indtil dette findes anvendes ingen automatisk undtagelse i EU-flowet."
       ]
     }
@@ -96,13 +190,17 @@
       "scope": "intl_beyond_eu",
       "blocked": true,
       "reason": "Intl services beyond EU undtaget – EU-flow disabled.",
-      "notes": ["BG intl beyond EU: bred undtagelse (bl.a. 4, 6, 7(1), 9(2)-(3), 12, 15, 17–20)."]
+      "notes": [
+        "BG intl beyond EU: bred undtagelse (bl.a. 4, 6, 7(1), 9(2)-(3), 12, 15, 17–20)."
+      ]
     },
     {
       "scope": "long_domestic",
       "blocked": true,
       "reason": "Long-distance domestic blocked – EU-flow disabled.",
-      "notes": ["BG long-distance domestic: national exemptions; EU komp/assistance ikke i brug."]
+      "notes": [
+        "BG long-distance domestic: national exemptions; EU komp/assistance ikke i brug."
+      ]
     },
     {
       "scope": "regional",
@@ -116,8 +214,12 @@
   "AT": [
     {
       "scope": "long_domestic",
-      "exemptions": ["Art.10"],
-      "notes": ["AT: Art. 10 (realtidsdata) undtaget til 7. juni 2030."]
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "AT: Art. 10 (realtidsdata) undtaget til 7. juni 2030."
+      ]
     },
     {
       "scope": "regional",
@@ -127,47 +229,163 @@
         "AT regional: EU-flow ikke anvendt; lokale/PSC-regimer gælder."
       ]
     },
-    { "scope": "regional", "exemptions": ["Art.10"], "notes": ["AT: Art.10 undtagelse gælder også regional."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["AT: Art.10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["AT: Art.10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "regional",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "AT: Art.10 undtagelse gælder også regional."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "AT: Art.10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "AT: Art.10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "HR": [
     {
       "scope": "long_domestic",
-      "exemptions": ["Art.10"],
-      "notes": ["HR: Art. 10 (realtidsdata) undtaget til 7. juni 2030."]
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HR: Art. 10 (realtidsdata) undtaget til 7. juni 2030."
+      ]
     },
-    { "scope": "regional", "exemptions": ["Art.10"], "notes": ["HR: Art.10 undtagelse gælder også regional."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["HR: Art.10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["HR: Art.10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "regional",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HR: Art.10 undtagelse gælder også regional."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HR: Art.10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "HR: Art.10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "LV": [
     {
       "scope": "regional",
-      "exemptions": ["Art.10"],
-      "notes": ["LV: Art. 10 (realtidsdata) undtaget til 7. juni 2030."]
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "LV: Art. 10 (realtidsdata) undtaget til 7. juni 2030."
+      ]
     },
-    { "scope": "long_domestic", "exemptions": ["Art.10"], "notes": ["LV: Art.10 undtagelse gælder også long domestic."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["LV: Art.10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["LV: Art.10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "long_domestic",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "LV: Art.10 undtagelse gælder også long domestic."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "LV: Art.10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "LV: Art.10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "RO": [
     {
       "scope": "regional",
       "blocked": true,
       "reason": "National/regional exemptions: EU-flow disabled for regional services.",
-      "notes": ["RO regional: EU-flow ikke anvendt."]
+      "notes": [
+        "RO regional: EU-flow ikke anvendt."
+      ]
     },
     {
       "scope": "long_domestic",
       "blocked": true,
       "reason": "Long-distance domestic blocked – EU-flow disabled.",
-      "notes": ["RO long-distance domestic: national exemptions; EU komp/assistance ikke i brug."]
+      "notes": [
+        "RO long-distance domestic: national exemptions; EU komp/assistance ikke i brug."
+      ]
     },
-    { "scope": "regional", "exemptions": ["Art.10"], "notes": ["RO: Art.10 undtagelse gælder også regional."] },
-    { "scope": "long_domestic", "exemptions": ["Art.10"], "notes": ["RO: Art.10 undtagelse gælder også long domestic."] },
-    { "scope": "intl_inside_eu", "exemptions": ["Art.10"], "notes": ["RO: Art.10 undtagelse gælder også international (EU)."] },
-    { "scope": "intl_beyond_eu", "exemptions": ["Art.10"], "notes": ["RO: Art.10 undtagelse gælder også international (beyond EU)."] }
+    {
+      "scope": "regional",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "RO: Art.10 undtagelse gælder også regional."
+      ]
+    },
+    {
+      "scope": "long_domestic",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "RO: Art.10 undtagelse gælder også long domestic."
+      ]
+    },
+    {
+      "scope": "intl_inside_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "RO: Art.10 undtagelse gælder også international (EU)."
+      ]
+    },
+    {
+      "scope": "intl_beyond_eu",
+      "exemptions": [
+        "Art.10"
+      ],
+      "notes": [
+        "RO: Art.10 undtagelse gælder også international (beyond EU)."
+      ]
+    }
   ],
   "FR": [
     {
@@ -194,7 +412,11 @@
       "scope": "long_domestic",
       "blocked": true,
       "reason": "Long-distance domestic blocked – EU-flow disabled.",
-      "exemptions": ["Art.19", "Art.20(2)", "Art.30(2)"],
+      "exemptions": [
+        "Art.19",
+        "Art.20(2)",
+        "Art.30(2)"
+      ],
       "notes": [
         "SK long-distance domestic: national exemptions; EU komp/assistance ikke i brug.",
         "Art. 19, 20(2) og 30(2) undtaget for long_domestic."

@@ -4,9 +4,21 @@
     "operator": "SNCF",
     "product": "TGV INOUI / Intercités (G30)",
     "tiers": [
-      { "minDelayMin": 30, "percent": 25, "payout": "voucher" },
-      { "minDelayMin": 120, "percent": 50, "payout": "cash_or_voucher" },
-      { "minDelayMin": 180, "percent": 75, "payout": "cash_or_voucher" }
+      {
+        "minDelayMin": 30,
+        "percent": 25,
+        "payout": "voucher"
+      },
+      {
+        "minDelayMin": 120,
+        "percent": 50,
+        "payout": "cash_or_voucher"
+      },
+      {
+        "minDelayMin": 180,
+        "percent": 75,
+        "payout": "cash_or_voucher"
+      }
     ],
     "notes": "SNCF G30-ordningen: 25% ≥30 min, 50% ≥120 min, 75% ≥180 min. Kontant udbetaling muligt fra ~60 min.",
     "source": "SNCF G30 official policy"
@@ -16,8 +28,16 @@
     "operator": "Renfe",
     "product": "AVE / Avlo punctuality commitment",
     "tiers": [
-      { "minDelayMin": 60, "percent": 50, "payout": "cash_or_voucher" },
-      { "minDelayMin": 90, "percent": 100, "payout": "cash_or_voucher" }
+      {
+        "minDelayMin": 60,
+        "percent": 50,
+        "payout": "cash_or_voucher"
+      },
+      {
+        "minDelayMin": 90,
+        "percent": 100,
+        "payout": "cash_or_voucher"
+      }
     ],
     "notes": "Renfe's nationale garanti – mere lempelig end EU-reglen (50% ≥60 min, 100% ≥90 min).",
     "source": "renfe.com (puntualidad)"
@@ -27,7 +47,11 @@
     "operator": "Trenitalia",
     "product": "Frecce (Frecciarossa/Frecciargento/Frecciabianca)",
     "tiers": [
-      { "minDelayMin": 30, "percent": 25, "payout": "voucher" }
+      {
+        "minDelayMin": 30,
+        "percent": 25,
+        "payout": "voucher"
+      }
     ],
     "notes": "Italiensk national bonus (25% voucher ≥30 min). Art. 19-satser anvendes ellers som minimum.",
     "source": "Trenitalia service conditions"
@@ -37,8 +61,16 @@
     "operator": "NS",
     "product": "Domestic (Reisvertraging regeling)",
     "tiers": [
-      { "minDelayMin": 30, "percent": 50, "payout": "cash_or_voucher" },
-      { "minDelayMin": 60, "percent": 100, "payout": "cash_or_voucher" }
+      {
+        "minDelayMin": 30,
+        "percent": 50,
+        "payout": "cash_or_voucher"
+      },
+      {
+        "minDelayMin": 60,
+        "percent": 100,
+        "payout": "cash_or_voucher"
+      }
     ],
     "notes": "NL-national ordning: 50% ≥30 min, 100% ≥60 min. Hurtigere og mere generøs end EU-krav.",
     "source": "ns.nl / Reisvertraging regeling"
@@ -48,8 +80,16 @@
     "operator": "DSB",
     "product": "Rejsetidsgaranti",
     "tiers": [
-      { "minDelayMin": 30, "percent": 25, "payout": "voucher" },
-      { "minDelayMin": 60, "percent": 50, "payout": "cash_or_voucher" }
+      {
+        "minDelayMin": 30,
+        "percent": 25,
+        "payout": "voucher"
+      },
+      {
+        "minDelayMin": 60,
+        "percent": 50,
+        "payout": "cash_or_voucher"
+      }
     ],
     "notes": "Dansk særregel: DSB rejsetidsgaranti anvender lavere tærskler end EU-forordningen. >60 min kan normalt udbetales som overførsel.",
     "source": "dsb.dk rejsetidsgaranti"
@@ -59,9 +99,18 @@
     "operator": "SJ",
     "product": "Förseningsersättning (national law)",
     "tiers": [
-      { "minDelayMin": 60, "percent": 25 },
-      { "minDelayMin": 120, "percent": 50 },
-      { "minDelayMin": 240, "percent": 100 }
+      {
+        "minDelayMin": 60,
+        "percent": 25
+      },
+      {
+        "minDelayMin": 120,
+        "percent": 50
+      },
+      {
+        "minDelayMin": 240,
+        "percent": 100
+      }
     ],
     "notes": "Svensk lov fastsætter kompensation for forsinkelse ≥60 min uanset EU-regler.",
     "source": "svensk förseningsersättningslag"
@@ -71,11 +120,20 @@
     "operator": "VR",
     "product": "Domestic commuter exemptions (166/2023)",
     "tiers": [
-      { "minDelayMin": 60, "percent": 25 },
-      { "minDelayMin": 120, "percent": 50 }
+      {
+        "minDelayMin": 60,
+        "percent": 25
+      },
+      {
+        "minDelayMin": 120,
+        "percent": 50
+      }
     ],
     "notes": "Visse pendlerstrækninger undtaget fra Art. 19 og Art. 20(2)(a)–(b) frem til 2029.",
-    "exemptions": ["Art.19", "Art.20(2)"],
+    "exemptions": [
+      "Art.19",
+      "Art.20(2)"
+    ],
     "scope": "commuter_exempt",
     "source": "Finlex 166/2023"
   },
@@ -84,10 +142,19 @@
     "operator": "DB",
     "product": "Passenger Rights National Adjustments",
     "tiers": [
-      { "minDelayMin": 60, "percent": 25 },
-      { "minDelayMin": 120, "percent": 50 }
+      {
+        "minDelayMin": 60,
+        "percent": 25
+      },
+      {
+        "minDelayMin": 120,
+        "percent": 50
+      }
     ],
-    "exemptions": ["Art.20(2)", "Art.30(1)"],
+    "exemptions": [
+      "Art.20(2)",
+      "Art.30(1)"
+    ],
     "notes": "Tyskland har undtagelse for Art. 20(2) (måltider, hotel mv.) – kompensationssatser følger EU-minimum.",
     "source": "bahn.de + EU exemptions Art. 2(6)(a)"
   },
@@ -97,7 +164,10 @@
     "product": "Domestic",
     "tiers": [],
     "notes": "Art. 19 og 20(2)(a)(b) undtaget for nationale tog frem til 2029. Ingen EU-kompensation.",
-    "exemptions": ["Art.19", "Art.20(2)"],
+    "exemptions": [
+      "Art.19",
+      "Art.20(2)"
+    ],
     "scope": "national_exempt",
     "source": "EU 2021/782 Art. 2(4) + national exemptions"
   },
@@ -107,7 +177,10 @@
     "product": "Domestic",
     "tiers": [],
     "notes": "Undtaget for Art. 19 og 20(2) frem til 2029. Ingen EU-kompensation for nationale rejser.",
-    "exemptions": ["Art.19", "Art.20(2)"],
+    "exemptions": [
+      "Art.19",
+      "Art.20(2)"
+    ],
     "scope": "national_exempt",
     "source": "EU 2021/782 Art. 2(4)"
   },
@@ -117,7 +190,9 @@
     "product": "Domestic",
     "tiers": [],
     "notes": "Undtaget for Art. 19 frem til 2029.",
-    "exemptions": ["Art.19"],
+    "exemptions": [
+      "Art.19"
+    ],
     "scope": "national_exempt",
     "source": "EU 2021/782 national exemptions"
   },
@@ -127,7 +202,9 @@
     "product": "Domestic",
     "tiers": [],
     "notes": "Undtaget for Art. 19 frem til 2029.",
-    "exemptions": ["Art.19"],
+    "exemptions": [
+      "Art.19"
+    ],
     "scope": "national_exempt",
     "source": "EU 2021/782 national exemptions"
   },
@@ -137,7 +214,10 @@
     "product": "International beyond EU exceptions",
     "tiers": [],
     "notes": "Undtagelse for Art. 12 og 18(3) på ruter med tredjelande (fx Ukraine/Belarus).",
-    "exemptions": ["Art.12", "Art.18(3)"],
+    "exemptions": [
+      "Art.12",
+      "Art.18(3)"
+    ],
     "scope": "intl_beyond_eu",
     "source": "EU 2021/782 Art. 2(6)(b)"
   }

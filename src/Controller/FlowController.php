@@ -32,6 +32,16 @@ class FlowController extends AppController
                 $auto = [];
                 foreach ($er->fields as $k => $v) { if ($v !== null && $v !== '') { $auto[$k] = ['value' => $v, 'source' => $er->provider]; } }
                 $meta['_auto'] = $auto;
+                // Propagate country hint from extraction into journey for exemptions profile
+                try {
+                    $opCountry = isset($auto['operator_country']['value']) ? (string)$auto['operator_country']['value'] : '';
+                    if ($opCountry !== '') {
+                        if (empty($journey['segments']) || !is_array($journey['segments'])) { $journey['segments'] = [[]]; }
+                        $journey['segments'][0]['country'] = $opCountry;
+                        $journey['country']['value'] = $opCountry;
+                        $meta['logs'][] = 'AUTO: journey country set from operator_country=' . $opCountry;
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
             }
 
             // Art. 12: if we have a bookingRef and a known seller_type, infer single-transaction flags
@@ -513,6 +523,16 @@ class FlowController extends AppController
                     $auto = [];
                     foreach ($er->fields as $k => $v) { if ($v !== null && $v !== '') { $auto[$k] = ['value' => $v, 'source' => $er->provider]; } }
                     $meta['_auto'] = $auto;
+                    // Propagate country hint from extraction into journey for exemptions profile
+                    try {
+                        $opCountry = isset($auto['operator_country']['value']) ? (string)$auto['operator_country']['value'] : '';
+                        if ($opCountry !== '') {
+                            if (empty($journey['segments']) || !is_array($journey['segments'])) { $journey['segments'] = [[]]; }
+                            $journey['segments'][0]['country'] = $opCountry;
+                            $journey['country']['value'] = $opCountry;
+                            $meta['logs'][] = 'AUTO: journey country set from operator_country=' . $opCountry;
+                        }
+                    } catch (\Throwable $e) { /* ignore */ }
                     // If extraction confidence is low or core fields missing, try Vision OCR re-OCR to improve text
                     $coreKeys = ['dep_station','arr_station','dep_date','dep_time','arr_time','train_no'];
                     $haveCore = true; foreach ($coreKeys as $ck) { if (empty($auto[$ck]['value'] ?? '')) { $haveCore = false; break; } }

@@ -6,27 +6,70 @@
   "items": {
     "type": "object",
     "additionalProperties": true,
-    "required": ["country", "operator", "product", "tiers"],
+    "required": [
+      "country",
+      "operator",
+      "product",
+      "tiers"
+    ],
     "properties": {
-      "country": { "type": "string", "minLength": 1 },
-      "operator": { "type": "string", "minLength": 1 },
-      "product": { "type": "string", "minLength": 1 },
-      "notes": { "type": "string" },
-      "source": { "type": "string" },
-      "scope": { "type": ["string", "null"] },
+      "country": {
+        "type": "string",
+        "minLength": 1
+      },
+      "operator": {
+        "type": "string",
+        "minLength": 1
+      },
+      "product": {
+        "type": "string",
+        "minLength": 1
+      },
+      "notes": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string"
+      },
+      "scope": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
       "exemptions": {
         "type": "array",
-        "items": { "type": "string" }
+        "items": {
+          "type": "string"
+        }
       },
       "tiers": {
         "type": "array",
         "items": {
           "type": "object",
-          "required": ["minDelayMin", "percent"],
+          "required": [
+            "minDelayMin",
+            "percent"
+          ],
           "properties": {
-            "minDelayMin": { "type": "integer", "minimum": 0 },
-            "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
-            "payout": { "type": "string", "enum": ["voucher", "cash_or_voucher", "cash", "other"] }
+            "minDelayMin": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "payout": {
+              "type": "string",
+              "enum": [
+                "voucher",
+                "cash_or_voucher",
+                "cash",
+                "other"
+              ]
+            }
           },
           "additionalProperties": true
         }
