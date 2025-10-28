@@ -1,0 +1,118 @@
+Art. 12 (gennemgående billet) - samlet reference fra projekt 'rail_app'
+
+Formål
+-------
+Denne tekstfil samler alt relevant kode- og UI-materiale i repository, der bruges af localhost/flow til at vurdere Article 12 (gennemgående billet). Den er beregnet til udviklere eller jurister, som ønsker en samlet oversigt af hooks, spørgsmål (TRIN 6) og evaluator-logik.
+
+1) Hvor logik findes
+-------------------
+- Evaluator: src/Service/Art12Evaluator.php
+  - Metode: evaluate(array $journey, array $meta = [])
+  - Output: [ 'hooks' => ..., 'missing' => ..., 'art12_applies' => bool|null, 'reasoning' => [...] ]
+
+- Controller flow og demo: src/Controller/Api/DemoController.php (fixtures, mock ticket parsing, demo scenarios)
+- UI element: templates/element/hooks_panel.php (TRIN 6 panel vist i flow og på demo endpoints)
+- Client flow questions: templates/ClientWizard/questions.php (formular for Art. 12 inputs)
+- Mapping for PDF rendering (TRIN 6 questions shown in PDFs): src/Controller/ReimbursementController.php (questionText, trinForField, and mapping into additional_info)
+- Documentation: docs/art12-code.md and docs/implementation_bundle_2025-10-14.md
+
+2) Hooks / felter brugt til vurdering (nøgleord)
+-----------------------------------------------
+through_ticket_disclosure
+single_txn_operator
+single_txn_retailer
+separate_contract_notice
+shared_pnr_scope
+seller_type_operator
+seller_type_agency
+multi_operator_trip
+mct_realistic
+one_contract_schedule
+contact_info_provided
+responsibility_explained
+single_booking_reference
+exemption_override_12
+
+3) TRIN 6 - UI-spørgsmål (som vist i templates/ClientWizard/questions.php og hooks_panel)
+-------------------------------------------------------------------------------------
+- Er det en gennemgående billet? (form key: through_ticket_disclosure)
+  Options: Gennemgående | Særskilte | Ved ikke
+
+- Oplyst separate kontrakter? (form key: separate_contract_notice)
+  Options: Ja | Nej | Ved ikke
+
+Yderligere hooks som kan være synlige eller auto-udfyldes:
+- single_txn_operator (Ja/Nej/unknown) — var det en enkelt transaktion hos operatøren?
+- single_txn_retailer (Ja/Nej/unknown) — enkelt transaktion hos forhandleren?
+- shared_pnr_scope (yes/no/unknown) — indikerer fælles bookingRef/PNR
+- seller_type_operator / seller_type_agency — hvem solgte billetten?
+- mct_realistic — var minimum connection time realistisk oplyst?
+- one_contract_schedule — var der én kontraktplan for rejsen?
+- contact_info_provided — fik du kontaktinformationer?
+- responsibility_explained — blev ansvar forklaret?
+
+4) Evaluator-regler (kort opsummering fra src/Service/Art12Evaluator.php)
+-------------------------------------------------------------------------
+- Indledende hooks opsamles fra $meta (formular / auto) og fra journey (bookingRef, pnrs, carriers).
+- Exemption profile kan slå Art. 12 fra (exemption_override_12): hvis så → art12_applies=false.
+- Hvis separate_contract_notice === 'Ja' (udtrykkeligt oplyst) → art12_applies=false (Art.12(5) undtagelse).
+- Hvis through_ticket_disclosure === 'Gennemgående' OR shared_pnr_scope === 'yes' → art12_applies=true.
+- Hvis single_txn_operator === 'yes' → art12_applies=true (Art.12(3)).
+- Hvis single_txn_retailer === 'yes' → art12_applies=true (Art.12(4)).
+- Hvis seller_type_agency === 'yes' og separate_contract_notice !== 'Ja' → default til applies=true (rejsebureau ansvar, Art.12(5)).
+- Missing hooks list omfatter: through_ticket_disclosure, single_txn_operator, single_txn_retailer, separate_contract_notice, mct_realistic, one_contract_schedule, contact_info_provided, responsibility_explained.
+
+5) Spørgsmålstekster (bruges i PDF/TEMPLATES og i controller)
+--------------------------------------------------------------
+Controllerens tekstkort (fra src/Controller/ReimbursementController.php questionText):
+- "Blev det oplyst at billetten var gennemgående?" (through_ticket_disclosure)
+- "Var købet en enkelt transaktion med operatøren?" (single_txn_operator)
+- "Var købet en enkelt transaktion med forhandleren?" (single_txn_retailer)
+- "Blev separate kontrakter oplyst?" (separate_contract_notice)
+- "Var MCT (forbindelsestid) realistisk oplyst?" (mct_realistic)
+- "Var der én kontraktplan for rejsen?" (one_contract_schedule)
+- "Fik du kontaktinformationer?" (contact_info_provided)
+- "Blev ansvar forklaret?" (responsibility_explained)
+- "Blev nationale regler forklaret som alternativ?" (continue_national_rules)
+
+6) Demo / fixtures og typiske værdier
+-------------------------------------
+- Demo controller (src/Controller/Api/DemoController.php) indeholder fixtures og scenarios (se buildScenarios) der demonstrerer gennemgående billettilfælde ("Gennemgående"), "Særskilte" og agency-salg uden separate contract notice.
+- Demo parsing lægger ofte art12_meta i scenarier: e.g. 'through_ticket_disclosure' => 'Gennemgående', 'single_txn_operator' => 'Ja', 'separate_contract_notice' => 'unknown'
+
+7) Hvordan UI viser vurderingen
+--------------------------------
+- Elementet templates/element/hooks_panel.php viser TRIN 6:
+  - applies (true/false/null)
+  - missing hooks (liste)
+  - begrundelse (reasoning[])
+  - detaljer i et <details> med nøgleværdier: through_ticket_disclosure, separate_contract_notice, single_txn_operator, single_txn_retailer, shared_pnr_scope, seller_type_operator, seller_type_agency, multi_operator_trip, mct_realistic, one_contract_schedule, contact_info_provided, responsibility_explained
+
+8) Integration med PDF (official form)
+--------------------------------------
+- ReimbursementController::official() indsamler udvalgte TRIN-svar og tilføjer dem til 'additional_info' multiline-området der så placeres på en blank continuation page (page 6).
+- Spørgsmålstekster fra questionText bruges når TRIN-svar grupperes for Section 6 (TRIN 6,8,9) i PDF.
+
+9) Hvor at finde relateret dokumentation i repo
+-----------------------------------------------
+- docs/art12-code.md (kort guide og placeringer)
+- docs/implementation_bundle_2025-10-14.md (dybdegående implementeringsnoter, eksempler og demo scenarier)
+- docs/pdf-field-mapping.txt (hvor PDF fields defineres og hvordan mapping virker)
+
+10) Quick-references (filnavne og steder)
+-----------------------------------------
+- Evaluator: src/Service/Art12Evaluator.php
+- UI panel: templates/element/hooks_panel.php
+- Client wizard form: templates/ClientWizard/questions.php
+- PDF grouping & question text: src/Controller/ReimbursementController.php
+- Demos & fixtures: src/Controller/Api/DemoController.php and config/demo/*.json
+- Exemption matrix & overrides: config/data/exemption_matrix.json and config/data/national_overrides.json
+
+11) Anbefalet næste skridt for en udvikler
+-----------------------------------------
+- Hvis du vil ændre spørgsmålenes tekst i TRIN 6, rediger både templates/ClientWizard/questions.php og questionText i ReimbursementController.php for at bevare konsistens i PDF outputs.
+- For at justere evaluator-logikken, opdater src/Service/Art12Evaluator.php — kør tests og demo endpoints (API) for at validere.
+- For at teste PDF-placering: brug /reimbursement/official?template=FILENAME.pdf&debug=1 og juster config/pdf/reimbursement_map.json eller indbyggede officialFieldMap().
+
+---
+Genereret af værktøj i repository den 2025-10-23.

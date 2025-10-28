@@ -54,6 +54,8 @@ class OcrHeuristicsMapper
                 // German boilerplate and table words
                 'fahrkarte','fahrkarten','bahncard','lichtbildausweis','nutzung','nutzungshinweise','gültig','gültigkeit','bedingungen','beförderungsbedingungen',
                 'verkehrsunternehmen','tarif','tarifgemeinschaft','bahn.de','db.de','diebahn','zangenabdruck','auftragsnummer','auftrag','sitzplatz','reservierung','hinweise','zugbindung',
+                // Extra German phrases that appeared in headers/instructions
+                'dokument','reiseverbindung','vorzeigepflichtig','website','kurzfristige','fahrplanänderungen',
                 'klasse','personen','reisende','einfach','fahrt','produkte','produkt','gleis','platz','handy'
             ];
             $hits = 0;
@@ -83,6 +85,28 @@ class OcrHeuristicsMapper
             }
             // DD/MM/YY or DD.MM.YY → assume 20YY
             if (preg_match('/^(\d{2})[\/.](\d{2})[\/.](\d{2})$/', $d, $m)) { $yy = (int)$m[3]; $yy += ($yy < 70 ? 2000 : 1900); return sprintf('%04d-%02d-%02d', $yy, (int)$m[2], (int)$m[1]); }
+            // Swedish/Scandinavian month names like "29 maj 2025" or with weekday prefix
+            $monthMap = [
+                'jan' => 1,'januar' => 1,'januari' => 1,
+                'feb' => 2,'februar' => 2,'februari' => 2,
+                'mar' => 3,'mars' => 3,'marts' => 3,
+                'apr' => 4,'april' => 4,
+                'maj' => 5,'may' => 5,
+                'jun' => 6,'juni' => 6,
+                'jul' => 7,'juli' => 7,
+                'aug' => 8,'august' => 8,
+                'sep' => 9,'sept' => 9,'september' => 9,
+                'okt' => 10,'oktober' => 10,'oct' => 10,'october' => 10,
+                'nov' => 11,'november' => 11,
+                'dec' => 12,'december' => 12
+            ];
+            if (preg_match('/\b(\d{1,2})\s+([A-Za-zÅÄÖåäö]{3,9})\s+(\d{4})\b/u', $d, $msv)) {
+                $moKey = mb_strtolower($msv[2], 'UTF-8');
+                $moKey = preg_replace('/[^a-zåäö]/iu', '', (string)$moKey) ?? $moKey;
+                if (isset($monthMap[$moKey])) {
+                    return sprintf('%04d-%02d-%02d', (int)$msv[3], (int)$monthMap[$moKey], (int)$msv[1]);
+                }
+            }
             return $d;
         };
         $normTime = function(string $t): string {
@@ -134,8 +158,10 @@ class OcrHeuristicsMapper
             $t = preg_replace('/\b(?:Partenza|Arrivo|Departure|Arrival|Abfahrt|Ankunft|Ankomst|To|Til|Till|Nach|Vers|A|À|Al)\b/iu', ' ', $t) ?? $t;
             // Drop parenthetical fragments
             $t = preg_replace('/\s*\([^)]*\)\s*/u', ' ', $t) ?? $t;
-            // Remove trailing platform/coach info
-            $t = preg_replace('/\s+(?:bin(?:ario)?|gleis|platform|carrozza|coach)\s*\d+\s*$/iu', ' ', $t) ?? $t;
+            // Remove trailing platform/coach info (incl. German "Gl.")
+            $t = preg_replace('/\s+(?:bin(?:ario)?|gleis|gl\.?|platform|carrozza|coach)\s*\d+\s*$/iu', ' ', $t) ?? $t;
+            // Trim trailing French layout keywords often printed to the right of station names
+            $t = preg_replace('/\s+(?:classe|voiture|place|duplex|prix|page)\b.*$/iu', ' ', $t) ?? $t;
             // Remove trailing pure numbers or number-like tokens
             $t = preg_replace('/\s+(?:n[°o]\.?\s*)?\d+\s*$/iu', ' ', $t) ?? $t;
             // Collapse whitespace
@@ -327,7 +353,7 @@ class OcrHeuristicsMapper
             }
         }
 
-        // Italian schedule row parser (e.g., "07.04 11.17 BOLOGNA CENTRALE MILANO CENTRALE 07.04 13.25 2")
+    // Italian schedule row parser (e.g., "07.04 11.17 BOLOGNA CENTRALE MILANO CENTRALE 07.04 13.25 2")
         if (!isset($auto['dep_station']['value']) || !isset($auto['arr_station']['value']) || !isset($auto['dep_time']) || !isset($auto['arr_time'])) {
             $lines = preg_split('/\R/u', $text) ?: [];
             // Capture the stations block between the two date/time pairs, then split it intelligently
@@ -384,10 +410,88 @@ class OcrHeuristicsMapper
             }
         }
 
+        // Swedish headings parser (e.g., lines with "Avgång  Ankomst  Tåg ..." followed by values line like "17.25  19.03  898 ...")
+        if (!isset($auto['dep_time']) || !isset($auto['arr_time']) || !isset($auto['train_no'])) {
+            $lines = preg_split('/\R/u', $text) ?: [];
+            for ($i = 0; $i < count($lines); $i++) {
+                $ln = trim($lines[$i]);
+                if ($ln === '') { continue; }
+                // Detect header row in Swedish
+                if (preg_match('/\bAvg(?:ång|ang)\b.*\bAnkomst\b.*\bT[åa]g\b/iu', $ln)) {
+                    $next = $lines[$i+1] ?? '';
+                    if ($next !== '') {
+                        if (preg_match('/\b((?:[01]?\d|2[0-3])[.:]\s*\d{2})\b\s+\b((?:[01]?\d|2[0-3])[.:]\s*\d{2})\b\s+(\d{2,6})/u', $next, $mm)) {
+                            if (!isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($mm[1]), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (sv header row)=' . $auto['dep_time']['value']; }
+                            if (!isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($mm[2]), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (sv header row)=' . $auto['arr_time']['value']; }
+                            if (!isset($auto['train_no'])) { $auto['train_no'] = ['value' => $mm[3], 'source' => 'ocr']; $logs[] = 'AUTO: train_no (sv header row)=' . $auto['train_no']['value']; }
+                            break;
+                        }
+                    }
+                }
+                // General fallback: any line with two time-like tokens then a 2+ digit number (train)
+                if ((!isset($auto['dep_time']) || !isset($auto['arr_time'])) && preg_match('/\b((?:[01]?\d|2[0-3])[.:]\s*\d{2})\b\s+\b((?:[01]?\d|2[0-3])[.:]\s*\d{2})\b\s+(\d{2,6})\b/u', $ln, $mx)) {
+                    if (!isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($mx[1]), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (sv row generic)=' . $auto['dep_time']['value']; }
+                    if (!isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($mx[2]), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (sv row generic)=' . $auto['arr_time']['value']; }
+                    if (!isset($auto['train_no'])) { $auto['train_no'] = ['value' => $mx[3], 'source' => 'ocr']; $logs[] = 'AUTO: train_no (sv row generic)=' . $auto['train_no']['value']; }
+                }
+            }
+        }
+
+        // Swedish compact ticket layout: lines "Avgång" on one line and time on the next; same for "Ankomst".
+        if (!isset($auto['dep_time']) || !isset($auto['arr_time'])) {
+            $lines = preg_split('/\R/u', $text) ?: [];
+            for ($i = 0; $i < count($lines); $i++) {
+                $ln = trim($lines[$i]);
+                if ($ln === '') { continue; }
+                // Avgång label with time either on same or next non-empty line
+                if (!isset($auto['dep_time']) && preg_match('/\bAvg(?:ång|ang)\b/iu', $ln)) {
+                    if (preg_match('/((?:[01]?\d|2[0-3])[.:h,]\s*\d{2}|\b\d{3,4}\b)/u', $ln, $mt)) {
+                        $auto['dep_time'] = ['value' => $normTime($mt[1]), 'source' => 'ocr'];
+                        $logs[] = 'AUTO: dep_time (sv compact same-line)=' . $auto['dep_time']['value'];
+                    } else {
+                        // Next non-empty line
+                        for ($j = $i + 1; $j < min($i + 4, count($lines)); $j++) {
+                            $nxt = trim($lines[$j]); if ($nxt === '') { continue; }
+                            if (preg_match('/^\s*((?:[01]?\d|2[0-3])[.:h,]\s*\d{2}|\b\d{3,4}\b)\s*$/u', $nxt, $mm)) {
+                                $auto['dep_time'] = ['value' => $normTime($mm[1]), 'source' => 'ocr'];
+                                $logs[] = 'AUTO: dep_time (sv compact next-line)=' . $auto['dep_time']['value'];
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Ankomst label with time on same or next line
+                if (!isset($auto['arr_time']) && preg_match('/\bAnkomst\b/iu', $ln)) {
+                    if (preg_match('/((?:[01]?\d|2[0-3])[.:h,]\s*\d{2}|\b\d{3,4}\b)/u', $ln, $mt2)) {
+                        $auto['arr_time'] = ['value' => $normTime($mt2[1]), 'source' => 'ocr'];
+                        $logs[] = 'AUTO: arr_time (sv compact same-line)=' . $auto['arr_time']['value'];
+                    } else {
+                        for ($j = $i + 1; $j < min($i + 4, count($lines)); $j++) {
+                            $nxt = trim($lines[$j]); if ($nxt === '') { continue; }
+                            if (preg_match('/^\s*((?:[01]?\d|2[0-3])[.:h,]\s*\d{2}|\b\d{3,4}\b)\s*$/u', $nxt, $mm2)) {
+                                $auto['arr_time'] = ['value' => $normTime($mm2[1]), 'source' => 'ocr'];
+                                $logs[] = 'AUTO: arr_time (sv compact next-line)=' . $auto['arr_time']['value'];
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (isset($auto['dep_time']) && isset($auto['arr_time'])) { break; }
+            }
+        }
+
+        // Swedish validity line date like "Giltig torsdag 29 maj 2025" → dep_date
+        if (!isset($auto['dep_date'])) {
+            if (preg_match('/\bGiltig\b[^\n\r]*?\b(\d{1,2}\s+[A-Za-zÅÄÖåäö]{3,9}\s+\d{4})\b/u', $text, $m)) {
+                $auto['dep_date'] = ['value' => $normDate($m[1]), 'source' => 'ocr'];
+                $logs[] = 'AUTO: dep_date (sv giltig)=' . $auto['dep_date']['value'];
+            }
+        }
+
         // Arrival time
-    $timeLabelsArr = '(?:Arr\.?\s*time|Ankomsttid|Arrival\s*time|Ankunftszeit|Heure\s*d\'arriv[ée]e|Ankomst|Arriv[ée]e|Arrivo|Arr\.|Scheduled\s*Arr(?:ival)?)';
-        if ($lbl) { $timeLabelsArr = '(?:' . $lbl->group('arr_time') . '|Arrival\s*time|Ankunftszeit|Ankomst|Arriv[ée]e|Arrivo)'; }
-        if (preg_match('/' . $timeLabelsArr . '[:\s]*(?:(' . $dateToken . ')\s*(?:à|at|um|kl\.?|,)?\s*)?(' . '(?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\b\d{3,4}\b' . ')(?:\s*(?:Uhr|h))?/iu', $text, $m)) {
+    $timeLabelsArr = '(?:Arr\.?\s*time|Ankomsttid|Arrival\s*time|Ankunftszeit|Heure\s*d\'arriv[ée]e|Ankomst|Arriv[ée]?\.?|Arrivo|Arr\.|Scheduled\s*Arr(?:ival)?)';
+        if ($lbl) { $timeLabelsArr = '(?:' . $lbl->group('arr_time') . '|Arrival\s*time|Ankunftszeit|Ankomst|Arriv[ée]?\.?|Arrivo)'; }
+    if (preg_match('/' . $timeLabelsArr . '(?::|\s)*(?:(' . $dateToken . ')\s*(?:à|at|um|kl\.?|,)?\s*)?(?:à|at|um|kl\.?|,)?\s*(' . '(?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\b\d{3,4}\b' . ')(?:\s*(?:Uhr|h))?/iu', $text, $m)) {
             $maybeDate = $m[1] ?? '';
             $timeVal = $m[2] ?? '';
             if ($maybeDate && !isset($auto['arr_date'])) {
@@ -399,7 +503,7 @@ class OcrHeuristicsMapper
         }
         // Simple fallback for lines like "Scheduled Arr: 10:10" (no date on the line)
         if (!isset($auto['arr_time'])) {
-            if (preg_match('/\b(?:Scheduled\s*Arr(?:ival)?|Arr\.|Arrival|Arriv[ée]e)\b[:\s]*((?:[01]?\d|2[0-3])(?:[:.h,]\s*[0-5]\d)|\b\d{3,4}\b)/iu', $text, $mS)) {
+            if (preg_match('/\b(?:Scheduled\s*Arr(?:ival)?|Arr\.|Arriv[ée]?\.?|Arrival)\b(?:[:\s]|à|at|um|kl\.?|,)*((?:[01]?\d|2[0-3])(?:[:.h,]\s*[0-5]\d)|\b\d{3,4}\b)/iu', $text, $mS)) {
                 $auto['arr_time'] = ['value' => $normTime($mS[1]), 'source' => 'ocr'];
                 $logs[] = 'AUTO: arr_time (scheduled shorthand)=' . $auto['arr_time']['value'];
             }
@@ -413,7 +517,7 @@ class OcrHeuristicsMapper
             }
         }
         if (!isset($auto['arr_time'])) {
-            if (preg_match('/\b(?:Arrivée|Arrivee|Arrival|Ankunft|Ankomst|Arr\.?)\b[\s\S]{0,120}' . $dateToken . '\s*(?:à|at|um|kl\.?|,)?\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\b\d{3,4}\b)/iu', $text, $m)) {
+            if (preg_match('/\b(?:Arrivée|Arrivee|Arriv\.?|Arrival|Ankunft|Ankomst|Arr\.?)\b[\s\S]{0,120}' . $dateToken . '\s*(?:à|at|um|kl\.?|,)?\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\b\d{3,4}\b)/iu', $text, $m)) {
                 $auto['arr_time'] = ['value' => $normTime($m[1]), 'source' => 'ocr'];
                 $logs[] = 'AUTO: arr_time (label+date)=' . $auto['arr_time']['value'];
             }
@@ -430,7 +534,8 @@ class OcrHeuristicsMapper
         // Fallback: extract times from lines containing station names
         if ((!isset($auto['dep_time']) || !isset($auto['arr_time'])) && (!empty($auto['dep_station']['value']) || !empty($auto['arr_station']['value']))) {
             $lines = preg_split('/\R/u', $text) ?: [];
-            $timeRe = '/((?:[01]?\d|2[0-3])(?:[:.h,]\s*\d{1,2})?|\b\d{3,4}\b)/u';
+            // Require minutes or compact HHMM; do NOT allow hours-only to avoid picking digits from nearby codes (e.g., 08 from 08218872)
+            $timeRe = '/((?:[01]?\d|2[0-3])(?:[:.h,]\s*\d{2})|\b\d{3,4}\b)/u';
             $depName = isset($auto['dep_station']['value']) ? (string)$auto['dep_station']['value'] : '';
             $arrName = isset($auto['arr_station']['value']) ? (string)$auto['arr_station']['value'] : '';
             foreach ($lines as $ln) {
@@ -449,33 +554,63 @@ class OcrHeuristicsMapper
         // Arrow line pattern: From → To [HH:MM] – [HH:MM]
         if (!isset($auto['dep_station']) || !isset($auto['arr_station']) || !isset($auto['dep_time']) || !isset($auto['arr_time'])) {
             // Variant with times in parentheses next to station names
-            if (preg_match('/^\s*([\p{L}0-9 .,\'\-]+?)\s*\(\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\d{3,4})\s*\)\s*(?:→|->|—|–|\s-\s)\s*([\p{L}0-9 .,\'\-]+?)\s*\(\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\d{3,4})\s*\)/ium', $text, $m)) {
-                $from = trim($m[1]); $to = trim($m[3]);
+                if (preg_match('/^\s*([\p{L}0-9 .,\'\-]+?)\s*\(\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\d{3,4})\s*\)\s*(?:→|->|—|–|\s-\s)\s*([\p{L}0-9 .,\'\-]+?)\s*\(\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})?|\d{3,4})\s*\)/ium', $text, $m)) {
+                $from = $cleanStationText(trim($m[1])); $to = $cleanStationText(trim($m[3]));
                 $t1 = $m[2] ?? ''; $t2 = $m[4] ?? '';
-                $validFrom = $from !== '' && preg_match('/\p{L}/u', $from) && !$isCodeLike($from) && $letterLen($from) >= 3;
-                $validTo = $to !== '' && preg_match('/\p{L}/u', $to) && !$isCodeLike($to) && $letterLen($to) >= 3;
-                if ($validFrom && !isset($auto['dep_station'])) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (arrow paren)=' . $from; }
-                elseif (!isset($auto['dep_station']) && $from !== '') { $logs[] = 'SKIP: dep_station (arrow paren) too short/code-like => ' . $from; }
-                if ($validTo && !isset($auto['arr_station'])) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (arrow paren)=' . $to; }
-                elseif (!isset($auto['arr_station']) && $to !== '') { $logs[] = 'SKIP: arr_station (arrow paren) too short/code-like => ' . $to; }
-                if ($t1 && !isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($t1), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (arrow paren)=' . $auto['dep_time']['value']; }
-                if ($t2 && !isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($t2), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (arrow paren)=' . $auto['arr_time']['value']; }
+                $validFrom = $isStation($from);
+                $validTo = $isStation($to);
+                // Require both sides to be valid to avoid picking boilerplate
+                if ($validFrom && $validTo) {
+                    if (!isset($auto['dep_station'])) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (arrow paren)=' . $from; }
+                    if (!isset($auto['arr_station'])) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (arrow paren)=' . $to; }
+                    if ($t1 && !isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($t1), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (arrow paren)=' . $auto['dep_time']['value']; }
+                    if ($t2 && !isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($t2), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (arrow paren)=' . $auto['arr_time']['value']; }
+                } else {
+                    if (!isset($auto['dep_station']) && $from !== '') { $logs[] = 'SKIP: dep_station (arrow paren) rejected => ' . $from; }
+                    if (!isset($auto['arr_station']) && $to !== '') { $logs[] = 'SKIP: arr_station (arrow paren) rejected => ' . $to; }
+                }
             } elseif (preg_match('/^\s*([\p{L}0-9 .,\'\-]+?)\s*(?:→|->|—|–|\s-\s)\s*([\p{L}0-9 .,\'\-]+?)(?:\s+((?:[01]?\d|2[0-3])(?:[:.h]\s*[0-5]\d)?))?(?:\s*[–\-]\s*((?:[01]?\d|2[0-3])(?:[:.h]\s*[0-5]\d)?))?/ium', $text, $m)) {
-                $from = trim($m[1]); $to = trim($m[2]);
-                $validFrom = $from !== '' && preg_match('/\p{L}/u', $from) && !$isCodeLike($from) && $letterLen($from) >= 3;
-                $validTo = $to !== '' && preg_match('/\p{L}/u', $to) && !$isCodeLike($to) && $letterLen($to) >= 3;
-                if ($validFrom && !isset($auto['dep_station'])) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (arrow)=' . $from; }
-                elseif (!isset($auto['dep_station']) && $from !== '') { $logs[] = 'SKIP: dep_station (arrow) too short/code-like => ' . $from; }
-                if ($validTo && !isset($auto['arr_station'])) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (arrow)=' . $to; }
-                elseif (!isset($auto['arr_station']) && $to !== '') { $logs[] = 'SKIP: arr_station (arrow) too short/code-like => ' . $to; }
-                if (!empty($m[3]) && !isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($m[3]), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (arrow)=' . $auto['dep_time']['value']; }
-                if (!empty($m[4]) && !isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($m[4]), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (arrow)=' . $auto['arr_time']['value']; }
+                $from = $cleanStationText(trim($m[1])); $to = $cleanStationText(trim($m[2]));
+                $validFrom = $isStation($from);
+                $validTo = $isStation($to);
+                if ($validFrom && $validTo) {
+                    if (!isset($auto['dep_station'])) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (arrow)=' . $from; }
+                    if (!isset($auto['arr_station'])) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (arrow)=' . $to; }
+                    if (!empty($m[3]) && !isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $normTime($m[3]), 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (arrow)=' . $auto['dep_time']['value']; }
+                    if (!empty($m[4]) && !isset($auto['arr_time'])) { $auto['arr_time'] = ['value' => $normTime($m[4]), 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (arrow)=' . $auto['arr_time']['value']; }
+                } else {
+                    if (!isset($auto['dep_station']) && $from !== '') { $logs[] = 'SKIP: dep_station (arrow) rejected => ' . $from; }
+                    if (!isset($auto['arr_station']) && $to !== '') { $logs[] = 'SKIP: arr_station (arrow) rejected => ' . $to; }
+                }
             }
             // Fallback: "De X à Y" style without arrow
             if ((!isset($auto['dep_station']) || !isset($auto['arr_station'])) && preg_match('/\b(?:De|Da|Von|Fra|Från)\b[:\s]*([^\n\r]+?)\s+\b(?:À|A|Til|Till|Nach|Vers)\b[:\s]*([^\n\r]+)/iu', $text, $m2)) {
                 $from = trim($m2[1]); $to = trim($m2[2]);
                 if ($from && !isset($auto['dep_station']) && !$isCodeLike($from)) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (de/à)=' . $from; }
                 if ($to && !isset($auto['arr_station']) && !$isCodeLike($to)) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (de/à)=' . $to; }
+            }
+            // French SNCF style lines: "Départ ... de X" and "Arriv. ... à Y"
+            if (!isset($auto['dep_station']['value']) || !isset($auto['arr_station']['value'])) {
+                $lines = preg_split('/\R/u', $text) ?: [];
+                foreach ($lines as $ln) {
+                    if (!isset($auto['dep_station']['value']) && preg_match('/\b(?:Départ|Depart|Dep\.?)\b[^\r\n]{0,120}?\bde\s+([^\r\n]+)/iu', $ln, $mds)) {
+                        $cand = $cleanStationText($mds[1]);
+                        if ($cand !== '' && $isStation($cand)) { $auto['dep_station'] = ['value' => $cand, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (fr de)=' . $cand; }
+                        if (!isset($auto['dep_time']) && preg_match('/\b((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})|\b\d{3,4}\b)\b/iu', $ln, $mt)) {
+                            $auto['dep_time'] = ['value' => $normTime($mt[1]), 'source' => 'ocr'];
+                            $logs[] = 'AUTO: dep_time (fr line)=' . $auto['dep_time']['value'];
+                        }
+                    }
+                    if (!isset($auto['arr_station']['value']) && preg_match('/\bArriv[ée]?\.?\b[^\r\n]{0,120}?\bà\s+([^\r\n]+)/iu', $ln, $mas)) {
+                        $cand = $cleanStationText($mas[1]);
+                        if ($cand !== '' && $isStation($cand)) { $auto['arr_station'] = ['value' => $cand, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (fr à)=' . $cand; }
+                        if (!isset($auto['arr_time']) && preg_match('/\b((?:[01]?\d|2[0-3])(?:[:.h]\s*\d{1,2})|\b\d{3,4}\b)\b/iu', $ln, $mt2)) {
+                            $auto['arr_time'] = ['value' => $normTime($mt2[1]), 'source' => 'ocr'];
+                            $logs[] = 'AUTO: arr_time (fr line)=' . $auto['arr_time']['value'];
+                        }
+                    }
+                    if (isset($auto['dep_station']['value']) && isset($auto['arr_station']['value'])) { break; }
+                }
             }
         }
 
@@ -508,18 +643,34 @@ class OcrHeuristicsMapper
         }
 
         // Train no/category: prefer labeled capture first
-        if (preg_match('/(?:Train\s*(?:no\.|number|category)?|Tognummer|Treno)[:\s]*([A-ZÄÖÜÅÆØ]{1,8}\s*\d{1,6}[A-Z]?)/iu', $text, $m)) {
+        // Train no/category: avoid capturing French 'Classe 2' or 'Classe' rows; require at least 2 digits to avoid 'InterCity 2'
+        if (preg_match('/(?:Train\s*(?:no\.|number|category)?|Tognummer|Treno|Tåg)[:\s]*([A-ZÄÖÜÅÆØ]{1,12}\s*\d{2,6}[A-Z]?)/iu', $text, $m) && !preg_match('/\bclasse\b\s*\d+/iu', $text)) {
             $auto['train_no'] = ['value' => trim($m[1]), 'source' => 'ocr'];
             $logs[] = 'AUTO: train_no=' . $auto['train_no']['value'];
-        } elseif (preg_match('/\b(?:TGV|ICE|IC|EC|EN|TER|AVE|REG|RE|RB|IR|RJX?|SJ|DSB|SBB|ÖBB|OEBB|NS|SNCF|CFL|CP|PKP|ZSSK)\s*\d{1,6}[A-Z]?\b/u', $text, $m)) {
+        } elseif (preg_match('/\b(?:TGV|ICE|IC|EC|EN|TER|AVE|REG|RE|RB|IR|RJX?|SJ|DSB|SBB|ÖBB|OEBB|NS|SNCF|CFL|CP|PKP|ZSSK)\s*\d{2,6}[A-Z]?\b/u', $text, $m)) {
             $auto['train_no'] = ['value' => trim($m[0]), 'source' => 'ocr'];
             $logs[] = 'AUTO: train_no=' . $auto['train_no']['value'];
         }
 
-        // Ticket/Booking ref (PNR)
+        // Ticket/Booking ref (PNR) — prefer lettered 6-8 char codes (e.g., SNCF Dossier QFKDQB) over long numeric receipts
+        $ticketCandidate = null;
+        // Common English/Danish labels
         if (preg_match('/\b(?:PNR|Booking\s*Reference|Billetnummer|Ticket\s*(?:no\.|number|reference))\b[:\s]*([A-Z0-9\-]+)/iu', $text, $m)) {
-            $auto['ticket_no'] = ['value' => $m[1], 'source' => 'ocr'];
-            $logs[] = 'AUTO: ticket_no=' . $m[1];
+            $ticketCandidate = $m[1];
+            $logs[] = 'CAND: ticket_no (generic)=' . $ticketCandidate;
+        }
+        // French-specific: Dossier / Référence dossier
+        if (preg_match('/\b(?:Dossier|R[ée]f[ée]rence\s*dossier)\b\s*[:#]?\s*([A-Z0-9]{6,8})\b/iu', $text, $mf)) {
+            $dossier = strtoupper($mf[1]);
+            // Prefer Dossier if it contains at least one letter
+            if ($dossier !== '' && preg_match('/[A-Z]/', $dossier)) {
+                $ticketCandidate = $dossier;
+                $logs[] = 'CAND: ticket_no (dossier)=' . $dossier;
+            }
+        }
+        if ($ticketCandidate !== null) {
+            $auto['ticket_no'] = ['value' => $ticketCandidate, 'source' => 'ocr'];
+            $logs[] = 'AUTO: ticket_no=' . $ticketCandidate;
         }
 
         // Price with decimals, symbols and currencies
@@ -652,6 +803,15 @@ class OcrHeuristicsMapper
             if ($prod) {
                 $auto['operator_product'] = ['value' => $prod, 'source' => 'ocr'];
                 $logs[] = 'AUTO: operator_product from catalog=' . $prod;
+                // If operator still unknown, infer from product -> operator mapping
+                if (empty($auto['operator']['value'])) {
+                    $byProd = $catalog->findOperatorByProduct($prod);
+                    if ($byProd) {
+                        $auto['operator'] = ['value' => $byProd['name'], 'source' => 'ocr'];
+                        $auto['operator_country'] = ['value' => $byProd['country'], 'source' => 'ocr'];
+                        $logs[] = 'AUTO: operator inferred from product=' . $prod . ' => ' . $byProd['name'] . ' (' . $byProd['country'] . ')';
+                    }
+                }
             }
         } catch (\Throwable $e) {
             // non-fatal

@@ -1,0 +1,38 @@
+{
+    "selfInflicted": {
+        "checks": [
+            {
+                "key": "hasValidTicket",
+                "label": "Gyldig billet",
+                "required": true
+            },
+            {
+                "key": "safetyMisconduct",
+                "label": "Farlig/adfærd",
+                "negate": true
+            },
+            {
+                "key": "forbiddenItemsOrAnimals",
+                "label": "Forbudte genstande",
+                "negate": true
+            },
+            {
+                "key": "customsRulesBreached",
+                "label": "Told-/myndighedskrav",
+                "negate": true
+            }
+        ],
+        "failOnAnyTrue": [
+            "safetyMisconduct",
+            "forbiddenItemsOrAnimals"
+        ]
+    },
+    "operatorEvidence": {
+        "acceptIfAny": [
+            "ticketStampPresent",
+            "qrPayloadHasDisruption",
+            "disruptionFeedMatch",
+            "missedConnection_3_2_3"
+        ]
+    }
+}

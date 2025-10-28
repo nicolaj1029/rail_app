@@ -143,9 +143,12 @@ class ClaimCalculator
         // 5) Gross, fee, net
         $gross = max($refundAmount + $compAmount + $expensesTotal - $alreadyRefunded, 0.0);
         $serviceFeePct = 25;
-    // Floor to 2 decimals to avoid overpay by rounding up
-    $serviceFee = floor(($gross * ($serviceFeePct / 100)) * 100) / 100;
-    $net = floor(($gross - $serviceFee) * 100) / 100;
+        // Service fee mode: default on gross; if 'expenses_only', only apply on expenses
+        $feeMode = (string)($input['service_fee_mode'] ?? 'gross');
+        $feeBase = ($feeMode === 'expenses_only') ? max($expensesTotal, 0.0) : $gross;
+        // Floor to 2 decimals to avoid overpay by rounding up
+        $serviceFee = floor(($feeBase * ($serviceFeePct / 100)) * 100) / 100;
+        $net = floor(($gross - $serviceFee) * 100) / 100;
 
         // 6) Output
         return [

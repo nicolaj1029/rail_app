@@ -88,7 +88,11 @@ class EligibilityService
                         'product' => $ctx['product'] ?? null,
                     ]);
                     if ($override) {
-                        [$ovPercent, $ovPayout] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
+                        [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
+                        // prefer override when strictly better, or equal but earlier threshold,
+                        // or when an exemption matched for the country/scope (prefer override if >=)
+                        $preferOverride = ($ovPercent > $percent) || ($ovPercent === $percent && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent)) || (!empty($exMatched) && $ovPercent >= $percent);
+                        if ($preferOverride) {
                         $out = [
                             'percent' => $ovPercent,
                             'source' => 'override',
@@ -127,9 +131,11 @@ class EligibilityService
             'operator' => $ctx['operator'] ?? null,
             'product' => $ctx['product'] ?? null,
         ]);
+
         if ($override) {
-            [$ovPercent, $ovPayout] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
-            if ($ovPercent > $percent) {
+            [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
+            $preferOverride = ($ovPercent > $percent) || ($ovPercent === $percent && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent)) || (!empty($exMatched) && $ovPercent >= $percent);
+            if ($preferOverride) {
                 $out = ['percent' => $ovPercent, 'source' => 'override'];
                 if ($ovPayout) { $out['payout'] = $ovPayout; }
                 if (!empty($override['notes'])) { $out['overrideNotes'] = (string)$override['notes']; }
@@ -147,6 +153,7 @@ class EligibilityService
                 return $out;
             }
         }
+
         $out = ['percent' => $percent, 'source' => 'eu'];
         if (!empty($exMatched)) {
             foreach ($exMatched as $row) {
@@ -161,7 +168,22 @@ class EligibilityService
                 if (empty($out['scope']) && !empty($override['scope'])) { $out['scope'] = (string)$override['scope']; }
             }
         }
+
         return $out;
+    }
+
+    /**
+     * Return the EU baseline minimum delay for a given percent value.
+     * @param int $percent
+     * @return int  minDelayMin for EU baseline or PHP_INT_MAX when none
+     */
+    private function baselineMinForPercent(int $percent): int
+    {
+        return match ($percent) {
+            50 => 120,
+            25 => 60,
+            default => PHP_INT_MAX,
+        };
     }
 
     /**
@@ -204,6 +226,7 @@ class EligibilityService
                 }
             }
         }
-        return [$best, $bestPayout];
+            return [$best, $bestPayout, $bestMin];
     }
 }
+

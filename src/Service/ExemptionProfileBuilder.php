@@ -58,8 +58,10 @@ class ExemptionProfileBuilder
                         $profile['articles']['art20_2'] = false;
                     }
                     // Carry reason and add a standardized country+scope note for tests/UX
-                    if (!empty($entry['reason'])) { $profile['notes'][] = (string)$entry['reason']; }
-                    $profile['notes'][] = $country . ' regional: EU-flow disabled (blocked).';
+                    if (!empty($entry['reason'])) { $profile['notes'][] = (string)$entry['reason']; $profile['ui_banners'][] = (string)$entry['reason']; }
+                    $profile['notes'][] = $country . ' ' . $scope . ': EU-flow disabled (blocked).';
+                    // Mark profile as blocked for easier UI checks
+                    $profile['blocked'] = true;
                 }
                 // Map generic "exemptions" array into article flags
                 $exArr = (array)($entry['exemptions'] ?? []);

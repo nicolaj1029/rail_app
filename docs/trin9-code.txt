@@ -1,0 +1,72 @@
+TRIN 9 — Billetinformation før køb (Art. 9) — Code Overview
+
+Scope
+- Purpose: Capture “on request” pre-contract information areas (Annex II) across 10 interest buckets; only evaluated when the user opts in. Integrates with evaluator to surface ask_hooks, UI banners, and dynamic sub-questions.
+- Location: Single-page flow (templates/Flow/one.php, FlowController::one()/entitlements()) and split flow via entitlements.
+
+Key Files
+1) Controller
+   - src/Controller/FlowController.php
+     a) one():
+        - Opt-in flag: compute['art9OptIn'] from checkbox "Inkludér Art. 9 (kun på anmodning)".
+        - When computing preview blocks, evaluates Art. 9 if opted in:
+          • $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta);
+        - Persists TRIN 9 fields from POST into $meta (array of art9Keys) for the evaluator to consume; keeps promised_facilities[] in $form for checkbox echoing.
+        - AJAX live updates: Any change in TRIN 9 triggers queueRecalc() to refresh the hooks panel (which shows ask_hooks).
+     b) entitlements():
+        - Mirrors: evaluates Art. 9 when compute['art9OptIn'] true and exposes $art9 to the view.
+
+2) View (Single-page UI)
+   - templates/Flow/one.php
+     a) Section markup
+        • Fieldset id="s9" with legend "TRIN 9 · Billetinformation før køb (Art. 9)"
+        • Intro notes explain “on request”.
+     b) Interest buckets & auto-mapping
+        • 10 buckets (coc, fastest, fares, pmr, bike, class, disruption, facilities, through, complaint)
+        • autoInterest derived from $art9['ask_hooks'] to pre-check buckets that need more info
+        • Checking a bucket shows a sub-card with targeted fields
+     c) Dynamic behavior (JS)
+        • Change handlers on interest checkboxes toggle sub-cards and call queueRecalc()
+        • Change/input in TRIN 9 sub-cards also trigger queueRecalc() to live-refresh hooks panel
+     d) Exemptions interaction
+        • Real-time info question is hidden when Art. 10 is exempt (art10Applies false)
+
+3) Hooks panel integration
+   - templates/element/hooks_panel.php
+     • Shows TRIN 9 section with ask_hooks count and a comma-separated list
+     • Updates live via AJAX when TRIN 9 inputs change
+
+Inputs/Outputs Contract (TRIN 9)
+- Inputs (persisted in meta and/or form):
+  • coc_acknowledged, coc_evidence_upload (file), civ_marking_present
+  • fastest_flag_at_purchase, mct_realistic, alts_shown_precontract
+  • multiple_fares_shown, cheapest_highlighted, fare_flex_type, train_specificity
+  • pmr_user, pmr_booked, pmr_delivered_status, pmr_promised_missing
+  • bike_reservation_type, bike_res_required, bike_denied_reason, bike_followup_offer, bike_delay_bucket
+  • fare_class_purchased, berth_seat_type, reserved_amenity_delivered, class_delivered_status
+  • preinformed_disruption, preinfo_channel, realtime_info_seen
+  • promised_facilities[] (array), facilities_delivered_status, facility_impact_note
+  • through_ticket_disclosure, single_txn_operator, single_txn_retailer, separate_contract_notice
+  • complaint_channel_seen, complaint_already_filed, complaint_receipt_upload (file), submit_via_official_channel
+
+- Outputs (view/evaluator):
+  • art9: { hooks, ask_hooks, ui_banners, ... }
+  • autoInterest: local view mapping to show which interest sub-cards should open by default
+  • hooks panel displays ask_hooks summary for transparency
+
+Adjacency
+- Depends on opt-in: compute['art9OptIn'] must be true to evaluate and show evaluator-driven data.
+- Interacts with Art. 10: hides real-time question if article is not applicable/exempt.
+- Shares some fields with Art. 12 context (e.g., through_ticket_disclosure, single_txn_*), but TRIN 9 captures the disclosure context “on request”.
+
+Where to adjust
+- Controller
+  • Update the $art9Keys array in FlowController::one() if you add/remove TRIN 9 fields; ensure arrays (promised_facilities[]) are kept as arrays in $form.
+  • Consider debounced autosave/PRG if more heavy fields are added.
+- View
+  • Edit interest map and sub-cards in templates/Flow/one.php under fieldset #s9.
+  • Adjust the autoInterest mapping if new evaluator ask_hooks are introduced.
+
+Search anchors
+- Controller: look for the array $art9Keys and the block “TRIN 9 – Art. 9: Handle uploads (CoC and complaint receipt)”.
+- Template: fieldset id="s9" and div id="art9_interests" plus sub-cards (art9_coc, art9_fastest, ... art9_complaint).

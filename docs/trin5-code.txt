@@ -1,0 +1,85 @@
+TRIN 5 — CIV screening (Art. 4, Annex I) — Code Overview
+
+Scope
+- Purpose: Gate claims by basic liability/CIV conditions (valid ticket, misconduct, prohibited items, administrative rules). If any self-inflicted condition is true, we block the case.
+- Location: Single-page flow and split-step flow implement the same checks.
+
+Key Files
+1) Controller
+   - src/Controller/FlowController.php
+     a) Single-page action: FlowController::one()
+        - Reads/writes session: flow.form, flow.flags, flow.incident
+        - Computes booleans used to gate TRIN 5 UI and later steps
+          • hasValidTicket: from form['hasValidTicket'] (default yes)
+          • safetyMisconduct: from form['safetyMisconduct'] (default no)
+          • forbiddenItemsOrAnimals: from form['forbiddenItemsOrAnimals'] (default no)
+          • customsRulesBreached: from form['customsRulesBreached'] (default yes; true means complied)
+          • liability_ok = hasValidTicket && !safetyMisconduct && !forbiddenItemsOrAnimals && customsRulesBreached
+        - Determines visibility:
+          • TRIN 5 is shown when travel_state in {ongoing, completed}; otherwise a skip note is shown
+          • If the journey is not completed, user must confirm delayLikely60 in TRIN 4 to unlock TRIN 5–7
+        - Exposes variables to the view: liability_ok, flags (travel_state), form
+     b) Split steps:
+        - details(): sets travel_state and incident basics and redirects to entitlements/screening later
+        - screening(): mirrors TRIN 5 checks for the split-flow preview
+          • Re-computes: hasValidTicket, safetyMisconduct, forbiddenItemsOrAnimals, customsRulesBreached, liability_ok
+          • Sets missedConnBlock (from TRIN 4 inputs) for preview but focus is CIV here
+        - choices(), extras(), etc.: consume gating indirectly via other flags
+
+2) View (Single-page UI)
+   - templates/Flow/one.php
+     a) Section markup
+        • Fieldset id="s5" with legend "TRIN 5 · CIV screening (Art. 4, bilag I)"
+        • Visible only when either travel_state is ongoing/completed (or unlocked via delayLikely60 rules)
+     b) Inputs (radio buttons)
+        • hasValidTicket: yes/no
+        • operatorStampedDisruptionProof: yes/no (informational; not part of liability_ok)
+        • safetyMisconduct: yes/no
+        • forbiddenItemsOrAnimals: yes/no
+        • customsRulesBreached: yes/no (here, 'yes' means complied)
+     c) Derived result
+        • liability_ok boolean is computed in controller and shown as a badge or a blocking warning
+        • If liability_ok is false ⇒ warn: "Kan ikke tage sagen: selvforskyldt udfald iht. CIV."
+     d) Visibility rules (JS)
+        • Based on TRIN 1 (travel_state) and TRIN 4 (delayLikely60), JS toggles section visibility
+        • See script at bottom, function update(): toggles #s5, #s6, #s7, #s8 depending on state
+
+3) View (Split-step UI)
+   - FlowController::screening() template (same file templates/Flow/one.php is not used here; split view has separate templates if enabled)
+   - The controller sets liability_ok and missedConnBlock for preview and gating
+
+4) JavaScript gating
+   - In templates/Flow/one.php, the update() function controls:
+     • Show TRIN 5 when travel_state is ongoing/completed; otherwise show skip note
+     • When journey not completed, require delayLikely60 to unlock TRIN 5–7
+     • Disables/enables Official EU form button alongside other gates
+
+Inputs/Outputs Contract (TRIN 5)
+- Inputs (form keys):
+  • hasValidTicket: 'yes'|'no'
+  • safetyMisconduct: 'yes'|'no'
+  • forbiddenItemsOrAnimals: 'yes'|'no'
+  • customsRulesBreached: 'yes'|'no' (interpreted as 'yes' = complied)
+  • operatorStampedDisruptionProof: 'yes'|'no' (UI only, not part of liability_ok)
+- Output flags (controller):
+  • liability_ok: boolean
+  • Used to disable Official PDF and to render warnings
+
+Edge cases handled
+- Default values when inputs are not set yet
+- Section hidden for not-started journeys unless delayLikely60 confirmed (when before_start)
+- Clearing of missed connection station when incident/missed toggles off (to avoid stale values)
+
+Adjacent effects
+- liability_ok participates in disabling the "Officiel EU-formular" button (with GDPR and Art. 12 gates)
+- No database writes; state persists in session only
+
+Where to adjust
+- Add/modify radio groups in templates/Flow/one.php under fieldset #s5
+- Adjust derived logic inside FlowController::one() where liability_ok is computed
+- For split flow, mirror any logic in FlowController::screening()
+
+Search anchors
+- Controller: "TRIN 5–6 – Entitlements and choices" section in one(), and "Split-step: Screening" method
+- Template: look for fieldset id="s5" and elements with IDs s5Screening / s5SkipNote
+

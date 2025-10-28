@@ -100,6 +100,14 @@ class FlowController extends AppController
         $compute = (array)$this->request->getSession()->read('flow.compute') ?: [];
 
         // Services
+        // Infer scope from stations before computing profile
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+            $journey = $inferRes['journey'];
+            if (!empty($inferRes['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $inferRes['logs']); }
+        } catch (\Throwable $e) {
+            $meta['logs'][] = 'WARN: scope infer failed: ' . $e->getMessage();
+        }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
     $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta);
 
@@ -212,6 +220,44 @@ class FlowController extends AppController
     $form = (array)$session->read('flow.form') ?: [];
 
         if ($this->request->is('post')) {
+            // Early handle: remove a ticket from the grouped list (TRIN 4 UI "Fjern")
+            $removeFile = (string)($this->request->getData('remove_ticket') ?? '');
+            if ($removeFile !== '') {
+                // If removing the current primary ticket
+                $currentFile = (string)($form['_ticketFilename'] ?? '');
+                if ($currentFile !== '' && $removeFile === $currentFile) {
+                    // Clear TRIN 4 current upload and auto fields
+                    unset($form['_ticketUploaded'], $form['_ticketFilename'], $form['_ticketOriginalName']);
+                    // Clear TRIN 4 form fields
+                    foreach ([
+                        'operator','operator_country','operator_product',
+                        'dep_date','dep_time','dep_station','arr_station','arr_time',
+                        'train_no','ticket_no','price',
+                        'actual_arrival_date','actual_dep_time','actual_arr_time',
+                        'missed_connection_station'
+                    ] as $rk) { unset($form[$rk]); }
+                    // Clear meta auto caches
+                    unset($meta['_auto'], $meta['_segments_auto'], $meta['_passengers_auto'], $meta['_identifiers'], $meta['_barcode']);
+                    unset($meta['extraction_provider'], $meta['extraction_confidence']);
+                    $meta['logs'][] = 'Removed primary ticket: ' . $removeFile;
+                } else {
+                    // Remove from multi tickets list if present
+                    if (!empty($meta['_multi_tickets']) && is_array($meta['_multi_tickets'])) {
+                        $meta['_multi_tickets'] = array_values(array_filter((array)$meta['_multi_tickets'], function($t) use ($removeFile){
+                            return (string)($t['file'] ?? '') !== $removeFile;
+                        }));
+                        $meta['logs'][] = 'Removed extra ticket: ' . $removeFile;
+                    }
+                }
+                $session->write('flow.meta', $meta);
+                $session->write('flow.form', $form);
+                // PRG back to TRIN 4; if AJAX hooks refresh, render fragment
+                if ($isAjaxHooks && $this->request->is('ajax')) {
+                    // Fall through to recompute and render hooks element below
+                } else {
+                    return $this->redirect(['action' => 'one', '#' => 's4']);
+                }
+            }
             $didUpload = false;
             // TRIN 1
             $travelState = (string)($this->request->getData('travel_state') ?? '');
@@ -321,6 +367,8 @@ class FlowController extends AppController
                 foreach ($resetKeys as $rk) { unset($form[$rk]); }
                 // Also reset meta['_auto'] completely
                 $meta['_auto'] = [];
+                // Reset scope flags on journey to avoid leaking previous classification
+                unset($journey['is_international_beyond_eu'], $journey['is_international_inside_eu'], $journey['is_long_domestic']);
                 // Reset extraction diagnostics so each upload starts clean
                 unset($meta['extraction_provider'], $meta['extraction_confidence']);
                 if (!isset($meta['logs']) || !is_array($meta['logs'])) { $meta['logs'] = []; }
@@ -523,6 +571,69 @@ class FlowController extends AppController
                     $auto = [];
                     foreach ($er->fields as $k => $v) { if ($v !== null && $v !== '') { $auto[$k] = ['value' => $v, 'source' => $er->provider]; } }
                     $meta['_auto'] = $auto;
+                    // New: parse multi-leg segments from OCR text to assist missed-connection selection
+                    try {
+                        $tp = new \App\Service\TicketParseService();
+                        $segAuto = $tp->parseSegmentsFromText($textBlob);
+                        if (!empty($segAuto)) {
+                            $meta['_segments_auto'] = $segAuto;
+                            // Prefill journey segments minimally if empty
+                            if (empty($journey['segments']) || !is_array($journey['segments'])) { $journey['segments'] = []; }
+                            foreach ($segAuto as $s) {
+                                $journey['segments'][] = [
+                                    'from' => (string)($s['from'] ?? ''),
+                                    'to' => (string)($s['to'] ?? ''),
+                                    'schedDep' => (string)($s['schedDep'] ?? ''),
+                                    'schedArr' => (string)($s['schedArr'] ?? ''),
+                                    'depDate' => (string)($s['depDate'] ?? ''),
+                                    'arrDate' => (string)($s['arrDate'] ?? ''),
+                                ];
+                            }
+                            $meta['logs'][] = 'AUTO: detected ' . count($segAuto) . ' segment(s) from ticket text.';
+                        }
+                        // Parse identifiers (PNR/order) from OCR text and optional barcode when image
+                        $ids = $tp->extractIdentifiers($textBlob);
+                        if (in_array($ext, ['png','jpg','jpeg','webp','bmp','tif','tiff','heic'], true)) {
+                            $bc = $tp->parseBarcode($dest);
+                            if (!empty($bc['payload'])) {
+                                $meta['_barcode'] = [ 'format' => $bc['format'], 'chars' => strlen((string)$bc['payload']) ];
+                                $idsBC = $tp->extractIdentifiers((string)$bc['payload']);
+                                $ids = array_merge($ids, $idsBC);
+                            }
+                        }
+                        if (!empty($ids)) {
+                            $meta['_identifiers'] = $ids;
+                            if (!empty($ids['pnr'])) { $journey['bookingRef'] = (string)$ids['pnr']; $meta['logs'][] = 'AUTO: bookingRef from PNR'; }
+                            if (empty($form['ticket_no']) && !empty($ids['order_no'])) { $form['ticket_no'] = (string)$ids['order_no']; $meta['logs'][] = 'AUTO: ticket_no from order_no'; }
+                        }
+                        // Extract passenger snapshot (adults/children and names) for group tickets
+                        $passengerData = $tp->extractPassengerData($textBlob);
+                        if (!empty($passengerData)) {
+                            $meta['_passengers_auto'] = $passengerData;
+                            $journey['passengerCount'] = count($passengerData);
+                            $journey['passengers'] = $passengerData;
+                            $journey['isGroupTicket'] = true;
+                        }
+                        // If dep_date missing, infer from dates found in text
+                        $datesFound = $tp->extractDates($textBlob);
+                        if (!empty($datesFound)) {
+                            $firstDate = (string)$datesFound[0];
+                            if (empty($form['dep_date'])) { $form['dep_date'] = $firstDate; $meta['logs'][] = 'AUTO: dep_date inferred from text dates'; }
+                            if (empty($meta['_auto']['dep_date']['value'])) { $meta['_auto']['dep_date'] = ['value' => $firstDate, 'source' => 'parser:dates']; }
+                        }
+                        // Attempt soft link to existing journey by PNR + dep_date
+                        try {
+                            $pnr = isset($ids['pnr']) ? (string)$ids['pnr'] : ((string)($journey['bookingRef'] ?? ''));
+                            $journeyDate = (string)($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? ''));
+                            if ($pnr !== '' && $journeyDate !== '') {
+                                $tjoin = new \App\Service\TicketJoinService();
+                                $hint = $tjoin->tryLinkToExistingJourney($pnr, $journeyDate, $passengerData ?? []);
+                                if (!empty($hint['matched'])) { $meta['logs'][] = 'JOIN: candidate link by PNR+date'; }
+                            }
+                        } catch (\Throwable $e) { /* ignore link errors */ }
+                    } catch (\Throwable $e) {
+                        $meta['logs'][] = 'WARN: segment/id parsing failed: ' . $e->getMessage();
+                    }
                     // Propagate country hint from extraction into journey for exemptions profile
                     try {
                         $opCountry = isset($auto['operator_country']['value']) ? (string)$auto['operator_country']['value'] : '';
@@ -568,6 +679,20 @@ class FlowController extends AppController
                     ] as $rk) {
                         $form[$rk] = isset($meta['_auto'][$rk]['value']) ? (string)$meta['_auto'][$rk]['value'] : '';
                     }
+                    // If multiple segments exist, prepare a simple select list for missed-connection station (arrivals of intermediate legs)
+                    if (!empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) {
+                        $choices = [];
+                        $segs = (array)$meta['_segments_auto'];
+                        // Offer all arrival stations except the last segment's arrival (miss occurs at a change point)
+                        $lastIdx = count($segs) - 1;
+                        foreach ($segs as $idx => $s) {
+                            $arr = (string)($s['to'] ?? '');
+                            if ($arr === '' || $idx === $lastIdx) { continue; }
+                            $label = $arr;
+                            $choices[$arr] = $label;
+                        }
+                        if (!empty($choices)) { $form['_miss_conn_choices'] = $choices; }
+                    }
                     // Light-touch: also reflect operator hints when available
                     if (!empty($meta['_auto']['operator']['value'])) { $form['operator'] = (string)$meta['_auto']['operator']['value']; }
                     if (!empty($meta['_auto']['operator_country']['value'])) { $form['operator_country'] = (string)$meta['_auto']['operator_country']['value']; }
@@ -589,8 +714,12 @@ class FlowController extends AppController
                             'dep_time' => (string)($meta['_auto']['dep_time']['value'] ?? ''),
                             'arr_time' => (string)($meta['_auto']['arr_time']['value'] ?? ''),
                             'train_no' => (string)($meta['_auto']['train_no']['value'] ?? ''),
-                            'ticket_no' => (string)($meta['_auto']['ticket_no']['value'] ?? ''),
+                            'ticket_no' => (string)($meta['_auto']['ticket_no']['value'] ?? ($form['ticket_no'] ?? '')),
+                            'booking_ref' => (string)($journey['bookingRef'] ?? ''),
                             'price' => (string)($meta['_auto']['price']['value'] ?? ''),
+                            'segments' => (array)($meta['_segments_auto'] ?? []),
+                            'passengers' => (array)($meta['_passengers_auto'] ?? []),
+                            'identifiers' => (array)($meta['_identifiers'] ?? []),
                             'extraction_provider' => (string)($meta['extraction_provider'] ?? ''),
                             'extraction_confidence' => (float)($meta['extraction_confidence'] ?? 0.0),
                             'source' => [
@@ -598,10 +727,19 @@ class FlowController extends AppController
                                 'original_filename' => $name,
                                 'saved_filename' => $safe,
                                 'ocr_chars' => (int)strlen((string)$textBlob),
+                                'barcode' => isset($meta['_barcode']) ? $meta['_barcode'] : null,
                             ],
                             'createdAt' => date('c'),
                         ];
-                        $line = json_encode($record, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+                        // For forward-compat: also wrap in tickets[] for multi-ticket grouping experiments
+                        $ticketsWrap = [
+                            'tickets' => [[
+                                'pnr' => (string)($journey['bookingRef'] ?? ''),
+                                'passenger_count' => isset($journey['passengerCount']) ? (int)$journey['passengerCount'] : count((array)($meta['_passengers_auto'] ?? [])),
+                                'passengers' => (array)($meta['_passengers_auto'] ?? []),
+                            ]],
+                        ];
+                        $line = json_encode(array_merge($record, $ticketsWrap), JSON_UNESCAPED_UNICODE) . PHP_EOL;
                         @file_put_contents($datasetDir . 'tickets.ndjson', $line, FILE_APPEND | LOCK_EX);
                         $meta['logs'][] = 'Dataset: appended to /data/tickets.ndjson';
                     } catch (\Throwable $e) {
@@ -660,6 +798,102 @@ class FlowController extends AppController
                         $meta['logs'][] = 'Dataset append failed: ' . $e->getMessage();
                     }
                 }
+            }
+
+            // Handle multi-ticket uploads (TRIN 4) to support multiple transactions per journey
+            $multiUploaded = 0;
+            try { $allUploaded = $this->request->getUploadedFiles(); } catch (\Throwable $e) { $allUploaded = []; }
+            $multiFiles = [];
+            if (is_array($allUploaded) && isset($allUploaded['multi_ticket_upload']) && is_array($allUploaded['multi_ticket_upload'])) {
+                $multiFiles = $allUploaded['multi_ticket_upload'];
+            } else {
+                $raw = $this->request->getData('multi_ticket_upload');
+                if (is_array($raw)) { $multiFiles = $raw; }
+            }
+            if (!empty($multiFiles)) {
+                if (!isset($meta['_multi_tickets']) || !is_array($meta['_multi_tickets'])) { $meta['_multi_tickets'] = []; }
+                foreach ($multiFiles as $mf) {
+                    if (!($mf instanceof \Psr\Http\Message\UploadedFileInterface)) { continue; }
+                    if ($mf->getError() !== UPLOAD_ERR_OK) { continue; }
+                    $name2 = (string)($mf->getClientFilename() ?? ('ticket_' . bin2hex(random_bytes(4))));
+                    $safe2 = preg_replace('/[^A-Za-z0-9._-]/', '_', $name2) ?: ('ticket_' . bin2hex(random_bytes(4)));
+                    $destDir2 = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads';
+                    if (!is_dir($destDir2)) { @mkdir($destDir2, 0775, true); }
+                    $dest2 = $destDir2 . DIRECTORY_SEPARATOR . $safe2;
+                    try { $mf->moveTo($dest2); } catch (\Throwable $e) { continue; }
+                    $multiUploaded++;
+                    $meta['logs'][] = 'Upload saved (multi): ' . (string)$safe2;
+                    // Minimal OCR/extraction for each extra ticket
+                    $text2 = '';
+                    $ext2 = strtolower((string)pathinfo($dest2, PATHINFO_EXTENSION));
+                    try {
+                        if ($ext2 === 'pdf' && class_exists('Smalot\\PdfParser\\Parser')) {
+                            $parser = new \Smalot\PdfParser\Parser();
+                            $pdf = $parser->parseFile($dest2);
+                            $text2 = $pdf->getText() ?? '';
+                        } elseif (in_array($ext2, ['txt','text'], true)) {
+                            $text2 = (string)@file_get_contents($dest2);
+                        } else {
+                            // Image path: try Tesseract with fallback
+                            $tess = function_exists('env') ? env('TESSERACT_PATH') : getenv('TESSERACT_PATH');
+                            if (!$tess || $tess === '') {
+                                $winDefault = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
+                                $tess = is_file($winDefault) ? $winDefault : 'tesseract';
+                            }
+                            $langs = (function_exists('env') ? env('TESSERACT_LANGS') : getenv('TESSERACT_LANGS')) ?: 'eng';
+                            $cmd = escapeshellarg((string)$tess) . ' ' . escapeshellarg((string)$dest2) . ' stdout -l ' . escapeshellarg((string)$langs);
+                            $out = @shell_exec($cmd . ' 2>&1');
+                            if (is_string($out) && trim($out) !== '') { $text2 = (string)$out; }
+                        }
+                    } catch (\Throwable $e) { $text2 = ''; }
+                    $text2 = preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', (string)$text2) ?? (string)$text2;
+                    $summary = [ 'file' => $safe2, 'provider' => null, 'pnr' => null, 'dep_date' => null, 'passengers' => [], 'segments' => [] ];
+                    if ($text2 !== '') {
+                        $broker2 = new \App\Service\TicketExtraction\ExtractorBroker([
+                            new \App\Service\TicketExtraction\HeuristicsExtractor(),
+                            new \App\Service\TicketExtraction\LlmExtractor(),
+                        ], 0.66);
+                        $erx = $broker2->run($text2);
+                        $summary['provider'] = $erx->provider;
+                        $tp2 = new \App\Service\TicketParseService();
+                        $ids2 = $tp2->extractIdentifiers($text2);
+                        $summary['pnr'] = (string)($ids2['pnr'] ?? '');
+                        $segs2 = $tp2->parseSegmentsFromText($text2);
+                        $summary['segments'] = $segs2;
+                        $pax2 = $tp2->extractPassengerData($text2);
+                        $summary['passengers'] = $pax2;
+                        $dates2 = $tp2->extractDates($text2);
+                        $summary['dep_date'] = (string)($dates2[0] ?? '');
+                        // Try to link
+                        try {
+                            $pnr2 = $summary['pnr'] ?: (string)($journey['bookingRef'] ?? '');
+                            $date2 = $summary['dep_date'] ?: (string)($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? ''));
+                            if ($pnr2 !== '' && $date2 !== '') {
+                                (new \App\Service\TicketJoinService())->tryLinkToExistingJourney($pnr2, $date2, $pax2);
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+                        // Append dataset line for this ticket too
+                        try {
+                            $datasetDir = WWW_ROOT . 'data' . DIRECTORY_SEPARATOR;
+                            if (!is_dir($datasetDir)) { @mkdir($datasetDir, 0775, true); }
+                            $rec2 = [
+                                '_id' => 'ticket_' . date('Ymd_His') . '_' . substr(sha1($safe2 . microtime(true)), 0, 6),
+                                '_type' => 'ticket',
+                                'dep_date' => $summary['dep_date'],
+                                'booking_ref' => $summary['pnr'],
+                                'segments' => $segs2,
+                                'passengers' => $pax2,
+                                'extraction_provider' => (string)$erx->provider,
+                                'source' => [ 'format' => $ext2, 'original_filename' => $name2, 'saved_filename' => $safe2 ],
+                                'createdAt' => date('c'),
+                                'tickets' => [[ 'pnr' => $summary['pnr'], 'passenger_count' => count($pax2), 'passengers' => $pax2 ]],
+                            ];
+                            @file_put_contents($datasetDir . 'tickets.ndjson', json_encode($rec2, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                        } catch (\Throwable $e) { /* ignore dataset errors */ }
+                    }
+                    $meta['_multi_tickets'][] = $summary;
+                }
+                if ($multiUploaded > 0) { $didUpload = true; $session->write('flow.justUploaded', true); }
             }
 
         // Removed duplicate upload handling block to prevent stale 3.2 values persisting across uploads
@@ -723,6 +957,40 @@ class FlowController extends AppController
                     $form[$k] = (string)$v;
                 }
                 // Ignore arrays/objects for these keys
+            }
+
+            // TRIN 1 — persist EU delay minutes if present in this POST (e.g., when uploading after entering delay)
+            if ($this->request->getData('delay_min_eu') !== null && $this->request->getData('delay_min_eu') !== '') {
+                $compute['delayMinEU'] = (int)$this->request->getData('delay_min_eu');
+            }
+
+            // If user clicked the TRIN 10 calculate/update button, persist delay and band explicitly
+            if ($this->request->getData('delayAtFinalMinutes') !== null) {
+                $form['delayAtFinalMinutes'] = (string)(int)$this->request->getData('delayAtFinalMinutes');
+                $compute['delayMinEU'] = (int)$form['delayAtFinalMinutes'];
+            }
+            if ($this->request->getData('compensationBand') !== null) {
+                $form['compensationBand'] = (string)$this->request->getData('compensationBand');
+            }
+            if ($this->request->getData('voucherAccepted') !== null) {
+                $form['voucherAccepted'] = $this->truthy($this->request->getData('voucherAccepted')) ? '1' : '';
+            }
+
+            // Persist inline passenger edits back to meta['_passengers_auto'] if provided
+            $paxEdited = $this->request->getData('passenger');
+            if (is_array($paxEdited) && !empty($meta['_passengers_auto']) && is_array($meta['_passengers_auto'])) {
+                $orig = (array)$meta['_passengers_auto'];
+                foreach ($paxEdited as $idx => $pEdit) {
+                    if (!is_array($pEdit)) { continue; }
+                    $i = is_numeric($idx) ? (int)$idx : null; if ($i === null || !array_key_exists($i, $orig)) { continue; }
+                    $name = isset($pEdit['name']) ? trim((string)$pEdit['name']) : null;
+                    $isC = !empty($pEdit['is_claimant']);
+                    if ($name !== null) { $orig[$i]['name'] = $name; }
+                    $orig[$i]['is_claimant'] = $isC ? true : false;
+                }
+                $meta['_passengers_auto'] = $orig;
+                $journey['passengers'] = $orig;
+                $journey['passengerCount'] = count($orig);
             }
 
             // Handle TRIN 8 uploads
@@ -834,16 +1102,33 @@ class FlowController extends AppController
             $session->write('flow.form', $form);
 
             // PRG: After an upload attempt, redirect to avoid resubmission and ensure anchor navigation to TRIN 4
-            if ($didUpload || $attemptedUpload) {
+            if ($didUpload || $attemptedUpload || ($multiUploaded ?? 0) > 0) {
                 $session->write('flow.justUploaded', true);
                 // Hint UI to show OCR debug card even if _auto is empty
                 $meta['justUploaded'] = true;
                 $session->write('flow.meta', $meta);
-                return $this->redirect(['action' => 'one', '#' => 's4']);
+                // For AJAX hook refresh, skip redirect and let the action render hooks fragment below
+                if (!($isAjaxHooks && $this->request->is('ajax')))
+                {
+                    // Preserve debug unlock query flags across redirect
+                    $qs = [];
+                    foreach (['allow_official','debug'] as $qk) {
+                        $qv = $this->request->getQuery($qk);
+                        if ($qv !== null && $qv !== '') { $qs[$qk] = $qv; }
+                    }
+                    return $this->redirect(array_merge(['action' => 'one', '#' => 's4'], $qs));
+                }
             }
         }
 
         // Compute dependent outputs for right-hand side preview
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+            $journey = $inferRes['journey'];
+            if (!empty($inferRes['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $inferRes['logs']); }
+        } catch (\Throwable $e) {
+            $meta['logs'][] = 'WARN: scope infer failed: ' . $e->getMessage();
+        }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
         $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta);
         $art9 = null;
@@ -857,29 +1142,94 @@ class FlowController extends AppController
         $currency = 'EUR';
         $priceRaw = (string)($journey['ticketPrice']['value'] ?? '0 EUR');
         if (preg_match('/([A-Z]{3})/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+        // Build claim input similar to claims page, including expenses and fee logic
+        $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0 EUR'));
+        $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', $ticketPriceStr);
+        $delayForClaim = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
+        $expensesIn = [
+            'meals' => (float)($form['expense_breakdown_meals'] ?? ($form['expense_meals'] ?? 0)),
+            'hotel' => (float)($form['expense_breakdown_hotel_nights'] ?? 0) > 0 ? 0.0 : (float)($form['expense_hotel'] ?? 0),
+            // When hotel_nights is provided, we defer amount capture to receipts; otherwise use simple value if any
+            'alt_transport' => (float)($form['expense_breakdown_local_transport'] ?? ($form['expense_alt_transport'] ?? 0)),
+            'other' => (float)($form['expense_breakdown_other_amounts'] ?? ($form['expense_other'] ?? 0)),
+        ];
         $claim = (new \App\Service\ClaimCalculator())->calculate([
             'country_code' => (string)($journey['country']['value'] ?? 'EU'),
             'currency' => $currency,
-            'ticket_price_total' => (float)preg_replace('/[^0-9.]/', '', (string)($journey['ticketPrice']['value'] ?? 0)),
+            'ticket_price_total' => $ticketPriceAmount,
             'trip' => [ 'through_ticket' => true, 'legs' => [] ],
             'disruption' => [
-                'delay_minutes_final' => (int)($compute['delayMinEU'] ?? 0),
+                'delay_minutes_final' => $delayForClaim,
                 'eu_only' => (bool)($compute['euOnly'] ?? true),
                 'notified_before_purchase' => (bool)($compute['knownDelayBeforePurchase'] ?? false),
                 'extraordinary' => (bool)($compute['extraordinary'] ?? false),
                 'self_inflicted' => false,
             ],
-            'choices' => [ 'wants_refund' => false, 'wants_reroute_same_soonest' => false, 'wants_reroute_later_choice' => false ],
-            'expenses' => [ 'meals' => 0, 'hotel' => 0, 'alt_transport' => 0, 'other' => 0 ],
+            'choices' => [
+                // Mirror some TRIN 7 choices if needed later
+                'wants_refund' => ((string)($form['remedyChoice'] ?? '') === 'refund_return'),
+                'wants_reroute_same_soonest' => ((string)($form['remedyChoice'] ?? '') === 'reroute_soonest'),
+                'wants_reroute_later_choice' => ((string)($form['remedyChoice'] ?? '') === 'reroute_later'),
+            ],
+            'expenses' => $expensesIn,
             'already_refunded' => 0,
+            // Apply 25% fee on expenses only, not on compensation base (ticket price)
+            'service_fee_mode' => 'expenses_only',
         ]);
+
+        // Build a simple multi-ticket grouped overview for hooks panel
+        $multiTickets = (array)($meta['_multi_tickets'] ?? []);
+        // Compose a current-ticket summary (from _auto/meta)
+        $currSummary = [
+            'file' => (string)($form['_ticketFilename'] ?? ''),
+            'pnr' => (string)($journey['bookingRef'] ?? ''),
+            'dep_date' => (string)($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? '')),
+            'passengers' => (array)($meta['_passengers_auto'] ?? []),
+            'segments' => (array)($meta['_segments_auto'] ?? []),
+        ];
+        $allForGrouping = [];
+        if (!empty($currSummary['pnr']) || !empty($currSummary['dep_date'])) { $allForGrouping[] = $currSummary; }
+        foreach ($multiTickets as $mt) {
+            $allForGrouping[] = [
+                'file' => (string)($mt['file'] ?? ''),
+                'pnr' => (string)($mt['pnr'] ?? ''),
+                'dep_date' => (string)($mt['dep_date'] ?? ''),
+                'passengers' => (array)($mt['passengers'] ?? []),
+                'segments' => (array)($mt['segments'] ?? []),
+            ];
+        }
+        $groupedTickets = [];
+        if (!empty($allForGrouping)) {
+            $groups = (new \App\Service\TicketJoinService())->groupTickets($allForGrouping);
+            $groupedTickets = $groups;
+        }
+
+        // Recommend claim form (EU vs national) based on exemptions/overrides
+        try {
+            $countryCtx = (string)($journey['country']['value'] ?? ($form['operator_country'] ?? ''));
+            $scopeCtx = (string)($profile['scope'] ?? '');
+            $opCtx = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
+            $prodCtx = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
+            $delayCtx = (int)($compute['delayMinEU'] ?? 0);
+            $selector = new \App\Service\ClaimFormSelector();
+            $formDecision = $selector->select([
+                'country' => $countryCtx,
+                'scope' => $scopeCtx,
+                'operator' => $opCtx,
+                'product' => $prodCtx,
+                'delayMin' => $delayCtx,
+                'profile' => $profile,
+            ]);
+        } catch (\Throwable $e) {
+            $formDecision = ['form' => 'eu_standard_claim', 'reason' => 'EU baseline (fallback)', 'notes' => ['Selector error: ' . $e->getMessage()]];
+        }
 
         if ($isAjaxHooks && $this->request->is('ajax')) {
             // Render only the hooks panel element (no layout) for live updates
             $this->viewBuilder()->disableAutoLayout();
             $this->viewBuilder()->setTemplatePath('element');
             $this->viewBuilder()->setTemplate('hooks_panel');
-            $this->set(compact('profile','art12','art9','refund','refusion','claim','journey','meta','compute','flags','incident','form'));
+            $this->set(compact('profile','art12','art9','refund','refusion','claim','journey','meta','compute','flags','incident','form','groupedTickets'));
             return $this->render();
         }
 
@@ -905,15 +1255,18 @@ class FlowController extends AppController
         if (!empty($sel)) $add[] = 'TRIN 2: ' . implode(', ', $sel);
         $additional_info = implode(' | ', $add);
 
-        // TRIN 3 – Liability/CIV screening and gating
+        // TRIN 3/5 – Liability/CIV screening and gating (two-step)
         $hasValidTicket = isset($form['hasValidTicket']) ? (bool)$this->truthy($form['hasValidTicket']) : true;
         $safetyMisconduct = isset($form['safetyMisconduct']) ? (bool)$this->truthy($form['safetyMisconduct']) : false;
         $forbiddenItemsOrAnimals = isset($form['forbiddenItemsOrAnimals']) ? (bool)$this->truthy($form['forbiddenItemsOrAnimals']) : false;
-        $customsRulesBreached = isset($form['customsRulesBreached']) ? (bool)$this->truthy($form['customsRulesBreached']) : true; // true means complied
-        $liability_ok = ($hasValidTicket === true)
-            && ($safetyMisconduct === false)
-            && ($forbiddenItemsOrAnimals === false)
-            && ($customsRulesBreached === true);
+        // true means complied with admin/customs rules
+        $customsRulesBreached = isset($form['customsRulesBreached']) ? (bool)$this->truthy($form['customsRulesBreached']) : true;
+        // Step B: operator-stamped proof or other documentary basis
+        $operatorProof = isset($form['operatorStampedDisruptionProof']) ? (bool)$this->truthy($form['operatorStampedDisruptionProof']) : false;
+        // Step A: self-inflicted if any of these hold
+        $selfInflicted = (!$hasValidTicket) || $safetyMisconduct || $forbiddenItemsOrAnimals || (!$customsRulesBreached);
+        // Combined gate: require not self-inflicted AND operator proof
+        $liability_ok = (!$selfInflicted) && $operatorProof;
 
         // TRIN 4 – Missed connection + separate contracts disclosure (Art. 12 note)
         $singleTxn = isset($form['singleTxn']) ? (bool)$this->truthy($form['singleTxn']) : false;
@@ -944,8 +1297,9 @@ class FlowController extends AppController
             'journey','meta','compute','flags','incident','form',
             'profile','art12','art9','refund','refusion','claim',
             'reason_delay','reason_cancellation','reason_missed_conn','additional_info',
-            'liability_ok','missedConnBlock','allow_refund','allow_compensation','section4_choice','gdpr_ok','delayAtFinal','art12_block'
+            'liability_ok','missedConnBlock','allow_refund','allow_compensation','section4_choice','gdpr_ok','delayAtFinal','art12_block','selfInflicted','operatorProof','formDecision'
         ));
+        $this->set(compact('groupedTickets'));
         $this->viewBuilder()->setTemplate('one');
         return null;
     }
@@ -998,11 +1352,13 @@ class FlowController extends AppController
             return $this->redirect(['action' => 'choices']);
         }
         // compute gating preview
-        $hasValidTicket = isset($form['hasValidTicket']) ? (bool)$this->truthy($form['hasValidTicket']) : true;
-        $safetyMisconduct = isset($form['safetyMisconduct']) ? (bool)$this->truthy($form['safetyMisconduct']) : false;
-        $forbiddenItemsOrAnimals = isset($form['forbiddenItemsOrAnimals']) ? (bool)$this->truthy($form['forbiddenItemsOrAnimals']) : false;
-        $customsRulesBreached = isset($form['customsRulesBreached']) ? (bool)$this->truthy($form['customsRulesBreached']) : true;
-        $liability_ok = ($hasValidTicket && !$safetyMisconduct && !$forbiddenItemsOrAnimals && $customsRulesBreached);
+    $hasValidTicket = isset($form['hasValidTicket']) ? (bool)$this->truthy($form['hasValidTicket']) : true;
+    $safetyMisconduct = isset($form['safetyMisconduct']) ? (bool)$this->truthy($form['safetyMisconduct']) : false;
+    $forbiddenItemsOrAnimals = isset($form['forbiddenItemsOrAnimals']) ? (bool)$this->truthy($form['forbiddenItemsOrAnimals']) : false;
+    $customsRulesBreached = isset($form['customsRulesBreached']) ? (bool)$this->truthy($form['customsRulesBreached']) : true;
+    $operatorProof = isset($form['operatorStampedDisruptionProof']) ? (bool)$this->truthy($form['operatorStampedDisruptionProof']) : false;
+    $selfInflicted = (!$hasValidTicket) || $safetyMisconduct || $forbiddenItemsOrAnimals || (!$customsRulesBreached);
+    $liability_ok = (!$selfInflicted) && $operatorProof;
         $reason_missed_conn = !empty($incident['missed']);
         $singleTxn = isset($form['singleTxn']) ? (bool)$this->truthy($form['singleTxn']) : false;
         $separateDisclosed = isset($form['separateContractsDisclosed']) ? (bool)$this->truthy($form['separateContractsDisclosed']) : false;

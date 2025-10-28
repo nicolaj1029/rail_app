@@ -32,12 +32,20 @@
   .mt12 { margin-top:12px; }
   .mt16 { margin-top:16px; }
   .hidden { display:none; }
+  /* Hide-left mode: collapse TOC column and expand center content */
+  /* In no-left mode, give the form ~70% + 200px and take from right column with a safe min width */
+  .flow-grid.no-left { grid-template-columns: minmax(0, calc(70% + 200px)) minmax(320px, calc(30% - 200px)); }
+  .flow-grid.no-left .toc { display: none; }
+  .flow-grid.no-left .preview { grid-column: 2; }
+  .flow-grid.no-left .sticky-actions { position:sticky; top:12px; }
+  .toggle-left-btn { margin-left: 8px; font-size: 12px; }
+  @media (max-width: 1000px) { .flow-grid.no-left { grid-template-columns: 1fr; } }
 </style>
 
 <h1 class="section-title">Én side – segmented flow</h1>
 
 <?= $this->Form->create(null, ['id' => 'flowOneForm', 'type' => 'file']) ?>
-  <div class="flow-grid">
+  <div class="flow-grid" id="flowGrid">
     <aside class="toc">
       <h3>Indholdsfortegnelse</h3>
     <a href="#s1">TRIN 1 · Status</a>
@@ -59,13 +67,27 @@
     </aside>
 
   <section>
-      <div class="sticky-actions actions-row">
-        <button type="submit">Gem/Opdater</button>
-  <?php $disableOfficial = (isset($liability_ok)&&!$liability_ok) || (isset($gdpr_ok)&&!$gdpr_ok) || (!empty($reason_missed_conn) && isset($art12['art12_applies']) && $art12['art12_applies']!==true); ?>
+  <div class="sticky-actions actions-row">
+    <button type="submit">Gem/Opdater</button>
+  <?php $forceOfficial = (bool)($this->getRequest()->getQuery('allow_official') ?? $this->getRequest()->getQuery('debug') ?? false); ?>
+  <?php $disableOfficial = $forceOfficial ? false : ((isset($liability_ok)&&!$liability_ok) || (isset($gdpr_ok)&&!$gdpr_ok) || (!empty($reason_missed_conn) && isset($art12['art12_applies']) && $art12['art12_applies']!==true)); ?>
   <button type="submit" formaction="<?= $this->Url->build('/reimbursement/generate') ?>" formtarget="_blank" class="button">Generér PDF opsummering</button>
-  <button id="officialBtn" type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
-        <?php if ($disableOfficial): ?><span class="warn small">Deaktiveret: tjek CIV og GDPR.</span><?php endif; ?>
-      </div>
+  <button id="officialBtn" type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button official-btn" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <?php if (!empty($formDecision)) :
+    $fd = $formDecision;
+    $rec = (string)($fd['form'] ?? 'eu_standard_claim');
+    $isEu = ($rec === 'eu_standard_claim');
+    $label = $isEu ? 'Anbefalet: EU-formular' : (($rec === 'none') ? 'Anbefalet: ingen EU-formular' : 'Anbefalet: national formular');
+    $reason = (string)($fd['reason'] ?? '');
+  ?>
+    <span style="margin-left:10px; padding:4px 8px; border-radius:4px; font-size:12px; <?= $isEu ? 'background:#e6f7ff;color:#006bb3;' : 'background:#fff7e6;color:#b36b00;' ?>" title="<?= h($reason) ?>">
+      <?= h($label) ?>
+    </span>
+  <?php endif; ?>
+    <?php if (!$forceOfficial && $disableOfficial): ?><span class="warn small">Deaktiveret: tjek CIV og GDPR.</span><?php endif; ?>
+    <?php if ($forceOfficial): ?><span class="badge small">DEBUG: EU-formular låst op</span><?php endif; ?>
+    <button type="button" id="toggleLeftBtn" class="toggle-left-btn">Skjul venstre panel</button>
+  </div>
 
       <fieldset id="s1" class="fieldset hl">
         <legend>TRIN 1 · Status</legend>
@@ -130,18 +152,72 @@
             <div class="small muted mt8">Der er ikke valgt nogen fil.</div>
           <?php endif; ?>
         </div>
+
+        <?php if (!empty($meta['_passengers_auto'])): ?>
+        <div class="card mt8">
+          <strong>📋 Fundne passagerer på billetten</strong>
+          <div class="small mt4">Redigér navne og markér hvem der klager:</div>
+          <div class="small" style="margin:6px 0 0 0;">
+            <?php $paxList = (array)$meta['_passengers_auto']; ?>
+            <?php foreach ($paxList as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
+              <div class="mt4">
+                <label>Navn
+                  <input type="text" name="passenger[<?= (int)$i ?>][name]" value="<?= h($nameVal) ?>" placeholder="Passager #<?= (int)($i+1) ?>" />
+                </label>
+                <span class="badge" style="margin-left:6px;"><?= h(ucfirst($age)) ?></span>
+                <label class="ml8"><input type="checkbox" name="passenger[<?= (int)$i ?>][is_claimant]" value="1" <?= $isC?'checked':'' ?> /> Klager</label>
+              </div>
+            <?php endforeach; ?>
+          </div>
+          <label class="small mt8"><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($form['claimant_is_legal_representative'])?'checked':'' ?> /> Jeg er juridisk ansvarlig for disse passagerer</label>
+        </div>
+        <?php endif; ?>
+
+        <div class="card mt8">
+          <label class="small">⬆️ Upload flere billetter hvis rejsen er fordelt over flere transaktioner</label>
+          <input type="file" name="multi_ticket_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" onchange="document.getElementById('flowOneForm').submit();" />
+        </div>
+
+        <?php if (!empty($groupedTickets)): ?>
+        <div class="card mt8">
+          <strong>Billetter samlet i sagen</strong>
+          <?php foreach ((array)$groupedTickets as $gi => $g): $shared = !empty($g['shared']); ?>
+            <div class="small mt4">
+              <strong>Gruppe <?= (int)($gi+1) ?></strong>
+              <?php if (!empty($g['pnr']) || !empty($g['dep_date'])): ?>
+                (<?= h(trim((string)($g['pnr'] ?? '') . ' ' . (string)($g['dep_date'] ?? ''))) ?>)
+              <?php endif; ?>
+              <span class="badge" style="margin-left:6px;"><?= $shared ? 'samlet' : 'enkelt' ?></span>
+            </div>
+            <ul class="small" style="margin:4px 0 0 16px;">
+              <?php foreach ((array)($g['tickets'] ?? []) as $t): ?>
+                <li>
+                  <?= h((string)($t['file'] ?? '')) ?><?= (!empty($t['pnr'])||!empty($t['dep_date'])) ? (': ' . h(trim((string)($t['pnr'] ?? '') . ' ' . (string)($t['dep_date'] ?? '')))) : '' ?>
+                  <?php $pc = isset($t['passengers']) ? count((array)$t['passengers']) : 0; if ($pc>0): ?>
+                    <span class="badge" style="margin-left:6px;">pax <?= (int)$pc ?></span>
+                  <?php endif; ?>
+                  <?php if (!empty($t['file'])): ?>
+                    <button type="submit" name="remove_ticket" value="<?= h((string)$t['file']) ?>" class="small" style="margin-left:6px;">Fjern</button>
+                  <?php endif; ?>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endforeach; ?>
+          <div class="small muted mt4">Grupperet efter PNR + dato. Du kan uploade flere billetter her.</div>
+        </div>
+        <?php endif; ?>
         
         <div class="card mt8">
           <strong>3.1. Name of railway undertaking: <span class="badge">AUTO</span></strong><br/>
           <div class="grid-2 mt8">
             <label>Operatør (kan overskrives)
-              <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? '') ?>" />
+              <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" />
             </label>
             <label>Land
-              <input type="text" name="operator_country" value="<?= h($meta['_auto']['operator_country']['value'] ?? '') ?>" />
+              <input type="text" name="operator_country" value="<?= h($meta['_auto']['operator_country']['value'] ?? ($form['operator_country'] ?? '')) ?>" />
             </label>
             <label>Produkt
-              <input type="text" name="operator_product" value="<?= h($meta['_auto']['operator_product']['value'] ?? '') ?>" />
+              <input type="text" name="operator_product" value="<?= h($meta['_auto']['operator_product']['value'] ?? ($form['operator_product'] ?? '')) ?>" />
             </label>
           </div>
         </div>
@@ -182,6 +258,9 @@
             <label>3.2.7. Ticket Number(s)/Booking Reference — <span class="badge">OK available</span>
               <input type="text" name="ticket_no" value="<?= h($meta['_auto']['ticket_no']['value'] ?? ($form['ticket_no'] ?? '')) ?>" />
             </label>
+            <?php if (!empty($journey['passengerCount'])): ?>
+              <div class="small badge">AUTO: Passagerer = <?= (int)$journey['passengerCount'] ?><?= !empty($journey['isGroupTicket']) ? ' (gruppebillet)' : '' ?></div>
+            <?php endif; ?>
             <label>3.2.8. Ticket price(s) — <span class="badge">OK available</span>
               <input type="text" name="price" value="<?= h($meta['_auto']['price']['value'] ?? ($form['price'] ?? '')) ?>" placeholder="100 EUR" />
             </label>
@@ -218,6 +297,33 @@
           </div>
         </div>
 
+  <?php $segAuto = (array)($meta['_segments_auto'] ?? []); if (!empty($segAuto) && !empty($incident['missed'])): ?>
+        <div id="connectionsCard" class="card mt8">
+          <strong>Forbindelser fundet på billetten</strong>
+          <div class="small muted mt4">Vælg den forbindelse der blev misset (skiftestation). Vi udfylder feltet nedenfor.</div>
+          <ul class="small" style="margin:6px 0 0 16px;">
+            <?php foreach ($segAuto as $i => $s): $from = (string)($s['from'] ?? ''); $to = (string)($s['to'] ?? ''); $dep = (string)($s['schedDep'] ?? ''); $arr = (string)($s['schedArr'] ?? ''); ?>
+              <li><?= h($from) ?> (<?= h($dep) ?>) → <?= h($to) ?> (<?= h($arr) ?>)</li>
+            <?php endforeach; ?>
+          </ul>
+          <?php
+            $choices = (array)($form['_miss_conn_choices'] ?? []);
+            if (empty($choices) && count($segAuto) >= 2) {
+              // Build default choices client-side
+              $choices = [];
+              for ($i=0; $i < count($segAuto)-1; $i++) { $choices[$segAuto[$i]['to']] = $segAuto[$i]['to']; }
+            }
+          ?>
+          <?php if (!empty($choices)): ?>
+            <div class="mt8">Misset forbindelse i (station):</div>
+            <?php $currentMiss = (string)($form['missed_connection_station'] ?? ''); ?>
+            <?php foreach ($choices as $key => $label): ?>
+              <label class="mr8"><input type="radio" name="missed_connection_station" value="<?= h($key) ?>" <?= $currentMiss===$key?'checked':'' ?> /> <?= h($label) ?></label>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <div id="missedOnlyCard" class="card mt8 <?= (!$isCompleted && $missedInc) ? '' : 'hidden' ?>">
           <strong>3.5. Missed connection (kun station)</strong>
           <div class="grid-2 mt8">
@@ -229,8 +335,8 @@
       </fieldset>
 
   <fieldset id="s5" class="fieldset mt12 <?= (!$isCompleted && empty($form['delayLikely60'])) ? 'hidden' : '' ?>">
-        <legend>TRIN 5 · CIV screening (Art. 4, bilag I)</legend>
-        <p class="muted">Se TRIN 1 – hvis rejsen er påbegyndt eller afsluttet, besvar nedenstående; ellers gå videre til TRIN 6.</p>
+  <legend>TRIN 5 · CIV vurdering</legend>
+  <p class="muted">Opdelt i to trin: A) Selvforskyldt hændelse? B) Dokumentation for operatørens ansvar.</p>
         <?php
           $travelState = $flags['travel_state'] ?? '';
           $showScreen = in_array($travelState, ['ongoing','completed'], true);
@@ -241,7 +347,8 @@
           $stamp = isset($form['operatorStampedDisruptionProof']) ? (string)$form['operatorStampedDisruptionProof'] : 'no';
         ?>
         <div id="s5Screening" class="card <?= $showScreen? '' : 'hidden' ?>">
-          <p><strong>Bemærk:</strong> Svarer du bekræftende på en selvforskyldt situation nedenfor, kan vi ikke tage sagen.</p>
+          <h4>Trin A – Var forsinkelsen selvforskyldt?</h4>
+          <div class="small muted">Besvar for hver situation:</div>
           <div class="grid-2 mt8">
             <div>
               <strong>Gyldig billet</strong><br/>
@@ -249,7 +356,8 @@
               <label><input type="radio" name="hasValidTicket" value="no" <?= ($hasValid==='no')?'checked':'' ?> /> Nej</label>
             </div>
             <div>
-              <strong>Dokumentation for aflysning/forsinkelse</strong><br/>
+              <h4>Trin B – Dokumentation for operatørens ansvar</h4>
+              <div class="small">Er billetten stemplet af operatøren, eller findes anden dokumentation?</div>
               <label><input type="radio" name="operatorStampedDisruptionProof" value="yes" <?= ($stamp==='yes')?'checked':'' ?> /> Ja</label>
               <label class="ml8"><input type="radio" name="operatorStampedDisruptionProof" value="no" <?= ($stamp!=='yes')?'checked':'' ?> /> Nej</label>
             </div>
@@ -270,11 +378,9 @@
             </div>
           </div>
           <div class="mt8">
-            <?php if (isset($liability_ok) && !$liability_ok): ?>
-              <span class="warn"><strong>Kan ikke tage sagen:</strong> selvforskyldt udfald iht. CIV.</span>
-            <?php elseif (isset($liability_ok)): ?>
-              <span class="small badge">Ok – CIV screening bestået</span>
-            <?php endif; ?>
+            <span id="civSelfInflictedWarn" class="warn <?= (isset($selfInflicted) && $selfInflicted) ? '' : 'hidden' ?>"><strong>Kan ikke tage sagen:</strong> selvforskyldt udfald iht. CIV (trin A).</span>
+            <span id="civOperatorProofWarn" class="warn <?= (isset($operatorProof) && !$operatorProof && empty($selfInflicted)) ? '' : 'hidden' ?>"><strong>Mangler bevis:</strong> Operatørens dokumentation mangler (trin B).</span>
+            <span id="civOkBadge" class="small badge <?= (isset($liability_ok) && $liability_ok) ? '' : 'hidden' ?>">Ok – CIV vurdering bestået (A+B)</span>
           </div>
         </div>
         <div id="s5SkipNote" class="small muted <?= $showScreen? 'hidden' : '' ?>">TRIN 5 springes over – gå videre til TRIN 6.</div>
@@ -1203,7 +1309,18 @@
         <input type="hidden" name="additional_info" value="<?= h($additional_info) ?>" />
         <button type="submit">Gem/Opdater</button>
         <button type="submit" formaction="<?= $this->Url->build('/reimbursement/generate') ?>" formtarget="_blank" class="button">Generér PDF opsummering</button>
-        <button type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <button id="officialBtnBottom" type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button official-btn" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <?php if (!empty($formDecision)) :
+    $fd = $formDecision;
+    $rec = (string)($fd['form'] ?? 'eu_standard_claim');
+    $isEu = ($rec === 'eu_standard_claim');
+    $label = $isEu ? 'Anbefalet: EU-formular' : (($rec === 'none') ? 'Anbefalet: ingen EU-formular' : 'Anbefalet: national formular');
+    $reason = (string)($fd['reason'] ?? '');
+  ?>
+    <span style="margin-left:10px; padding:4px 8px; border-radius:4px; font-size:12px; <?= $isEu ? 'background:#e6f7ff;color:#006bb3;' : 'background:#fff7e6;color:#b36b00;' ?>" title="<?= h($reason) ?>">
+      <?= h($label) ?>
+    </span>
+  <?php endif; ?>
       </div>
     </section>
 
@@ -1253,6 +1370,27 @@
   </div>
 <?= $this->Form->end() ?>
 <script>
+  // Left panel toggle (persisted in localStorage)
+  (function(){
+    var grid = document.getElementById('flowGrid');
+    var btn = document.getElementById('toggleLeftBtn');
+    if (!grid || !btn) return;
+    var KEY = 'flow_hide_left';
+    var apply = function(v){
+      var on = (v === '1');
+      grid.classList.toggle('no-left', on);
+      btn.textContent = on ? 'Vis venstre panel' : 'Skjul venstre panel';
+    };
+    try { apply(localStorage.getItem(KEY) || '0'); } catch(e) { /* ignore */ }
+    btn.addEventListener('click', function(){
+      try {
+        var cur = localStorage.getItem(KEY) || '0';
+        var next = (cur === '1') ? '0' : '1';
+        localStorage.setItem(KEY, next);
+        apply(next);
+      } catch(e) { apply(grid.classList.contains('no-left') ? '0' : '1'); }
+    });
+  })();
   // Expose exemption flags for client gating
   window.__artFlags = {
     scope: <?= json_encode($profile['scope'] ?? '') ?>,
@@ -1274,7 +1412,8 @@
   var s6Art12 = document.getElementById('s6Art12');
   var s6Skip = document.getElementById('s6Skip');
   var art12Auto = document.getElementById('art12AutoOK');
-  var officialBtn = document.getElementById('officialBtn');
+  var officialBtns = document.querySelectorAll('.official-btn');
+  var debugForceOfficial = (new URLSearchParams(window.location.search)).has('allow_official') || (new URLSearchParams(window.location.search)).has('debug');
   var delayLikelyCheckbox = document.querySelector('input[name="delayLikely60"]');
   var s5Fieldset = document.getElementById('s5');
   var s6Fieldset = document.getElementById('s6');
@@ -1284,6 +1423,11 @@
   var showS9Debug = true; // TEMP: always show TRIN 9 during testing
   var delayLikelyWarn = document.getElementById('delayLikelyWarn');
     function update() {
+      function setOfficialDisabled(flag) {
+        try {
+          officialBtns.forEach(function(btn){ btn.disabled = debugForceOfficial ? false : !!flag; });
+        } catch(e) { /* no-op */ }
+      }
       var selected = document.querySelector('input[name="incident_main"]:checked');
       if (missed) {
         if (selected && (selected.value === 'delay' || selected.value === 'cancellation')) {
@@ -1312,8 +1456,10 @@
         if (s6Fieldset) s6Fieldset.classList.remove('hidden');
         if (s7Fieldset) s7Fieldset.classList.remove('hidden');
           if (s8Fieldset) s8Fieldset.classList.remove('hidden');
-        if (delayLikelyWarn) delayLikelyWarn.classList.add('hidden');
-        if (officialBtn) officialBtn.disabled = officialBtn.getAttribute('data-base-disabled') === '1';
+    if (delayLikelyWarn) delayLikelyWarn.classList.add('hidden');
+    var baseDisabled = false;
+    if (officialBtns && officialBtns.length > 0) { baseDisabled = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }
+    setOfficialDisabled(baseDisabled);
       } else {
         if (actualCard) actualCard.classList.add('hidden');
         if (delayLikely) delayLikely.classList.remove('hidden');
@@ -1344,7 +1490,7 @@
           }
           if (s9Fieldset) { s9Fieldset.classList.remove('hidden'); }
           if (delayLikelyWarn) delayLikelyWarn.classList.remove('hidden');
-          if (officialBtn) officialBtn.disabled = true;
+          setOfficialDisabled(true);
         } else {
           if (s5Fieldset) s5Fieldset.classList.remove('hidden');
           if (s6Fieldset) s6Fieldset.classList.remove('hidden');
@@ -1352,7 +1498,9 @@
           if (s8Fieldset) s8Fieldset.classList.remove('hidden');
           if (s9Fieldset) s9Fieldset.classList.remove('hidden');
           if (delayLikelyWarn) delayLikelyWarn.classList.add('hidden');
-          if (officialBtn) officialBtn.disabled = officialBtn.getAttribute('data-base-disabled') === '1';
+          var baseDisabled2 = false;
+          if (officialBtns && officialBtns.length > 0) { baseDisabled2 = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }
+          setOfficialDisabled(baseDisabled2);
         }
       }
       // If user switched to 'No', clear both station inputs immediately to avoid residual values
@@ -1417,6 +1565,31 @@
       if (overnightNow && ho) overnightNow.classList.toggle('hidden', ho.value !== 'no');
       if (extraTypePast && ec) extraTypePast.classList.toggle('hidden', ec.value !== 'yes');
       if (extraTypeNow && ec) extraTypeNow.classList.toggle('hidden', ec.value !== 'yes');
+
+      // TRIN 5 – Live CIV status messaging (A+B)
+      try {
+        var hv = document.querySelector('input[name="hasValidTicket"]:checked');
+        var smv = document.querySelector('input[name="safetyMisconduct"]:checked');
+        var fvv = document.querySelector('input[name="forbiddenItemsOrAnimals"]:checked');
+        var crv = document.querySelector('input[name="customsRulesBreached"]:checked');
+        var op = document.querySelector('input[name="operatorStampedDisruptionProof"]:checked');
+        var hasValid = hv ? (hv.value === 'yes') : true;
+        var safetyMis = smv ? (smv.value === 'yes') : false;
+        var forb = fvv ? (fvv.value === 'yes') : false;
+        var customsOk = crv ? (crv.value === 'yes') : true; // yes = overholdt
+        var proof = op ? (op.value === 'yes') : false;
+        var selfInf = (!hasValid) || safetyMis || forb || (!customsOk);
+        var elA = document.getElementById('civSelfInflictedWarn');
+        var elB = document.getElementById('civOperatorProofWarn');
+        var elOK = document.getElementById('civOkBadge');
+        if (elA && elB && elOK) {
+          elA.classList.toggle('hidden', !selfInf);
+          var showB = (!selfInf) && (!proof);
+          elB.classList.toggle('hidden', !showB);
+          var showOK = (!selfInf) && proof;
+          elOK.classList.toggle('hidden', !showOK);
+        }
+      } catch (e) { /* no-op */ }
       var remedy = document.querySelector('input[name="remedyChoice"]:checked');
       var rv = remedy ? remedy.value : '';
       var aidNotes = [
@@ -1527,13 +1700,41 @@
       };
       setVals('past'); setVals('now');
     }
-  radios.forEach(function(r){ r.addEventListener('change', update); r.addEventListener('click', update); r.addEventListener('input', update); });
-  stateRadios.forEach(function(r){ r.addEventListener('change', update); r.addEventListener('click', update); r.addEventListener('input', update); });
+  // TRIN 2 (incident) – react + autosubmit hooks
+  radios.forEach(function(r){
+    r.addEventListener('change', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('click', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('input', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+  });
+  // TRIN 1 (status) – now autosubmits hooks on change as well
+  stateRadios.forEach(function(r){
+    r.addEventListener('change', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('click', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('input', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+  });
   var missedRadios = document.querySelectorAll('input[name="missed_connection"]');
-  missedRadios.forEach(function(r){ r.addEventListener('change', update); r.addEventListener('click', update); r.addEventListener('input', update); });
-  if (delayLikelyCheckbox) { delayLikelyCheckbox.addEventListener('change', update); delayLikelyCheckbox.addEventListener('click', update); }
+  missedRadios.forEach(function(r){
+    r.addEventListener('change', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('click', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    r.addEventListener('input', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+  });
+  if (delayLikelyCheckbox) {
+    delayLikelyCheckbox.addEventListener('change', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    delayLikelyCheckbox.addEventListener('click', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+  }
+  // TRIN 1 numeric delay field autosubmits too
+  var delayMinEuInput = document.querySelector('input[name="delay_min_eu"]');
+  if (delayMinEuInput) {
+    ['change','input','blur'].forEach(function(ev){ delayMinEuInput.addEventListener(ev, function(){ update(); if (window.queueRecalc) window.queueRecalc(); }); });
+  }
   var radiosExtra = document.querySelectorAll('input[name="reroute_extra_costs"], input[name="downgrade_occurred"]');
   radiosExtra.forEach(function(r){ r.addEventListener('change', update); r.addEventListener('click', update); });
+  // TRIN 5 (CIV screening) – trigger recalculation when answers change
+  var trin5Inputs = document.querySelectorAll('input[name="hasValidTicket"], input[name="safetyMisconduct"], input[name="forbiddenItemsOrAnimals"], input[name="customsRulesBreached"], input[name="operatorStampedDisruptionProof"]');
+  trin5Inputs.forEach(function(inp){
+    inp.addEventListener('change', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+    inp.addEventListener('click', function(){ update(); if (window.queueRecalc) window.queueRecalc(); });
+  });
   // TRIN 6 (Art. 12) – autosubmit on changes to update hooks panel live
   var s6Wrap = document.getElementById('s6');
   if (s6Wrap) {
@@ -1579,10 +1780,27 @@
       formEl.addEventListener('change', function(e){
         var t = e.target;
         if (!t) return;
-  if (t.name === 'missed_connection' || t.name === 'travel_state' || t.name === 'incident_main' || t.name === 'reroute_extra_costs' || t.name === 'downgrade_occurred' || t.name === 'remedyChoice' || t.name === 'hotel_offered' || t.name === 'extraordinary_claimed' || t.name === 'compensationBand' || t.name === 'expense_breakdown_meals' || t.name === 'expense_breakdown_hotel_nights' || t.name === 'expense_breakdown_local_transport' || t.name === 'expense_breakdown_other_amounts' || t.name === 'expense_meals' || t.name === 'expense_other') { update(); }
+  if (t.name === 'missed_connection' || t.name === 'travel_state' || t.name === 'incident_main' || t.name === 'reroute_extra_costs' || t.name === 'downgrade_occurred' || t.name === 'remedyChoice' || t.name === 'hotel_offered' || t.name === 'extraordinary_claimed' || t.name === 'compensationBand' || t.name === 'expense_breakdown_meals' || t.name === 'expense_breakdown_hotel_nights' || t.name === 'expense_breakdown_local_transport' || t.name === 'expense_breakdown_other_amounts' || t.name === 'expense_meals' || t.name === 'expense_other') { update(); if (window.queueRecalc) window.queueRecalc(); }
       });
     }
     update();
+  })();
+
+  // TRIN 4 – autosubmit when operator/station/time/price fields change (affects profile/exemptions/claim)
+  (function(){
+    var fields = ['operator','operator_country','operator_product','dep_station','arr_station','dep_date','dep_time','arr_time','train_no','ticket_no','price','missed_connection_station'];
+    fields.forEach(function(name){
+      var el = document.querySelector('[name="'+name+'"]');
+      if (!el) return;
+      ['input','change','blur'].forEach(function(ev){ el.addEventListener(ev, function(){ if (window.queueRecalc) { queueRecalc(); } }); });
+    });
+  })();
+
+  // TRIN 11 – autosubmit GDPR to update button gating
+  (function(){
+    var gdpr = document.querySelector('input[name="gdprConsent"]');
+    if (!gdpr) return;
+    ['change','click'].forEach(function(ev){ gdpr.addEventListener(ev, function(){ if (window.queueRecalc) queueRecalc(); }); });
   })();
   
   // Toggle Art. 9 subcards live when interests are checked/unchecked
@@ -1603,11 +1821,7 @@
     if (!s9) return;
     s9.addEventListener('change', function(e){
       var t = e.target; if (!t) return;
-      // Avoid submitting on file inputs immediately to allow file selection; submit on blur of files
-      if (t.type === 'file') {
-        t.addEventListener('blur', function(){ queueRecalc(); }, { once: true });
-        return;
-      }
+      // For file inputs, trigger immediate recalculation on change
       queueRecalc();
     });
     s9.addEventListener('input', function(e){
@@ -1615,6 +1829,15 @@
       if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' ) {
         queueRecalc();
       }
+    });
+  })();
+  // Trigger hooks refresh when any file input in the form changes (TRIN 4, 8, 9 uploads)
+  (function(){
+    var form = document.getElementById('flowOneForm');
+    if (!form) return;
+    var fileInputs = form.querySelectorAll('input[type="file"]');
+    fileInputs.forEach(function(fi){
+      fi.addEventListener('change', function(){ if (window.queueRecalc) window.queueRecalc(); });
     });
   })();
   // Autoscroll removed; PRG redirect adds #s4 only immediately after upload

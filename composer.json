@@ -9,6 +9,7 @@
         "cakephp/cakephp": "5.2.*",
         "cakephp/migrations": "^4.0.0",
         "cakephp/plugin-installer": "^2.0",
+        "guzzlehttp/guzzle": "^7.0",
         "mobiledetect/mobiledetectlib": "^4.8.03",
         "setasign/fpdf": "1.8",
         "setasign/fpdi": "2.6",
@@ -56,6 +57,7 @@
         "cs-check": "phpcs --colors -p",
         "cs-fix": "phpcbf --colors -p",
         "test": "phpunit --colors=always",
-        "validate-overrides": "php bin/validate_overrides.php"
+        "validate-overrides": "php bin/validate_overrides.php",
+        "ai:audit": "php bin/cake.php ai_audit"
     }
 }

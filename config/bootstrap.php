@@ -69,7 +69,9 @@ require CAKE . 'functions.php';
 $skipDotenv = (getenv('APP_SKIP_DOTENV') === '1') || (getenv('CI') === 'true') || defined('APP_SKIP_DOTENV');
 if (!$skipDotenv && file_exists(CONFIG . '.env')) {
     $dotenv = new \josegonzalez\Dotenv\Loader([CONFIG . '.env']);
+    // Avoid LogicException when keys already exist (e.g., repeated loads)
     $dotenv->parse()
+        ->skipExisting(['putenv','toEnv','toServer'])
         ->putenv()
         ->toEnv()
         ->toServer();

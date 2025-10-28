@@ -1,0 +1,52 @@
+TRIN 10 — Kompensation (Art. 19) — Code Overview
+
+Scope
+- Purpose: Capture and compute compensation eligibility and band based on final delay and exemptions; feed into claim calculation and EU request mirror.
+- Location: Single-page flow (templates/Flow/one.php, FlowController::one()) and claim calculator service.
+
+Key Files
+1) Controller
+   - src/Controller/FlowController.php
+     a) one():
+        - Inputs (form):
+          • delayAtFinalMinutes (number)
+          • compensationBand: '' | '60_119' | '120_plus'
+          • voucherAccepted (checkbox)
+        - Derived:
+          • delayAtFinal = form.delayAtFinalMinutes or compute.delayMinEU fallback
+          • allow_compensation computed earlier together with TRIN 7 gates (missedConnBlock/art12_block)
+        - Claim snapshot (used by preview and elsewhere):
+          • $claim = (new \App\Service\ClaimCalculator())->calculate([...])
+        - Auto EU request mirror (hidden inputs in view):
+          • request_comp_60 and request_comp_120 set from band
+     b) choices()/summary():
+        - summary() also computes $claim for display and export.
+
+2) View (Single-page UI)
+   - templates/Flow/one.php
+     a) Section markup
+        • Fieldset id="s10" with legend "TRIN 10 · Kompensation (Art. 19)"
+        • Hidden when profile.articles.art19 === false (JS gating)
+     b) Inputs captured
+        • delayAtFinalMinutes, compensationBand, voucherAccepted
+     c) JS interactions
+        • data-comp-wrap="1" sections toggled by art19 flag via update()
+        • queueRecalc() triggered on changes to recompute preview/hook panel as needed
+
+3) Claim Calculation
+   - src/Service/ClaimCalculator.php
+     • Computes gross/fee/net based on ticket price, delay thresholds, and band
+     • Currency derived from journey ticket price string; defaults to EUR
+
+4) Exemptions interplay
+   - profile['articles']['art19'] === false → hide compensation section; still allow other flows (refund/assistance) to proceed
+   - Earlier gates (missedConnBlock, art12_block) also influence eligibility messaging but section visibility is governed by art19
+
+Inputs/Outputs Contract
+- Inputs: delayAtFinalMinutes, compensationBand, voucherAccepted
+- Outputs: claim struct { gross, fee, net, currency }, entitlements flags and EU request mirror hidden flags (request_comp_60/_120)
+
+Where to adjust
+- Controller: thresholds or additional bands; how allow_compensation is computed alongside TRIN 7 outcomes
+- View: labels, adding/removing bands, voucher toggle behavior
+- ClaimCalculator: rules for compensation amounts and fees

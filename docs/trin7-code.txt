@@ -1,0 +1,57 @@
+TRIN 7 — Dine valg (Art. 18) — Code Overview
+
+Scope
+- Purpose: Capture and gate the passenger's remedy choice after ≥60 min delay, cancellation, or missed connection; reflect Art. 18(3) (100-min information) and tie into exemptions profile.
+- Location: Single-page flow (templates/Flow/one.php, FlowController::one()) and split flows (choices()).
+
+Key Files
+1) Controller
+   - src/Controller/FlowController.php
+     a) one():
+        - Input snapshot:
+          • remedyChoice: 'refund_return'|'reroute_soonest'|'reroute_later'
+          • reroute_info_within_100min: yes/no/unknown (Art. 18(3))
+          • reroute_extra_costs: yes/no (+ amount/currency when yes)
+          • downgrade_occurred: yes/no (+ basis)
+        - Gating booleans (computed earlier and reused):
+          • reason_cancellation from incident.main
+          • reason_missed_conn from incident.missed
+          • art12_block if missed && Art. 12 negative
+          • missedConnBlock when TRIN 4 marked separate contracts disclosed + singleTxn
+        - Entitlements flags:
+          • allow_refund = !missedConnBlock && !art12_block && (delayMinEU >= 60 || reason_cancellation)
+          • allow_compensation = !missedConnBlock && !art12_block && (delayAtFinal >= 60)
+        - Exemptions gating (profile['articles']):
+          • art18_3 may be false → hide/ignore 100-min question
+     b) choices():
+        - Mirrors the same bindings in split-step; persists remedyChoice and related fields to session.
+
+2) View (Single-page UI)
+   - templates/Flow/one.php
+     a) Section markup
+        • Fieldset id="s7" with legend "TRIN 7 · Dine valg (Art. 18)"
+        • Two variants (completed vs not completed) with matching radio groups and details
+     b) Inputs captured:
+        • remedyChoice
+        • reroute_info_within_100min
+        • reroute_extra_costs (+ amount/currency)
+        • downgrade_occurred (+ downgrade_comp_basis)
+     c) Exemption-based gating (JS)
+        • update() toggles blocks and hides 100-min question if profile.articles.art18_3 === false
+        • Section visibility depends on TRIN 1 status and TRIN 4 delayLikely60 confirmation
+
+3) Derived mirrors into TRIN 9 (auto EU request mirror)
+   - Hidden inputs set from remedyChoice and compensationBand to reflect EU request snapshot:
+     • request_refund, request_comp_60, request_comp_120, request_expenses
+
+Inputs/Outputs Contract
+- Inputs: remedyChoice, reroute_info_within_100min, reroute_extra_costs, reroute_extra_costs_amount, reroute_extra_costs_currency, downgrade_occurred, downgrade_comp_basis
+- Outputs (controller/view flags): allow_refund, allow_compensation; affects buttons, messages, and later calculation.
+
+Adjacency
+- Interacts with TRIN 6 (Art. 12) outcome for missed connection gating.
+- TRIN 8 (assistance) text/notes adapt based on remedy choice.
+
+Where to adjust
+- Controller: update allow_refund/allow_compensation calculation if policy nuances change.
+- View: tweak the remedy radio labels or detail sections; ensure hidden sync inputs remain in place if used by downstream integrations.

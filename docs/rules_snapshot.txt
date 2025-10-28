@@ -1,0 +1,383 @@
+Rail App – Exemptions, National Overrides, and Operator/Product Snapshot
+Generated: 2025-10-22
+
+This file summarizes the data sources used to determine eligibility and compensation outside the core EU baseline, and how they are consumed in code.
+
+Sources and usage
+- Exemption matrix: config/data/exemption_matrix.json
+  • Loader: App\Service\ExemptionMatrixRepository
+  • Used by: App\Service\EligibilityService (for scope-level blocks/exemptions per country)
+- Exemptions list: config/data/exemptions.json
+  • Loader: App\Service\ExemptionsRepository
+  • Used by: App\Service\EligibilityService (for Art. 19/20(2) etc. per country/scope)
+- National overrides: config/data/national_overrides.json
+  • Loader: App\Service\NationalOverridesRepository
+  • Used by: App\Service\EligibilityService (to apply more generous national/operator schemes)
+- Operators catalog: config/data/operators_catalog.json
+  • Used by: operator detection and product alias normalization upstream
+
+Notes on logic
+- Baseline EU compensation: 25% ≥ 60 minutes, 50% ≥ 120 minutes delay (Art. 19).
+- EligibilityService first denies certain cases (refund chosen under Art. 18(a), self‑inflicted/CIV faults, extraordinary circumstances, known delay before purchase), then:
+  1) Applies ExemptionMatrix blocks for a country+scope (e.g., regional blocked) – returns denied immediately.
+  2) Applies ExemptionsRepository: if Art. 19 is exempt for the context, it will try NationalOverrides; if none, compensation is 0.
+  3) Otherwise computes EU baseline and then, if an override exists that is more generous at the given delay, uses the override.
+  4) It also bubbles up scope/exemption annotations for UI badges.
+- Scope inputs expected by EligibilityService: country, scope, operator, product, delayMin, plus flags listed in the class docblock.
+
+Operators catalog (operators_catalog.json)
+• Normalized operators with country and known products. Product aliases map user/parsed names to canonical forms.
+
+Operators
+- SNCF [FR]
+  Products: TGV, TER, Intercités, TGV INOUI, OUIGO
+  Aliases: sncf, voyages sncf, inoui, oui.sncf, sncf connect
+- Deutsche Bahn [DE]
+  Products: ICE, IC, EC, RE
+  Aliases: db, db fernverkehr, deutsche bahn
+- DSB [DK]
+  Products: IC, Lyn, R
+  Aliases: dsb
+- SJ [SE]
+  Products: Snabbtåg, IC, Regional
+  Aliases: sj ab, sj
+- ÖBB [AT]
+  Products: Railjet, RJ, Nightjet, NJ, EC, IC
+  Aliases: oebb, öbb, oebb pj, oebbpj
+- SBB CFF FFS [CH]
+  Products: IC, IR, EC
+  Aliases: sbb, cff, ffs
+- Trenitalia [IT]
+  Products: Frecciarossa, FR, Frecciargento, FA, Frecciabianca, FB, IC
+  Aliases: trenitalia, fs
+- Renfe [ES]
+  Products: AVE, Alvia, Avlo, IC
+  Aliases: renfe
+- NS [NL]
+  Products: IC, Sprinter
+  Aliases: ns
+- PKP Intercity [PL]
+  Products: EIP, EIC, IC, TLK
+  Aliases: pkp, pkp ic, intercity, pkp intercity
+- SNCB/NMBS [BE]
+  Products: IC, S, P
+  Aliases: sncb, nmbs
+- ČD [CZ]
+  Products: EC, IC, RJ
+  Aliases: cd, ceske drahy, čd
+- ZSSK [SK]
+  Products: IC, R
+  Aliases: zssk
+- VR [FI]
+  Products: IC, Pendolino
+  Aliases: vr
+- Eurostar [GB]
+  Products: Eurostar
+  Aliases: eurostar, es
+- Thalys [FR]
+  Products: Thalys
+  Aliases: thalys
+
+Product aliases
+- tgv → TGV
+- inoui → TGV INOUI
+- ouigo → OUIGO
+- ice → ICE
+- ic → IC
+- ec → EC
+- re → RE
+- rj → Railjet
+- railjet → Railjet
+- nj → Nightjet
+- nightjet → Nightjet
+- ave → AVE
+- fr → Frecciarossa
+- fa → Frecciargento
+- fb → Frecciabianca
+- pendolino → Pendolino
+
+Exemption matrix (exemption_matrix.json)
+• Country-level scope blocks/exemptions with notes. “blocked:true” means the EU flow is disabled for that scope.
+
+FI (Finland)
+- Scope: regional
+  Exemptions: Art.19, Art.20(2)
+  Notes: Pendler-strækninger i FI: Art. 19 + 20(2)(a)-(b) undtaget jf. decree 166/2023 (Finlex).
+- Scope: intl_beyond_eu
+  Notes: Intl services til/fra Rusland kan være undtaget jf. Art. 2(6)(b).
+
+DE (Germany)
+- Scope: regional
+  Exemptions: Art.9(2), Art.20(2), Art.30(1)
+  Notes: DE regional: undtagelser bl.a. Art. 9(2), 20(2)(a) og 30(1) (første sætning).
+
+SE (Sweden)
+- Scope: regional
+  Exemptions: Art.8, Art.9(1), Art.17, Art.18, Art.19, Art.20
+  Notes: SE <150 km domestic: undtaget for Art. 8, 9(1), 17–20. I koden: aktiver kun disse undtagelser når distance<150 km (Step Billetinformationer).
+
+HU (Hungary)
+- Scope: long_domestic
+  Exemptions: Art.19, Art.20(2)
+  Notes: HU long-distance domestic: Art. 19 (kompensation) og 20(2) (assistance) undtaget til 2029.
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+- Scope: regional
+  Exemptions: Art.10
+  Notes: HU: Art. 10 (realtidsdata) undtaget til 7. juni 2030.
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: HU: Art. 10 undtagelse gælder også long domestic.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: HU: Art. 10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: HU: Art. 10 undtagelse gælder også international (beyond EU).
+
+PT (Portugal)
+- Scope: long_domestic
+  Exemptions: Art.17, Art.19, Art.20(2)
+  Notes: PT long-distance domestic: Art. 17, 19 og 20(2) undtaget (forlænget fra 1371/2007-regimet).
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+
+PL (Poland)
+- Scope: intl_beyond_eu
+  Exemptions: Art.12, Art.18(3)
+  Notes: PL intl beyond EU: Art. 12 og 18(3) undtaget. Ingen gennemgående-billet-beskyttelse/100-minuters regel på disse stræk.
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: PL regional: EU-flow ikke anvendt; brug lokale ordninger hvor muligt.
+- Scope: regional
+  Exemptions: Art.10
+  Notes: PL: Art. 10 (realtidsdata) undtaget til 7. juni 2030.
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: PL: Art. 10 undtagelse gælder også long domestic.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: PL: Art. 10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: PL: Art. 10 undtagelse gælder også international (beyond EU).
+
+CZ (Czech Republic)
+- Scope: intl_beyond_eu
+  Notes: Medtages som udgangspunkt. Udelades kun hvis tjenesten har første eller sidste station i tredjeland (undtagen CH) – så er Art. 12 og 18(3) undtaget. Kræver rutedata.
+
+BG (Bulgaria)
+- Scope: intl_beyond_eu [blocked]
+  Reason: Intl services beyond EU undtaget – EU-flow disabled.
+  Notes: BG intl beyond EU: bred undtagelse (bl.a. 4, 6, 7(1), 9(2)-(3), 12, 15, 17–20).
+- Scope: long_domestic [blocked]
+  Reason: Long-distance domestic blocked – EU-flow disabled.
+  Notes: BG long-distance domestic: national exemptions; EU komp/assistance ikke i brug.
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: BG regional: EU-flow ikke anvendt; brug lokale ordninger hvis findes.
+
+AT (Austria)
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: AT: Art. 10 (realtidsdata) undtaget til 7. juni 2030.
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: AT regional: EU-flow ikke anvendt; lokale/PSC-regimer gælder.
+- Scope: regional
+  Exemptions: Art.10
+  Notes: AT: Art.10 undtagelse gælder også regional.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: AT: Art.10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: AT: Art.10 undtagelse gælder også international (beyond EU).
+
+HR (Croatia)
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: HR: Art. 10 (realtidsdata) undtaget til 7. juni 2030.
+- Scope: regional
+  Exemptions: Art.10
+  Notes: HR: Art.10 undtagelse gælder også regional.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: HR: Art.10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: HR: Art.10 undtagelse gælder også international (beyond EU).
+
+LV (Latvia)
+- Scope: regional
+  Exemptions: Art.10
+  Notes: LV: Art. 10 (realtidsdata) undtaget til 7. juni 2030.
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: LV: Art.10 undtagelse gælder også long domestic.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: LV: Art.10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: LV: Art.10 undtagelse gælder også international (beyond EU).
+
+RO (Romania)
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: RO regional: EU-flow ikke anvendt.
+- Scope: long_domestic [blocked]
+  Reason: Long-distance domestic blocked – EU-flow disabled.
+  Notes: RO long-distance domestic: national exemptions; EU komp/assistance ikke i brug.
+- Scope: regional
+  Exemptions: Art.10
+  Notes: RO: Art.10 undtagelse gælder også regional.
+- Scope: long_domestic
+  Exemptions: Art.10
+  Notes: RO: Art.10 undtagelse gælder også long domestic.
+- Scope: intl_inside_eu
+  Exemptions: Art.10
+  Notes: RO: Art.10 undtagelse gælder også international (EU).
+- Scope: intl_beyond_eu
+  Exemptions: Art.10
+  Notes: RO: Art.10 undtagelse gælder også international (beyond EU).
+
+FR (France)
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: Regional (TER) behandles ikke i EU-flowet. Long-distance domestic (TGV/IC) følger egne regler (fx G30).
+
+LU (Luxembourg)
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: LU regional: EU-flow ikke anvendt. 12(1)/18(3) timings gælder fortsat for andre scopes.
+
+SK (Slovakia)
+- Scope: long_domestic [blocked]
+  Reason: Long-distance domestic blocked – EU-flow disabled.
+  Exemptions: Art.19, Art.20(2), Art.30(2)
+  Notes: SK long-distance domestic: national exemptions; EU komp/assistance ikke i brug. Art. 19, 20(2) og 30(2) undtaget for long_domestic.
+- Scope: regional [blocked]
+  Reason: National/regional exemptions: EU-flow disabled for regional services.
+  Notes: SK regional: EU-flow ikke anvendt; brug lokale ordninger hvis findes.
+
+ES / IT / NL / BE / DK / IE / SI / EE / LT / MT
+- No entries in matrix.json (EU baseline applies unless other sources match).
+
+Exemptions list (exemptions.json)
+- Hungary — scope: long_domestic
+  Articles exempt: 19, 20(2)
+  Until: 2029-12-03
+  Note: Domestic long distance exemptions under Art. 2.B.4
+- Portugal — scope: long_domestic
+  Articles exempt: 17, 19, 20(2)
+  Until: 2029-12-03
+  Note: Domestic long distance exemptions under Art. 2.B.4
+- Sweden — scope: regional
+  Articles exempt: (handled via distance profile <150 km)
+  Until: 2029-12-03
+  Note: Distance-gated via profile (SE <150 km) — handled in ExemptionProfileBuilder, not here.
+
+National/operator overrides (national_overrides.json)
+- France — SNCF — product: TGV INOUI / Intercités (G30)
+  Tiers:
+    • ≥ 30 min → 25% (payout: voucher)
+    • ≥ 120 min → 50% (payout: cash_or_voucher)
+    • ≥ 180 min → 75% (payout: cash_or_voucher)
+  Notes: SNCF G30-ordningen: 25% ≥30 min, 50% ≥120 min, 75% ≥180 min. Kontant udbetaling muligt fra ~60 min.
+  Source: SNCF G30 official policy
+
+- Spain — Renfe — product: AVE / Avlo punctuality commitment
+  Tiers:
+    • ≥ 60 min → 50% (payout: cash_or_voucher)
+    • ≥ 90 min → 100% (payout: cash_or_voucher)
+  Notes: Renfe's nationale garanti – mere lempelig end EU-reglen (50% ≥60 min, 100% ≥90 min).
+  Source: renfe.com (puntualidad)
+
+- Italy — Trenitalia — product: Frecce (Frecciarossa/Frecciargento/Frecciabianca)
+  Tiers:
+    • ≥ 30 min → 25% (payout: voucher)
+  Notes: Italiensk national bonus (25% voucher ≥30 min). Art. 19-satser anvendes ellers som minimum.
+  Source: Trenitalia service conditions
+
+- Netherlands — NS — product: Domestic (Reisvertraging regeling)
+  Tiers:
+    • ≥ 30 min → 50% (payout: cash_or_voucher)
+    • ≥ 60 min → 100% (payout: cash_or_voucher)
+  Notes: NL-national ordning: 50% ≥30 min, 100% ≥60 min. Hurtigere og mere generøs end EU-krav.
+  Source: ns.nl / Reisvertraging regeling
+
+- Denmark — DSB — product: Rejsetidsgaranti
+  Tiers:
+    • ≥ 30 min → 25% (payout: voucher)
+    • ≥ 60 min → 50% (payout: cash_or_voucher)
+  Notes: Dansk særregel: DSB rejsetidsgaranti anvender lavere tærskler end EU-forordningen. >60 min kan normalt udbetales som overførsel.
+  Source: dsb.dk rejsetidsgaranti
+
+- Sweden — SJ — product: Förseningsersättning (national law)
+  Tiers:
+    • ≥ 60 min → 25%
+    • ≥ 120 min → 50%
+    • ≥ 240 min → 100%
+  Notes: Svensk lov fastsætter kompensation for forsinkelse ≥60 min uanset EU-regler.
+  Source: svensk förseningsersättningslag
+
+- Finland — VR — product: Domestic commuter exemptions (166/2023)
+  Tiers:
+    • ≥ 60 min → 25%
+    • ≥ 120 min → 50%
+  Exemptions: Art.19, Art.20(2)
+  Scope: commuter_exempt
+  Notes: Visse pendlerstrækninger undtaget fra Art. 19 og Art. 20(2)(a)–(b) frem til 2029.
+  Source: Finlex 166/2023
+
+- Germany — DB — product: Passenger Rights National Adjustments
+  Tiers:
+    • ≥ 60 min → 25%
+    • ≥ 120 min → 50%
+  Exemptions: Art.20(2), Art.30(1)
+  Notes: Tyskland har undtagelse for Art. 20(2) (måltider, hotel mv.) – kompensationssatser følger EU-minimum.
+  Source: bahn.de + EU exemptions Art. 2(6)(a)
+
+- Hungary — MÁV-START — product: Domestic
+  Tiers: (none)
+  Exemptions: Art.19, Art.20(2)
+  Scope: national_exempt
+  Notes: Art. 19 og 20(2)(a)(b) undtaget for nationale tog frem til 2029. Ingen EU-kompensation.
+  Source: EU 2021/782 Art. 2(4) + national exemptions
+
+- Portugal — CP Comboios de Portugal — product: Domestic
+  Tiers: (none)
+  Exemptions: Art.19, Art.20(2)
+  Scope: national_exempt
+  Notes: Undtaget for Art. 19 og 20(2) frem til 2029. Ingen EU-kompensation for nationale rejser.
+  Source: EU 2021/782 Art. 2(4)
+
+- Romania — CFR Călători — product: Domestic
+  Tiers: (none)
+  Exemptions: Art.19
+  Scope: national_exempt
+  Notes: Undtaget for Art. 19 frem til 2029.
+  Source: EU 2021/782 national exemptions
+
+- Slovakia — ZSSK — product: Domestic
+  Tiers: (none)
+  Exemptions: Art.19
+  Scope: national_exempt
+  Notes: Undtaget for Art. 19 frem til 2029.
+  Source: EU 2021/782 national exemptions
+
+- Poland — PKP Intercity — product: International beyond EU exceptions
+  Tiers: (none)
+  Exemptions: Art.12, Art.18(3)
+  Scope: intl_beyond_eu
+  Notes: Undtagelse for Art. 12 og 18(3) på ruter med tredjelande (fx Ukraine/Belarus).
+  Source: EU 2021/782 Art. 2(6)(b)
+
+How this influences claims
+- If ExemptionMatrix marks a country+scope as blocked, the EU flow is disabled for that scope.
+- If ExemptionsRepository marks Art. 19 as exempt for the journey context, EU compensation is 0 unless a matching national/operator override is found.
+- If EU baseline yields 25%/50% but a national override exists with a higher percent for the same delay, the override percent is used (and payout preference recorded when provided).
+- Operator/product strings should be normalized via operators_catalog.json (including product_aliases) before matching overrides.
+
+File end.

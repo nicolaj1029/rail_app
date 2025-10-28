@@ -1,0 +1,7 @@
+Snapshot notes for AI audit (fill with your authoritative excerpts):
+
+- FR G30 compensation scheme thresholds and exclusions.
+- DK DSB Rejsetidsgaranti thresholds and scope.
+- SE regional <150km considerations and channel constraints.
+- DE DB national notes where applicable.
+- Any Art.10/real-time data caveats that affect form selection.

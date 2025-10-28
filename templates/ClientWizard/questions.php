@@ -28,9 +28,25 @@
       ]) ?>
     </fieldset>
     <fieldset>
-      <legend>Art. 12 (gennemgående billet)</legend>
-      <?= $this->Form->control('through_ticket_disclosure', ['label' => 'Er det en gennemgående billet?', 'options' => ['Gennemgående' => 'Gennemgående', 'Særskilte' => 'Særskilte', 'unknown' => 'Ved ikke'], 'default' => 'unknown']) ?>
-      <?= $this->Form->control('separate_contract_notice', ['label' => 'Oplyst separate kontrakter?', 'options' => ['Ja'=>'Ja','Nej'=>'Nej','unknown'=>'Ved ikke'],'default'=>'unknown']) ?>
+      <legend>2. Gennemgående Billetter (TRIN 6 — kort) (kun spørgsmål 1–6)</legend>
+      <p>Kort version: kun de første seks spørgsmål vises her. Felter 2, 3, 5 og 6 kan udfyldes automatisk (AUTO).</p>
+
+      <?= $this->Form->control('through_ticket_disclosure', [
+        'label' => '1. Var du tydeligt informeret om, at din(e) billet(ter) var gennemgående eller ej?',
+        'type' => 'select',
+        'options' => ['Gennemgående' => 'Gennemgående', 'Særskilte' => 'Særskilte', 'unknown' => 'Ved ikke'],
+        'default' => 'unknown'
+      ]) ?>
+
+      <?= $this->Form->control('single_txn_operator', ['type' => 'hidden', 'value' => 'unknown']) ?>
+      <?= $this->Form->control('single_txn_retailer', ['type' => 'hidden', 'value' => 'unknown']) ?>
+
+      <?= $this->Form->control('separate_contract_notice', ['type' => 'select', 'label' => '4. Stod det udtrykkeligt, at billetterne var særskilte kontrakter?', 'options' => ['Ja'=>'Ja','Nej'=>'Nej','unknown'=>'Ved ikke'], 'default' => 'unknown']) ?>
+
+      <?= $this->Form->control('shared_pnr_scope', ['type' => 'hidden', 'value' => 'unknown']) ?>
+      <?= $this->Form->control('seller_type_operator', ['type' => 'hidden', 'value' => 'unknown']) ?>
+
+      <p class="help">Bemærk: kun spørgsmål der er besvaret medtages i PDF-pkt.6. AUTO-felter udfyldes via bookingdata.</p>
     </fieldset>
     <fieldset>
       <legend>Art. 9 (information)</legend>

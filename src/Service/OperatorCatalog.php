@@ -87,6 +87,8 @@ final class OperatorCatalog
             foreach ((array)$op['products'] as $pRaw) {
                 $p = trim((string)$pRaw);
                 if ($p === '') { continue; }
+                // Avoid extremely short products (1-letter like "R") which cause massive false positives
+                if (mb_strlen($p) < 2) { continue; }
                 // Avoid matching inside other words (e.g., TER in "international")
                 $pattern = '/(?<![A-Za-z0-9])' . preg_quote($p, '/') . '(?![A-Za-z0-9])/iu';
                 if (preg_match($pattern, $hay)) { return (string)$p; }
@@ -98,6 +100,25 @@ final class OperatorCatalog
             if (mb_strlen($alias) < 3) { continue; }
             $pattern = '/(?<![A-Za-z0-9])' . preg_quote($alias, '/') . '(?![A-Za-z0-9])/iu';
             if (preg_match($pattern, $hay)) { return (string)$norm; }
+        }
+        return null;
+    }
+
+    /**
+     * Find the operator that owns a given product name.
+     * @return array{name:string,country:string}|null
+     */
+    public function findOperatorByProduct(string $product): ?array
+    {
+        $pNeedle = trim($product);
+        if ($pNeedle === '') { return null; }
+        foreach ($this->operators as $op) {
+            $prods = array_map(fn($p) => (string)$p, (array)($op['products'] ?? []));
+            foreach ($prods as $p) {
+                if (mb_strtolower($p) === mb_strtolower($pNeedle)) {
+                    return ['name' => (string)$op['name'], 'country' => strtoupper((string)$op['country'] ?? '')];
+                }
+            }
         }
         return null;
     }

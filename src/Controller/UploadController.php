@@ -147,6 +147,15 @@ class UploadController extends AppController
             if (!empty($textHints) || !empty($filenameHints)) { $ocrLogs[] = 'AUTO: fallback med land fra hints: ' . $countryHint; }
         }
 
+        // Before computing exemptions, infer international scope from stations/cities
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+            $journey = $inferRes['journey'];
+            if (!empty($inferRes['logs'])) { $ocrLogs = array_merge($ocrLogs, $inferRes['logs']); }
+        } catch (\Throwable $e) {
+            $ocrLogs[] = 'WARN: scope infer failed: ' . $e->getMessage();
+        }
+
         // Compute exemptions profile (focus på Art. 12 til at starte med)
         $builder = new ExemptionProfileBuilder();
         $profile = $builder->build($journey);

@@ -1,0 +1,46 @@
+{
+    "stopWords": [
+        "gültigkeit",
+        "gültig",
+        "gültigkeitsbereich",
+        "gültigkeitszeitraum",
+        "gültig ab",
+        "gültig bis",
+        "via",
+        "zugbindung",
+        "einfach",
+        "einfach fahrt",
+        "einzeln",
+        "reservierung",
+        "hinweise",
+        "reiseverbindung",
+        "halt",
+        "datum",
+        "zeit",
+        "gleis",
+        "produkte",
+        "reservierung / hinweise",
+        "hinweis",
+        "kunde",
+        "kundenservice"
+    ],
+    "prefixes": [
+        "gültig",
+        "via ",
+        "zugbindung",
+        "reservierung",
+        "hinweis",
+        "ihre reiseverbindung",
+        "einfach fahrt"
+    ],
+    "contains": [
+        "reservierung",
+        "auftragsnummer",
+        "kunde",
+        "kundennr",
+        "rechnung",
+        "preis",
+        "betrag",
+        "gültigkeit (00:00)"
+    ]
+}

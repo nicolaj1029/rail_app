@@ -1,0 +1,51 @@
+TRIN 8 — Assistance og udgifter (Art. 20) — Code Overview
+
+Scope
+- Purpose: Capture assistance offered/delivered and expenses during disruption; reflect exemptions (Art. 20(2) hotel/meals/transport) and cap logic notes (e.g., hotel 3-night limit under extraordinary circumstances).
+- Location: Single-page flow (templates/Flow/one.php, FlowController::one()) and split flows (extras()).
+
+Key Files
+1) Controller
+   - src/Controller/FlowController.php
+     a) one():
+        - Inputs (form):
+          • meal_offered yes/no, hotel_offered yes/no, overnight_needed yes/no
+          • blocked_train_alt_transport yes/no
+          • alt_transport_provided yes/no
+          • extra_expense_upload (file)
+          • expense_breakdown_* (meals, hotel_nights, local_transport, other_amounts, currency)
+          • delay_confirmation_received yes/no, delay_confirmation_upload (file)
+          • extraordinary_claimed yes/no, extraordinary_type
+        - Section gating (computed earlier and via JS):
+          • Visible when journey started OR (not completed AND (cancellation || missed_conn)) OR delayLikely60 confirmed
+        - Exemptions gating (profile['articles']):
+          • art20_2 may be false → hide assistance A blocks; still log expenses and allow local-rule handling
+     b) extras():
+        - Mirrors the same bindings in split-step; persists inputs to session.
+
+2) View (Single-page UI)
+   - templates/Flow/one.php
+     a) Section markup
+        • Fieldset id="s8" with legend "TRIN 8 · Assistance og udgifter (Art. 20)"
+     b) Inputs captured as radio/select/file/number fields
+     c) JS toggles:
+        • Overnight-needed only visible when hotel_offered = no
+        • extraordinary_type only visible when extraordinary_claimed = yes
+        • Assistance explanatory notes adapt based on remedyChoice (TRIN 7)
+        • Art. 20(2) blocks hidden when profile.articles.art20_2 === false
+
+3) Dataset/Uploads
+   - one(): stores expense/delay confirmation uploads to webroot/files/uploads/* with unique prefixes
+   - values are echoed back in UI as small hints (filenames)
+
+Inputs/Outputs Contract
+- Inputs: meal_offered, hotel_offered, overnight_needed, blocked_train_alt_transport, alt_transport_provided, extra_expense_upload, expense_breakdown_*, delay_confirmation_received, delay_confirmation_upload, extraordinary_claimed, extraordinary_type
+- Outputs: none directly numeric here (used later for expense aggregation); affects explanations and eligibility messaging.
+
+Adjacency
+- Interacts with TRIN 7 remedy choice to show contextual notes.
+- Exemptions profile affects visibility of some sub-blocks.
+
+Where to adjust
+- Controller: handling for file uploads; add validation or size limits if needed.
+- View: presentation, labels, and extra toggles for operator-specific variations.

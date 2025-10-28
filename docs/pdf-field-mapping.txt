@@ -1,0 +1,95 @@
+PDF field mapping guide (for GPT-assisted placement)
+
+Overview
+- The app overlays data onto a static PDF template using FPDI (A4, mm units).
+- Coordinates are in millimetres from the top-left of each page (x to the right, y down).
+- You can provide a JSON field map at: config/pdf/reimbursement_map.json. If absent, a minimal built-in map is used.
+- Debug grid and nudging are available to help align positions.
+
+Key files
+- Controller doing PDF writing: src/Controller/ReimbursementController.php (methods: official(), generate())
+- Built-in default mapping: ReimbursementController::officialFieldMap()
+- External map location (if present, overrides defaults): config/pdf/reimbursement_map.json
+- Optional template PDF search path: webroot/files/ or webroot/ (see findOfficialTemplatePath())
+
+How mapping works
+- JSON structure is an object keyed by page number (1-based). Each page contains a dictionary of field entries.
+- Field entry shape:
+  { "x": <number_mm>, "y": <number_mm>, "w": <number_mm_optional>, "type": "text|checkbox", "multiline": true|false, "source": "alternate_data_key_optional" }
+- type=text (default): text is written at (x,y). Width w>0 enables cell/multicell width.
+- type=checkbox: if the field value is truthy, an “X” is drawn in a ~4mm box at (x,y).
+- source: lets you map a PDF box to a different incoming form key.
+
+Coordinate tips
+- Units: mm. Origin: top-left of the imported template page.
+- Default font for official() is Helvetica 9pt; line height ≈ 4mm.
+- Use the debug grid: append ?debug=1 to the official PDF URL to overlay a 10mm grid (labels every 20mm).
+- Fine nudge: add &dx=1.5&dy=-0.8 to shift all positions globally on a debugging run.
+
+Template PDF
+- Place the template file in webroot/files or webroot (e.g., webroot/files/reimbursement_form_uncompressed.pdf).
+- You can force a specific file with ?template=FILENAME.pdf.
+- If the PDF uses compressed cross-reference streams, FPDI may fail. Convert once via qpdf:
+  qpdf --qdf --object-streams=disable input.pdf output.pdf
+
+Available data fields (incoming keys)
+Core journey and contact:
+- name, email, operator, operator_country, operator_product, dep_station, arr_station, dep_date, dep_time, arr_time, train_no, ticket_no, price
+Actuals (TRIN 3.3):
+- actual_arrival_date, actual_dep_time, actual_arr_time
+Connection/missed:
+- missed_connection, missed_connection_station
+Status & incident (TRIN 1–2):
+- travel_state, delay_min_eu, known_delay, extraordinary, incident_main, reason_delay, reason_cancellation, reason_missed_conn
+CIV screening (TRIN 5):
+- hasValidTicket, safetyMisconduct, forbiddenItemsOrAnimals, customsRulesBreached, operatorStampedDisruptionProof
+Art. 12 / disclosures (TRIN 6):
+- through_ticket_disclosure, single_txn_operator, single_txn_retailer, separate_contract_notice, mct_realistic, one_contract_schedule, contact_info_provided, responsibility_explained, continue_national_rules
+Remedies (TRIN 7):
+- remedyChoice, refund_requested, refund_form_selected, reroute_same_conditions_soonest, reroute_later_at_choice, reroute_info_within_100min, reroute_extra_costs, reroute_extra_costs_amount, reroute_extra_costs_currency, downgrade_occurred, downgrade_comp_basis
+Assistance & expenses (TRIN 8):
+- meal_offered, hotel_offered, overnight_needed, blocked_train_alt_transport, alt_transport_provided, extra_expense_upload,
+- expense_breakdown_meals, expense_breakdown_hotel_nights, expense_breakdown_local_transport, expense_breakdown_other_amounts,
+- expense_meals, expense_hotel, expense_alt_transport, expense_other, delay_confirmation_received, delay_confirmation_upload,
+- extraordinary_claimed, extraordinary_type
+Interests & hooks (TRIN 9):
+- request_refund, request_comp_60, request_comp_120, request_expenses, info_requested_pre_purchase, coc_acknowledged,
+- civ_marking_present, fastest_flag_at_purchase, alts_shown_precontract, multiple_fares_shown, cheapest_highlighted,
+- fare_flex_type, train_specificity, pmr_user, pmr_booked, pmr_delivered_status, pmr_promised_missing,
+- bike_reservation_type, bike_res_required, bike_denied_reason, bike_followup_offer, bike_delay_bucket,
+- fare_class_purchased, berth_seat_type, reserved_amenity_delivered, class_delivered_status, preinformed_disruption,
+- preinfo_channel, realtime_info_seen, promised_facilities, facilities_delivered_status, facility_impact_note,
+- complaint_channel_seen, complaint_already_filed, complaint_receipt_upload, submit_via_official_channel
+Compensation (TRIN 10) & GDPR (TRIN 11):
+- delayAtFinalMinutes, compensationBand, voucherAccepted, gdprConsent, additionalInfo, additional_info
+
+Example JSON map (page 1 only)
+{
+  "1": {
+    "name": { "x": 30, "y": 40, "w": 80, "type": "text" },
+    "email": { "x": 130, "y": 40, "w": 60 },
+    "operator": { "x": 30, "y": 55, "w": 80 },
+    "train_no": { "x": 130, "y": 55, "w": 60 },
+    "dep_station": { "x": 30, "y": 70, "w": 80 },
+    "arr_station": { "x": 130, "y": 70, "w": 60 },
+    "dep_date": { "x": 30, "y": 85, "w": 40 },
+    "arr_time": { "x": 130, "y": 85, "w": 40 },
+    "ticket_no": { "x": 30, "y": 100, "w": 160 },
+    "price": { "x": 30, "y": 115, "w": 40 },
+    "actual_arrival_date": { "x": 30, "y": 130, "w": 40 },
+    "missed_connection_station": { "x": 30, "y": 145, "w": 160, "multiline": true },
+    "additional_info": { "x": 30, "y": 200, "w": 160, "multiline": true }
+  }
+}
+
+How to iterate quickly
+1) Put your template in webroot/files/ (e.g., reimbursement_form_uncompressed.pdf).
+2) Create/modify config/pdf/reimbursement_map.json with your coordinates.
+3) Open the official PDF endpoint with ?debug=1 to see the grid: /reimbursement/official?debug=1
+   - If needed, force a filename: /reimbursement/official?template=reimbursement_form_uncompressed.pdf&debug=1
+4) Adjust coordinates and refresh. Use &dx / &dy to nudge all fields temporarily.
+
+Notes for GPT prompt
+- Provide GPT with this file, the JSON schema above, and the template’s visual layout (or a PNG of the form).
+- Ask GPT to output a JSON with exact coordinates in mm, matching the schema; keep page numbers as keys.
+- Remind GPT that (0,0) is top-left; text baseline is at y, MultiCell wraps within width w.
