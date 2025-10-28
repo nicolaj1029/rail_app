@@ -45,7 +45,7 @@
 <h1 class="section-title">Én side – segmented flow</h1>
 
 <?= $this->Form->create(null, ['id' => 'flowOneForm', 'type' => 'file']) ?>
-  <div class="flow-grid" id="flowGrid">
+  <div class="flow-grid no-left" id="flowGrid">
     <aside class="toc">
       <h3>Indholdsfortegnelse</h3>
     <a href="#s1">TRIN 1 · Status</a>
@@ -73,6 +73,8 @@
   <?php $disableOfficial = $forceOfficial ? false : ((isset($liability_ok)&&!$liability_ok) || (isset($gdpr_ok)&&!$gdpr_ok) || (!empty($reason_missed_conn) && isset($art12['art12_applies']) && $art12['art12_applies']!==true)); ?>
   <button type="submit" formaction="<?= $this->Url->build('/reimbursement/generate') ?>" formtarget="_blank" class="button">Generér PDF opsummering</button>
   <button id="officialBtn" type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button official-btn" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <button type="button" id="autofillToStep6" class="button">Autofyld TRIN 1–5 (missed connection)</button>
+  <button type="button" id="resetSteps1to5" class="button">Nulstil TRIN 1–5</button>
   <?php if (!empty($formDecision)) :
     $fd = $formDecision;
     $rec = (string)($fd['form'] ?? 'eu_standard_claim');
@@ -84,6 +86,65 @@
       <?= h($label) ?>
     </span>
   <?php endif; ?>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      var btn = document.getElementById('autofillToStep6');
+      var resetBtn = document.getElementById('resetSteps1to5');
+      function setRadio(name, value) {
+        var el = document.querySelector('input[name="'+name+'\"][value="'+value+'"]');
+        if (el) el.checked = true;
+      }
+      function setCheckbox(name, checked) {
+        var el = document.querySelector('input[name="'+name+'\"][type="checkbox"]');
+        if (el) el.checked = !!checked;
+      }
+      function clearRadios(name) {
+        var els = document.querySelectorAll('input[name=\"'+name+'\\\"][type=\"radio\"]');
+        els.forEach(function(e){ e.checked = false; });
+      }
+      btn.addEventListener('click', function(){
+        // TRIN 1 – Status: ongoing
+        setRadio('travel_state', 'ongoing');
+        // TRIN 2 – Hændelse: delay + missed connection yes
+        setRadio('incident_main', 'delay');
+        setRadio('missed_connection', 'yes');
+        // TRIN 4 – Bekræft forsinkelse ≥ 60 min.
+        setCheckbox('delayLikely60', true);
+        // TRIN 5 – Fornuftige default svar (ikke-selvforskyldt, ingen dokumentation påkrævet)
+        setRadio('hasValidTicket', 'yes');
+        setRadio('safetyMisconduct', 'no');
+        setRadio('forbiddenItemsOrAnimals', 'no');
+        // "Administrative forskrifter (overholdt?)" – vælg 'no' som standard for ingen overtrædelse
+  // "Administrative forskrifter (overholdt?)" – 'yes' betyder overholdt (ingen overtrædelse)
+  setRadio('customsRulesBreached', 'yes');
+        setRadio('operatorStampedDisruptionProof', 'no');
+        // Submit to persist and recalc visibility up to TRIN 6
+        var f = document.getElementById('flowOneForm');
+        if (f) f.submit();
+      });
+
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function(){
+          // Clear TRIN 1
+          clearRadios('travel_state');
+          // Clear TRIN 2
+          clearRadios('incident_main');
+          clearRadios('missed_connection');
+          // Clear TRIN 4 confirmation
+          setCheckbox('delayLikely60', false);
+          // Clear TRIN 5 CIV screening answers
+          clearRadios('hasValidTicket');
+          clearRadios('safetyMisconduct');
+          clearRadios('forbiddenItemsOrAnimals');
+          clearRadios('customsRulesBreached');
+          clearRadios('operatorStampedDisruptionProof');
+          // Submit to persist and recalc (back to earlier steps)
+          var f = document.getElementById('flowOneForm');
+          if (f) f.submit();
+        });
+      }
+    });
+  </script>
     <?php if (!$forceOfficial && $disableOfficial): ?><span class="warn small">Deaktiveret: tjek CIV og GDPR.</span><?php endif; ?>
     <?php if ($forceOfficial): ?><span class="badge small">DEBUG: EU-formular låst op</span><?php endif; ?>
     <button type="button" id="toggleLeftBtn" class="toggle-left-btn">Skjul venstre panel</button>
@@ -96,6 +157,41 @@
         <label><input type="radio" name="travel_state" value="ongoing" <?= !empty($flags['travel_state']) && $flags['travel_state']==='ongoing'?'checked':'' ?> /> Rejsen er påbegyndt (i tog / skift)</label><br/>
         <label><input type="radio" name="travel_state" value="before_start" <?= !empty($flags['travel_state']) && $flags['travel_state']==='before_start'?'checked':'' ?> /> Skal til at påbegynde rejsen</label>
       </fieldset>
+      <script>
+      // Lightweight fallback just for TRIN 2 → ensures UI reacts even if other JS is blocked
+      (function(){
+        try {
+          var missedRow = document.getElementById('missedRow');
+          var s6 = document.getElementById('s6');
+          var s6Art12 = document.getElementById('s6Art12');
+          var s6Skip = document.getElementById('s6Skip');
+          function updateLocal(){
+            var sel = document.querySelector('input[name="incident_main"]:checked');
+            if (missedRow) {
+              var showMissed = !!(sel && (sel.value === 'delay' || sel.value === 'cancellation'));
+              missedRow.classList.toggle('hidden', !showMissed);
+            }
+            // Also gate TRIN 6 quickly based on missed-connection answer
+            var missedYes = !!document.querySelector('input[name="missed_connection"][value="yes"]:checked');
+            var autoOkEl = document.getElementById('art12AutoOK');
+            var autoOk = !!(autoOkEl && autoOkEl.value === '1');
+            if (s6 && s6Art12 && s6Skip) {
+              if (missedYes) {
+                s6.classList.remove('hidden');
+                if (autoOk) { s6Art12.classList.add('hidden'); s6Skip.classList.remove('hidden'); }
+                else { s6Art12.classList.remove('hidden'); s6Skip.classList.add('hidden'); }
+              } else {
+                // Keep fieldset visible or hidden according to higher-level gating; just hide the card and show skip
+                s6Art12.classList.add('hidden'); s6Skip.classList.remove('hidden');
+              }
+            }
+          }
+          var binds = document.querySelectorAll('input[name="incident_main"], input[name="missed_connection"]');
+          binds.forEach(function(r){ r.addEventListener('change', updateLocal); r.addEventListener('click', updateLocal); });
+          updateLocal();
+        } catch (e) { /* no-op fallback */ }
+      })();
+      </script>
 
       <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); ?>
 
@@ -103,8 +199,8 @@
         <legend>TRIN 2 · Hændelse</legend>
         <p class="muted"><em>REIMBURSEMENT AND COMPENSATION REQUEST FORM – Rubrik 1 udfyldes</em></p>
         <?php $main = $incident['main'] ?? ''; ?>
-        <label><input type="radio" name="incident_main" value="delay" <?= $main==='delay'?'checked':'' ?> /> Delay (vælg én)</label><br/>
-        <label><input type="radio" name="incident_main" value="cancellation" <?= $main==='cancellation'?'checked':'' ?> /> Cancellation (vælg én)</label><br/>
+  <label><input type="radio" name="incident_main" value="delay" <?= $main==='delay'?'checked':'' ?> onchange="var r=document.getElementById('missedRow'); if(r){ r.classList.remove('hidden'); }" /> Delay (vælg én)</label><br/>
+  <label><input type="radio" name="incident_main" value="cancellation" <?= $main==='cancellation'?'checked':'' ?> onchange="var r=document.getElementById('missedRow'); if(r){ r.classList.remove('hidden'); }" /> Cancellation (vælg én)</label><br/>
         <div id="missedRow" class="mt8 <?= ($main==='delay'||$main==='cancellation') ? '' : 'hidden' ?>">
           <div>Har det medført en missed connection?</div>
           <label><input type="radio" name="missed_connection" value="yes" <?= !empty($incident['missed'])?'checked':'' ?> /> Ja</label>
@@ -334,7 +430,7 @@
         </div>
       </fieldset>
 
-  <fieldset id="s5" class="fieldset mt12 <?= (!$isCompleted && empty($form['delayLikely60'])) ? 'hidden' : '' ?>">
+  <fieldset id="s5" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_missed_conn) || !empty($reason_cancellation) || !empty($reason_delay)) ? '' : 'hidden' ?>">
   <legend>TRIN 5 · CIV vurdering</legend>
   <p class="muted">Opdelt i to trin: A) Selvforskyldt hændelse? B) Dokumentation for operatørens ansvar.</p>
         <?php
@@ -344,7 +440,8 @@
           $sm = isset($form['safetyMisconduct']) ? (string)$form['safetyMisconduct'] : 'no';
           $fia = isset($form['forbiddenItemsOrAnimals']) ? (string)$form['forbiddenItemsOrAnimals'] : 'no';
           $crb = isset($form['customsRulesBreached']) ? (string)$form['customsRulesBreached'] : 'yes';
-          $stamp = isset($form['operatorStampedDisruptionProof']) ? (string)$form['operatorStampedDisruptionProof'] : 'no';
+          // Default til ukendt, så advarsler ikke vises før brugerens valg
+          $stamp = isset($form['operatorStampedDisruptionProof']) ? (string)$form['operatorStampedDisruptionProof'] : '';
         ?>
         <div id="s5Screening" class="card <?= $showScreen? '' : 'hidden' ?>">
           <h4>Trin A – Var forsinkelsen selvforskyldt?</h4>
@@ -377,138 +474,305 @@
               <label class="ml8"><input type="radio" name="customsRulesBreached" value="no" <?= ($crb!=='yes')?'checked':'' ?> /> Nej</label>
             </div>
           </div>
+          <?php
+            // Beregn initiale A/B-statusser direkte ud fra de nuværende radioværdier,
+            // så visningen matcher det brugeren ser – uafhængigt af controllerens flags.
+            $selfInfLocal = ($hasValid !== 'yes') || ($sm === 'yes') || ($fia === 'yes') || ($crb !== 'yes');
+            $hasProofAnswer = ($stamp === 'yes' || $stamp === 'no');
+            $proofLocal = ($stamp === 'yes');
+            $liabilityOkLocal = (!$selfInfLocal) && $proofLocal;
+          ?>
           <div class="mt8">
-            <span id="civSelfInflictedWarn" class="warn <?= (isset($selfInflicted) && $selfInflicted) ? '' : 'hidden' ?>"><strong>Kan ikke tage sagen:</strong> selvforskyldt udfald iht. CIV (trin A).</span>
-            <span id="civOperatorProofWarn" class="warn <?= (isset($operatorProof) && !$operatorProof && empty($selfInflicted)) ? '' : 'hidden' ?>"><strong>Mangler bevis:</strong> Operatørens dokumentation mangler (trin B).</span>
-            <span id="civOkBadge" class="small badge <?= (isset($liability_ok) && $liability_ok) ? '' : 'hidden' ?>">Ok – CIV vurdering bestået (A+B)</span>
+            <span id="civSelfInflictedWarn" class="warn <?= $selfInfLocal ? '' : 'hidden' ?>"><strong>Kan ikke tage sagen:</strong> selvforskyldt udfald iht. CIV (trin A).</span>
+            <span id="civOperatorProofWarn" class="warn <?= (!$selfInfLocal && $hasProofAnswer && !$proofLocal) ? '' : 'hidden' ?>"><strong>Mangler bevis:</strong> Operatørens dokumentation mangler (trin B).</span>
+            <span id="civOkBadge" class="small badge <?= ($liabilityOkLocal && $hasProofAnswer) ? '' : 'hidden' ?>">Ok – CIV vurdering bestået (A+B)</span>
           </div>
         </div>
         <div id="s5SkipNote" class="small muted <?= $showScreen? 'hidden' : '' ?>">TRIN 5 springes over – gå videre til TRIN 6.</div>
       </fieldset>
 
-  <fieldset id="s6" class="fieldset mt12 <?= (!$isCompleted && empty($form['delayLikely60'])) ? 'hidden' : '' ?>">
+      <script>
+      // Standalone, defensive CIV-status updater for TRIN 5
+      // Ensures the A/B warnings toggle correctly even without a full rerender
+      (function(){
+        function updateCIVStatus(){
+          try {
+            var hv = document.querySelector('input[name="hasValidTicket"]:checked');
+            var smv = document.querySelector('input[name="safetyMisconduct"]:checked');
+            var fvv = document.querySelector('input[name="forbiddenItemsOrAnimals"]:checked');
+            var crv = document.querySelector('input[name="customsRulesBreached"]:checked');
+            var op  = document.querySelector('input[name="operatorStampedDisruptionProof"]:checked');
+            var hasValid = hv ? (hv.value === 'yes') : true;
+            var safetyMis = smv ? (smv.value === 'yes') : false;
+            var forb = fvv ? (fvv.value === 'yes') : false;
+            var customsOk = crv ? (crv.value === 'yes') : true; // 'yes' = overholdt
+            var proof = op ? (op.value === 'yes') : false;
+            var selfInf = (!hasValid) || safetyMis || forb || (!customsOk);
+            var elA = document.getElementById('civSelfInflictedWarn');
+            var elB = document.getElementById('civOperatorProofWarn');
+            var elOK = document.getElementById('civOkBadge');
+            if (elA) elA.classList.toggle('hidden', !selfInf);
+            if (elB) elB.classList.toggle('hidden', !((!selfInf) && (!proof)));
+            if (elOK) elOK.classList.toggle('hidden', !((!selfInf) && proof));
+          } catch (e) { /* no-op */ }
+        }
+        // Run once on load and bind listeners to TRIN 5 inputs
+        try { updateCIVStatus(); } catch(e) {}
+        try {
+          var trin5Inputs = document.querySelectorAll('input[name="hasValidTicket"], input[name="safetyMisconduct"], input[name="forbiddenItemsOrAnimals"], input[name="customsRulesBreached"], input[name="operatorStampedDisruptionProof"]');
+          trin5Inputs.forEach(function(inp){
+            ['change','click','input'].forEach(function(ev){ inp.addEventListener(ev, updateCIVStatus); });
+          });
+        } catch(e) { /* no-op */ }
+      })();
+      </script>
+
+  <!-- TRIN 6 skal kun være aktivt for missed connection -->
+  <fieldset id="s6" class="fieldset mt12 <?= (!empty($reason_missed_conn)) ? '' : 'hidden' ?>">
         <legend>TRIN 6 · Art. 12 – gennemgående billet (missed connection)</legend>
   <?php $showArt12 = !empty($reason_missed_conn); $hooks = (array)($art12['hooks'] ?? []); $missing = (array)($art12['missing'] ?? []); $applies = $art12['art12_applies'] ?? null; $autoOK = (!empty($reason_missed_conn) && $applies === true); ?>
+  <?php
+    // Inline evaluation summary so result is visible even without the right panel
+    $liableParty = (string)($art12['liable_party'] ?? 'unknown');
+    $liableNorm = ($liableParty === 'retailer') ? 'agency' : $liableParty;
+    $liableLbl = ($liableNorm === 'operator') ? 'Jernbanevirksomhed' : (($liableNorm === 'agency') ? 'Forhandler/rejsebureau' : 'Ukendt');
+    $resultLbl = ($applies === true) ? 'Gælder' : (($applies === false) ? 'Gælder ikke' : 'Ukendt');
+  ?>
+  <div class="small mt4" id="s6EvalSummary">
+    <strong>Evaluering:</strong>
+    <span class="badge" style="background:<?= ($applies===true?'#e6ffed':'#f6f8fa') ?>;border-color:<?= ($applies===true?'#b2f2bb':'#d0d7de') ?>;color:#24292f;">
+      <?= h($resultLbl) ?>
+    </span>
+    <?php if ($applies === true): ?>
+      <span class="badge" style="margin-left:6px;">Ansvarlig: <?= h($liableLbl) ?></span>
+    <?php endif; ?>
+  </div>
+  <?php
+    // Inline TRIN 6 decision details (defensive, same rules as hooks panel)
+    $hks = (array)($art12['hooks'] ?? []);
+    $ttdTri = (string)($hks['through_ticket_disclosure'] ?? 'unknown');
+    $scnTri = (string)($hks['separate_contract_notice'] ?? 'unknown');
+    $sellerOpTri = (string)($hks['seller_type_operator'] ?? 'unknown');
+    $sellerAgTri = (string)($hks['seller_type_agency'] ?? 'unknown');
+    $billettype = null; $kompBasis = null; $needs = (array)($art12['missing'] ?? []);
+    if ($scnTri === 'no') {
+      $billettype = 'gennemgående';
+      if ($sellerOpTri === 'yes') { $kompBasis = 'stk3'; }
+      elseif ($sellerAgTri === 'yes') { $kompBasis = 'stk4'; }
+      else { $kompBasis = 'stk3_eller_4'; }
+    } elseif ($scnTri === 'yes') {
+      if ($ttdTri === 'yes') {
+        $billettype = 'ikke gennemgående';
+        $kompBasis = 'per_led';
+      } else {
+        $billettype = 'gennemgående';
+        if ($sellerOpTri === 'yes') { $kompBasis = 'stk3'; }
+        elseif ($sellerAgTri === 'yes') { $kompBasis = 'stk4'; }
+        else { $kompBasis = 'stk3_eller_4'; }
+      }
+    }
+  ?>
+  <div class="small mt4" id="s6DecisionInline">
+    <span>billettype: <code><?= h($billettype ?? '-') ?></code></span>
+    <span class="ml8">komp: <code><?= h($kompBasis ?? '-') ?></code></span>
+    <?php if (!empty($needs)): ?>
+      <span class="ml8">mangler: <code><?= h(implode(', ', $needs)) ?></code></span>
+    <?php endif; ?>
+  </div>
   <div class="small muted <?= $autoOK? '' : 'hidden' ?>">Art. 12 er automatisk bekræftet ud fra billetdata – ingen spørgsmål nødvendige.</div>
   <input type="hidden" id="art12AutoOK" value="<?= $autoOK? '1':'0' ?>" />
+  <div class="mt8 <?= ($showArt12 && !$autoOK)? '' : 'hidden' ?>">
+    <span class="small muted">Besvar de to spørgsmål nedenfor. PNR/booking afledes automatisk fra 3.2.7/uploadede billetter.</span>
+  </div>
   <div id="s6Art12" class="card <?= ($showArt12 && !$autoOK)? '' : 'hidden' ?>">
           <?php if ($applies === false): ?>
             <div class="warn"><strong>Kan ikke tage sagen:</strong> Art. 12-evaluering negativ ved missed connection.</div>
           <?php endif; ?>
-          <div class="small muted mt8">
-            <strong>AUTO-grundlag:</strong>
-            Mangler: <?= h(implode(', ', $missing)) ?: '-' ?>.
-          </div>
-          <?php $exempt = (string)($hooks['exemption_override_12'] ?? 'unknown'); if ($exempt === 'yes'): ?>
-            <div class="card mt8 hl">
-              <strong>Valgfrit trin: Undtagelse fra Art. 12</strong>
-              <div class="small mt8">Denne afgang ser ud til at være undtaget fra Art. 12 (se nationale regler). Vil du fortsætte beregning efter nationale regler?</div>
-              <?php $cnr = (string)($form['continue_national_rules'] ?? ''); ?>
-              <label class="mt8"><input type="radio" name="continue_national_rules" value="yes" <?= $cnr==='yes'?'checked':'' ?> /> Ja, fortsæt under nationale regler</label>
-              <label class="ml8"><input type="radio" name="continue_national_rules" value="no" <?= ($cnr==='no'||$cnr==='')?'checked':'' ?> /> Nej</label>
-              <?php if ($cnr==='yes'): ?><div class="small mt8 badge">Valgt: Nationale regler</div><?php endif; ?>
-            </div>
-          <?php endif; ?>
+          <?php
+            // Compute pnr_count from available data (bookingRef + multi tickets)
+            $pnrSet = [];
+            $br = (string)($journey['bookingRef'] ?? '');
+            if ($br !== '') { $pnrSet[$br] = true; }
+            $multi = (array)($meta['_multi_tickets'] ?? []);
+            foreach ($multi as $mt) { $p = (string)($mt['pnr'] ?? ''); if ($p !== '') { $pnrSet[$p] = true; } }
+            $pnrCount = count($pnrSet);
+          ?>
+          <input type="hidden" id="pnrCount" value="<?= (int)$pnrCount ?>" />
+          <?php $sharedScopeTri = (string)($hks['shared_pnr_scope'] ?? 'unknown'); $singleBookingTri = (string)($hks['single_booking_reference'] ?? 'unknown'); ?>
+          <input type="hidden" id="sharedScopeTri" value="<?= h($sharedScopeTri) ?>" />
+          <input type="hidden" id="singleBookingTri" value="<?= h($singleBookingTri) ?>" />
           <div class="grid-2 mt8">
             <div>
-              <strong>Grundtype</strong><br/>
-              <label>Var du tydeligt informeret om typen?
-                <select name="through_ticket_disclosure">
-                  <?php $ttd = (string)($hooks['through_ticket_disclosure'] ?? 'unknown'); ?>
-                  <option value="">-</option>
-                  <option value="Gennemgående" <?= $ttd==='Gennemgående'?'selected':'' ?>>Gennemgående billet</option>
-                  <option value="Særskilte" <?= $ttd==='Særskilte'?'selected':'' ?>>Særskilte kontrakter</option>
-                  <option value="Ved ikke" <?= $ttd==='Ved ikke'?'selected':'' ?>>Ved ikke</option>
-                </select>
-              </label><br/>
-              <?php $opt = function($k){ return function($val) use ($k){ $v = (string)($GLOBALS['hooks'][$k] ?? 'unknown'); return $v===$val?'checked':''; }; }; ?>
-              <?php $v = (string)($hooks['single_txn_operator'] ?? 'unknown'); ?>
-              <?php if ($v === 'unknown'): ?>
-                <div class="small mt8">Køb i én transaktion hos operatør?</div>
-                <label><input type="radio" name="single_txn_operator" value="yes" /> Ja</label>
-                <label class="ml8"><input type="radio" name="single_txn_operator" value="no" /> Nej</label>
-                <label class="ml8"><input type="radio" name="single_txn_operator" value="unknown" checked /> Ved ikke</label>
-              <?php else: ?>
-                <div class="small mt8 badge">AUTO: Køb i én transaktion hos operatør = <?= $v==='yes'?'Ja':'Nej' ?></div>
-              <?php endif; ?>
+              <?php
+                // Gating-variabler baseret på flowet (TRIN 1–5)
+                $st = (string)($form['same_transaction'] ?? '');
+                $noPNR = ($pnrCount === 0);
+                $singlePNR = ($pnrCount === 1);
+                $sharedPNRForRetailer = ($pnrCount <= 1); // 0 eller 1: lad forhandler-scenariet stille TRIN 4/5
+                $showSameTxn = ($pnrCount > 1);
+                $showT4T5 = false; // Start med sælger-spørgsmålet først
+              ?>
 
-              <?php $v = (string)($hooks['single_txn_retailer'] ?? 'unknown'); ?>
-              <?php if ($v === 'unknown'): ?>
-                <div class="small mt8">Køb samlet hos rejsebureau/billetudsteder?</div>
-                <label><input type="radio" name="single_txn_retailer" value="yes" /> Ja</label>
-                <label class="ml8"><input type="radio" name="single_txn_retailer" value="no" /> Nej</label>
-                <label class="ml8"><input type="radio" name="single_txn_retailer" value="unknown" checked /> Ved ikke</label>
-              <?php else: ?>
-                <div class="small mt8 badge">AUTO: Køb samlet hos rejsebureau/billetudsteder = <?= $v==='yes'?'Ja':'Nej' ?></div>
-              <?php endif; ?>
+              <!-- Spørgsmål 1: Er du operatør eller rejsebureau? -->
+              <?php $sc = (string)($form['seller_channel'] ?? ''); ?>
+              <div id="sellerWrap" class="mt0">
+                <strong>Hvem har du købt hos?</strong><br/>
+                <div class="small mt4">Er du operatør (togselskab) eller rejsebureau/billetudsteder?</div>
+                <label><input type="radio" name="seller_channel" value="operator" <?= $sc==='operator'?'checked':'' ?> /> Operatør (togselskab)</label>
+                <label class="ml8"><input type="radio" name="seller_channel" value="retailer" <?= $sc==='retailer'?'checked':'' ?> /> Rejsebureau/billetudsteder</label>
+                <!-- Hidden bindings so evaluator sees single_txn_* directly from seller choice (minimal TRIN 6 flow) -->
+                <input type="hidden" name="single_txn_operator" id="s6_h_single_txn_operator" value="<?= h($form['single_txn_operator'] ?? '') ?>" />
+                <input type="hidden" name="single_txn_retailer" id="s6_h_single_txn_retailer" value="<?= h($form['single_txn_retailer'] ?? '') ?>" />
+                <?php $st = (string)($form['same_transaction'] ?? ''); ?>
+                <div id="sameTxnWrap" class="small mt8 <?= ($pnrCount>1)?'':'hidden' ?>">Var billetterne købt samlet i én transaktion?
+                  <label class="ml8"><input type="radio" name="same_transaction" value="yes" <?= $st==='yes'?'checked':'' ?> /> Ja</label>
+                  <label class="ml8"><input type="radio" name="same_transaction" value="no" <?= $st==='no'?'checked':'' ?> /> Nej</label>
+                </div>
+                <?php if ($sc==='operator' && $pnrCount===1): ?>
+                  <div id="autoBadgeOp" class="small badge mt8">AUTO: Gennemgående (stk. 3) – én PNR hos operatør</div>
+                <?php elseif ($pnrCount>1 && $st==='no'): ?>
+                  <div id="autoBadgeSep" class="small badge mt8">AUTO: Særskilt kontrakt – flere PNR og ikke samme transaktion</div>
+                <?php endif; ?>
+              </div>
 
-              <?php $v = (string)($hooks['separate_contract_notice'] ?? 'unknown'); ?>
-              <div class="small mt8">Var særskilte kontrakter udtrykkeligt angivet?</div>
-              <label><input type="radio" name="separate_contract_notice" value="Ja" <?= $v==='Ja'?'checked':'' ?> /> Ja</label>
-              <label class="ml8"><input type="radio" name="separate_contract_notice" value="Nej" <?= $v==='Nej'?'checked':'' ?> /> Nej</label>
-              <label class="ml8"><input type="radio" name="separate_contract_notice" value="Ved ikke" <?= ($v!=='Ja'&&$v!=='Nej')?'checked':'' ?> /> Ved ikke</label>
+              <?php
+                // If evaluator says we are missing exception answers, force them visible regardless of operator+single-booking heuristics
+                $needExceptions = in_array('separate_contract_notice', $missing ?? [], true) || in_array('through_ticket_disclosure', $missing ?? [], true);
+                $hideExceptionsInit = !$needExceptions && ($sc==='operator' && ($pnrCount===1 || ($sharedScopeTri==='yes') || ($singleBookingTri==='yes')));
+              ?>
+              <div id="t4t5Wrap" class="mt12<?= $hideExceptionsInit ? ' hidden' : '' ?>">
+                <?php
+                  // Begge underspørgsmål renderes, men initialt skjules det/de, som ikke er nødvendige.
+                  // Server-initialisering: vis separate_contract_notice først; hvis evaluator kun mangler disclosure, vis den i stedet.
+                  $askSeparate = in_array('separate_contract_notice', $missing ?? [], true);
+                  $askDisclosure = (!$askSeparate) && in_array('through_ticket_disclosure', $missing ?? [], true);
+                  $initShowSep = $askSeparate || (!$askDisclosure && !$askSeparate); // default til sep
+                  $initShowDis = $askDisclosure && !$askSeparate;
+                  $vSimple = (string)($form['separate_contract_notice'] ?? '');
+                  $td = (string)($form['through_ticket_disclosure'] ?? '');
+                ?>
+                <div id="s6_q_sep" class="<?= $initShowSep ? '' : 'hidden' ?>">
+                  <div class="small mt8">Står der på billetter/kvittering, at billetterne er særskilte befordringskontrakter?</div>
+                  <label><input type="radio" name="separate_contract_notice" value="yes" <?= $vSimple==='yes'?'checked':'' ?> /> Ja</label>
+                  <label class="ml8"><input type="radio" name="separate_contract_notice" value="no" <?= $vSimple==='no'?'checked':'' ?> /> Nej</label>
+                </div>
+                <div id="s6_q_dis" class="<?= $initShowDis ? '' : 'hidden' ?>">
+                  <div class="small mt8">Blev du tydeligt informeret før køb, om dine billetter var gennemgående eller ej?</div>
+                  <label><input type="radio" name="through_ticket_disclosure" value="yes" <?= $td==='yes'?'checked':'' ?> /> Ja</label>
+                  <label class="ml8"><input type="radio" name="through_ticket_disclosure" value="no" <?= $td==='no'?'checked':'' ?> /> Nej</label>
+                </div>
+              </div>
 
-              <?php $v = (string)($hooks['shared_pnr_scope'] ?? 'unknown'); ?>
-              <?php if ($v === 'unknown'): ?>
-                <div class="small mt8">Samme ordrenummer/PNR for alle billetter? (AUTO)</div>
-                <label><input type="radio" name="shared_pnr_scope" value="yes" /> Ja</label>
-                <label class="ml8"><input type="radio" name="shared_pnr_scope" value="no" /> Nej</label>
-                <label class="ml8"><input type="radio" name="shared_pnr_scope" value="unknown" checked /> Ved ikke</label>
-              <?php else: ?>
-                <div class="small mt8 badge">AUTO: Samme PNR for alle billetter = <?= $v==='yes'?'Ja':'Nej' ?></div>
-              <?php endif; ?>
+              <script>
+                // TRIN 6: klientlogik for visning og autosubmit
+                (function(){
+                  function toggleT4T5BySep() {
+                    var sepSel = document.querySelector('input[name="separate_contract_notice"]:checked');
+                    var showSep = true, showDis = false;
+                    if (sepSel && sepSel.value === 'yes') { showSep = false; showDis = true; }
+                    var sepDiv = document.getElementById('s6_q_sep');
+                    var disDiv = document.getElementById('s6_q_dis');
+                    if (sepDiv) sepDiv.classList.toggle('hidden', !showSep);
+                    if (disDiv) disDiv.classList.toggle('hidden', !showDis);
+                  }
+
+                  function s6Update() {
+                    var pnrCount = parseInt(document.getElementById('pnrCount')?.value || '0', 10);
+                    var sc = document.querySelector('input[name="seller_channel"]:checked');
+                    var st = document.querySelector('input[name="same_transaction"]:checked');
+                    var sameTxnWrap = document.getElementById('sameTxnWrap');
+                    if (sameTxnWrap) sameTxnWrap.classList.toggle('hidden', !(pnrCount > 1));
+
+                    var t4t5Wrap = document.getElementById('t4t5Wrap');
+                    var sellerWrap = document.getElementById('sellerWrap');
+                    var autoBadgeOp = document.getElementById('autoBadgeOp');
+                    var autoBadgeSep = document.getElementById('autoBadgeSep');
+                    // Show exception questions only when relevant:
+                    // "operator + 1 PNR" => only ask Q1 (seller). If seller is retailer, show TRIN 4/5.
+                    var triShared = (document.getElementById('sharedScopeTri')?.value || 'unknown') === 'yes';
+                    var triSingleBook = (document.getElementById('singleBookingTri')?.value || 'unknown') === 'yes';
+                    var operatorOne = (pnrCount === 1) || triShared || triSingleBook;
+                    var showExceptions = true;
+                    if (sc && sc.value === 'operator' && operatorOne) { showExceptions = false; }
+                    // But if any required exception answer is still missing, force-show them to avoid evaluator staying 'Ukendt'
+                    try {
+                      var sepChecked = document.querySelector('input[name="separate_contract_notice"]:checked');
+                      var disChecked = document.querySelector('input[name="through_ticket_disclosure"]:checked');
+                      var needSep = !sepChecked; // must answer sep first
+                      var needDis = !!(sepChecked && sepChecked.value === 'yes' && !disChecked);
+                      if (needSep || needDis) { showExceptions = true; }
+                    } catch(e) { /* no-op */ }
+                    if (t4t5Wrap) t4t5Wrap.classList.toggle('hidden', !showExceptions);
+
+                    // AUTO badges and hiding seller when fully determined
+                    var autoOpOnePNR = (!!sc && sc.value === 'operator' && pnrCount === 1);
+                    var autoSeparate = (pnrCount > 1 && !!st && st.value === 'no');
+                    if (autoBadgeOp) autoBadgeOp.classList.toggle('hidden', !autoOpOnePNR);
+                    if (autoBadgeSep) autoBadgeSep.classList.toggle('hidden', !autoSeparate);
+                    // Keep seller question visible to prevent it from disappearing when other answers change
+                    if (sellerWrap) sellerWrap.classList.remove('hidden');
+
+                    toggleT4T5BySep();
+                  }
+
+                  // Keep single_txn_* hidden fields in sync with seller choice for minimal evaluator input
+                  function syncSellerTxn(){
+                    try {
+                      var sc = document.querySelector('input[name="seller_channel"]:checked');
+                      var opH = document.getElementById('s6_h_single_txn_operator');
+                      var rtH = document.getElementById('s6_h_single_txn_retailer');
+                      if (!opH || !rtH) return;
+                      var v = sc ? sc.value : '';
+                      if (v === 'operator') { opH.value = 'yes'; rtH.value = 'no'; }
+                      else if (v === 'retailer') { opH.value = 'no'; rtH.value = 'yes'; }
+                      else { opH.value = ''; rtH.value = ''; }
+                    } catch(e) { /* no-op */ }
+                  }
+
+                  function bindAutosubmit(sel) {
+                    if (!sel) return;
+                    ['change','click','input'].forEach(function(ev){
+                      sel.addEventListener(ev, function(){
+                        s6Update();
+                        syncSellerTxn();
+                        if (typeof queueRecalc === 'function') { try { queueRecalc(); } catch(e){} }
+                      });
+                    });
+                  }
+
+                  document.addEventListener('DOMContentLoaded', function(){
+                    // initial
+                    s6Update();
+                    syncSellerTxn();
+                    // bind
+                    document.querySelectorAll('input[name="seller_channel"]').forEach(bindAutosubmit);
+                    document.querySelectorAll('input[name="same_transaction"]').forEach(bindAutosubmit);
+                    document.querySelectorAll('input[name="separate_contract_notice"], input[name="through_ticket_disclosure"]').forEach(function(el){
+                      ['change','click','input'].forEach(function(ev){
+                        el.addEventListener(ev, function(){
+                          toggleT4T5BySep();
+                          if (typeof queueRecalc === 'function') { try { queueRecalc(); } catch(e){} }
+                        });
+                      });
+                    });
+                  });
+                })();
+              </script>
+
+              <!-- PNR/booking scope afledes automatisk fra 3.2.7/uploadede billetter -->
             </div>
-            <div>
-              <strong>Hvem solgte rejsen?</strong><br/>
-              <?php $vop = (string)($hooks['seller_type_operator'] ?? 'unknown'); $vag = (string)($hooks['seller_type_agency'] ?? 'unknown'); ?>
-              <div class="small">Sælger (vælg én)</div>
-              <label><input type="radio" name="seller_type" value="operator" <?= $vop==='yes'?'checked':'' ?> /> Jernbanevirksomhed</label>
-              <label class="ml8"><input type="radio" name="seller_type" value="agency" <?= $vag==='yes'?'checked':'' ?> /> Rejsebureau/billetudsteder</label>
-              <label class="ml8"><input type="radio" name="seller_type" value="" <?= ($vop!=='yes'&&$vag!=='yes')?'checked':'' ?> /> Ved ikke</label>
-
-              <?php $v = (string)($hooks['mct_realistic'] ?? 'unknown'); ?>
-              <div class="small mt8">Var skiftetider realistiske?</div>
-              <label><input type="radio" name="mct_realistic" value="yes" <?= $v==='yes'?'checked':'' ?> /> Ja</label>
-              <label class="ml8"><input type="radio" name="mct_realistic" value="no" <?= $v==='no'?'checked':'' ?> /> Nej</label>
-              <label class="ml8"><input type="radio" name="mct_realistic" value="unknown" <?= ($v!=='yes'&&$v!=='no')?'checked':'' ?> /> Ved ikke</label>
-
-              <?php $v = (string)($hooks['one_contract_schedule'] ?? 'unknown'); ?>
-              <div class="small mt8">Fremstod købet som én ansvarlig rejseplan?</div>
-              <label><input type="radio" name="one_contract_schedule" value="yes" <?= $v==='yes'?'checked':'' ?> /> Ja</label>
-              <label class="ml8"><input type="radio" name="one_contract_schedule" value="no" <?= $v==='no'?'checked':'' ?> /> Nej</label>
-              <label class="ml8"><input type="radio" name="one_contract_schedule" value="unknown" <?= ($v!=='yes'&&$v!=='no')?'checked':'' ?> /> Ved ikke</label>
-
-              <?php $v = (string)($hooks['contact_info_provided'] ?? 'unknown'); ?>
-              <div class="small mt8">Fik du oplyst kontakt ved aflysning/forsinkelse?</div>
-              <label><input type="radio" name="contact_info_provided" value="yes" <?= $v==='yes'?'checked':'' ?> /> Ja</label>
-              <label class="ml8"><input type="radio" name="contact_info_provided" value="no" <?= $v==='no'?'checked':'' ?> /> Nej</label>
-              <label class="ml8"><input type="radio" name="contact_info_provided" value="unknown" <?= ($v!=='yes'&&$v!=='no')?'checked':'' ?> /> Ved ikke</label>
-
-              <?php $v = (string)($hooks['responsibility_explained'] ?? 'unknown'); ?>
-              <div class="small mt8">Var ansvar ved missed connection forklaret?</div>
-              <label><input type="radio" name="responsibility_explained" value="yes" <?= $v==='yes'?'checked':'' ?> /> Ja</label>
-              <label class="ml8"><input type="radio" name="responsibility_explained" value="no" <?= $v==='no'?'checked':'' ?> /> Nej</label>
-              <label class="ml8"><input type="radio" name="responsibility_explained" value="unknown" <?= ($v!=='yes'&&$v!=='no')?'checked':'' ?> /> Ved ikke</label>
-
-              <?php $v = (string)($hooks['single_booking_reference'] ?? 'unknown'); ?>
-              <?php if ($v === 'unknown'): ?>
-                <div class="small mt8">Én bookingreference for hele rejsen? (AUTO)</div>
-                <label><input type="radio" name="single_booking_reference" value="yes" /> Ja</label>
-                <label class="ml8"><input type="radio" name="single_booking_reference" value="no" /> Nej</label>
-                <label class="ml8"><input type="radio" name="single_booking_reference" value="unknown" checked /> Ved ikke</label>
-              <?php else: ?>
-                <div class="small mt8 badge">AUTO: Én bookingreference for hele rejsen = <?= $v==='yes'?'Ja':'Nej' ?></div>
-              <?php endif; ?>
-            </div>
+            <div></div>
           </div>
-          <?php if (!empty($art12['reasoning'])): ?>
-            <div class="small mt8"><strong>Begrundelse:</strong> <?= h(implode(' | ', (array)$art12['reasoning'])) ?></div>
-          <?php endif; ?>
         </div>
+        <script>
+        (function(){
+          // No auto-fill needed in the simplified TRIN 6 – we rely on two answers + AUTO.
+        })();
+        </script>
   <div id="s6Skip" class="small muted <?= $showArt12? ($autoOK? '' : 'hidden') : '' ?>"><?php if ($autoOK): ?>TRIN 6 springes over (AUTO).<?php else: ?>TRIN 6 springes over (ingen missed connection) – gå videre til næste trin.<?php endif; ?></div>
       </fieldset>
 
-      <fieldset id="s7" class="fieldset mt12 <?= (!$isCompleted && empty($form['delayLikely60'])) ? 'hidden' : '' ?>">
+  <fieldset id="s7" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
         <legend>TRIN 7 · Dine valg (Art. 18)</legend>
 
         <?php if ($isCompleted): ?>
@@ -666,12 +930,50 @@
         <?php endif; ?>
 
         <!-- Kompensation fjernet fra TRIN 7; flyttet til TRIN 10 -->
+        <script>
+          // TRIN 7 (Art. 18): klientlogik for valg og sektioner
+          (function(){
+            function s7Update() {
+              var remEl = document.querySelector('input[name="remedyChoice"]:checked');
+              var val = remEl ? remEl.value : '';
+              ['Past','Now'].forEach(function(suf){
+                var refund = document.getElementById('refundSection' + suf);
+                var reroute = document.getElementById('rerouteSection' + suf);
+                if (refund) refund.classList.toggle('hidden', val !== 'refund_return');
+                if (reroute) reroute.classList.toggle('hidden', !(val === 'reroute_soonest' || val === 'reroute_later'));
+
+                var noteR = document.getElementById('assistNoteRefund' + suf);
+                var noteS = document.getElementById('assistNoteSoonest' + suf);
+                var noteL = document.getElementById('assistNoteLater' + suf);
+                if (noteR) noteR.classList.toggle('hidden', val !== 'refund_return');
+                if (noteS) noteS.classList.toggle('hidden', val !== 'reroute_soonest');
+                if (noteL) noteL.classList.toggle('hidden', val !== 'reroute_later');
+
+                var tcr = document.getElementById('tcr_sync_' + suf.toLowerCase());
+                var rsc = document.getElementById('rsc_sync_' + suf.toLowerCase());
+                var rlc = document.getElementById('rlc_sync_' + suf.toLowerCase());
+                if (tcr) tcr.value = (val === 'refund_return') ? 'yes' : '';
+                if (rsc) rsc.value = (val === 'reroute_soonest') ? 'yes' : '';
+                if (rlc) rlc.value = (val === 'reroute_later') ? 'yes' : '';
+              });
+
+              if (typeof queueRecalc === 'function') { try { queueRecalc(); } catch(e){} }
+            }
+
+            document.addEventListener('DOMContentLoaded', function(){
+              s7Update();
+              document.querySelectorAll('input[name="remedyChoice"]').forEach(function(el){
+                ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
+              });
+            });
+          })();
+        </script>
       </fieldset>
 
       
 
       <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); ?>
-      <fieldset id="s8" class="fieldset mt12 <?= (!$isCompleted && empty($form['delayLikely60'])) ? 'hidden' : '' ?>">
+  <fieldset id="s8" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
         <legend>TRIN 8 · Assistance og udgifter (Art. 20)</legend>
         <div class="small muted">Aktiveres ved forsinkelse ≥60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).</div>
 
@@ -1172,29 +1474,30 @@
         </div>
 
         <!-- 9) Gennemgående billet-oplysning -->
-        <?php $show = !empty($form['interest_through']) || (!empty($autoInterest['through'])); ?>
+  <?php $show = (!empty($form['interest_through']) || (!empty($autoInterest['through']))) && empty($reason_missed_conn); ?>
         <div id="art9_through" class="card mt12 <?= $show?'':'hidden' ?>">
+          <?php $art9ThroughDisabled = $show ? '' : 'disabled'; ?>
           <strong>9) Gennemgående vs. særskilte kontrakter</strong>
           <?php $ttd = (string)($form['through_ticket_disclosure'] ?? ($art9Hooks['through_ticket_disclosure'] ?? '')); ?>
           <div class="mt8">1. Blev du tydeligt informeret om kontrakt-typen?</div>
-          <label><input type="radio" name="through_ticket_disclosure" value="Gennemgående" <?= $ttd==='Gennemgående'?'checked':'' ?> /> Gennemgående billet</label>
-          <label class="ml8"><input type="radio" name="through_ticket_disclosure" value="Særskilte" <?= $ttd==='Særskilte'?'checked':'' ?> /> Særskilte kontrakter</label>
-          <label class="ml8"><input type="radio" name="through_ticket_disclosure" value="Ved ikke" <?= ($ttd===''||$ttd==='Ved ikke')?'checked':'' ?> /> Ved ikke</label>
+          <label><input type="radio" name="through_ticket_disclosure" value="Gennemgående" <?= $ttd==='Gennemgående'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Gennemgående billet</label>
+          <label class="ml8"><input type="radio" name="through_ticket_disclosure" value="Særskilte" <?= $ttd==='Særskilte'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Særskilte kontrakter</label>
+          <label class="ml8"><input type="radio" name="through_ticket_disclosure" value="Ved ikke" <?= ($ttd===''||$ttd==='Ved ikke')?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ved ikke</label>
           <?php $sto = (string)($form['single_txn_operator'] ?? ($art9Hooks['single_txn_operator'] ?? 'unknown')); ?>
           <div class="mt8">2. Køb i én transaktion hos operatøren? (AUTO)</div>
-          <label><input type="radio" name="single_txn_operator" value="yes" <?= $sto==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="single_txn_operator" value="no" <?= $sto==='no'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="single_txn_operator" value="unknown" <?= ($sto===''||$sto==='unknown')?'checked':'' ?> /> Ved ikke</label>
+          <label><input type="radio" name="single_txn_operator" value="yes" <?= $sto==='yes'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="single_txn_operator" value="no" <?= $sto==='no'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="single_txn_operator" value="unknown" <?= ($sto===''||$sto==='unknown')?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ved ikke</label>
           <?php $str = (string)($form['single_txn_retailer'] ?? ($art9Hooks['single_txn_retailer'] ?? 'unknown')); ?>
           <div class="mt8">3. Én transaktion hos billetudsteder/rejsebureau? (AUTO)</div>
-          <label><input type="radio" name="single_txn_retailer" value="yes" <?= $str==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="single_txn_retailer" value="no" <?= $str==='no'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="single_txn_retailer" value="unknown" <?= ($str===''||$str==='unknown')?'checked':'' ?> /> Ved ikke</label>
+          <label><input type="radio" name="single_txn_retailer" value="yes" <?= $str==='yes'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="single_txn_retailer" value="no" <?= $str==='no'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="single_txn_retailer" value="unknown" <?= ($str===''||$str==='unknown')?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ved ikke</label>
           <?php $scn = (string)($form['separate_contract_notice'] ?? ($art9Hooks['separate_contract_notice'] ?? '')); ?>
           <div class="mt8">4. Var 'særskilte kontrakter' udtrykkeligt angivet?</div>
-          <label><input type="radio" name="separate_contract_notice" value="Ja" <?= $scn==='Ja'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="separate_contract_notice" value="Nej" <?= $scn==='Nej'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="separate_contract_notice" value="Ved ikke" <?= ($scn===''||$scn==='Ved ikke')?'checked':'' ?> /> Ved ikke</label>
+          <label><input type="radio" name="separate_contract_notice" value="Ja" <?= $scn==='Ja'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="separate_contract_notice" value="Nej" <?= $scn==='Nej'?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="separate_contract_notice" value="Ved ikke" <?= ($scn===''||$scn==='Ved ikke')?'checked':'' ?> <?= $art9ThroughDisabled ?> /> Ved ikke</label>
         </div>
 
         <!-- 10) Klageprocedure -->
@@ -1381,7 +1684,15 @@
       grid.classList.toggle('no-left', on);
       btn.textContent = on ? 'Vis venstre panel' : 'Skjul venstre panel';
     };
-    try { apply(localStorage.getItem(KEY) || '0'); } catch(e) { /* ignore */ }
+    try {
+      var stored = localStorage.getItem(KEY);
+      if (stored === null) {
+        // If not stored, default to whatever class is present on first render
+        stored = grid.classList.contains('no-left') ? '1' : '0';
+        localStorage.setItem(KEY, stored);
+      }
+      apply(stored);
+    } catch(e) { apply(grid.classList.contains('no-left') ? '1' : '0'); }
     btn.addEventListener('click', function(){
       try {
         var cur = localStorage.getItem(KEY) || '0';
@@ -1420,7 +1731,6 @@
   var s7Fieldset = document.getElementById('s7');
   var s8Fieldset = document.getElementById('s8');
   var s9Fieldset = document.getElementById('s9');
-  var showS9Debug = true; // TEMP: always show TRIN 9 during testing
   var delayLikelyWarn = document.getElementById('delayLikelyWarn');
     function update() {
       function setOfficialDisabled(flag) {
@@ -1428,7 +1738,7 @@
           officialBtns.forEach(function(btn){ btn.disabled = debugForceOfficial ? false : !!flag; });
         } catch(e) { /* no-op */ }
       }
-      var selected = document.querySelector('input[name="incident_main"]:checked');
+  var selected = document.querySelector('input[name="incident_main"]:checked');
       if (missed) {
         if (selected && (selected.value === 'delay' || selected.value === 'cancellation')) {
           missed.classList.remove('hidden');
@@ -1441,8 +1751,9 @@
   var isOngoing = !!(document.querySelector('input[name="travel_state"][value="ongoing"]') && document.querySelector('input[name="travel_state"][value="ongoing"]').checked);
   var started = isCompleted || isOngoing;
   var missedYes = !!(document.querySelector('input[name="missed_connection"][value="yes"]') && document.querySelector('input[name="missed_connection"][value="yes"]').checked);
-      var needsDelayLikely = !isCompleted;
-      var hasDelayLikely = !!(delayLikelyCheckbox && delayLikelyCheckbox.checked);
+  var needsDelayLikely = !isCompleted;
+  var hasDelayLikely = !!(delayLikelyCheckbox && delayLikelyCheckbox.checked);
+  var hasIncident = !!(selected && (selected.value === 'delay' || selected.value === 'cancellation'));
         if (isCompleted) {
         if (actualCard) actualCard.classList.remove('hidden');
         if (delayLikely) delayLikely.classList.add('hidden');
@@ -1478,30 +1789,26 @@
           if (s5Screen) s5Screen.classList.add('hidden');
           if (s5Skip) s5Skip.classList.remove('hidden');
         }
-        // Gate TRIN 5–7 unless >=60 min likely confirmed
-        if (needsDelayLikely && !hasDelayLikely) {
-          if (s5Fieldset) s5Fieldset.classList.add('hidden');
-          if (s6Fieldset) s6Fieldset.classList.add('hidden');
-          if (s7Fieldset) s7Fieldset.classList.add('hidden');
-          if (s8Fieldset) {
-            // Exception: show TRIN 8 if cancellation selected or missed connection true
-            var showS8 = (selected && selected.value==='cancellation') || missedYes;
-            s8Fieldset.classList.toggle('hidden', !showS8);
-          }
-          if (s9Fieldset) { s9Fieldset.classList.remove('hidden'); }
-          if (delayLikelyWarn) delayLikelyWarn.classList.remove('hidden');
-          setOfficialDisabled(true);
-        } else {
-          if (s5Fieldset) s5Fieldset.classList.remove('hidden');
-          if (s6Fieldset) s6Fieldset.classList.remove('hidden');
-          if (s7Fieldset) s7Fieldset.classList.remove('hidden');
-          if (s8Fieldset) s8Fieldset.classList.remove('hidden');
-          if (s9Fieldset) s9Fieldset.classList.remove('hidden');
-          if (delayLikelyWarn) delayLikelyWarn.classList.add('hidden');
-          var baseDisabled2 = false;
-          if (officialBtns && officialBtns.length > 0) { baseDisabled2 = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }
-          setOfficialDisabled(baseDisabled2);
-        }
+        // Relaxed gating: show TRIN 5–7 when any of the following is true:
+        // - rejsen er afsluttet
+        // - ≥60 min. sandsynlig
+        // - der er valgt delay/cancellation
+        // - missed connection er Ja
+        var show567 = isCompleted || hasDelayLikely || hasIncident || missedYes;
+        if (s5Fieldset) s5Fieldset.classList.toggle('hidden', !show567);
+        if (s6Fieldset) s6Fieldset.classList.toggle('hidden', !show567);
+        if (s7Fieldset) s7Fieldset.classList.toggle('hidden', !show567);
+        // TRIN 8: vis når samme betingelser, eller særskilt hvis cancellation/missed
+        var showS8 = isCompleted || hasDelayLikely || hasIncident || missedYes;
+        if (s8Fieldset) s8Fieldset.classList.toggle('hidden', !showS8);
+  // TRIN 9: følg serverens gating (vises kun på anmodning); ingen tvangsåbning her
+        // Delay-likely advarsel kun når ikke afsluttet, ikke ≥60, og heller ingen incident/missed
+        var showDelayWarn = needsDelayLikely && !hasDelayLikely && !(hasIncident || missedYes);
+        if (delayLikelyWarn) delayLikelyWarn.classList.toggle('hidden', !showDelayWarn);
+        // Official-knapper: behold base disabled-state, ingen ekstra blokering her
+        var baseDisabled2 = false;
+        if (officialBtns && officialBtns.length > 0) { baseDisabled2 = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }
+        setOfficialDisabled(baseDisabled2);
       }
       // If user switched to 'No', clear both station inputs immediately to avoid residual values
       if (!missedYes) {
@@ -1590,6 +1897,40 @@
           elOK.classList.toggle('hidden', !showOK);
         }
       } catch (e) { /* no-op */ }
+
+      // TRIN 6 (Art. 12) – client-side gating for same transaction and TRIN 4/5 visibility
+      try {
+        var sameTxnWrap = document.getElementById('sameTxnWrap');
+        var t4t5Wrap = document.getElementById('t4t5Wrap');
+        var pnrCountEl = document.getElementById('pnrCount');
+        var pnrCount = parseInt((pnrCountEl && pnrCountEl.value) ? pnrCountEl.value : '0', 10) || 0;
+  if (sameTxnWrap) sameTxnWrap.classList.toggle('hidden', !(pnrCount > 1));
+  var scChecked = document.querySelector('input[name="seller_channel"]:checked');
+  var scVal = scChecked ? scChecked.value : '';
+        var stChecked = document.querySelector('input[name="same_transaction"]:checked');
+        var stVal = stChecked ? stChecked.value : '';
+        var showT4T5 = false;
+        if (scVal === 'retailer' || scVal === '') { // ukendt sælger behandles som retailer for TRIN 4/5-visning
+          // When PNR is unknown (0) or single (1), allow answering TRIN 4/5 directly
+          if (pnrCount <= 1) { showT4T5 = true; }
+          else if (pnrCount > 1 && stVal === 'yes') { showT4T5 = true; }
+        }
+        // Operatør: tillad TRIN 4/5 hvis der slet ikke er PNR (pnrCount==0)
+        if (scVal === 'operator' && pnrCount === 0) {
+          showT4T5 = true;
+        }
+        if (t4t5Wrap) t4t5Wrap.classList.toggle('hidden', !showT4T5);
+
+        // Sub-question toggle: show only ONE at a time
+        var qSep = document.getElementById('s6_q_sep');
+        var qDis = document.getElementById('s6_q_dis');
+        var sepSel = document.querySelector('input[name="separate_contract_notice"]:checked');
+        var showSep = showT4T5 && !(sepSel && sepSel.value === 'yes');
+        var showDis = showT4T5 && (sepSel && sepSel.value === 'yes');
+        if (qSep) qSep.classList.toggle('hidden', !showSep);
+        if (qDis) qDis.classList.toggle('hidden', !showDis);
+      } catch (e) { /* no-op */ }
+
       var remedy = document.querySelector('input[name="remedyChoice"]:checked');
       var rv = remedy ? remedy.value : '';
       var aidNotes = [
@@ -1608,7 +1949,6 @@
           var f = document.getElementById('flowOneForm');
           if (f) {
             // Use AJAX to submit only the form and update hooks panel, preventing scroll-to-top
-            var formData = new FormData(f);
             var xhr = new XMLHttpRequest();
             xhr.open('POST', window.location.pathname + '?ajax_hooks=1', true);
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -1630,45 +1970,22 @@
                 } else {
                   hooksPanel.innerHTML = txt;
                 }
+                // After replacing hooks panel, sync tri-states and pnrCount into main hidden fields for TRIN 6 gating
+                try {
+                  var ajP = hooksPanel.querySelector('#aj_pnrCount');
+                  var ajS = hooksPanel.querySelector('#aj_sharedTri');
+                  var ajB = hooksPanel.querySelector('#aj_singleBookTri');
+                  var pnrEl = document.getElementById('pnrCount');
+                  var sharedEl = document.getElementById('sharedScopeTri');
+                  var singleEl = document.getElementById('singleBookingTri');
+                  if (pnrEl && ajP && ajP.value !== undefined) { pnrEl.value = ajP.value; }
+                  if (sharedEl && ajS && ajS.value !== undefined) { sharedEl.value = ajS.value; }
+                  if (singleEl && ajB && ajB.value !== undefined) { singleEl.value = ajB.value; }
+                } catch (e) { /* ignore sync errors */ }
+                // Re-run client-side visibility logic after sync
+                try { if (typeof update === 'function') { update(); } } catch (e) { /* no-op */ }
               }
             };
-            xhr.send(formData);
-          }
-        }, 300);
-      };
-
-  // TRIN 9 auto-checks and hidden sync
-  var reqRefund = document.getElementById('req_refund');
-  var reqComp60 = document.getElementById('req_comp60');
-  var reqComp120 = document.getElementById('req_comp120');
-  var reqExpenses = document.getElementById('req_expenses');
-  var reqRefundCb = document.getElementById('req_refund_cb');
-  var reqComp60Cb = document.getElementById('req_comp60_cb');
-  var reqComp120Cb = document.getElementById('req_comp120_cb');
-  var reqExpensesCb = document.getElementById('req_expenses_cb');
-  // Remedy → refund
-  var refundVal = (rv==='refund_return');
-  if (reqRefund) reqRefund.value = refundVal ? '1' : '';
-  if (reqRefundCb) reqRefundCb.checked = refundVal;
-  // Compensation band
-  var bandSel = document.querySelector('select[name="compensationBand"]');
-  var bval = bandSel ? bandSel.value : '';
-  var b60 = (bval==='60_119'); var b120 = (bval==='120_plus');
-  if (reqComp60) reqComp60.value = b60 ? '1' : '';
-  if (reqComp120) reqComp120.value = b120 ? '1' : '';
-  if (reqComp60Cb) reqComp60Cb.checked = b60;
-  if (reqComp120Cb) reqComp120Cb.checked = b120;
-  // Expenses presence
-  var ebMeals = parseFloat(document.querySelector('input[name="expense_breakdown_meals"]')?.value || document.querySelector('input[name="expense_meals"]')?.value || '0') || 0;
-  var ebNights = parseInt(document.querySelector('input[name="expense_breakdown_hotel_nights"]')?.value || '0') || 0;
-  var ebLocal = parseFloat(document.querySelector('input[name="expense_breakdown_local_transport"]')?.value || '0') || 0;
-  var ebOther = parseFloat(document.querySelector('input[name="expense_breakdown_other_amounts"]')?.value || document.querySelector('input[name="expense_other"]')?.value || '0') || 0;
-  var recFlag = (document.querySelector('input[name="reroute_extra_costs"][value="yes"]')?.checked) || false;
-  var recAmount = parseFloat(document.querySelector('input[name="reroute_extra_costs_amount"]')?.value || '0') || 0;
-  var hasExp = (ebMeals>0) || (ebNights>0) || (ebLocal>0) || (ebOther>0) || recFlag || (recAmount>0);
-  if (reqExpenses) reqExpenses.value = hasExp ? '1' : '';
-  if (reqExpensesCb) reqExpensesCb.checked = hasExp;
-
       // TRIN 7 remedyChoice toggles and legacy hook sync
       var remedy = document.querySelector('input[name="remedyChoice"]:checked');
       var remedyVal = remedy ? remedy.value : '';
@@ -1699,6 +2016,9 @@
         }
       };
       setVals('past'); setVals('now');
+      // Build FormData AFTER syncing any hidden legacy inputs so values are included
+      var formData = new FormData(f);
+      xhr.send(formData);
     }
   // TRIN 2 (incident) – react + autosubmit hooks
   radios.forEach(function(r){
@@ -1784,6 +2104,11 @@
       });
     }
     update();
+    // If TRIN 6 radios are already selected on load (e.g., after PRG), trigger one AJAX refresh
+    try {
+      var s6AnyChecked = document.querySelector('#s6 input[type="radio"]:checked');
+      if (s6AnyChecked && typeof window.queueRecalc === 'function') { window.queueRecalc(); }
+    } catch(e) { /* no-op */ }
   })();
 
   // TRIN 4 – autosubmit when operator/station/time/price fields change (affects profile/exemptions/claim)

@@ -35,34 +35,103 @@
 <?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 6</strong> · Art. 12</div>
-<?php $h = (array)($art12['hooks'] ?? []); $miss = (array)($art12['missing'] ?? []); ?>
-<div class="kv small">applies: <code><?= isset($art12['art12_applies']) ? var_export((bool)$art12['art12_applies'], true) : '-' ?></code></div>
-<div class="kv small">missing: <code><?= h(implode(', ', $miss) ?: '-') ?></code></div>
-<?php $reasons = (array)($art12['reasoning'] ?? []); ?>
-<?php if (!empty($reasons)): ?>
-  <div class="small mt4">Begrundelse:</div>
-  <ul class="small" style="margin:4px 0 6px 16px;">
-    <?php foreach ($reasons as $r): ?>
-      <li><?= h($r) ?></li>
-    <?php endforeach; ?>
-  </ul>
+<?php $h = (array)($art12['hooks'] ?? []); $miss = (array)($art12['missing'] ?? []); $missUi = (array)($art12['missing_ui'] ?? []); $missAuto = (array)($art12['missing_auto'] ?? []); $debug = (bool)($this->getRequest()->getQuery('debug') ?? false); ?>
+<?php
+  $applies = $art12['art12_applies'] ?? null;
+  $liable = (string)($art12['liable_party'] ?? 'unknown');
+  // Normalize liable party for display
+  $liableNorm = $liable;
+  if ($liableNorm === 'retailer') $liableNorm = 'agency';
+  $liableLbl = ($liableNorm === 'operator') ? 'Jernbanevirksomhed' : (($liableNorm === 'agency') ? 'Forhandler/rejsebureau' : 'Ukendt');
+  // Build user-facing result text
+  $resultLbl = ($applies === true) ? 'Gælder' : (($applies === false) ? 'Gælder ikke' : 'Ukendt');
+?>
+<div class="small" style="margin:4px 0;">
+  <strong>Evaluering:</strong>
+  <span class="badge" style="background:<?= ($applies===true?'#e6ffed':'#f6f8fa') ?>;border-color:<?= ($applies===true?'#b2f2bb':'#d0d7de') ?>;color:#24292f;"><?= h($resultLbl) ?></span>
+  <?php if ($applies === true): ?>
+    <span class="badge" style="margin-left:6px;">Ansvarlig: <?= h($liableLbl) ?></span>
+  <?php endif; ?>
+</div>
+
+<?php
+// Ny TRIN 6-flow (forenklet visning): brug tri-state yes/no/unknown fra evaluator hooks
+$ttd = (string)($h['through_ticket_disclosure'] ?? 'unknown');   // 'yes' = tydelig oplysning før køb, 'no' = ikke tydelig
+$scn = (string)($h['separate_contract_notice'] ?? 'unknown');    // 'yes' = særskilt-notits givet, 'no' = ikke givet
+$ny_billettype = null; $ny_komp = null; $ny_ask = [];
+
+// Regler (ny semantik):
+// - separate_contract_notice = 'no'  ⇒ gennemgående
+// - separate_contract_notice = 'yes' & through_ticket_disclosure = 'yes' ⇒ separate
+// - separate_contract_notice = 'yes' & through_ticket_disclosure in ('no','unknown') ⇒ gennemgående (manglende/uklar oplysning)
+if ($scn === 'no') {
+  $ny_billettype = 'gennemgående';
+  if (($h['seller_type_operator'] ?? 'unknown') === 'yes') { $ny_komp = 'stk3'; }
+  elseif (($h['seller_type_agency'] ?? 'unknown') === 'yes') { $ny_komp = 'stk4'; }
+  else { $ny_komp = 'stk3_eller_4'; }
+} elseif ($scn === 'yes') {
+  if ($ttd === 'yes') {
+    $ny_billettype = 'ikke gennemgående';
+    $ny_komp = 'per_led';
+  } else { // ttd = 'no' eller 'unknown'
+    $ny_billettype = 'gennemgående';
+    if (($h['seller_type_operator'] ?? 'unknown') === 'yes') { $ny_komp = 'stk3'; }
+    elseif (($h['seller_type_agency'] ?? 'unknown') === 'yes') { $ny_komp = 'stk4'; }
+    else { $ny_komp = 'stk3_eller_4'; }
+  }
+} else { // scn unknown
+  $ny_ask[] = 'separate_contract_notice';
+}
+if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'through_ticket_disclosure'; }
+?>
+<div class="small mt6">Ny TRIN 6-flow (forenklet)</div>
+<div class="small">billettype: <code><?= h($ny_billettype ?? '-') ?></code></div>
+<div class="small">komp: <code><?= h($ny_komp ?? '-') ?></code></div>
+<?php if (!empty($ny_ask)): ?>
+  <div class="small">mangler: <code><?= h(implode(', ', $ny_ask)) ?></code></div>
 <?php endif; ?>
 <details class="small" style="margin:6px 0;">
   <summary style="cursor:pointer;">Vurderingsgrundlag (nøgleværdier)</summary>
   <div class="small" style="margin-top:4px;">
-    <div>through_ticket_disclosure: <code><?= h((string)($h['through_ticket_disclosure'] ?? 'unknown')) ?></code></div>
+    <div>applies: <code><?= isset($art12['art12_applies']) ? var_export((bool)$art12['art12_applies'], true) : '-' ?></code></div>
+    <?php if (!empty($art12['classification'])): ?>
+      <div>classification: <code><?= h((string)$art12['classification']) ?></code></div>
+    <?php endif; ?>
+    <?php if (!empty($art12['basis'])): ?>
+      <div>basis: <code><?= h(implode(', ', (array)$art12['basis'])) ?></code></div>
+    <?php endif; ?>
+    <?php if (!empty($miss)): ?>
+      <div>missing: <code><?= h(implode(', ', $miss)) ?></code></div>
+    <?php endif; ?>
+    <!-- Vis kun de relevante nøgler for afgørelsen som standard -->
     <div>separate_contract_notice: <code><?= h((string)($h['separate_contract_notice'] ?? 'unknown')) ?></code></div>
+    <div>through_ticket_disclosure: <code><?= h((string)($h['through_ticket_disclosure'] ?? 'unknown')) ?></code></div>
     <div>single_txn_operator: <code><?= h((string)($h['single_txn_operator'] ?? 'unknown')) ?></code></div>
     <div>single_txn_retailer: <code><?= h((string)($h['single_txn_retailer'] ?? 'unknown')) ?></code></div>
     <div>shared_pnr_scope: <code><?= h((string)($h['shared_pnr_scope'] ?? 'unknown')) ?></code></div>
-    <div>seller_type_operator: <code><?= h((string)($h['seller_type_operator'] ?? 'unknown')) ?></code></div>
-    <div>seller_type_agency: <code><?= h((string)($h['seller_type_agency'] ?? 'unknown')) ?></code></div>
-    <div>multi_operator_trip: <code><?= h((string)($h['multi_operator_trip'] ?? 'unknown')) ?></code></div>
     <div>single_booking_reference: <code><?= h((string)($h['single_booking_reference'] ?? 'unknown')) ?></code></div>
-    <div>mct_realistic: <code><?= h((string)($h['mct_realistic'] ?? 'unknown')) ?></code></div>
-    <div>one_contract_schedule: <code><?= h((string)($h['one_contract_schedule'] ?? 'unknown')) ?></code></div>
-    <div>contact_info_provided: <code><?= h((string)($h['contact_info_provided'] ?? 'unknown')) ?></code></div>
-    <div>responsibility_explained: <code><?= h((string)($h['responsibility_explained'] ?? 'unknown')) ?></code></div>
+
+    <?php if ($debug): ?>
+      <!-- Debug: vis de øvrige signaler -->
+      <div>seller_type_operator: <code><?= h((string)($h['seller_type_operator'] ?? 'unknown')) ?></code></div>
+      <div>seller_type_agency: <code><?= h((string)($h['seller_type_agency'] ?? 'unknown')) ?></code></div>
+      <div>multi_operator_trip: <code><?= h((string)($h['multi_operator_trip'] ?? 'unknown')) ?></code></div>
+      <div>connection_time_realistic: <code><?= h((string)($h['connection_time_realistic'] ?? 'unknown')) ?></code></div>
+      <div>one_contract_schedule: <code><?= h((string)($h['one_contract_schedule'] ?? 'unknown')) ?></code></div>
+      <div>contact_info_provided: <code><?= h((string)($h['contact_info_provided'] ?? 'unknown')) ?></code></div>
+      <div>responsibility_explained: <code><?= h((string)($h['responsibility_explained'] ?? 'unknown')) ?></code></div>
+      <?php if (!empty($missAuto)): ?>
+        <div>missing (AUTO): <code><?= h(implode(', ', $missAuto)) ?></code></div>
+      <?php endif; ?>
+    <?php endif; ?>
+    <?php $reasons = (array)($art12['reasoning'] ?? []); if (!empty($reasons)): ?>
+      <div class="small mt4">Begrundelse:</div>
+      <ul class="small" style="margin:4px 0 6px 16px;">
+        <?php foreach ($reasons as $r): ?>
+          <li><?= h($r) ?></li>
+        <?php endforeach; ?>
+      </ul>
+    <?php endif; ?>
   </div>
   <?php if (!empty($meta['_identifiers'])): $ids=(array)$meta['_identifiers']; ?>
     <div class="small mt4">Identifikatorer (AUTO):
@@ -109,6 +178,22 @@
 <div class="small">country: <code><?= h($auto['operator_country']['value'] ?? ($form['operator_country'] ?? '-')) ?></code></div>
 <div class="small">product: <code><?= h($auto['operator_product']['value'] ?? ($form['operator_product'] ?? '-')) ?></code></div>
 <div class="small">train: <code><?= h($form['train_no'] ?? '-') ?></code></div>
+
+<?php
+// Provide hidden state for client-side gating sync (used by AJAX updater)
+// Compute pnrCount from journey + multi-ticket summaries
+try {
+  $pnrSet = [];
+  $br = (string)($journey['bookingRef'] ?? '');
+  if ($br !== '') { $pnrSet[$br] = true; }
+  $multi = (array)($meta['_multi_tickets'] ?? []);
+  foreach ($multi as $mt) { $p = (string)($mt['pnr'] ?? ''); if ($p !== '') { $pnrSet[$p] = true; } }
+  $pnrCount = count($pnrSet);
+} catch (\Throwable $e) { $pnrCount = 0; }
+?>
+<input type="hidden" id="aj_pnrCount" value="<?= (int)$pnrCount ?>" />
+<input type="hidden" id="aj_sharedTri" value="<?= h((string)($h['shared_pnr_scope'] ?? 'unknown')) ?>" />
+<input type="hidden" id="aj_singleBookTri" value="<?= h((string)($h['single_booking_reference'] ?? 'unknown')) ?>" />
 
 <?php if (!empty($groupedTickets)): ?>
   <hr/>

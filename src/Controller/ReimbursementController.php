@@ -330,6 +330,17 @@ class ReimbursementController extends AppController
             }
         }
 
+        // Merge missing fields from the flow session state so the official PDF reflects
+        // the same answers as the on-page flow and non-official summary view.
+        // Preference order: explicit POST/GET data > flow.form > flow.meta
+        try {
+            $session = $this->request->getSession();
+            $formSess = (array)$session->read('flow.form') ?: [];
+            $metaSess = (array)$session->read('flow.meta') ?: [];
+        } catch (\Throwable $e) {
+            $formSess = []; $metaSess = [];
+        }
+
         // Allow overriding template via query parameter for diagnostics, but only within webroot or webroot/files
         $source = null;
         $forceName = (string)($this->request->getQuery('template') ?? '');
@@ -356,6 +367,34 @@ class ReimbursementController extends AppController
         }
 
     $map = $this->loadFieldMap() ?: $this->officialFieldMap();
+    // If we have a field map, collect all referenced source keys and backfill from session
+    if (is_array($map) && !empty($map)) {
+        $mapFields = [];
+        foreach ($map as $pg => $flds) {
+            if (!is_array($flds)) { continue; }
+            foreach ($flds as $field => $cfg) {
+                $src = is_array($cfg) && array_key_exists('source', $cfg) ? (string)$cfg['source'] : (string)$field;
+                if ($src === '') { continue; }
+                $mapFields[$src] = true;
+            }
+        }
+        // Backfill gaps from form/meta session so official PDF mirrors the live flow
+        foreach (array_keys($mapFields) as $k) {
+            $has = array_key_exists($k, $data) && $data[$k] !== null && $data[$k] !== '';
+            if ($has) { continue; }
+            if (array_key_exists($k, $formSess) && $formSess[$k] !== null && $formSess[$k] !== '') {
+                $data[$k] = $formSess[$k];
+                continue;
+            }
+            if (array_key_exists($k, $metaSess) && $metaSess[$k] !== null && $metaSess[$k] !== '') {
+                $data[$k] = $metaSess[$k];
+            }
+        }
+        // Special-case: TRIN 7 exclusives derived from remedyChoice if only present in session
+        if (!isset($data['remedy_cancel_return']) && isset($formSess['remedyChoice']) && !isset($data['remedyChoice'])) {
+            $data['remedyChoice'] = $formSess['remedyChoice'];
+        }
+    }
     $debug = (bool)$this->request->getQuery('debug');
     $dx = (float)($this->request->getQuery('dx') ?? 0);
     $dy = (float)($this->request->getQuery('dy') ?? 0);
@@ -426,6 +465,27 @@ class ReimbursementController extends AppController
         }
     // Buffer for Section 6 content that we'll render on a dedicated blank page
     $pendingSection6 = [];
+
+    // Build a data snapshot for PDF filling and page-6 fallback before the page loop,
+    // mirroring the derivations done within the loop when we hit page 5.
+    $dataSnap = $data;
+    $incident = strtolower((string)($data['incident_main'] ?? ''));
+    if (!isset($dataSnap['reason_delay'])) {
+        $dataSnap['reason_delay'] = ($incident === 'delay') || !empty($data['reason_delay']);
+    }
+    if (!isset($dataSnap['reason_cancellation'])) {
+        $dataSnap['reason_cancellation'] = ($incident === 'cancellation') || !empty($data['reason_cancellation']);
+    }
+    if (!isset($dataSnap['reason_missed_conn'])) {
+        $dataSnap['reason_missed_conn'] = ($incident === 'missed_connection') || !empty($data['missed_connection']) || !empty($data['reason_missed_conn']);
+    }
+    // Enforce TRIN 7 exclusive remedy flags if only remedyChoice is present
+    $choicePre = (string)($data['remedyChoice'] ?? '');
+    if ($choicePre !== '') {
+        $dataSnap['remedy_cancel_return'] = ($choicePre === 'refund_return');
+        $dataSnap['remedy_reroute_soonest'] = ($choicePre === 'reroute_soonest');
+        $dataSnap['remedy_reroute_later'] = ($choicePre === 'reroute_later');
+    }
 
     for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             $tpl = $fpdi->importPage($pageNo);
@@ -723,8 +783,70 @@ class ReimbursementController extends AppController
                 }
             }
         }
-        // After rendering all template pages, if we collected Section 6 content,
-        // render it on a dedicated blank page (page 6+).
+        // If the template didn't have page 5 (or we otherwise didn't collect Section 6),
+        // build a fallback from the map's page-5 config and the prepared data snapshot.
+        if (empty($pendingSection6) && !empty($map[5]) && is_array($map[5])) {
+            $groups = [];
+            $questionText = [
+                'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemgående?',
+                'single_txn_operator' => 'Var købet en enkelt transaktion med operatøren?',
+                'single_txn_retailer' => 'Var købet en enkelt transaktion med forhandleren?',
+                'separate_contract_notice' => 'Blev separate kontrakter oplyst?',
+                'shared_pnr_scope' => 'Var alle billetter udstedt under samme bookingnummer/PNR?',
+                'seller_type_operator' => 'Var det en jernbanevirksomhed der solgte dig hele rejsen?',
+                'meal_offered' => 'Blev der tilbudt måltid?',
+                'hotel_offered' => 'Blev der tilbudt hotelovernatning?',
+                'overnight_needed' => 'Var overnatning nødvendig?',
+                'blocked_train_alt_transport' => 'Blev der tilbudt alternativ transport pga. blokeret tog?',
+                'alt_transport_provided' => 'Blev alternativ transport leveret?',
+                'extra_expense_upload' => 'Har du uploadet kvitteringer for udgifter?',
+                'delay_confirmation_received' => 'Modtog du bekræftelse på forsinkelsen?',
+                'delay_confirmation_upload' => 'Har du uploadet bekræftelse på forsinkelsen?',
+                'extraordinary_claimed' => 'Har du angivet ekstraordinært krav?',
+                'request_refund' => 'Ønsker du refusion?',
+                'request_comp_60' => 'Ønsker du kompensation for 60+ min?',
+                'request_comp_120' => 'Ønsker du kompensation for 120+ min?',
+                'request_expenses' => 'Ønsker du dækning af udgifter?'
+            ];
+            $trinForField = [
+                'through_ticket_disclosure' => 6,'single_txn_operator' => 6,'single_txn_retailer' => 6,'separate_contract_notice' => 6,'shared_pnr_scope' => 6,'seller_type_operator' => 6,
+                'meal_offered' => 8,'hotel_offered' => 8,'overnight_needed' => 8,'blocked_train_alt_transport' => 8,'alt_transport_provided' => 8,'extra_expense_upload' => 8,'delay_confirmation_received' => 8,'delay_confirmation_upload' => 8,'extraordinary_claimed' => 8,
+                'request_refund' => 9,'request_comp_60' => 9,'request_comp_120' => 9,'request_expenses' => 9,
+            ];
+            $answerToText = function($v) use ($stringify) {
+                if ($v === null) { return ''; }
+                if (is_bool($v)) { return $v ? 'ja' : 'nej'; }
+                $s = trim((string)$stringify($v));
+                $map = ['1'=>'ja','0'=>'nej','true'=>'ja','false'=>'nej','yes'=>'ja','no'=>'nej','nej'=>'nej','ja'=>'ja','unknown'=>'ved ikke'];
+                $low = mb_strtolower($s);
+                return $map[$low] ?? $s;
+            };
+            foreach ($map[5] as $field => $cfg) {
+                $src = is_array($cfg) && array_key_exists('source', $cfg) ? (string)$cfg['source'] : (string)$field;
+                if (!isset($trinForField[$src])) { continue; }
+                $trin = $trinForField[$src];
+                $q = $questionText[$src] ?? $field;
+                $ans = $answerToText($dataSnap[$src] ?? null);
+                $groups[$trin][] = ['q' => $q, 'a' => $ans];
+            }
+            $allLines = [];
+            ksort($groups);
+            foreach ($groups as $trin => $items) {
+                $allLines[] = $toPdf(sprintf('TRIN %d', $trin));
+                foreach ($items as $it) { $allLines[] = $toPdf(sprintf('%s: %s', $it['q'], $it['a'])); }
+                $allLines[] = '';
+            }
+            $extra = trim($stringify($dataSnap['additional_info'] ?? $data['additional_info'] ?? ''));
+            if ($extra !== '') {
+                $allLines[] = $toPdf('');
+                $paras = preg_split('/\r\n|\r|\n/', $extra);
+                foreach ($paras as $p) { $p = trim($p); if ($p !== '') { $allLines[] = $toPdf($p); } }
+            }
+            $pendingSection6 = array_values(array_filter($allLines, function($l){ return !preg_match('/^\s*TRIN\s*1\b/i', (string)$l); }));
+        }
+
+        // After rendering all template pages (and optional fallback build), if we collected
+        // Section 6 content, render it on a dedicated blank page (page 6+).
         if (!empty($pendingSection6)) {
             // Add blank A4 page
             $fpdi->AddPage('P', [210, 297]);

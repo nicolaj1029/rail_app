@@ -56,6 +56,8 @@ final class Art12Evaluator
         $bookingRef = $journey['bookingRef'] ?? null;
         $sellerType = $journey['seller_type'] ?? null; // 'operator'|'agency'|null
         $missedConn = $journey['missed_connection'] ?? null;
+        $reason = [];
+        $notes  = [];
 
         // --- AUTO-afledninger ---
         // PNR/booking: fælles scope?
@@ -87,7 +89,8 @@ final class Art12Evaluator
         // --- Saml alle 13 hooks (tri-state 'yes'/'no'/'unknown') ---
         $hooks = [
             // 1–5
-            'through_ticket_disclosure' => $this->normChoice($meta['through_ticket_disclosure'] ?? 'unknown'), // 'Gennemgående'|'Særskilte'|'Ved ikke'|'unknown'
+            // New logic: treat 'through_ticket_disclosure' as a Yes/No about whether disclosure was clear before purchase
+            'through_ticket_disclosure' => $this->normYesNo($meta['through_ticket_disclosure'] ?? 'unknown'),
             'single_txn_operator'       => $this->normYesNo($meta['single_txn_operator'] ?? 'unknown'),
             'single_txn_retailer'       => $this->normYesNo($meta['single_txn_retailer'] ?? 'unknown'),
             'separate_contract_notice'  => $this->normYesNo($meta['separate_contract_notice'] ?? 'unknown'),
@@ -99,6 +102,8 @@ final class Art12Evaluator
             'seller_type_operator'      => $this->normYesNo($meta['seller_type_operator'] ?? ($sellerOpAuto ? 'Ja' : ($sellerType !== null ? 'Nej' : 'unknown'))),
             'seller_type_agency'        => $this->normYesNo($meta['seller_type_agency']   ?? ($sellerAgAuto ? 'Ja' : ($sellerType !== null ? 'Nej' : 'unknown'))),
             'multi_operator_trip'       => $this->normYesNo($meta['multi_operator_trip']  ?? ($multiOpsAuto ? 'Ja' : (count($carriers) ? 'Nej' : 'unknown'))),
+            // Convenience: single_operator_scope (inverse of multi_operator_trip)
+            'single_operator_scope'     => $this->normYesNo($meta['single_operator_scope'] ?? ($multiOpsAuto ? 'Nej' : (count($carriers) ? 'Ja' : 'unknown'))),
 
             // 9–13
             'connection_time_realistic' => $this->normYesNo($meta['connection_time_realistic'] ?? 'unknown'),
@@ -115,10 +120,14 @@ final class Art12Evaluator
         if (isset($exProfile['articles']['art12']) && $exProfile['articles']['art12'] === false) {
             $notes = array_merge($notes, $exProfile['notes'] ?? []);
             $reason[] = 'Art.12 disabled by exemption profile (ExemptionProfileBuilder).';
-            $missing = $this->missing1to13($hooks);
+            // Build missing lists (UI vs AUTO) for compatibility in panels
+            [$missingUi, $missingAuto] = $this->splitMissing($hooks);
+            $missing = array_values(array_unique(array_merge($missingUi, $missingAuto)));
             return [
                 'hooks' => $hooks,
                 'missing' => $missing,
+                'missing_ui' => $missingUi,
+                'missing_auto' => $missingAuto,
                 'art12_applies' => false,
                 'liable_party' => 'unknown',
                 'reasoning' => $reason,
@@ -126,45 +135,62 @@ final class Art12Evaluator
             ];
         }
 
+        // --- Quick classification (using only already-gathered minimal signals) ---
+        $quick = $this->quickClassify(
+            $segments,
+            is_string($bookingRef) ? $bookingRef : null,
+            is_string($sellerType) ? $sellerType : null,
+            // pass current preliminary hooks for notice/one schedule
+            [
+                'separate_contract_notice' => $this->normYesNo($meta['separate_contract_notice'] ?? 'unknown'),
+                'one_contract_schedule'    => $this->normYesNo($meta['one_contract_schedule'] ?? 'unknown'),
+            ]
+        );
+
         // --- Afgørelseslogik ---
-        $reason = [];
-        $notes  = [];
         $applies = null;              // bool|null
         $liable = 'unknown';          // 'operator'|'agency'|'unknown'
 
-        // 4) Klart angivet "særskilte kontrakter" (før køb) → udvidet ansvar i 12(3)-(4) fraviges.
-        if ($hooks['separate_contract_notice'] === 'yes') {
+        // Derivér single_txn (foreløbig) fra PNR/booking/single_txn flags
+        $singleTxn = null; // bool|null
+        if (count($uniquePnrs) > 1 && $hooks['single_txn_operator'] === 'no' && $hooks['single_txn_retailer'] === 'no') {
+            $singleTxn = false;
+        } elseif (
+            $hooks['shared_pnr_scope'] === 'yes' ||
+            $hooks['single_booking_reference'] === 'yes' ||
+            $hooks['single_txn_operator'] === 'yes' ||
+            $hooks['single_txn_retailer'] === 'yes'
+        ) {
+            $singleTxn = true;
+        }
+
+        // 1) TRIN 1–2: Hvis vi ved det er multi-transaction (single_txn === false) → separate og stop her
+        if ($singleTxn === false) {
             $applies = false;
-            $reason[] = 'Særskilte kontrakter var udtrykkeligt angivet før køb (Art. 12(5)).';
+            $reason[] = 'Ikke samme transaktion → særskilte kontrakter.';
         }
 
-        // 2–3) Én transaktion → gennemgående (operator: 12(3); agency: 12(4))
-        if ($hooks['single_txn_operator'] === 'yes') {
+        // 2) Default presumption (stk. 3/4) – foreløbig antagelse, først endelig efter stk. 5
+        if ($applies === null && $singleTxn === true) {
             $applies = true;
-            $liable  = 'operator';
-            $reason[] = 'Billetter købt i én transaktion hos operatør (Art. 12(3)).';
-        }
-        if ($hooks['single_txn_retailer'] === 'yes') {
-            if ($hooks['separate_contract_notice'] !== 'yes') {
-                $applies = true;
-                $liable  = 'agency';
-                $reason[] = 'Billetter købt samlet hos billetudsteder/rejsebureau uden klar særskilt-notits (Art. 12(4) + 12(5)).';
-            } else {
-                $notes[] = 'Samlet køb hos forhandler, men særskilte kontrakter oplyst → 12(4) fraviges via 12(5).';
-            }
+            if ($hooks['seller_type_operator'] === 'yes') { $liable = 'operator'; $reason[] = 'Foreløbig: 12(3) ved operatør.'; }
+            elseif ($hooks['seller_type_agency'] === 'yes') { $liable = 'agency'; $reason[] = 'Foreløbig: 12(4) ved billetudsteder/rejsebureau.'; }
+            else { $reason[] = 'Foreløbig: 12(3)/(4) – sælger ukendt.'; }
         }
 
-        // 1) Disclosure “Gennemgående” → vægt for anvendelse
-        if ($this->isDisclosureThrough($hooks['through_ticket_disclosure'])) {
-            $applies = true;
-            $reason[] = 'Oplyst som gennemgående billet (Art. 12(2), Bilag II pkt. 9).';
+        // 1) Disclosure before purchase (new semantics): if disclosure was NOT clear (no), weigh towards "through" when other signals support it
+        if ($hooks['through_ticket_disclosure'] === 'no') {
+            $notes[] = 'Manglende tydelig oplysning før køb (Art. 12(2)).';
+        } elseif ($hooks['through_ticket_disclosure'] === 'yes') {
+            // If later marked as separate AND clearly informed, treat as separate in TRIN 5 block below.
+            $notes[] = 'Tydelig oplysning før køb registreret (Art. 12(2)).';
         }
 
-        // 5 & 13) Fælles PNR/bookingRef uden særskilt-notits → implicit gennemgående (12(5))
+        // 5 & 13) Fælles PNR/bookingRef uden særskilt-notits → styrker presumption (men den endelige afgørelse sker efter stk. 5)
         $sharedScope = ($hooks['shared_pnr_scope'] === 'yes' || $hooks['single_booking_reference'] === 'yes');
-        if ($sharedScope && $hooks['separate_contract_notice'] !== 'yes') {
+        if ($applies === null && $sharedScope && $hooks['separate_contract_notice'] !== 'yes') {
             $applies = true;
-            $reason[] = 'Fælles booking/PNR uden tydelig særskilt-notits → implicit gennemgående (Art. 12(5)).';
+            $reason[] = 'Fælles booking/PNR uden særskilt-notits → foreløbig gennemgående (Art. 12(5)).';
         }
 
         // 6–7) Sælgerrolle – hvem er ansvarlig part når art.12 gælder
@@ -191,6 +217,8 @@ final class Art12Evaluator
                 }
             } else {
                 $notes[] = 'Én operatør – gennemgående anvendes (Art. 12(1) understøtter).';
+                // Når der kun er én operatør og art.12 allerede gælder, tilskriv ansvar
+                if ($liable === 'unknown') { $liable = 'operator'; }
             }
         }
 
@@ -232,24 +260,65 @@ final class Art12Evaluator
             $notes[] = 'Uoverensstemmelse mellem PNR-scope (spm. 5) og bookingreference (spm. 13) – datavalidering anbefales.';
         }
 
-        // Konflikt-tilfælde: disclosure “Gennemgående” MEN separate_contract_notice “Ja”
-        if ($this->isDisclosureThrough($hooks['through_ticket_disclosure']) && $hooks['separate_contract_notice'] === 'yes') {
-            // Forbrugerbeskyttende tilgang: behandle som gennemgående, og flag konflikt.
-            $applies = true;
-            $reason[] = 'Konflikt: oplyst gennemgående, men særskilt-notits givet. Fortolkes til passagerens fordel.';
-            if ($liable === 'unknown' && $hooks['seller_type_operator'] === 'yes') $liable = 'operator';
-            if ($liable === 'unknown' && $hooks['seller_type_agency']   === 'yes') $liable = 'agency';
+        // TRIN 2 (nye regler): allerede håndteret via $singleTxn === false ovenfor
+
+        // TRIN 5 (art.12(5) undtagelsen) – endelig afgørelse:
+        // Kun hvis særskilt-notits VAR givet OG disclosure VAR givet før køb, fraviges presumptionen
+        if ($hooks['separate_contract_notice'] === 'yes' && $hooks['through_ticket_disclosure'] === 'yes') {
+            $applies = false;
+            $reason[] = 'Undtagelse i Art. 12(5): Særskilt-notits + tydelig oplysning før køb → ikke gennemgående.';
+        } elseif ($applies === null) {
+            // Ingen automatisk "Gælder"-default, medmindre vi allerede har en stærk indikation om samme transaktion
+            // (dækket ovenfor ved $singleTxn === true). Hvis vi stadig er null her, lader vi det forblive ukendt,
+            // så UI kan spørge den minimale undtagelses-duo (TRIN 4/5) i stedet for at vise "Gælder".
         }
 
-        // Hvis vi stadig ikke ved det, sæt null og bed UI om at indsamle de afgørende svar
-        $missing = $this->missing1to13($hooks);
+        // Hvis beslutningen stadig er uklar, brug quick classification til at fastsætte default
+        if ($applies === null && is_array($quick)) {
+            switch ($quick['classification']) {
+                case 'THROUGH_12_3':
+                case 'THROUGH_12_4':
+                case 'THROUGH_DEFAULT':
+                    $applies = true;
+                    if ($liable === 'unknown' && !empty($quick['liable_party'])) {
+                        $liable = $quick['liable_party'];
+                    }
+                    $reason[] = 'Quick Art.12: ' . $quick['classification'];
+                    break;
+                case 'SEPARATE_12_5':
+                    $applies = false;
+                    $reason[] = 'Quick Art.12: SEPARATE_12_5';
+                    break;
+                case 'OBLIGATION_12_1':
+                    // Marker pligtspor i noter; selve anvendelsen kan afhænge af øvrige forhold
+                    $notes[] = 'Quick Art.12: OBLIGATION_12_1 (én operatør med skift; vurder disclosure/PNR).';
+                    if ($liable === 'unknown' && !empty($quick['liable_party'])) {
+                        $liable = $quick['liable_party'];
+                    }
+                    break;
+                case 'NA':
+                default:
+                    // ingen skift / ikke relevant
+                    break;
+            }
+        }
+
+    // Hvis vi stadig ikke ved det, sæt null og bed UI om at indsamle KUN de afgørende svar
+    // Minimal missing: kun det, der er nødvendigt for at afgøre "gennemgående" vs. "særskilte kontrakter"
+    $missingUi = $this->computeMinimalMissing($hooks, $applies);
+    $missingAuto = []; // skjul AUTO-mangler i normalt flow; vis kun i debug-paneler
+    $missing = $missingUi;
 
         return [
             'hooks'          => $hooks,
             'missing'        => $missing,
+            'missing_ui'     => $missingUi,
+            'missing_auto'   => $missingAuto,
             'art12_applies'  => $applies,
             'liable_party'   => $liable,
             'reasoning'      => $reason,
+            'classification' => $quick['classification'] ?? null,
+            'basis'          => $quick['basis'] ?? [],
             'notes'          => $notes,
         ];
     }
@@ -311,5 +380,185 @@ final class Art12Evaluator
             }
         }
         return $out;
+    }
+
+    /**
+     * Minimal mangler til TRIN 6 (kun logisk afgørelse: gennemgående vs særskilte).
+     * Vi spørger kun om:
+     * - separate_contract_notice (altid, hvis ukendt)
+     * - through_ticket_disclosure (kun hvis separate_contract_notice === 'yes' og disclosure er ukendt)
+     * - single_txn_operator / single_txn_retailer (kun hvis afgørelsen stadig er uklar og PNR-scope ikke hjælper)
+     * @param array<string,string> $hooks
+     * @param bool|null $applies
+     * @return string[]
+     */
+    private function computeMinimalMissing(array $hooks, ?bool $applies): array
+    {
+        $out = [];
+        $scn = $hooks['separate_contract_notice'] ?? 'unknown';
+        $ttd = $hooks['through_ticket_disclosure'] ?? 'unknown';
+        $sbo = $hooks['single_booking_reference'] ?? 'unknown';
+        $spr = $hooks['shared_pnr_scope'] ?? 'unknown';
+        $sto = $hooks['single_txn_operator'] ?? 'unknown';
+        $str = $hooks['single_txn_retailer'] ?? 'unknown';
+        $selOp = $hooks['seller_type_operator'] ?? 'unknown';
+        $selAg = $hooks['seller_type_agency'] ?? 'unknown';
+
+        $pnrHelpful = ($sbo === 'yes' || $spr === 'yes');
+
+        // Operatør-spor: Hvis PNR/booking hjælper (fælles scope), stiller vi ikke undtagelses-parret.
+        // Hvis PNR/booking er ukendt/ikke hjælpsomt, skal begge spørgsmål stilles (TRIN 4 → TRIN 5).
+        if ($selOp === 'yes') {
+            if ($pnrHelpful) { return []; }
+            if ($ttd === 'unknown') { $out[] = 'through_ticket_disclosure'; }
+            if ($scn === 'unknown') { $out[] = 'separate_contract_notice'; }
+            if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $out[] = 'through_ticket_disclosure'; }
+            // Stable order later
+        }
+
+        // New rule (per spec): Never STOP as "through" before checking the exception (Art. 12(5)).
+        // If single-transaction is presumed/confirmed (either via PNR/shared scope or explicit single_txn flags),
+        // we MUST collect the exception pair: separate_contract_notice and, if 'yes', through_ticket_disclosure.
+        $singleTxnLikely = $pnrHelpful || $sto === 'yes' || $str === 'yes';
+
+        if ($singleTxnLikely) {
+            if ($scn === 'unknown') { $out[] = 'separate_contract_notice'; }
+            if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $out[] = 'through_ticket_disclosure'; }
+            // Note: even if $applies === true from default presumption, we still surface the exception questions.
+        }
+
+        // Branch by seller role to avoid asking irrelevant questions
+        if ($selOp === 'yes') {
+            // Operator seller path:
+            // If single-transaction not yet established, keep it simple: ask only TRIN 4/5 pair to allow exception path.
+            if (!$singleTxnLikely) {
+                if ($scn === 'unknown') { $out[] = 'separate_contract_notice'; }
+                if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $out[] = 'through_ticket_disclosure'; }
+            }
+        } elseif ($selAg === 'yes') {
+            // Retailer seller path: if PNR helps or single transaction confirmed, ask TRIN 4/5 to decide 12(5)
+            if (!$pnrHelpful && $applies === null && $str === 'unknown' && $scn !== 'yes') { $out[] = 'single_txn_retailer'; }
+            if ($scn === 'unknown') { $out[] = 'separate_contract_notice'; }
+            if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $out[] = 'through_ticket_disclosure'; }
+        } else {
+            // Unknown seller: hold it truly minimal – ask the two simple TRIN 4/5 questions first
+            if ($scn === 'unknown') { $out[] = 'separate_contract_notice'; }
+            if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $out[] = 'through_ticket_disclosure'; }
+            // Only if decision remains unclear AND PNR isn't helpful, then ask about same transaction
+            if ($applies === null && !$pnrHelpful && empty($out)) {
+                if ($sto === 'unknown') { $out[] = 'single_txn_operator'; }
+                elseif ($str === 'unknown') { $out[] = 'single_txn_retailer'; }
+            }
+        }
+
+        // Stable ordering
+        $order = ['separate_contract_notice','through_ticket_disclosure','single_txn_operator','single_txn_retailer'];
+        $out = array_values(array_unique($out));
+        usort($out, function($a,$b) use ($order){
+            $ia = array_search($a, $order, true); $ib = array_search($b, $order, true);
+            $ia = $ia === false ? 999 : $ia; $ib = $ib === false ? 999 : $ib;
+            return $ia <=> $ib;
+        });
+        return $out;
+    }
+
+    /**
+     * Split missing into UI (1–6) and AUTO (7–13) buckets for TRIN 6 UX.
+     * @param array<string,string> $hooks
+     * @return array{0: string[], 1: string[]}
+     */
+    private function splitMissing(array $hooks): array
+    {
+        // Behold for bagudkompatibilitet i debug, men brug computeMinimalMissing for faktisk 'missing'
+        $ui = ['separate_contract_notice','through_ticket_disclosure','single_txn_operator','single_txn_retailer'];
+        $auto = ['shared_pnr_scope','single_booking_reference'];
+        $missingUi = [];
+        foreach ($ui as $k) { if (!isset($hooks[$k]) || $hooks[$k] === 'unknown') { $missingUi[] = $k; } }
+        $missingAuto = [];
+        foreach ($auto as $k) { if (!isset($hooks[$k]) || $hooks[$k] === 'unknown') { $missingAuto[] = $k; } }
+        return [$missingUi, $missingAuto];
+    }
+
+    /**
+     * Quick classifier per user’s minimal-data rules.
+     * @param array<int,array<string,mixed>> $segments
+     * @param string|null $bookingRef
+     * @param string|null $sellerType 'operator'|'agency'|null
+     * @param array{separate_contract_notice:string, one_contract_schedule:string} $preHooks
+     * @return array{classification:string, liable_party?:string, basis:string[]}
+     */
+    private function quickClassify(array $segments, ?string $bookingRef, ?string $sellerType, array $preHooks): array
+    {
+        $hasTransfer = count($segments) > 1;
+        if (!$hasTransfer) {
+            return ['classification' => 'NA', 'basis' => ['no_transfer']];
+        }
+
+        // Operators on segments
+        $ops = [];
+        $pnrs = [];
+        foreach ($segments as $s) {
+            $op = $s['operator_name'] ?? ($s['operator'] ?? ($s['carrier'] ?? null));
+            if (is_string($op) && trim($op) !== '') $ops[] = trim($op);
+            $pnr = $s['booking_reference'] ?? ($s['pnr'] ?? null);
+            if (is_string($pnr) && trim($pnr) !== '') $pnrs[] = trim($pnr);
+        }
+        $ops = array_values(array_unique($ops));
+        $pnrs = array_values(array_unique($pnrs));
+        $oneOperatorAll = (count($ops) === 1 && $ops[0] !== '');
+        $sharedPNR = false;
+        if (is_string($bookingRef) && trim($bookingRef) !== '') {
+            $sharedPNR = true;
+        } elseif (count($pnrs) === 1 && $pnrs[0] !== '') {
+            $sharedPNR = true;
+        }
+
+        $notice = ($preHooks['separate_contract_notice'] === 'yes');
+        $oneSched = ($preHooks['one_contract_schedule'] === 'yes');
+        $seller = null;
+        if ($sellerType === 'operator') $seller = 'operator';
+        if ($sellerType === 'agency')   $seller = 'retailer';
+
+        // 1) THROUGH_12_3 – operator liable
+        if ($sharedPNR && !$notice && ($seller === 'operator' || ($seller === null && $oneOperatorAll))) {
+            return [
+                'classification' => 'THROUGH_12_3',
+                'liable_party'   => 'operator',
+                'basis'          => ['shared_pnr','no_separate_notice', $seller === 'operator' ? 'seller_operator' : 'one_operator_all_segments']
+            ];
+        }
+        // 2) THROUGH_12_4 – retailer liable
+        if ($sharedPNR && !$notice && $seller === 'retailer') {
+            return [
+                'classification' => 'THROUGH_12_4',
+                'liable_party'   => 'retailer',
+                'basis'          => ['shared_pnr','no_separate_notice','seller_retailer']
+            ];
+        }
+        // 3) THROUGH_DEFAULT
+        if (!$notice && ($sharedPNR || $oneSched)) {
+            return [
+                'classification' => 'THROUGH_DEFAULT',
+                'liable_party'   => $seller ?? ($oneOperatorAll ? 'operator' : null),
+                'basis'          => [ $sharedPNR ? 'shared_pnr' : 'one_contract_schedule', 'no_separate_notice', $seller ? ('seller_'.$seller) : ($oneOperatorAll ? 'one_operator_all_segments' : 'seller_unknown') ]
+            ];
+        }
+        // 4) SEPARATE_12_5
+        if ($notice && (!$sharedPNR || !$oneSched)) {
+            return [
+                'classification' => 'SEPARATE_12_5',
+                'basis'          => ['separate_notice', !$sharedPNR ? 'multiple_pnr' : 'no_single_itinerary']
+            ];
+        }
+        // 5) OBLIGATION_12_1
+        if ($hasTransfer && $oneOperatorAll) {
+            return [
+                'classification' => 'OBLIGATION_12_1',
+                'liable_party'   => 'operator',
+                'basis'          => ['one_operator_all_segments','has_transfer', $notice ? 'separate_notice_present' : 'no_separate_notice']
+            ];
+        }
+        // Fallback
+        return [ 'classification' => 'SEPARATE_12_5', 'basis' => ['default_fallback'] ];
     }
 }

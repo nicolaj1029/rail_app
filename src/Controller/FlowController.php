@@ -109,11 +109,23 @@ class FlowController extends AppController
             $meta['logs'][] = 'WARN: scope infer failed: ' . $e->getMessage();
         }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
-    $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta);
+        // Derive AUTO Art.12 hooks (2,3,5,6,7,8,13) without overriding user inputs
+        try {
+            $auto12 = (new \App\Service\Art12AutoDeriver())->apply($journey, $meta);
+            $meta = $auto12['meta'];
+            if (!empty($auto12['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $auto12['logs']); }
+        } catch (\Throwable $e) {
+            $meta['logs'][] = 'WARN: Art12AutoDeriver failed: ' . $e->getMessage();
+        }
+        $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta);
 
-        $art9 = null;
-        if (!empty($compute['art9OptIn'])) {
+        // Evaluate Art. 9 unconditionally so ask_hooks and banners are available even if the
+        // explicit opt-in toggle isn't set. The UI can still choose what to show.
+        try {
             $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta);
+        } catch (\Throwable $e) {
+            $art9 = null;
+            $meta['logs'][] = 'WARN: Art9Evaluator failed: ' . $e->getMessage();
         }
         $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
         $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
@@ -194,14 +206,16 @@ class FlowController extends AppController
         $session = $this->request->getSession();
         // When called via AJAX to refresh hooks panel, we'll short-circuit and render only the element
         $isAjaxHooks = (bool)$this->request->getQuery('ajax_hooks');
-        // On plain GET without a recent upload, clear previously filled fields (reset form)
+        // Previously: a plain GET cleared all session state. This caused data loss when adding
+        // query params like allow_official=1. Now we only reset on explicit request (?reset=1).
         if ($this->request->is('get')) {
             $justUploaded = (bool)$session->read('flow.justUploaded');
+            $doReset = $this->truthy($this->request->getQuery('reset'));
             if ($justUploaded) {
                 // Preserve once after PRG, then drop the flag
                 $session->write('flow.justUploaded', false);
-            } else {
-                // Hard refresh: reset TRIN 1–2 (flags & incident) and form fields
+            } elseif ($doReset) {
+                // Hard reset only when user explicitly asks for it
                 $session->delete('flow.form');
                 $session->delete('flow.flags');
                 $session->delete('flow.incident');
@@ -938,8 +952,10 @@ class FlowController extends AppController
                 'bike_reservation_type','bike_res_required','bike_denied_reason','bike_followup_offer','bike_delay_bucket',
                 'fare_class_purchased','berth_seat_type','reserved_amenity_delivered','class_delivered_status',
                 'preinformed_disruption','preinfo_channel','realtime_info_seen',
-                'facilities_delivered_status','facility_impact_note',
+                'facilities_delivered_status','facility_impact_note','connection_time_realistic',
                 'through_ticket_disclosure','single_txn_operator','single_txn_retailer','separate_contract_notice',
+                // TRIN 6 – simplified Art. 12 UI state
+                'seller_channel','same_transaction',
                 'complaint_channel_seen','complaint_already_filed','complaint_receipt_upload','submit_via_official_channel',
                 // Other
                 'purchaseChannel',
@@ -957,6 +973,31 @@ class FlowController extends AppController
                     $form[$k] = (string)$v;
                 }
                 // Ignore arrays/objects for these keys
+            }
+
+            // Map 3.2.7 Ticket Number(s)/Booking Reference to journey.bookingRef when sensible
+            // - If a single token is provided, treat it as the booking reference (PNR)
+            // - If multiple distinct tokens are provided, do NOT set bookingRef; instead hint shared_pnr_scope=Nej when unknown
+            $ticketField = (string)($this->request->getData('ticket_no') ?? ($form['ticket_no'] ?? ''));
+            if (is_string($ticketField)) {
+                $val = trim($ticketField);
+                if ($val !== '') {
+                    $tokens = preg_split('/[\s,;]+/', $val) ?: [];
+                    $tokens = array_values(array_filter(array_map('trim', $tokens), function($s){ return $s !== ''; }));
+                    $unique = array_values(array_unique($tokens));
+                    if (count($unique) === 1) {
+                        if (empty($journey['bookingRef'])) {
+                            $journey['bookingRef'] = (string)$unique[0];
+                            $meta['logs'][] = 'AUTO: bookingRef set from 3.2.7 ticket_no field';
+                        }
+                    } elseif (count($unique) > 1) {
+                        $cur = isset($meta['shared_pnr_scope']) ? strtolower((string)$meta['shared_pnr_scope']) : '';
+                        if ($cur === '' || $cur === 'unknown' || $cur === 'ved ikke' || $cur === '-') {
+                            $meta['shared_pnr_scope'] = 'Nej';
+                            $meta['logs'][] = 'AUTO: shared_pnr_scope=Nej (multiple booking refs in 3.2.7)';
+                        }
+                    }
+                }
             }
 
             // TRIN 1 — persist EU delay minutes if present in this POST (e.g., when uploading after entering delay)
@@ -1039,24 +1080,69 @@ class FlowController extends AppController
                 $form['complaint_receipt_upload'] = $target;
             } elseif (($r4 = $this->request->getData('complaint_receipt_upload')) && is_string($r4)) { $form['complaint_receipt_upload'] = $r4; }
 
-            // TRIN 6 – Art. 12 inputs: persist to meta/journey for evaluator
-            $sellerType = (string)($this->request->getData('seller_type') ?? '');
-            if (in_array($sellerType, ['operator','agency'], true)) {
-                $journey['seller_type'] = $sellerType;
+            // TRIN 6 – Art. 12 (NYT flow): persist and map to evaluator-compatible hooks
+            // Seller channel (operator/retailer/unknown) → journey.seller_type + seller_type_* hooks
+            $sellerChannel = (string)($this->request->getData('seller_channel') ?? '');
+            if ($sellerChannel === 'operator') {
+                $journey['seller_type'] = 'operator';
+                $meta['seller_type_operator'] = 'Ja';
+                $meta['seller_type_agency'] = 'Nej';
+            } elseif ($sellerChannel === 'retailer') {
+                $journey['seller_type'] = 'agency';
+                $meta['seller_type_operator'] = 'Nej';
+                $meta['seller_type_agency'] = 'Ja';
+            } elseif ($sellerChannel === 'unknown') {
+                $meta['seller_type_operator'] = 'Ved ikke';
+                $meta['seller_type_agency'] = 'Ved ikke';
             }
+            // If bookingRef already present, infer single transaction automatically by seller role
+            if (!empty($journey['bookingRef'])) {
+                if (($journey['seller_type'] ?? null) === 'operator') {
+                    $meta['single_txn_operator'] = 'Ja';
+                } elseif (($journey['seller_type'] ?? null) === 'agency') {
+                    $meta['single_txn_retailer'] = 'Ja';
+                }
+                // Also reflect this in hook 13 for clarity
+                $meta['single_booking_reference'] = 'Ja';
+                $meta['shared_pnr_scope'] = 'Ja';
+            }
+            // Same transaction (only asked when multiple PNRs) → single_txn_* hooks depending on seller
+            $sameTxn = (string)($this->request->getData('same_transaction') ?? '');
+            if ($sameTxn === 'yes' || $sameTxn === 'no') {
+                if ($sellerChannel === 'operator') {
+                    $meta['single_txn_operator'] = ($sameTxn === 'yes') ? 'yes' : 'no';
+                    $meta['single_txn_retailer'] = 'no';
+                } elseif ($sellerChannel === 'retailer') {
+                    $meta['single_txn_operator'] = 'no';
+                    $meta['single_txn_retailer'] = ($sameTxn === 'yes') ? 'yes' : 'no';
+                } else {
+                    // Unknown seller: set both to unknown unless explicitly no
+                    $meta['single_txn_operator'] = ($sameTxn === 'no') ? 'no' : 'unknown';
+                    $meta['single_txn_retailer'] = ($sameTxn === 'no') ? 'no' : 'unknown';
+                }
+            }
+            // TRIN 4+5 simplified: through_ticket_disclosure (yes/no) and separate_contract_notice (yes/no)
+            // Accept both new names and legacy *_bool for backwards compatibility
+            $sepRaw = (string)($this->request->getData('separate_contract_notice') ?? $this->request->getData('separate_contract_notice_bool') ?? '');
+            if ($sepRaw === 'yes') { $meta['separate_contract_notice'] = 'Ja'; }
+            elseif ($sepRaw === 'no') { $meta['separate_contract_notice'] = 'Nej'; }
+
+            $ttdRaw = (string)($this->request->getData('through_ticket_disclosure') ?? $this->request->getData('through_ticket_disclosure_bool') ?? '');
+            if ($ttdRaw === 'yes') { $meta['through_ticket_disclosure'] = 'Ja'; }
+            elseif ($ttdRaw === 'no') { $meta['through_ticket_disclosure'] = 'Nej'; }
+            // Propagate any debug/auto answers for 9–13 and related hooks
             $art12Keys = [
-                'through_ticket_disclosure','single_txn_operator','single_txn_retailer','separate_contract_notice',
-                'mct_realistic','one_contract_schedule','contact_info_provided','responsibility_explained'
+                // 'through_ticket_disclosure' intentionally excluded – mapped above from boolean
+                'single_txn_operator','single_txn_retailer','separate_contract_notice',
+                'connection_time_realistic','one_contract_schedule','contact_info_provided','responsibility_explained'
             ];
             foreach ($art12Keys as $k) {
                 $val = $this->request->getData($k);
-                if ($val !== null && $val !== '') {
-                    $vv = is_string($val) ? trim($val) : (string)$val;
-                    // Normalize unknowns
-                    if ($vv === 'Ved ikke' || $vv === '-') { $vv = 'unknown'; }
-                    if ($vv === '') { $vv = 'unknown'; }
-                    $meta[$k] = $vv;
-                }
+                if ($val === null || $val === '') { continue; }
+                $vv = is_string($val) ? trim($val) : (string)$val;
+                if ($vv === 'Ved ikke' || $vv === '-') { $vv = 'unknown'; }
+                if ($vv === '') { $vv = 'unknown'; }
+                $meta[$k] = $vv;
             }
 
             // TRIN 9 – Map Art. 9 hooks into $meta so evaluator can auto-complete
@@ -1074,13 +1160,32 @@ class FlowController extends AppController
             foreach ($art9Keys as $k) {
                 $val = $this->request->getData($k);
                 if ($val === null || $val === '') { continue; }
-                if (is_array($val)) { // promised_facilities[]
+                // promised_facilities[] stays as array in meta for echoing
+                if (is_array($val)) {
                     $meta[$k] = array_values(array_map('strval', $val));
                     continue;
                 }
                 $vv = is_string($val) ? trim($val) : (string)$val;
                 if ($vv === 'Ved ikke' || $vv === '-') { $vv = 'unknown'; }
                 if ($vv === '') { $vv = 'unknown'; }
+
+                // Important: Don't let Art. 9 UI override TRIN 6 answers that already set meta
+                // - If TRIN 6 has already provided a definite yes/no for a hook, keep it
+                // - Special-case through_ticket_disclosure: Art. 9 uses legacy values
+                //   ("Gennemgående"/"Særskilte"/"Ved ikke"). Ignore those here so
+                //   the TRIN 6 boolean (yes/no = disclosure clear before purchase) wins.
+                $hasDefinite = isset($meta[$k]) && !in_array(strtolower((string)$meta[$k]), ['','unknown','ved ikke','-'], true);
+                if ($k === 'through_ticket_disclosure') {
+                    $low = mb_strtolower($vv);
+                    $isLegacyChoice = in_array($low, ['gennemgående','gennemgaende','særskilte','saerskilte','separate','ved ikke','unknown','-'], true);
+                    if ($isLegacyChoice) {
+                        // Only set if not already answered by TRIN 6; map to unknown to avoid polluting
+                        if (!$hasDefinite) { $meta[$k] = 'unknown'; }
+                        continue;
+                    }
+                }
+                // For all other hooks: only overwrite if not already set to a definite value
+                if ($hasDefinite) { continue; }
                 $meta[$k] = $vv;
             }
             // Keep promised_facilities[] in $form for checkbox echoing
@@ -1130,10 +1235,21 @@ class FlowController extends AppController
             $meta['logs'][] = 'WARN: scope infer failed: ' . $e->getMessage();
         }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        // Derive AUTO Art.12 hooks (2,3,5,6,7,8,13) before evaluation; user inputs remain authoritative
+        try {
+            $auto12 = (new \App\Service\Art12AutoDeriver())->apply($journey, $meta);
+            $meta = $auto12['meta'];
+            if (!empty($auto12['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $auto12['logs']); }
+        } catch (\Throwable $e) {
+            $meta['logs'][] = 'WARN: Art12AutoDeriver failed: ' . $e->getMessage();
+        }
         $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta);
-        $art9 = null;
-        if (!empty($compute['art9OptIn'])) {
+        // Evaluate Art. 9 unconditionally (see above rationale)
+        try {
             $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta);
+        } catch (\Throwable $e) {
+            $art9 = null;
+            $meta['logs'][] = 'WARN: Art9Evaluator failed: ' . $e->getMessage();
         }
     $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
     $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
@@ -1275,10 +1391,11 @@ class FlowController extends AppController
 
         // TRIN 5–6 – Entitlements and choices
         $delayAtFinal = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
-    // Additional gate: if missed connection and Art. 12 evaluation is negative, block entitlements
-    $art12_block = ($reason_missed_conn && isset($art12['art12_applies']) && $art12['art12_applies'] === false);
-    $allow_refund = (!$missedConnBlock) && (!$art12_block) && (($compute['delayMinEU'] ?? 0) >= 60 || $reason_cancellation);
-    $allow_compensation = (!$missedConnBlock) && (!$art12_block) && ($delayAtFinal >= 60);
+    // Do NOT block entitlements based on Art. 12 outcome. Even if Art. 12 is negative
+    // for a missed connection, the user may still seek remedies/assistance on other bases.
+    $art12_block = false;
+    $allow_refund = (!$missedConnBlock) && (($compute['delayMinEU'] ?? 0) >= 60 || $reason_cancellation);
+    $allow_compensation = (!$missedConnBlock) && ($delayAtFinal >= 60);
         // Section 4 choice resolution (enforce not both): prefer explicit remedyChoice=refund; else compensation; else alt_costs
         $section4_choice = null;
         $remedyChoice = $form['remedyChoice'] ?? null; // refund | reroute_soonest | reroute_later

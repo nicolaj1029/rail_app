@@ -206,6 +206,11 @@
     </li>
   </ul>
 
+  <h2>Dokumentation</h2>
+  <ul>
+    <li>PDF-samling: <a href="<?= h($this->Url->build('/files/', ['fullBase' => true])) ?>" target="_blank" rel="noopener"><?= h($this->Url->build('/files/', ['fullBase' => true])) ?></a></li>
+  </ul>
+
   <h2>OCR/ingest API stub (for pipeline tests)</h2>
   <ul>
     <li><strong>Ticket ingest</strong> (stub; returns a structure you can expand later)
