@@ -24,6 +24,7 @@ class ClaimCalculator
         $choices = (array)($input['choices'] ?? []);
         $expensesIn = (array)($input['expenses'] ?? []);
         $alreadyRefunded = (float)($input['already_refunded'] ?? 0.0);
+    $applyMinThreshold = (bool)($input['apply_min_threshold'] ?? false);
 
         // Exemption profile
         $journeyForProfile = [
@@ -48,9 +49,15 @@ class ClaimCalculator
         // Gatekeepers
         $selfInflicted = (bool)($disruption['self_inflicted'] ?? false);
         $extraordinary = (bool)($disruption['extraordinary'] ?? false);
+        $extraordinaryType = (string)($disruption['extraordinary_type'] ?? '');
         $notifiedBefore = (bool)($disruption['notified_before_purchase'] ?? false);
         if ($selfInflicted) { $compAllowed = false; }
-        if ($extraordinary) { $compAllowed = false; }
+        if ($extraordinary) {
+            // Art. 19(10) carve-out: operator's own staff strikes do NOT remove compensation rights
+            if (!$this->isInternalStrike($extraordinaryType)) {
+                $compAllowed = false;
+            }
+        }
         if ($notifiedBefore) { $compAllowed = false; }
 
         // Delay calculation — prefer provided, else compute; if non-EU legs present and eu_only=true, filter
@@ -61,15 +68,29 @@ class ClaimCalculator
 
         // 3) Compensation
         $compPct = 0;
+        $overridePct = null;
+        if (isset($input['override_comp_pct']) && is_numeric($input['override_comp_pct'])) {
+            $ov = (int)$input['override_comp_pct'];
+            if (in_array($ov, [25,50], true)) { $overridePct = $ov; }
+        }
         $compEligible = false;
         if ($compAllowed) {
             if ($delay >= 120) { $compPct = 50; }
             elseif ($delay >= 60) { $compPct = 25; }
+            // Allow caller override for UX preview
+            if ($overridePct !== null) { $compPct = max($compPct, $overridePct); }
             $compEligible = $compPct > 0;
         }
         // Basis — Art. 19(3): leg price if available; for return with no split price -> 1/2; else whole fare
         [$compBaseAmount, $compBaseLabel] = $this->computeCompensationBasis($ticketTotal, $legs, $throughTicket, $trip, $disruption);
-    $compAmount = $compEligible ? round($compBaseAmount * ($compPct / 100), 2) : 0.0;
+        $compAmount = $compEligible ? round($compBaseAmount * ($compPct / 100), 2) : 0.0;
+        // Minimum threshold (Art. 19(8)) — suppress very small amounts ≤ 4 EUR when enabled
+        if ($compEligible && $applyMinThreshold && $compAmount > 0 && $compAmount < 4.0) {
+            $compEligible = false;
+            $compPct = 0;
+            $compAmount = 0.0;
+            $compBaseLabel = 'Art.19(8) minimum threshold (≤ 4 EUR)';
+        }
         $compRule = 'EU'; // placeholder for national overrides
         if (!$compAllowed) {
             // If Art. 19 is nationally exempted (profile), mark as such; else keep EU basis
@@ -128,13 +149,18 @@ class ClaimCalculator
         }
 
         // 4) Expenses (Art.20)
-        $expenses = [
+        $altTransportLabel = ($delay >= 100) ? 'Reroute costs (Art.18(3))' : 'Alternative transport';
+        // Build numeric-only amounts separately to avoid summing non-numeric labels
+        $expenseAmounts = [
             'meals' => (float)($expensesIn['meals'] ?? 0),
             'hotel' => (float)($expensesIn['hotel'] ?? 0),
             'alt_transport' => (float)($expensesIn['alt_transport'] ?? 0),
             'other' => (float)($expensesIn['other'] ?? 0),
         ];
-        $expensesTotal = $assistAllowed ? array_sum($expenses) : 0.0;
+        $expensesTotal = $assistAllowed ? array_sum($expenseAmounts) : 0.0;
+        $expenses = $expenseAmounts + [
+            'alt_transport_label' => ($expenseAmounts['alt_transport'] ?? 0) > 0 ? $altTransportLabel : null,
+        ];
         if (!$assistAllowed && $expensesTotal > 0) {
             $exemptionsApplied[] = 'art20_2_blocked';
             $exemptionsApplied = array_values(array_unique($exemptionsApplied));
@@ -174,6 +200,7 @@ class ClaimCalculator
             ],
             'flags' => [
                 'extraordinary' => $extraordinary,
+                'extraordinary_type' => $extraordinaryType ?: null,
                 'self_inflicted' => $selfInflicted,
                 'exemptions_applied' => !empty($exemptionsApplied) ? array_values(array_unique($exemptionsApplied)) : null,
                 'manual_review' => false,
@@ -288,5 +315,16 @@ class ClaimCalculator
 
         // 4) Single-leg/simple default → whole fare
         return [max(0.0, $ticketTotal), 'Art.19(3) whole fare'];
+    }
+
+    /** Identify internal/operator staff strikes from a free-text or enum type token. */
+    private function isInternalStrike(string $t): bool
+    {
+        $s = strtolower(trim($t));
+        if ($s === '') { return false; }
+    $ok = ['own_staff_strike','staff_strike','internal_strike','personalestrike'];
+        if (in_array($s, $ok, true)) { return true; }
+        // Loose matching on common words
+        return str_contains($s, 'own staff') || str_contains($s, 'staff strike') || str_contains($s, 'internal') || str_contains($s, 'personale');
     }
 }

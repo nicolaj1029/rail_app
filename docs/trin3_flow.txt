@@ -1,0 +1,120 @@
+TRIN 3 · Rejsedetaljer (Upload billet)
+
+Formål
+- Brugeren uploader billet(ter), vi udtrækker centrale rejsefelter, foreslår hooks og viser anbefaling (EU vs. national) med live opdatering.
+- Understøtter både enkeltbillet og flere separate billetter (familier/grupper), inkl. passagerliste og værge/gruppeansvarlig.
+
+URL/Action
+- Controller: src/Controller/FlowController.php → entitlements()
+- View/Template: templates/Flow/entitlements.php
+- Element (hooks): templates/element/hooks_panel.php
+
+Request-typer og reset
+- GET (normal sidevisning): Wiper hele flow-sessionen (flow.*) for at sikre “hard refresh”.
+- GET med ?ajax_hooks=1 (XHR): Ingen reset; returnerer kun hooks-panel HTML til højre side.
+- POST: Håndterer uploads, inline feltredigering og afledt beregning; kan også returnere hooks-panel (via XHR) eller fortsætte til summary.
+
+UI-hoveddele
+- Dropzone/filknapper: “Tilføj filer” + “Fjern alle”. Understøtter PDF/JPG/PNG/TXT/PKPASS.
+- Primær billetfelter (afsnit 3.1/3.2/3.5): Operatør, land, produkt, tider, stationer, tognr., 3.2.7 billetnr./PNR, pris, missed connection-station.
+- Passagerkort (primær billet): Viser udtrukne passagerer, felter for navn + “Klager”.
+- Juridisk repræsentant: Checkbox “Jeg er juridisk værge/ansvarlig for andre på billetten”.
+- Flere billetter (grupperet): “Billetter samlet i sagen” med grupper pr. (PNR+dato), pr. billet vises/kan fjernes. Hver billet har “Redigér passagerer” (navn + “Klager”).
+- Missed connection: Checkbox-liste over skiftestationer (fra segmenter) + fri tekstfelt. Flueben synker til tekstfelt automatisk.
+- Kendt før køb: Toggle der persisteres i compute. Bruges i senere vurdering.
+- Hooks-panel (sticky): Viser ON/OFF for artikler, EU vs. national anbefaling, beslutningsbadge m.m.; opdateres automatisk via AJAX ved ændringer.
+- Debug-toggle: ?debug=1 for at vise ekstra info (EU-only begrundelse, Art. 12/Art. 9 JSON mv.).
+
+Uploads og lagring
+- Filer gemmes under webroot/files/uploads/ med sikkerheds-renset filnavn.
+- “Fjern alle” sletter alle TRIN 3 felter for nuværende upload, multi-billetter og afledte caches (meta._auto, _segments_auto, _passengers_auto, _identifiers, _barcode) samt journey.bookingRef.
+- “Fjern” på enkeltbillet i grupperet liste:
+  - Hvis det er den aktuelle primærbillet, nulstilles dens TRIN 3 felter og auto-caches.
+  - Ellers fjernes den fra meta._multi_tickets.
+
+OCR/ekstraktion
+- PDF: smalot/pdfparser; fallback til ‘pdftotext -layout’ hvis tom tekst i PDF.
+- Billeder: Forsøg med image fixture (mocks/tests/fixtures), valgfrit Vision OCR, Tesseract (med sprogheuristik), Vision fallback.
+- TXT: indhold læses direkte.
+- Provider og confidence logges (meta.extraction_provider/_confidence). Debug-linjer tilføjes i meta.logs.
+
+Automatisk udtræk (auto)
+- meta._auto udfyldes med felter (dep_date, dep_time, dep_station, arr_station, arr_time, train_no, ticket_no, price, operator, operator_country, operator_product).
+- meta._segments_auto: Liste over rejseben (from/to/tider + dato hvor mulig) fra TicketParseService::parseSegmentsFromText().
+- meta._passengers_auto: Liste over passagerer (adult/child/unknown, navne hvis fundet) fra extractPassengerData().
+- meta._identifiers: Identifikatorer som pnr og order_no fra extractIdentifiers().
+- journey.bookingRef sættes fra pnr, og 3.2.7 udfyldes, inkl. fallback fra filnavn hvis nødvendigt.
+
+Sælger/Art. 12 seed
+- Sælger-type heuristik fra OCR-tekst (agency vs operator): journey.seller_type.
+- Hvis bookingRef findes: meta.single_txn_operator eller meta.single_txn_retailer sættes automatisk efter seller_type; seller_type_* hooks sættes.
+
+Flere billetter og grupper
+- Ekstra uploads: meta._multi_tickets[] indeholder pr. billet: file, pnr, dep_date, passengers, segments.
+- Gruppering: TicketJoinService::groupTickets() samler på (pnr + dep_date) → groupedTickets vises i UI.
+- shared_pnr_scope: meta.shared_pnr_scope = yes/no hvis alle har samme PNR eller ej.
+- Hooks til automatisering: meta.ticket_upload_count (antal billetter total), meta.ticket_multi_passenger = yes hvis nogen billet har >1 passager.
+
+Passagerredigering
+- Primær billet: form-felt passenger[i][name|is_claimant] → gemmes i meta._passengers_auto (og journey.passengers, journey.passengerCount).
+- Juridisk repræsentant: meta.claimant_is_legal_representative = yes/no.
+- Per ekstra billet: passenger_multi[<file>][i][name|is_claimant] → opdaterer meta._multi_tickets[*].passengers for den pågældende fil.
+
+Missed connection
+- Liste over mulige skiftestationer (alle segmenters ‘to’ undtagen sidste) bygges fra meta._segments_auto samt groupedTickets.
+- Valgte flueben skrives til form.missed_connection_station som “A / B / C”. Frit tekstfelt vises altid.
+
+Andre landespecifikke hints
+- Sverige: under 150 km toggle (journey.se_under_150km) påvirker exemptions; vises når scope=regional og country=SE.
+
+Evalueringer og anbefaling
+- JourneyScopeInferer: udleder land/scope/distance (DistanceEstimator) før profil build.
+- ExemptionProfileBuilder: bygger profil (scope mv.).
+- Art12AutoDeriver + Art12Evaluator: beregner hooks og outcome, uden at tilsidesætte brugerens egne input.
+- Art9Evaluator: beregnes altid (UI kan vælge at vise/ikke vise).
+- RefundEvaluator + Art18RefusionEvaluator: refusion/assistance.
+- ClaimFormSelector: top-anbefaling EU-standard vs. national formular vises i hooks-panelet.
+
+AJAX hooks-opdatering
+- JS samler formdata og POST’er til samme URL med ?ajax_hooks=1.
+- X-CSRF-Token header og credentials: same-origin (krævet af CsrfProtectionMiddleware).
+- Server returnerer kun elementet hooks_panel (uden layout), som erstatter højresiden.
+
+Feltpersistens (udvalg)
+- POST form-nøgler (uddrag):
+  - 3.1/3.2/3.5: operator, operator_country, operator_product, dep_date, dep_time, dep_station, arr_station, arr_time, train_no, ticket_no, price, missed_connection_station
+  - Passagerer: passenger[i][name|is_claimant], passenger_multi[<file>][i][name|is_claimant]
+  - Guardian: claimant_is_legal_representative
+  - Kendt før køb: known_delay
+  - SE under 150 km: se_under_150km
+  - Filer: ticket_upload, multi_ticket_upload[]
+  - Clear-all: clear_all=1
+
+Datasæt/telemetri
+- Der skrives en normaliseret post til webroot/data/tickets.ndjson per upload (når muligt) med udtrukne felter, segmenter, passagerer og kildeinfo (filnavn, OCR-tegn-antal mm.).
+
+Sessionnøgler (uddrag)
+- flow.form: TRIN 3 felter (operator, dep_date, …, ticket_no, pris, missed_connection_station, mm.).
+- flow.meta: _auto, _segments_auto, _passengers_auto, _identifiers, _barcode, logs, extraction_provider/_confidence,
+             _multi_tickets, shared_pnr_scope, ticket_upload_count, ticket_multi_passenger,
+             claimant_is_legal_representative, seller_type_* og single_txn_* seeds.
+- flow.journey: bookingRef, country/scope hints, se_under_150km, passengers/passengerCount, segments.
+- flow.compute: euOnly, knownDelayBeforePurchase, delayMinEU.
+- flow.incident: main (delay/cancellation), missed (bool).
+
+Fejl-/kanttilfælde
+- Dobbelt-upload: de-duper på filnavn.
+- Hard refresh (GET): nulstiller hele flow-state, så ingen gamle PNR/valg hænger ved.
+- Ingen OCR-tekst: fallback fra filnavn (operator/country/product) og dataset-post med status=no_ocr_text.
+- Tesseract ikke fundet: forsøger Vision eller fixtures; logger i meta.logs.
+
+Reference til kode
+- Controller: src/Controller/FlowController.php → entitlements()
+- Template: templates/Flow/entitlements.php
+- Segment/PNR/passager-parsere: src/Service/TicketParseService.php
+- Gruppering: src/Service/TicketJoinService.php
+- Evaluatorer: src/Service/Art12AutoDeriver.php, Art12Evaluator.php, Art9Evaluator.php, RefundEvaluator.php, Art18RefusionEvaluator.php
+- Scope/distance: src/Service/JourneyScopeInferer.php, DistanceEstimator.php, ExemptionProfileBuilder.php
+- Formularvalg: src/Service/ClaimFormSelector.php
+
+Slut

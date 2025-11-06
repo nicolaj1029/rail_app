@@ -19,3 +19,9 @@
   &nbsp;|&nbsp;
   <a href="<?= $this->Url->build('/reimbursement/official') ?>" target="_blank">Udfyld officiel EU formular</a>
 </p>
+
+<div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+  <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee;color:#333;']) ?>
+  <?= $this->Html->link('Fortsæt →', ['action' => 'choices'], ['class' => 'button']) ?>
+  <span class="small muted" style="margin-left:auto;">Du kan også downloade/udfylde formular via links ovenfor.</span>
+  </div>

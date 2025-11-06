@@ -186,7 +186,7 @@
               }
             }
           }
-          var binds = document.querySelectorAll('input[name="incident_main"], input[name="missed_connection"]');
+          var binds = document.querySelectorAll('input[name="incident_main"]');
           binds.forEach(function(r){ r.addEventListener('change', updateLocal); r.addEventListener('click', updateLocal); });
           updateLocal();
         } catch (e) { /* no-op fallback */ }
@@ -199,13 +199,8 @@
         <legend>TRIN 2 · Hændelse</legend>
         <p class="muted"><em>REIMBURSEMENT AND COMPENSATION REQUEST FORM – Rubrik 1 udfyldes</em></p>
         <?php $main = $incident['main'] ?? ''; ?>
-  <label><input type="radio" name="incident_main" value="delay" <?= $main==='delay'?'checked':'' ?> onchange="var r=document.getElementById('missedRow'); if(r){ r.classList.remove('hidden'); }" /> Delay (vælg én)</label><br/>
-  <label><input type="radio" name="incident_main" value="cancellation" <?= $main==='cancellation'?'checked':'' ?> onchange="var r=document.getElementById('missedRow'); if(r){ r.classList.remove('hidden'); }" /> Cancellation (vælg én)</label><br/>
-        <div id="missedRow" class="mt8 <?= ($main==='delay'||$main==='cancellation') ? '' : 'hidden' ?>">
-          <div>Har det medført en missed connection?</div>
-          <label><input type="radio" name="missed_connection" value="yes" <?= !empty($incident['missed'])?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="missed_connection" value="no" <?= empty($incident['missed'])?'checked':'' ?> /> Nej</label>
-        </div>
+  <label><input type="radio" name="incident_main" value="delay" <?= $main==='delay'?'checked':'' ?> /> Delay (vælg én)</label><br/>
+  <label><input type="radio" name="incident_main" value="cancellation" <?= $main==='cancellation'?'checked':'' ?> /> Cancellation (vælg én)</label><br/>
       </fieldset>
 
       <fieldset id="sR" class="fieldset mt12 hidden">
@@ -363,7 +358,7 @@
           </div>
         </div>
 
-  <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); $missedInc = !empty($incident['missed']); ?>
+  <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); $segAuto = (array)($meta['_segments_auto'] ?? []); $hasConnections = count($segAuto) >= 2; $missedInc = (!empty($incident['missed']) || !empty($form['missed_connection_station']) || $hasConnections); ?>
         <div id="delayLikelyBox" class="card mt8 <?= $isCompleted ? 'hidden' : '' ?>">
           <strong>Bekræftelse</strong>
           <div class="mt8 small">Rejsen er ikke afsluttet. Bekræft venligst at en forsinkelse på ≥ 60 minutter er sandsynlig.</div>
@@ -393,7 +388,7 @@
           </div>
         </div>
 
-  <?php $segAuto = (array)($meta['_segments_auto'] ?? []); if (!empty($segAuto) && !empty($incident['missed'])): ?>
+  <?php if (!empty($segAuto) && $hasConnections): ?>
         <div id="connectionsCard" class="card mt8">
           <strong>Forbindelser fundet på billetten</strong>
           <div class="small muted mt4">Vælg den forbindelse der blev misset (skiftestation). Vi udfylder feltet nedenfor.</div>
@@ -420,7 +415,7 @@
         </div>
         <?php endif; ?>
 
-        <div id="missedOnlyCard" class="card mt8 <?= (!$isCompleted && $missedInc) ? '' : 'hidden' ?>">
+        <div id="missedOnlyCard" class="card mt8 <?= (!$isCompleted && $hasConnections) ? '' : 'hidden' ?>">
           <strong>3.5. Missed connection (kun station)</strong>
           <div class="grid-2 mt8">
             <label>Station for missed connection

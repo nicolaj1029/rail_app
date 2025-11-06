@@ -23,6 +23,11 @@ class JourneyScopeInferer
         'paris' => 'FR', 'lyon' => 'FR', 'lille' => 'FR', 'bordeaux' => 'FR', 'montpellier' => 'FR',
         // DK (Denmark)
         'københavn' => 'DK', 'kobenhavn' => 'DK', 'copenhagen' => 'DK', 'odense' => 'DK', 'aarhus' => 'DK', 'århus' => 'DK', 'aalborg' => 'DK', 'esbjerg' => 'DK', 'roskilde' => 'DK', 'nyborg' => 'DK', 'slagelse' => 'DK',
+        // SE (Sweden)
+        'stockholm' => 'SE', 'stockholms' => 'SE', 'göteborg' => 'SE', 'goteborg' => 'SE', 'gothenburg' => 'SE', 'malmö' => 'SE', 'malmo' => 'SE', 'uppsala' => 'SE', 'gävle' => 'SE', 'gavle' => 'SE',
+        'sundsvall' => 'SE', 'örebro' => 'SE', 'orebro' => 'SE', 'västerås' => 'SE', 'vasteras' => 'SE', 'jönköping' => 'SE', 'jonkoping' => 'SE', 'linköping' => 'SE', 'linkoping' => 'SE',
+        'norrköping' => 'SE', 'norrkoping' => 'SE', 'lund' => 'SE', 'helsingborg' => 'SE', 'halmstad' => 'SE', 'karlstad' => 'SE', 'luleå' => 'SE', 'lulea' => 'SE', 'umeå' => 'SE', 'umea' => 'SE',
+        'borås' => 'SE', 'boras' => 'SE', 'skövde' => 'SE', 'skovde' => 'SE', 'trollhättan' => 'SE', 'trollhattan' => 'SE', 'hässleholm' => 'SE', 'hassleholm' => 'SE', 'kalmar' => 'SE', 'växjö' => 'SE', 'vaxjo' => 'SE',
         // PL (Poland)
         'warszawa' => 'PL', 'warsaw' => 'PL', 'kraków' => 'PL', 'krakow' => 'PL', 'wrocław' => 'PL', 'wroclaw' => 'PL', 'poznan' => 'PL', 'poznań' => 'PL', 'gdansk' => 'PL', 'gdańsk' => 'PL', 'katowice' => 'PL', 'łódź' => 'PL', 'lodz' => 'PL', 'przemyśl' => 'PL', 'przemysl' => 'PL',
         // UA (Ukraine)
@@ -56,6 +61,7 @@ class JourneyScopeInferer
         if (str_contains($s, 'verona')) { return 'IT'; }
         if (str_contains($s, 'münchen') || str_contains($s, 'munchen') || str_contains($s, 'muenchen')) { return 'DE'; }
         if (str_contains($s, 'københavn') || str_contains($s, 'kobenhavn') || str_contains($s, 'copenhagen')) { return 'DK'; }
+        if (str_contains($s, 'stockholm') || str_contains($s, 'göteborg') || str_contains($s, 'goteborg') || str_contains($s, 'malmö') || str_contains($s, 'malmo')) { return 'SE'; }
         return null;
     }
 
@@ -112,6 +118,28 @@ class JourneyScopeInferer
                 }
             }
         }
+
+        // Suburban/commuter detection (S-Bahn, S-tog, Pendeltåg, etc.)
+        try {
+            $prod = (string)($meta['_auto']['operator_product']['value'] ?? '');
+            $p = mb_strtolower($prod, 'UTF-8');
+            $isSuburban = false;
+            if ($p !== '') {
+                $tokens = [ 's-bahn', 's bahn', 's-tog', 'stog', 'pendeltåg', 'pendeltag', 'rer ', ' rer', 'cercanías', 'cercanias' ];
+                foreach ($tokens as $t) { if (strpos($p, $t) !== false) { $isSuburban = true; break; } }
+            }
+            if ($isSuburban) {
+                $journey['is_suburban'] = true;
+                $logs[] = 'AUTO: flagged as suburban/commuter based on product=' . $prod;
+            }
+            // Finland commuter restriction hint
+            if ($depC === 'FI' || $arrC === 'FI' || (string)($journey['country']['value'] ?? '') === 'FI') {
+                $fiTokens = [ 'hsl', 'lähijuna', 'lahijuna', 'vr commuter', 'vr lähiliikenne', 'vr lahiliikenne' ];
+                foreach ($fiTokens as $t) {
+                    if ($p !== '' && strpos($p, $t) !== false) { $journey['fi_commuter_route'] = true; $logs[] = 'AUTO: FI commuter route hint from product=' . $prod; break; }
+                }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
         return $journey;
     }
 

@@ -45,6 +45,10 @@ class OcrHeuristicsMapper
         // Detect lines that look like boilerplate/instructions rather than station names
         $looksLikeBoilerplate = function(string $s): bool {
             $t = mb_strtolower($s);
+            // Immediate reject if the string contains a URL or domain-like token (e.g., www.bahn.de)
+            if (preg_match('/\b(?:https?:\/\/)?(?:www\.)?[a-z0-9.-]+\.(?:de|dk|se|no|fi|fr|it|nl|pl|cz|sk|si|hr|hu|es|pt|ro|bg|at|be|lu|ie|lt|lv|ee|gr|ch|uk|eu|com)\b/iu', $s)) {
+                return true;
+            }
             $stop = [
                 // Italian frequent boilerplate on tickets
                 'esibire','condizioni','vettore','servizio','classe','base','tot','totale','emit','vett','p.iva','p iva','trenitalia',
@@ -52,18 +56,22 @@ class OcrHeuristicsMapper
                 // Generic
                 'conditions','service','class','price','total','pnr','booking','reference','category',
                 // German boilerplate and table words
-                'fahrkarte','fahrkarten','bahncard','lichtbildausweis','nutzung','nutzungshinweise','gültig','gültigkeit','bedingungen','beförderungsbedingungen',
-                'verkehrsunternehmen','tarif','tarifgemeinschaft','bahn.de','db.de','diebahn','zangenabdruck','auftragsnummer','auftrag','sitzplatz','reservierung','hinweise','zugbindung',
+                'fahrkarte','fahrkarten','bahncard','lichtbildausweis','nutzung','nutzungshinweise','gültig','gültigkeit','bedingungen','beförderungsbedingungen','beforderungsbedingungen',
+                'verkehrsunternehmen','tarif','tarifgemeinschaft','bahn.de','db.de','diebahn','zangenabdruck','auftragsnummer','auftrag','sitzplatz','reservierung','hinweise','zugbindung','fahrgastrechte','einlösebedingungen','einloesebedingungen',
                 // Extra German phrases that appeared in headers/instructions
-                'dokument','reiseverbindung','vorzeigepflichtig','website','kurzfristige','fahrplanänderungen',
-                'klasse','personen','reisende','einfach','fahrt','produkte','produkt','gleis','platz','handy'
+                'dokument','reiseverbindung','vorzeigepflichtig','website','kurzfristige','fahrplanänderungen','fahrplanaenderungen','bitte beachten','gilt nur',
+                'klasse','personen','reisende','einfach','fahrt','produkte','produkt','gleis','platz','handy',
+                // Danish complaint/legal boilerplate that occasionally bleeds into OCR near the form
+                'domstol','domstole','klage','ankenævn','ankenaevn','forbruger','forbrug','vilkår','vilkar','betingelser','juridisk','ansvar','ansvarsfraskrivelse','kundeservice'
             ];
             $hits = 0;
             foreach ($stop as $w) { if (str_contains($t, $w)) { $hits++; if ($hits >= 2) return true; } }
             // Strong single-word/phrase triggers commonly found in headers/instructions
             $strong = [
                 'da esibire', 'esibire', 'valgon', 'condizioni', 'risparmi', 'co2', 'tariffa', 'prenotazione', 'biglietto',
-                'classe', 'carrozza', 'posti', 'finestrino', 'tot.bigl', 'p. iva', 'p iva', 'auftragsnummer', 'zangenabdruck'
+                'classe', 'carrozza', 'posti', 'finestrino', 'tot.bigl', 'p. iva', 'p iva', 'auftragsnummer', 'zangenabdruck', 'fahrgastrechte', 'einlösebedingungen', 'einloesebedingungen',
+                // Danish legal boilerplate snippets
+                'de almindelige domstole', 'almindelige domstole', 'klage til', 'klage over'
             ];
             foreach ($strong as $w) { if (str_contains($t, $w)) { return true; } }
             return false;
@@ -132,6 +140,10 @@ class OcrHeuristicsMapper
             if (preg_match('/^(\d{1,2})[:.](\d{2})/u', $t, $m)) { return sprintf('%02d:%02d', (int)$m[1], (int)$m[2]); }
             return $t;
         };
+        // Strict HH:MM validator to weed out compact junk like 0072 captured near codes
+        $isValidTime = function(string $t): bool {
+            return (bool)preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $t);
+        };
         // Label/Station validators
         $isLabelToken = function(string $s): bool {
             $t = mb_strtolower(trim($s));
@@ -147,6 +159,17 @@ class OcrHeuristicsMapper
             if ($letters < 3) { return false; }
             if ($isCodeLike($s)) { return false; }
             if ($looksLikeBoilerplate($s)) { return false; }
+            // Reject lines that look like sentences or legal phrases rather than proper nouns
+            // Heuristic 1: require at least one uppercase letter (most ticket station names are capitalized)
+            if (!preg_match('/\p{Lu}/u', $s)) {
+                // If there are no uppercase letters and the average token length is very short, reject (e.g., "den dag og den")
+                $tokens = preg_split('/\s+/u', $s) ?: [];
+                $lenSum = 0; $cnt = 0; foreach ($tokens as $tk) { $lenSum += mb_strlen(preg_replace('/[^\p{L}]/u','',$tk)); $cnt++; }
+                $avg = $cnt > 0 ? ($lenSum / $cnt) : 0;
+                if ($avg < 3.2) { return false; }
+            }
+            // Heuristic 2: trailing period usually indicates a sentence; allow common abbreviations like Hbf. or St.
+            if (preg_match('/\.(\s*)$/u', $s) && !preg_match('/\b(Hbf\.|St\.)$/iu', $s)) { return false; }
             return (bool)preg_match('/\p{L}/u', $s);
         };
         // Sanitize station-like text: strip arrows/labels and trailing numbers/platforms
@@ -156,8 +179,15 @@ class OcrHeuristicsMapper
             $t = preg_replace('/(?:--?>?|→|—|–)\s*/u', ' ', $t) ?? $t;
             // Remove standalone label/preposition tokens
             $t = preg_replace('/\b(?:Partenza|Arrivo|Departure|Arrival|Abfahrt|Ankunft|Ankomst|To|Til|Till|Nach|Vers|A|À|Al)\b/iu', ' ', $t) ?? $t;
+            // Danish DSB header like "Til rejsen Herning Messecenter St. - København H, Mandag d. 18 marts"
+            // Strip the lead-in phrase "Til rejsen"
+            $t = preg_replace('/^\s*(?:Til|For)\s+rejsen\s+/iu', ' ', $t) ?? $t;
+            // Strip URLs/domains outright
+            $t = preg_replace('/\b(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[A-Za-z]{2,}\b/u', ' ', $t) ?? $t;
             // Drop parenthetical fragments
             $t = preg_replace('/\s*\([^)]*\)\s*/u', ' ', $t) ?? $t;
+            // Remove trailing weekday/month descriptors after a comma (", Mandag d. 18 marts")
+            $t = preg_replace('/,\s*(?:mandag|tirsdag|onsdag|torsdag|fredag|l[øo]rdag|s[øo]ndag|januar|februar|marts|april|maj|juni|juli|august|september|oktober|november|december)\b.*$/iu', ' ', $t) ?? $t;
             // Remove trailing platform/coach info (incl. German "Gl.")
             $t = preg_replace('/\s+(?:bin(?:ario)?|gleis|gl\.?|platform|carrozza|coach)\s*\d+\s*$/iu', ' ', $t) ?? $t;
             // Trim trailing French layout keywords often printed to the right of station names
@@ -295,6 +325,17 @@ class OcrHeuristicsMapper
                     $auto['arr_station'] = ['value' => $cand, 'source' => 'ocr'];
                     $logs[] = 'AUTO: arr_station (cross-line)=' . $cand;
                 }
+            }
+        }
+
+        // German DB tickets often include a summary line like "Einfache Fahrt: Verona P. N. - Düsseldorf Hbf".
+        // If stations are still missing, try to parse that summary.
+        if (empty($auto['dep_station']['value']) || empty($auto['arr_station']['value'])) {
+            if (preg_match('/\b(?:Einfach(?:e)?\s+Fahrt)\b[^:\n]*:\s*([\p{L}0-9 .,\'\-()]+?)\s*[-–—>]\s*([\p{L}0-9 .,\'\-()]+)/iu', $text, $mSum)) {
+                $from = $cleanStationText($mSum[1] ?? '');
+                $to = $cleanStationText($mSum[2] ?? '');
+                if ($isStation($from) && empty($auto['dep_station']['value'])) { $auto['dep_station'] = ['value' => $from, 'source' => 'ocr']; $logs[] = 'AUTO: dep_station (Einfache Fahrt)=' . $from; }
+                if ($isStation($to) && empty($auto['arr_station']['value'])) { $auto['arr_station'] = ['value' => $to, 'source' => 'ocr']; $logs[] = 'AUTO: arr_station (Einfache Fahrt)=' . $to; }
             }
         }
 
@@ -485,6 +526,16 @@ class OcrHeuristicsMapper
             if (preg_match('/\bGiltig\b[^\n\r]*?\b(\d{1,2}\s+[A-Za-zÅÄÖåäö]{3,9}\s+\d{4})\b/u', $text, $m)) {
                 $auto['dep_date'] = ['value' => $normDate($m[1]), 'source' => 'ocr'];
                 $logs[] = 'AUTO: dep_date (sv giltig)=' . $auto['dep_date']['value'];
+            }
+        }
+
+        // Danish DSB header/table shorthand: "Afg: 17:51 Ank: 21:02"
+        if (!isset($auto['dep_time']) || !isset($auto['arr_time']) || (isset($auto['dep_time']['value'], $auto['arr_time']['value']) && $auto['dep_time']['value'] === $auto['arr_time']['value'])) {
+            if (preg_match('/\bAfg\s*:?\s*((?:[01]?\d|2[0-3])[.:h,]?\s*\d{2}|\b\d{3,4}\b)\b[\s\S]{0,40}?\bAnk\s*:?\s*((?:[01]?\d|2[0-3])[.:h,]?\s*\d{2}|\b\d{3,4}\b)/iu', $text, $mDA)) {
+                $tDep = $normTime($mDA[1]);
+                $tArr = $normTime($mDA[2]);
+                if (!isset($auto['dep_time'])) { $auto['dep_time'] = ['value' => $tDep, 'source' => 'ocr']; $logs[] = 'AUTO: dep_time (DSB Afg/Ank)=' . $tDep; }
+                if (!isset($auto['arr_time']) || ($auto['arr_time']['value'] ?? '') === ($auto['dep_time']['value'] ?? '')) { $auto['arr_time'] = ['value' => $tArr, 'source' => 'ocr']; $logs[] = 'AUTO: arr_time (DSB Afg/Ank)=' . $tArr; }
             }
         }
 
@@ -815,6 +866,16 @@ class OcrHeuristicsMapper
             }
         } catch (\Throwable $e) {
             // non-fatal
+        }
+
+        // Final sanity: drop invalid time tokens that aren't proper HH:MM (e.g., '0072')
+        foreach (['dep_time','arr_time','actual_dep_time','actual_arr_time'] as $tk) {
+            if (!empty($auto[$tk]['value']) && is_string($auto[$tk]['value'])) {
+                if (!$isValidTime((string)$auto[$tk]['value'])) {
+                    $logs[] = 'DROP: ' . $tk . ' invalid => ' . $auto[$tk]['value'];
+                    unset($auto[$tk]);
+                }
+            }
         }
 
         return ['auto' => $auto, 'logs' => $logs];

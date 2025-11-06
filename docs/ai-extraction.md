@@ -19,16 +19,20 @@ This app can combine fast heuristics with optional AI-based extraction when form
 - Enable the LLM extractor by setting the following environment variables (e.g., in `config/app_local.php` via `env()` or in your shell):
 
 Environment variables
-- LLM_PROVIDER: one of `openai` or `azure`. If unset/disabled, the LLM won’t be called.
+- LLM_PROVIDER: one of `openai`, `azure`, or `groq`. If unset/disabled, the LLM won’t be called.
 - OPENAI_API_KEY: your API key (OpenAI or Azure OpenAI)
 - OPENAI_BASE_URL:
   - For OpenAI: https://api.openai.com/v1
   - For Azure OpenAI: https://<your-resource>.openai.azure.com
+  - For Groq (OpenAI-compatible): https://api.groq.com (normalized to /openai/v1 automatically)
 - OPENAI_MODEL:
   - OpenAI: e.g., gpt-4o-mini
   - Azure OpenAI: the Deployment name you created (not the base model name)
+  - Groq: e.g., llama-3.1-70b-versatile, mixtral-8x7b-32768
 - OPENAI_API_VERSION (Azure only): e.g., 2024-08-01-preview
 - LLM_TIMEOUT_SECONDS (optional): default 15
+ - USE_LLM_STRUCTURING (optional): set to 1 to let an LLM structure journey segments when the parser finds none.
+ - LLM_VERIFY_SEGMENTS (optional): set to 1 to also verify/augment segments even when some were found (or pass ?segments_verify=1 in the URL for a one-off run on TRIN 3).
 
 Windows PowerShell examples
 ```powershell
@@ -44,6 +48,15 @@ $env:OPENAI_API_KEY = "<your-azure-openai-key>"
 $env:OPENAI_BASE_URL = "https://<your-resource>.openai.azure.com"
 $env:OPENAI_MODEL = "<your-deployment-name>"
 $env:OPENAI_API_VERSION = "2024-08-01-preview"
+
+# Groq (OpenAI-compatible)
+$env:LLM_PROVIDER = "groq"
+$env:OPENAI_API_KEY = "gsk-..."
+$env:OPENAI_BASE_URL = "https://api.groq.com"  # app normalizes to /openai/v1
+$env:OPENAI_MODEL = "llama-3.1-70b-versatile"  # or "mixtral-8x7b-32768"
+$env:USE_LLM_STRUCTURING = "1"
+# Optional: also verify/augment even when segments exist
+$env:LLM_VERIFY_SEGMENTS = "1"
 ```
 
 ## Suggested field schema

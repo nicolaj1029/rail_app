@@ -27,7 +27,7 @@
     <label>Other</label> <?= $this->Form->number('expense_other', ['min' => 0, 'step' => '0.01']) ?>
 </fieldset>
 <div style="display:flex;gap:8px;align-items:center">
-    <?= $this->Html->link('← Back', ['action' => 'choices'], ['class' => 'button']) ?>
+    <?= $this->Html->link('← Back', ['action' => 'compensation'], ['class' => 'button']) ?>
     <?= $this->Form->button('Next →') ?>
 </div>
 <?= $this->Form->end() ?>

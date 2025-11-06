@@ -25,11 +25,14 @@ class ExemptionProfileBuilder
         $profile = [
             'scope' => $scope,
             'articles' => [
+                'art8' => true,
                 'art12' => true,
                 'art17' => true,
                 'art18_3' => true,
                 'art19' => true,
                 'art20_2' => true,
+                'art29' => true,
+                'art30_1' => true,
                 'art30_2' => true,
                 'art10' => true,
                 'art9' => true,
@@ -66,11 +69,14 @@ class ExemptionProfileBuilder
                 // Map generic "exemptions" array into article flags
                 $exArr = (array)($entry['exemptions'] ?? []);
                 $map = [
+                    'Art.8' => 'art8',
                     'Art.12' => 'art12',
                     'Art.17' => 'art17',
                     'Art.18(3)' => 'art18_3',
                     'Art.19' => 'art19',
                     'Art.20(2)' => 'art20_2',
+                    'Art.29' => 'art29',
+                    'Art.30(1)' => 'art30_1',
                     'Art.30(2)' => 'art30_2',
                     'Art.10' => 'art10',
                     'Art.9' => 'art9',
@@ -112,7 +118,7 @@ class ExemptionProfileBuilder
             }
         }
 
-        // Apply country-specific conditional gates not directly expressible in the matrix
+    // Apply country-specific and scope conditional gates not directly expressible in the matrix
         $this->applyConditionalGates($journey, $profile);
 
         // Derive UI banners
@@ -134,6 +140,12 @@ class ExemptionProfileBuilder
         if (!$profile['articles']['art9']) {
             $profile['ui_banners'][] = 'Informationspligter (Art. 9) kan være undtaget — vis basisoplysninger og fallback-links.';
         }
+        if (isset($profile['articles']['art29']) && !$profile['articles']['art29']) {
+            $profile['ui_banners'][] = 'National undtagelse (Art. 29) gælder for denne rejse — vis nationale procedurer hvor relevant.';
+        }
+        if (isset($profile['articles']['art30_1']) && !$profile['articles']['art30_1']) {
+            $profile['ui_banners'][] = 'Særordning (Art. 30(1)) kan påvirke rettigheder — tilpas vejledning.';
+        }
 
         return $profile;
     }
@@ -151,6 +163,18 @@ class ExemptionProfileBuilder
         $countries = array_values(array_filter(array_map(fn($s) => strtoupper((string)($s['country'] ?? '')), $segments)));
         $has = function(string $cc) use ($countries): bool { return in_array(strtoupper($cc), $countries, true); };
 
+        // Suburban services: not handled in app for now — block EU-flow entirely
+        if ($scope === 'suburban') {
+            $profile['articles']['art19'] = false;
+            $profile['articles']['art20_2'] = false;
+            $profile['articles']['art17'] = false;
+            $profile['articles']['art8'] = false;
+            $profile['articles']['art9'] = false;
+            $profile['blocked'] = true;
+            $profile['notes'][] = 'Suburban/by- og forstadsbetjening: ikke understøttet i EU-flowet (midlertidigt).';
+            $profile['ui_banners'][] = 'Suburban/forstads tog er ikke understøttet i dette flow.';
+        }
+
         // SE: <150 km domestic only — only apply exemptions when under 150 km
         if ($has('SE') && $scope === 'regional') {
             $under150 = false;
@@ -162,12 +186,15 @@ class ExemptionProfileBuilder
                 $under150 = (bool)($journey['se_under_150km'] ?? false);
             }
             if (!$under150) {
-                // Re-enable articles that might have been disabled via matrix for SE regional when not under 150 km
-                // Focus on keys we actually model downstream
-                $profile['articles']['art19'] = true;
+                // Re-enable articles that might have been disabled via matrix for SE regional when >= 150 km
+                $profile['articles']['art8'] = true;
                 $profile['articles']['art17'] = true;
+                $profile['articles']['art18_3'] = true;
+                $profile['articles']['art19'] = true;
                 $profile['articles']['art20_2'] = true;
-                $profile['notes'][] = 'SE: <150 km-betingelsen ikke opfyldt — regionale undtagelser anvendes ikke.';
+                // Re-enable Art.9(1) subpart
+                if (isset($profile['articles_sub']['art9_1'])) { $profile['articles_sub']['art9_1'] = true; }
+                $profile['notes'][] = 'SE: <150 km-betingelsen ikke opfyldt — regionale undtagelser (8, 9(1), 17–20) anvendes ikke.';
             }
         }
 
@@ -178,6 +205,17 @@ class ExemptionProfileBuilder
                 $profile['articles']['art18_3'] = false;
                 $profile['notes'][] = 'FI: Rute til/fra RU/BY — Art. 12 og 18(3) begrænses (Art. 2(6)(b)).';
                 $profile['ui_banners'][] = 'Rute delvist uden for EU — gennemgående billet/100-min kan være undtaget.';
+            }
+        }
+
+        // FI: commuter-only exemption limitation — if not a commuter route, re-enable regional exemptions that matrix may disable
+        if ($has('FI') && $scope === 'regional') {
+            $isCommuter = !empty($journey['fi_commuter_route']);
+            if (!$isCommuter) {
+                // Re-enable compensation and assistance unless explicitly blocked elsewhere
+                $profile['articles']['art19'] = true;
+                $profile['articles']['art20_2'] = true;
+                $profile['notes'][] = 'FI: Ikke markeret som pendler-/lähijuna — nationale regional-undtagelser anvendes ikke.';
             }
         }
 
@@ -229,6 +267,7 @@ class ExemptionProfileBuilder
     private function classifyScope(array $journey): string
     {
         // Simple classifier; can be replaced with distance/time based share outside EU
+        if (!empty($journey['is_suburban'])) return 'suburban';
         if (!empty($journey['is_international_beyond_eu'])) return 'intl_beyond_eu';
         if (!empty($journey['is_international_inside_eu'])) return 'intl_inside_eu';
         if (!empty($journey['is_long_domestic'])) return 'long_domestic';

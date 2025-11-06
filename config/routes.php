@@ -102,6 +102,8 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/flow/details', ['controller' => 'Flow', 'action' => 'details']);
     $builder->connect('/flow/screening', ['controller' => 'Flow', 'action' => 'screening']);
     $builder->connect('/flow/choices', ['controller' => 'Flow', 'action' => 'choices']);
+    $builder->connect('/flow/assistance', ['controller' => 'Flow', 'action' => 'assistance']);
+    $builder->connect('/flow/compensation', ['controller' => 'Flow', 'action' => 'compensation']);
     $builder->connect('/flow/extras', ['controller' => 'Flow', 'action' => 'extras']);
     $builder->connect('/flow/applicant', ['controller' => 'Flow', 'action' => 'applicant']);
     $builder->connect('/flow/consent', ['controller' => 'Flow', 'action' => 'consent']);

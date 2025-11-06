@@ -5,6 +5,9 @@
 <h3>Live hooks & AUTO</h3>
 <div class="small">Undtagelser (test)</div>
 <div class="small">scope: <code><?= h($profile['scope'] ?? '-') ?></code></div>
+<?php if (isset($euOnlySuggested)): ?>
+  <div class="small">EU only (anbefalet): <code><?= h($euOnlySuggested) ?></code><?php if (!empty($this->getRequest()->getQuery('debug')) && !empty($euOnlyReason)): ?> · <span class="muted"><?= h($euOnlyReason) ?></span><?php endif; ?></div>
+<?php endif; ?>
 <?php if (!empty($profile['blocked'])): ?>
   <div class="small warn">Denne rute/scope er blokeret i EU-flowet (nationalt regime anvendes).</div>
 <?php endif; ?>
@@ -33,9 +36,259 @@
     <?php endforeach; ?>
   </ul>
 <?php endif; ?>
+<?php
+  // Explicit exemptions section: list only the articles that are OFF (exempt)
+  $labels = [
+    'art12' => 'Art. 12 – Gennemgående billet',
+    'art17' => 'Art. 17 – Forsinkelsesinformation',
+    'art18_3' => 'Art. 18(3) – 100-minutters-reglen',
+    'art19' => 'Art. 19 – Kompensation',
+    'art20_2' => 'Art. 20(2) – Assistance',
+    'art30_2' => 'Art. 30(2) – Tvistbilæggelse',
+    'art10' => 'Art. 10 – Realtidsdata',
+    'art9' => 'Art. 9 – Informationspligter',
+  ];
+  $exList = [];
+  foreach ($arts as $k=>$v) {
+    if ($v === false) { $exList[] = $labels[$k] ?? $k; }
+  }
+  // Add partial Art. 9 exemptions if any sub-parts are OFF
+  if (!empty($artsSub)) {
+    foreach ($artsSub as $k=>$v) {
+      if ($v === false) {
+        $part = substr((string)$k, -1);
+        $exList[] = 'Art. 9(' . h($part) . ') – undtaget';
+      }
+    }
+  }
+?>
+<?php if (!empty($exList)): ?>
+  <div class="small mt4">Fritagelser (gældende undtagelser):</div>
+  <ul class="small" style="margin:4px 0 6px 16px;">
+    <?php foreach ($exList as $ex): ?>
+      <li><?= is_string($ex) ? $ex : h((string)$ex) ?></li>
+    <?php endforeach; ?>
+  </ul>
+<?php endif; ?>
 <hr/>
-<div class="small"><strong>TRIN 6</strong> · Art. 12</div>
+<div class="small"><strong>TRIN 3</strong> · Cykel på billetten</div>
+<?php 
+  $bikeAuto = (array)($meta['_bike_detection'] ?? []);
+  $bikeB = (string)($meta['bike_booked'] ?? ($meta['_auto']['bike_booked']['value'] ?? 'unknown'));
+  $bikeC = (string)($meta['bike_count'] ?? ($meta['_auto']['bike_count']['value'] ?? ''));
+?>
+<div class="small">bike_booked (auto): <code><?= h($bikeB ?: 'unknown') ?></code><?php if ($bikeC!==''): ?> · antal: <code><?= h($bikeC) ?></code><?php endif; ?></div>
+<?php if (!empty($bikeAuto)): ?>
+  <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($bikeAuto['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($bikeAuto['confidence'] ?? '')) ?></code></div>
+<?php endif; ?>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <div class="small">Er der cykel på billetten?
+    <?php $vb = strtolower($bikeB); ?>
+    <label class="ml8"><input type="radio" name="bike_booked" value="Ja" <?= $vb==='ja'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="bike_booked" value="Nej" <?= $vb==='nej'?'checked':'' ?> /> Nej</label>
+    <label class="ml8"><input type="radio" name="bike_booked" value="unknown" <?= ($vb===''||$vb==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  </div>
+  <div class="small" style="margin-top:4px;">Antal cykler (valgfrit):
+    <input type="number" min="1" max="6" step="1" name="bike_count" value="<?= h($bikeC) ?>" style="width:70px;" />
+  </div>
+  <button type="submit" class="small" style="margin-top:4px;">Gem</button>
+</form>
+<hr/>
+<div class="small"><strong>TRIN 3</strong> · Billetype (pris/fleks + togspecifik)</div>
+<?php 
+  $ttd = (array)($meta['_ticket_type_detection'] ?? []);
+  $fftAuto = (string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? ''));
+  $tsAuto = (string)($meta['train_specificity'] ?? ($meta['_auto']['train_specificity']['value'] ?? 'unknown'));
+?>
+<div class="small">fare_flex_type (auto): <code><?= h($fftAuto ?: 'other') ?></code> · train_specificity: <code><?= h($tsAuto ?: 'unknown') ?></code></div>
+<?php if (!empty($ttd)): ?>
+  <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($ttd['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($ttd['confidence'] ?? '')) ?></code></div>
+<?php endif; ?>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <div class="small">Købstype (AUTO):
+    <select name="fare_flex_type">
+      <?php $curFft = strtolower((string)$fftAuto); ?>
+      <option value="">-</option>
+      <option value="nonflex" <?= $curFft==='nonflex'?'selected':'' ?>>Standard/Non-flex</option>
+      <option value="semiflex" <?= $curFft==='semiflex'?'selected':'' ?>>Semi-flex</option>
+      <option value="flex" <?= $curFft==='flex'?'selected':'' ?>>Flex</option>
+      <option value="pass" <?= $curFft==='pass'?'selected':'' ?>>Abonnement/Periodekort</option>
+      <option value="other" <?= $curFft==='other'?'selected':'' ?>>Andet</option>
+    </select>
+  </div>
+  <div class="small" style="margin-top:4px;">Gælder billetten kun for specifikt tog?
+    <?php $curTs = strtolower((string)$tsAuto); ?>
+    <label class="ml8"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
+    <label class="ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
+    <label class="ml8"><input type="radio" name="train_specificity" value="unknown" <?= ($curTs===''||$curTs==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  </div>
+  <button type="submit" class="small" style="margin-top:4px;">Gem</button>
+  <div class="small muted" style="margin-top:4px;">Match: Art. 9 – Bilag II del I</div>
+  </form>
+<hr/>
+<div class="small"><strong>TRIN 3</strong> · Klasse og reserverede faciliteter</div>
+<?php 
+  $crd = (array)($meta['_class_detection'] ?? []);
+  $classAuto = (string)($meta['fare_class_purchased'] ?? ($meta['_auto']['fare_class_purchased']['value'] ?? 'unknown'));
+  $seatType = (string)($meta['berth_seat_type'] ?? ($meta['_auto']['berth_seat_type']['value'] ?? 'unknown'));
+?>
+<div class="small">fare_class_purchased (auto): <code><?= h($classAuto ?: 'unknown') ?></code> · berth_seat_type: <code><?= h($seatType ?: 'unknown') ?></code></div>
+<?php if (!empty($crd)): ?>
+  <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($crd['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($crd['confidence'] ?? '')) ?></code></div>
+<?php endif; ?>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <div class="small">Klasse (AUTO):
+    <?php $curCls = strtolower((string)$classAuto); ?>
+    <select name="fare_class_purchased">
+      <option value="">-</option>
+      <option value="1" <?= $curCls==='1'?'selected':'' ?>>1. klasse</option>
+      <option value="2" <?= $curCls==='2'?'selected':'' ?>>2. klasse</option>
+      <option value="other" <?= $curCls==='other'?'selected':'' ?>>Andet</option>
+      <option value="unknown" <?= ($curCls===''||$curCls==='unknown')?'selected':'' ?>>Ukendt</option>
+    </select>
+  </div>
+  <div class="small" style="margin-top:4px;">Reservering/liggeplads:
+    <?php $curSeat = strtolower((string)$seatType); ?>
+    <select name="berth_seat_type">
+      <option value="">-</option>
+      <option value="seat" <?= $curSeat==='seat'?'selected':'' ?>>Sæde (pladsreservation)</option>
+      <option value="free" <?= $curSeat==='free'?'selected':'' ?>>Fri siddeplads (ingen reservation)</option>
+      <option value="couchette" <?= $curSeat==='couchette'?'selected':'' ?>>Liggeplads (couchette)</option>
+      <option value="sleeper" <?= $curSeat==='sleeper'?'selected':'' ?>>Sovevogn</option>
+      <option value="none" <?= $curSeat==='none'?'selected':'' ?>>Ingen relevant</option>
+      <option value="unknown" <?= ($curSeat===''||$curSeat==='unknown')?'selected':'' ?>>Ukendt</option>
+    </select>
+  </div>
+  <button type="submit" class="small" style="margin-top:4px;">Gem</button>
+</form>
+<hr/>
+<div class="small"><strong>TRIN 1</strong> · Forsinkelse & hændelse</div>
+<?php $delayNow = (int)($compute['delayMinEU'] ?? (int)($form['delayAtFinalMinutes'] ?? 0)); $kd = !empty($compute['knownDelayBeforePurchase']); ?>
+<div class="small">delay_min_eu: <code><?= (int)$delayNow ?></code></div>
+<?php
+  $incMain = (string)($incident['main'] ?? '');
+  $segAutoHp = (array)($meta['_segments_auto'] ?? []);
+  $hasConnHp = count($segAutoHp) >= 2;
+  $hasMcStationHp = trim((string)($form['missed_connection_station'] ?? '')) !== '';
+  $incMiss = !empty($incident['missed']) || $hasMcStationHp || $hasConnHp;
+?>
+<div class="small">incident: <code><?= h($incMain ?: '-') ?></code><?= $incMiss ? ' · <span class="badge">missed-connection</span>' : '' ?></div>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <label>Minuters forsinkelse: <input type="number" min="0" name="delay_min_eu" value="<?= (int)$delayNow ?>" style="width:80px;" /></label>
+  <label class="ml8"><input type="checkbox" name="known_delay" value="1" <?= $kd?'checked':'' ?> /> Kendt før køb</label>
+  <label class="ml8">Hændelse:
+    <select name="incident_main">
+      <?php foreach (['','delay','cancellation','other'] as $opt): ?>
+        <option value="<?= h($opt) ?>" <?= $incMain===$opt?'selected':'' ?>><?= h($opt===''?'-':$opt) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </label>
+  <label class="ml8"><input type="checkbox" name="incident_missed" value="1" <?= $incMiss?'checked':'' ?> /> Misset forbindelse</label>
+  <button type="submit" class="small ml8">Gem</button>
+  <span class="muted" style="margin-left:6px;">(opdaterer efter næste handling)</span>
+  </form>
+<hr/>
+<div class="small"><strong>TRIN 2</strong> · EU-scope</div>
+<?php $euOnlyNow = isset($compute['euOnly']) ? (bool)$compute['euOnly'] : null; ?>
+<div class="small">eu_only (aktuel): <code><?= $euOnlyNow===null?'-':($euOnlyNow?'true':'false') ?></code></div>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <label><input type="checkbox" name="eu_only" value="1" <?= $euOnlyNow?'checked':'' ?> /> Tving kun EU-regler (ignorer nationale)</label>
+  <button type="submit" class="small ml8">Gem</button>
+  <?php if (isset($euOnlySuggested) && $euOnlySuggested === 'yes'): ?><span class="ml8 badge">anbefalet</span><?php endif; ?>
+  </form>
+<hr/>
+<div class="small"><strong>TRIN 3</strong> · PMR/handicap</div>
+<?php $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : []; $pmrU = (string)($h9['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')); $pmrB = (string)($h9['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')); ?>
+<div class="small">pmr_user (auto): <code><?= h($pmrU ?: 'unknown') ?></code> · pmr_booked: <code><?= h($pmrB ?: 'unknown') ?></code></div>
+<?php if (!empty($meta['_pmr_detection'])): $pd=(array)$meta['_pmr_detection']; ?>
+  <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($pd['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($pd['confidence'] ?? '')) ?></code></div>
+<?php endif; ?>
+<form method="post" class="small" style="margin-top:6px;">
+  <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+    <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+  <?php endif; ?>
+  <div class="small">Har du et handicap eller nedsat mobilitet?
+    <?php $v = strtolower($pmrU); ?>
+    <label class="ml8"><input type="radio" name="pmr_user" value="Ja" <?= $v==='ja'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="pmr_user" value="Nej" <?= $v==='nej'?'checked':'' ?> /> Nej</label>
+    <label class="ml8"><input type="radio" name="pmr_user" value="unknown" <?= ($v===''||$v==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  </div>
+  <div class="small" style="margin-top:4px;">Bestilte du assistance før rejsen?
+    <?php $vb = strtolower($pmrB); ?>
+    <label class="ml8"><input type="radio" name="pmr_booked" value="Ja" <?= $vb==='ja'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="pmr_booked" value="Nej" <?= $vb==='nej'?'checked':'' ?> /> Nej</label>
+    <label class="ml8"><input type="radio" name="pmr_booked" value="unknown" <?= ($vb===''||$vb==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  </div>
+  <button type="submit" class="small" style="margin-top:4px;">Gem</button>
+</form>
+<hr/>
+<?php if ($incMiss): ?>
+  <div class="small"><strong>TRIN 3</strong> · Art. 9(1) – Køreplaner og hurtigste rejse</div>
+  <?php 
+    $mctVal = (string)($meta['mct_realistic'] ?? '');
+    if ($mctVal === '' || strtolower($mctVal) === 'unknown') {
+      $mctVal = (string)($meta['_auto']['mct_realistic']['value'] ?? 'unknown');
+    }
+  ?>
+  <div class="small">Var minimumsskiftetiden realistisk (missed station)? <code><?= h($mctVal ?: 'unknown') ?></code></div>
+  <?php if (strtolower((string)$mctVal) === 'unknown'): ?>
+    <form method="post" class="small" style="margin-top:6px;">
+      <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+        <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+      <?php endif; ?>
+      <label class="ml8"><input type="radio" name="mct_realistic" value="Ja" /> Ja</label>
+      <label class="ml8"><input type="radio" name="mct_realistic" value="Nej" /> Nej</label>
+      <button type="submit" class="small ml8">Gem</button>
+    </form>
+  <?php endif; ?>
+  <hr/>
+<?php endif; ?>
+<?php if (isset($art12flow) && is_array($art12flow)): ?>
+<div class="small"><strong>TRIN 2/4/5</strong> · Art. 12 flow</div>
+<?php $stage = (string)($art12flow['stage'] ?? ''); $flowNotes = (array)($art12flow['notes'] ?? []); $toAsk = (array)($art12flow['hooks_to_collect'] ?? []); ?>
+<div class="small">stage: <code><?= h($stage ?: '-') ?></code></div>
+<?php if (!empty($flowNotes)): ?>
+  <ul class="small" style="margin:4px 0 6px 16px;">
+    <?php foreach ($flowNotes as $n): ?>
+      <li><?= h((string)$n) ?></li>
+    <?php endforeach; ?>
+  </ul>
+<?php endif; ?>
+<div class="small">mangler: <code><?= h(implode(', ', $toAsk) ?: '-') ?></code></div>
+<?php if (in_array('same_transaction_all', $toAsk, true)): ?>
+  <form method="post" style="margin-top:6px;">
+    <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+      <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+    <?php endif; ?>
+    <?php $curSta = strtolower((string)($meta['same_transaction_all'] ?? '')); ?>
+    <div class="small">Købt i én transaktion (alle billetter)?
+      <label class="ml8"><input type="radio" name="same_transaction_all" value="yes" <?= $curSta==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="ml8"><input type="radio" name="same_transaction_all" value="no" <?= $curSta==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <button type="submit" class="small" style="margin-top:4px;">Gem</button>
+  </form>
+<?php endif; ?>
+<hr/>
+<?php endif; ?>
+<?php $showArt12Section = isset($showArt12Section) ? (bool)$showArt12Section : true; ?>
 <?php $h = (array)($art12['hooks'] ?? []); $miss = (array)($art12['missing'] ?? []); $missUi = (array)($art12['missing_ui'] ?? []); $missAuto = (array)($art12['missing_auto'] ?? []); $debug = (bool)($this->getRequest()->getQuery('debug') ?? false); ?>
+<?php if ($showArt12Section): ?>
+<div class="small"><strong>TRIN 6</strong> · Art. 12</div>
 <?php
   $applies = $art12['art12_applies'] ?? null;
   $liable = (string)($art12['liable_party'] ?? 'unknown');
@@ -53,6 +306,14 @@
     <span class="badge" style="margin-left:6px;">Ansvarlig: <?= h($liableLbl) ?></span>
   <?php endif; ?>
 </div>
+
+<?php $showFormDecision = isset($showFormDecision) ? (bool)$showFormDecision : true; ?>
+<?php if ($showFormDecision && isset($formDecision) && is_array($formDecision)): ?>
+  <?php $rec = (string)($formDecision['form'] ?? 'eu_standard_claim'); $isEu = ($rec === 'eu_standard_claim'); $label = $isEu ? 'Anbefalet: EU-formular' : (($rec === 'none') ? 'Anbefalet: ingen EU-formular' : 'Anbefalet: national formular'); $reasonDec = (string)($formDecision['reason'] ?? ''); ?>
+  <div class="small" title="<?= h($reasonDec) ?>">
+    <span class="badge" style="<?= $isEu ? 'background:#e6f7ff;color:#006bb3;' : 'background:#fff7e6;color:#b36b00;' ?>;border:1px solid #d0d7de;"><?= h($label) ?></span>
+  </div>
+<?php endif; ?>
 
 <?php
 // Ny TRIN 6-flow (forenklet visning): brug tri-state yes/no/unknown fra evaluator hooks
@@ -143,6 +404,7 @@ if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'throug
     <div class="small">Barcode: <code><?= h((string)($bc['format'] ?? '')) ?></code> (<?= h((string)($bc['chars'] ?? '')) ?> chars)</div>
   <?php endif; ?>
 </details>
+<?php endif; // showArt12Section ?>
 <hr/>
 <div class="small"><strong>TRIN 7</strong> · Art. 18 (remedies)</div>
 <?php $remedy = (string)($form['remedyChoice'] ?? ''); $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
@@ -215,6 +477,9 @@ try {
           <?php endif; ?>
           <?php if (!empty($t['file'])): ?>
             <form method="post" style="display:inline; margin-left:6px;">
+              <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+                <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+              <?php endif; ?>
               <input type="hidden" name="remove_ticket" value="<?= h((string)$t['file']) ?>" />
               <button type="submit" class="small" title="Fjern denne billet">Fjern</button>
             </form>

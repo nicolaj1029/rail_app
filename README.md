@@ -119,6 +119,17 @@ Stil kodekvalitet: PHPStan/phpcs konfigurationer findes i repoet.
 
 ---
 
+## 🆕 Nyheder (okt 2025)
+
+- TRIN 3 hooks-panel udvidet med:
+	- Billetype (pris-fleksibilitet + togspecificitet) med AUTO og manuelle valg
+	- Klasse og reserverede faciliteter (1./2. klasse, sæde/fri/couchette/sleeper) med AUTO-evidence og hurtige dropdowns
+- OCR auto-detektioner gemmer evidens og confidence i `meta` under `_ticket_type_detection` og `_class_detection`.
+- One-page flow åbner automatisk relevante sektioner (cykel, afbrydelse, klasse) ved detektion.
+
+
+---
+
 ## 🔗 Links
 
 - Flow (v2 – Live Client Service): `docs/flow_chart_v_2_live_client_service.md`
