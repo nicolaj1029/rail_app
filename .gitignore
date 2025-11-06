@@ -14,7 +14,8 @@
 .Spotlight-V100
 .Trashes
 # Icon must end with two \r
-Icon
+Icon
+
 ehthumbs.db
 Thumbs.db
 .directory
@@ -47,6 +48,20 @@ nbproject/*
 .sass-cache/
 # node
 /node_modules/*
+# node modules in nested mock workspace
+/mocks/node_modules/*
+# build artefacts / caches
+/mocks/dist/*
+# uploads and large local test fixtures (never commit user files)
+/webroot/files/uploads/*
+/webroot/files/*.pdf
+/mocks/tests/fixtures/*
+# debug databases and local artifacts
+/tmp/*.sqlite
+/tmp/*.db
+/tmp/*.sqlite3
+# PDF/diagram scratch files
+/webroot/files/flow_chart_*.pdf
 # yarn
 yarn-debug.log
 yarn-error.log
