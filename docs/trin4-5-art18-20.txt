@@ -1,0 +1,243 @@
+TRIN 4–5 kode og redegørelse (Art. 18 vs. Art. 20)
+Dato: 2025-11-06
+
+Oversigt
+- Trin 4 (Choices) implementerer Art. 18: refusion eller omlægning, inkl. 100-min-reglen (Art. 18(3)), selv-køb scenarier, ekstraomkostninger og nedklassificering (Bilag II).
+- Trin 5 (Assistance) implementerer Art. 20: måltider/forfriskninger, hotel/indkvartering og transport dertil (3-nætters loft ved ekstraordinære forhold), evakuering når tog er blokeret, alternative transporttjenester, samt dokumentation/udgifter og forsinkelsesbekræftelse. Når assistance ikke blev leveret, indsamles egenbetalte udgifter pr. kategori (beløb/valuta) og kvitteringer, og berettigelse efter Art. 18(3) markeres automatisk.
+
+Klar distinktion (Art. 18 vs. Art. 20)
+- Art. 18 (Trin 4)
+  - remedyChoice: refund_return | reroute_soonest | reroute_later
+  - 100-min-reglen (reroute_info_within_100min) + konsekvens for selv-køb (self_purchased_new_ticket)
+  - Ekstra omkostninger ved omlægning (reroute_extra_costs + beløb/valuta)
+  - Nedklassificering → delvis tilbagebetaling efter Bilag II (downgrade_*)
+
+ 
+- Art. 20 (Trin 5)
+  - Måltider/forfriskninger (meal_offered), hotel/indkvartering inkl. transport (hotel_offered) + overnatningsbehov (overnight_needed)
+  - Evakuering fra blokeret tog (blocked_train_alt_transport)
+  - Alternative transporttjenester ved afbrudt forbindelse (alt_transport_provided)
+        - Udgifter og dokumentation (expense_breakdown_*, expense_breakdown_currency)
+    - Egenbetaling ved manglende assistance (Art. 18(3)) pr. kategori:
+        - Måltider: meal_self_paid_amount + meal_self_paid_currency + meal_self_paid_receipt
+        - Hotel: hotel_self_paid_amount + hotel_self_paid_currency + hotel_self_paid_nights + hotel_self_paid_receipt
+        - Evakuering (transport væk): blocked_self_paid_amount + blocked_self_paid_currency + blocked_self_paid_receipt
+        - Alternativ transport til destination: alt_self_paid_amount + alt_self_paid_currency + alt_self_paid_receipt
+    - Automatisk flag: eligible_under_18_3 ("1"/"0") når egenbetaling er angivet i en kategori hvor assistance ikke blev leveret
+
+Opdatering 2025-11-06
+- Trin 5 UI: Fjernet legacy-blok “C) Dokumentation & udgifter”; i stedet vises upload-knapper under hvert beløbfelt for egenbetaling.
+- Spørgsmål om forsinkelsesbekræftelse er fjernet fra Trin 5.
+- Controller assistance(): Persisterer egenbetalte beløb/valuta pr. kategori, normaliserer tal, udfylder valuta fra fælles fallback, håndterer kvitteringsuploads pr. kategori og sætter eligible_under_18_3.
+
+Filer og kodeuddrag
+
+1) Controller: src/Controller/FlowController.php — choices() (TRIN 4, Art. 18)
+-----------------------------------------------------------------------
+public function choices(): \Cake\Http\Response|null
+{
+    $session = $this->request->getSession();
+    $compute = (array)$session->read('flow.compute') ?: [];
+    $form = (array)$session->read('flow.form') ?: [];
+    $incident = (array)$session->read('flow.incident') ?: [];
+    $flags = (array)$session->read('flow.flags') ?: [];
+    $journey = (array)$session->read('flow.journey') ?: [];
+    $meta = (array)$session->read('flow.meta') ?: [];
+    if ($this->request->is('post')) {
+        foreach (['remedyChoice','trip_cancelled_return_to_origin','refund_requested','refund_form_selected','reroute_same_conditions_soonest','reroute_later_at_choice','reroute_info_within_100min','self_purchased_new_ticket','reroute_extra_costs','reroute_extra_costs_amount','reroute_extra_costs_currency','downgrade_occurred','downgrade_comp_basis','delayAtFinalMinutes','compensationBand','voucherAccepted'] as $k) {
+            $v = $this->request->getData($k);
+            if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
+        }
+
+        // Compute and persist downgrade refund preview (Annex II) when applicable
+        try {
+            $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0'));
+            $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', $ticketPriceStr);
+            $segShareIn = $this->request->getData('downgrade_segment_share');
+            $segmentShare = is_numeric($segShareIn) ? (float)$segShareIn : (float)($form['downgrade_segment_share'] ?? 1.0);
+            if (!is_finite($segmentShare)) { $segmentShare = 1.0; }
+            if ($segmentShare < 0.0) { $segmentShare = 0.0; }
+            if ($segmentShare > 1.0) { $segmentShare = 1.0; }
+            $downgradeRefund = 0.0;
+            if (isset($form['downgrade_occurred']) && $form['downgrade_occurred'] === 'yes' && !empty($form['downgrade_comp_basis'])) {
+                $rate = 0.0;
+                switch ((string)$form['downgrade_comp_basis']) {
+                    case 'seat': $rate = 0.25; break;       // Seat 1->2 class
+                    case 'couchette': $rate = 0.50; break;   // Couchette/Sleeper comfort step down
+                    case 'sleeper': $rate = 0.75; break;     // Sleeper -> Seat
+                    default: $rate = 0.0; break;
+                }
+                $downgradeRefund = round($ticketPriceAmount * $rate * $segmentShare, 2);
+            }
+            $form['downgrade_segment_share'] = (string)$segmentShare;
+            $form['downgrade_refund_amount'] = (string)$downgradeRefund;
+            $form['downgrade_ticket_price'] = (string)$ticketPriceAmount;
+        } catch (\Throwable $e) { /* ignore calc errors */ }
+        $session->write('flow.form', $form);
+        // After TRIN 4 · Dine valg, continue to TRIN 5 · Assistance (Art. 20)
+        return $this->redirect(['action' => 'assistance']);
+    }
+    // Build profile for gating (Art. 18(3) etc.) to mirror one() TRIN 7 behaviour
+    try {
+        $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+        $journey = $inferRes['journey'];
+    } catch (\Throwable $e) { /* ignore for choices */ }
+    $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+    // Derive ticket price amount for downgrade preview in view
+    try {
+        $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0'));
+        $ticketPrice = (float)preg_replace('/[^0-9.]/', '', $ticketPriceStr);
+    } catch (\Throwable $e) { $ticketPrice = 0.0; }
+    // Auto-compute downgrade segment share …
+    try {
+        if (empty($form['downgrade_segment_share'])) {
+            $segments = (array)($meta['_segments_auto'] ?? ($journey['segments'] ?? []));
+            $missedStation = (string)($form['missed_connection_station'] ?? '');
+            $auto = $this->computeDowngradeSegmentShareAuto($segments, $missedStation);
+            $share = max(0.0, min(1.0, (float)$auto['share']));
+            $form['downgrade_segment_share'] = (string)round($share, 3);
+            $form['downgrade_segment_share_basis'] = (string)($auto['basis'] ?? 'unknown');
+            $form['downgrade_segment_share_conf'] = (string)($auto['confidence'] ?? '0');
+            $session->write('flow.form', $form);
+        }
+        $autoDowngradeShare = [
+            'share' => isset($form['downgrade_segment_share']) ? (float)$form['downgrade_segment_share'] : null,
+            'basis' => (string)($form['downgrade_segment_share_basis'] ?? 'unknown'),
+            'confidence' => (float)($form['downgrade_segment_share_conf'] ?? 0),
+        ];
+    } catch (\Throwable $e) { $autoDowngradeShare = null; }
+    $delayAtFinal = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
+    $reason_cancellation = (!empty($incident['main']) && $incident['main'] === 'cancellation');
+    $reason_missed_conn = !empty($incident['missed']);
+    $singleTxn = isset($form['singleTxn']) ? (bool)$this->truthy($form['singleTxn']) : false;
+    $separateDisclosed = isset($form['separateContractsDisclosed']) ? (bool)$this->truthy($form['separateContractsDisclosed']) : false;
+    $missedConnBlock = ($reason_missed_conn && $singleTxn && $separateDisclosed);
+    $allow_refund = (!$missedConnBlock) && (($compute['delayMinEU'] ?? 0) >= 60 || $reason_cancellation);
+    $allow_compensation = (!$missedConnBlock) && ($delayAtFinal >= 60);
+    $this->set(compact('form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','ticketPrice','autoDowngradeShare'));
+    return null;
+}
+
+2) Controller: src/Controller/FlowController.php — assistance() (TRIN 5, Art. 20)
+--------------------------------------------------------------------------
+public function assistance(): \Cake\Http\Response|null
+{
+    $session = $this->request->getSession();
+    $form = (array)$session->read('flow.form') ?: [];
+    $journey = (array)$session->read('flow.journey') ?: [];
+    $meta = (array)$session->read('flow.meta') ?: [];
+    $compute = (array)$session->read('flow.compute') ?: [];
+    $flags = (array)$session->read('flow.flags') ?: [];
+    $incident = (array)$session->read('flow.incident') ?: [];
+
+    if ($this->request->is('post')) {
+        // Persist Art. 20 fields (as in one() TRIN 8)
+        $keys = [
+            'meal_offered','hotel_offered','overnight_needed','blocked_train_alt_transport','alt_transport_provided',
+            'expense_breakdown_meals','expense_breakdown_hotel_nights','expense_breakdown_local_transport','expense_breakdown_other_amounts','expense_breakdown_currency',
+            'delay_confirmation_received'
+        ];
+        foreach ($keys as $k) {
+            $v = $this->request->getData($k);
+            if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
+        }
+
+        // Handle uploads for receipts and delay confirmation (mirror one())
+        try { $u1 = $this->request->getUploadedFile('extra_expense_upload'); } catch (\Throwable $e) { $u1 = null; }
+        try { $u2 = $this->request->getUploadedFile('delay_confirmation_upload'); } catch (\Throwable $e) { $u2 = null; }
+        $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+        if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
+        if ($u1 && $u1->getError() === \UPLOAD_ERR_OK) {
+            $name = (string)$u1->getClientFilename();
+            $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
+            $target = $uploadDir . (uniqid('exp_') . '_' . $safe);
+            try { $u1->moveTo($target); $form['extra_expense_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
+        } elseif (($raw = $this->request->getData('extra_expense_upload')) && is_string($raw)) {
+            $form['extra_expense_upload'] = $raw;
+        }
+        if ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
+            $name = (string)$u2->getClientFilename();
+            $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
+            $target = $uploadDir . (uniqid('dcr_') . '_' . $safe);
+            try { $u2->moveTo($target); $form['delay_confirmation_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
+        } elseif (($raw2 = $this->request->getData('delay_confirmation_upload')) && is_string($raw2)) {
+            $form['delay_confirmation_upload'] = $raw2;
+        }
+
+        $session->write('flow.form', $form);
+        // After TRIN 5 · Assistance, continue to TRIN 6 · Compensation (Art. 19)
+        return $this->redirect(['action' => 'compensation']);
+    }
+
+    // Build profile for exemption gating notes (Art. 20(2) etc.)
+    try {
+        $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+        $journey = $inferRes['journey'];
+    } catch (\Throwable $e) { /* ignore for assistance */ }
+    $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+
+    $this->set(compact('form','flags','incident','profile'));
+    return null;
+}
+
+3) View: templates/Flow/choices.php (TRIN 4, Art. 18)
+-----------------------------------------------
+<?php
+/** @var \App\View\AppView $this */
+$form = $form ?? [];
+$flags = $flags ?? [];
+$incident = $incident ?? [];
+$profile = $profile ?? ['articles' => []];
+$isCompleted = (!empty($flags['travel_state']) && $flags['travel_state'] === 'completed');
+?>
+
+<h1>TRIN 4 · Dine valg (Art. 18)</h1>
+<?= $this->Form->create(null) ?>
+
+<!-- Valg, 100-min-regel, selv-køb, ekstraomkostninger, nedklassificering (Bilag II) -->
+<!-- Se hele filen i repo for fuld klientlogik og styling -->
+
+<script>
+// JS: scenarier og 100-min-regel (Art. 18(3)), live preview for Bilag II, exemptions gating
+</script>
+
+<div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
+    <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+    <?= $this->Form->button('Næste →', ['class' => 'button']) ?>
+</div>
+
+<?= $this->Form->end() ?>
+
+4) View: templates/Flow/assistance.php (TRIN 5, Art. 20)
+--------------------------------------------------
+<?php
+/** @var \App\View\AppView $this */
+$form = $form ?? [];
+$flags = $flags ?? [];
+$incident = $incident ?? [];
+$profile = $profile ?? ['articles' => []];
+$isCompleted = (!empty($flags['travel_state']) && $flags['travel_state'] === 'completed');
+?>
+
+<h1>TRIN 5 · Assistance og udgifter (Art. 20)</h1>
+<?= $this->Form->create(null, ['type' => 'file']) ?>
+
+<fieldset class="fieldset mt12">
+  <legend>Art. 20 · Assistance og udgifter</legend>
+  <div class="small muted">Aktiveres ved forsinkelse ≥60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).</div>
+
+  <!-- A) Tilbudt assistance: måltider, hotel/indkvartering + transport, evakuering -->
+  <!-- B) Alternative transporttjenester ved afbrudt forbindelse -->
+  <!-- C) Dokumentation & udgifter + forsinkelsesbekræftelse -->
+</fieldset>
+
+<div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
+  <?= $this->Html->link('← Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Form->button('Næste →', ['class' => 'button']) ?>
+</div>
+
+<?= $this->Form->end() ?>
+
+Noter
+- De fulde view-filer indeholder detaljeret klientlogik (JS) for Art. 18(3), progressive visninger og preview af Bilag II. Se templates/Flow/choices.php og templates/Flow/assistance.php i repo for hele indholdet.
+- Trin 5 slutter i denne split-flow med redirect til Trin 6 (kompensation/Art. 19).

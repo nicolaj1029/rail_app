@@ -1,0 +1,318 @@
+{
+    "units": "pt",
+    "origin": "bottom-left",
+    "pages": {
+        "1": {
+            "title_mr": {
+                "x": 46.77,
+                "y": 410.56,
+                "type": "checkbox"
+            },
+            "title_ms": {
+                "x": 80.36,
+                "y": 410.56,
+                "type": "checkbox"
+            },
+            "surname": {
+                "x": 70.58,
+                "y": 391.71,
+                "w": 494.93,
+                "type": "text",
+                "source": "lastName"
+            },
+            "firstname": {
+                "x": 77.65,
+                "y": 373.88,
+                "w": 487.87,
+                "type": "text",
+                "source": "firstName"
+            },
+            "address_line1": {
+                "x": 55.84,
+                "y": 356.05,
+                "w": 236.69,
+                "type": "text",
+                "source": "address_street"
+            },
+            "address_line2": {
+                "x": 305.86,
+                "y": 356.05,
+                "w": 259.65,
+                "type": "text",
+                "source": "address_no"
+            },
+            "postcode": {
+                "x": 70.87,
+                "y": 338.22,
+                "w": 43.79,
+                "type": "text",
+                "source": "address_postalCode"
+            },
+            "city": {
+                "x": 73.70,
+                "y": 301.83,
+                "w": 54.43,
+                "type": "text",
+                "source": "address_city"
+            },
+            "email": {
+                "x": 189.92,
+                "y": 337.94,
+                "w": 375.59,
+                "type": "text",
+                "source": "contact_email"
+            },
+            "phone": {
+                "x": 123.01,
+                "y": 319.82,
+                "w": 442.50,
+                "type": "text",
+                "source": "contact_phone"
+            },
+            "country": {
+                "x": 189.92,
+                "y": 301.67,
+                "w": 375.59,
+                "type": "text",
+                "source": "address_country"
+            },
+            "booking_reference": {
+                "x": 69.73,
+                "y": 283.83,
+                "w": 495.78,
+                "type": "text",
+                "source": "ticket_no"
+            },
+            "seg1_train_no": {
+                "x": 83.62,
+                "y": 185.11,
+                "w": 21.69,
+                "type": "text",
+                "source": "train_no"
+            },
+            "seg1_dep_station": {
+                "x": 109.42,
+                "y": 185.11,
+                "w": 150.00,
+                "type": "text",
+                "source": "dep_station"
+            },
+            "seg1_arr_station": {
+                "x": 265.21,
+                "y": 185.11,
+                "w": 150.00,
+                "type": "text",
+                "source": "arr_station"
+            },
+            "seg1_dep_time": {
+                "x": 199.28,
+                "y": 203.21,
+                "w": 66.05,
+                "type": "text",
+                "source": "dep_time"
+            },
+            "seg1_arr_time": {
+                "x": 285.95,
+                "y": 167.24,
+                "w": 66.05,
+                "type": "text",
+                "source": "arr_time"
+            },
+            "traveller_1": {
+                "x": 28.91,
+                "y": 131.36,
+                "w": 237.54,
+                "type": "text",
+                "source": "full_name"
+            },
+            "traveller_2": {
+                "x": 329.39,
+                "y": 131.36,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_3": {
+                "x": 28.91,
+                "y": 113.30,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_4": {
+                "x": 329.39,
+                "y": 113.30,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_5": {
+                "x": 28.91,
+                "y": 95.14,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_6": {
+                "x": 329.39,
+                "y": 95.14,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_7": {
+                "x": 28.91,
+                "y": 77.68,
+                "w": 237.54,
+                "type": "text"
+            },
+            "traveller_8": {
+                "x": 329.39,
+                "y": 76.97,
+                "w": 237.54,
+                "type": "text"
+            },
+            "loyalty_gv": {
+                "x": 378.99,
+                "y": 227.73,
+                "w": 186.52,
+                "type": "text"
+            }
+        },
+        "2": {
+            "seg1_prod_tgv_inoui": {
+                "x": 84.61,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg1_prod_intercites": {
+                "x": 165.83,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg1_prod_ouigo": {
+                "x": 226.63,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg1_prod_ter": {
+                "x": 271.28,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg1_prod_tgv_lyria": {
+                "x": 345.69,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg1_prod_other": {
+                "x": 450.14,
+                "y": 760.25,
+                "type": "checkbox"
+            },
+            "seg2_train_no": {
+                "x": 71.43,
+                "y": 777.97,
+                "w": 65.48,
+                "type": "text"
+            },
+            "seg2_dep_station": {
+                "x": 109.42,
+                "y": 742.11,
+                "w": 458.64,
+                "type": "text"
+            },
+            "seg2_arr_station": {
+                "x": 109.42,
+                "y": 723.98,
+                "w": 458.64,
+                "type": "text"
+            },
+            "seg2_dep_time": {
+                "x": 465.87,
+                "y": 760.25,
+                "w": 102.19,
+                "type": "text"
+            },
+            "seg2_prod_tgv_inoui": {
+                "x": 84.61,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg2_prod_intercites": {
+                "x": 165.83,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg2_prod_ouigo": {
+                "x": 226.63,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg2_prod_ter": {
+                "x": 271.28,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg2_prod_tgv_lyria": {
+                "x": 345.69,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg2_prod_other": {
+                "x": 450.14,
+                "y": 644.54,
+                "type": "checkbox"
+            },
+            "seg3_train_no": {
+                "x": 71.43,
+                "y": 545.17,
+                "w": 65.48,
+                "type": "text"
+            },
+            "seg3_dep_station": {
+                "x": 109.42,
+                "y": 509.32,
+                "w": 458.64,
+                "type": "text"
+            },
+            "seg3_arr_station": {
+                "x": 109.42,
+                "y": 491.18,
+                "w": 458.64,
+                "type": "text"
+            },
+            "seg3_dep_time": {
+                "x": 465.87,
+                "y": 527.45,
+                "w": 102.19,
+                "type": "text"
+            },
+            "seg3_prod_tgv_inoui": {
+                "x": 84.61,
+                "y": 527.45,
+                "type": "checkbox"
+            },
+            "seg3_prod_intercites": {
+                "x": 165.83,
+                "y": 527.45,
+                "type": "checkbox"
+            },
+            "seg3_prod_ouigo": {
+                "x": 226.63,
+                "y": 527.45,
+                "type": "checkbox"
+            },
+            "seg3_prod_ter": {
+                "x": 271.28,
+                "y": 527.45,
+                "type": "checkbox"
+            },
+            "seg3_prod_tgv_lyria": {
+                "x": 345.69,
+                "y": 527.45,
+                "type": "checkbox"
+            },
+            "seg3_prod_other": {
+                "x": 450.14,
+                "y": 527.45,
+                "type": "checkbox"
+            }
+        }
+    }
+}

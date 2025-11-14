@@ -5,6 +5,7 @@ $flags = $flags ?? [];
 $incident = $incident ?? [];
 $profile = $profile ?? ['articles' => []];
 $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state'] === 'completed');
+$assistOff = isset($profile['articles']['art20_2']) && $profile['articles']['art20_2'] === false;
 $reason_delay = !empty($incident['main']) && $incident['main'] === 'delay';
 $reason_cancellation = !empty($incident['main']) && $incident['main'] === 'cancellation';
 $reason_missed_conn = !empty($incident['missed']);
@@ -40,6 +41,7 @@ $reason_missed_conn = !empty($incident['missed']);
         <div id="assistNoteLaterPast" class="<?= $rem==='reroute_later' ? '' : 'hidden' ?> small hl">Rettigheder (omlægning senere efter ønske): Kun i den oprindelige forsinkelsesperiode indtil du traf dit valg.</div>
       </div>
 
+      <?php if (!$assistOff): ?>
       <div id="assistA_past">
         <div class="mt8"><strong>A) Tilbudt assistance</strong></div>
         <?php $mo = (string)($form['meal_offered'] ?? ''); ?>
@@ -64,6 +66,9 @@ $reason_missed_conn = !empty($incident['missed']);
         <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej</label>
       </div>
+      <?php else: ?>
+        <div class="small mt8 hl">⚠️ Assistance efter Art. 20(2) (måltider/hotel/evakuering) er markeret som undtaget for denne rejse. Udfyld i stedet dine udgifter nedenfor, så behandles de som refusion efter Art. 18(3).</div>
+      <?php endif; ?>
 
       <div class="mt12"><strong>B) Alternative transporttjenester</strong></div>
       <?php $ap = (string)($form['alt_transport_provided'] ?? ''); ?>
@@ -71,42 +76,90 @@ $reason_missed_conn = !empty($incident['missed']);
       <label><input type="radio" name="alt_transport_provided" value="yes" <?= $ap==='yes'?'checked':'' ?> /> Ja</label>
       <label class="ml8"><input type="radio" name="alt_transport_provided" value="no" <?= $ap==='no'?'checked':'' ?> /> Nej</label>
 
-      <div class="mt12"><strong>C) Dokumentation & udgifter</strong></div>
-      <?php $exu = (string)($form['extra_expense_upload'] ?? ''); ?>
-      <div>5. Har du haft udgifter (taxi, bus, hotel, mad osv.)? (Upload kvitteringer)</div>
-      <input type="file" name="extra_expense_upload" />
-      <?php if ($exu !== ''): ?><div class="small muted mt4">Uploadet: <?= h(basename($exu)) ?></div><?php endif; ?>
-      <div class="grid-3 mt8">
-        <label>Måltider (beløb)
-          <input type="number" step="0.01" name="expense_breakdown_meals" value="<?= h($form['expense_breakdown_meals'] ?? '') ?>" />
-        </label>
-        <label>Hotel (nætter)
-          <input type="number" step="1" name="expense_breakdown_hotel_nights" value="<?= h($form['expense_breakdown_hotel_nights'] ?? '') ?>" />
-        </label>
-        <label>Lokal transport (beløb)
-          <input type="number" step="0.01" name="expense_breakdown_local_transport" value="<?= h($form['expense_breakdown_local_transport'] ?? '') ?>" />
-        </label>
-        <label>Andre beløb
-          <input type="number" step="0.01" name="expense_breakdown_other_amounts" value="<?= h($form['expense_breakdown_other_amounts'] ?? '') ?>" />
-        </label>
-        <label>Valuta
-          <input type="text" name="expense_breakdown_currency" value="<?= h($form['expense_breakdown_currency'] ?? '') ?>" placeholder="EUR" />
-        </label>
-      </div>
+      <fieldset class="fieldset mt12">
+        <legend>Dine udgifter (udfyld kun hvis du selv betalte)</legend>
+        <div class="small muted">Disse udgifter behandles som refusion af nødvendige udlæg efter Art. 18(3), når vederlagsfri hjælp efter Art. 20 ikke blev leveret.</div>
+        <!-- Måltider egenbetaling -->
+        <div class="mt8" <?= $assistOff ? '' : 'data-reveal="meal_offered:no"' ?>>
+          <label>Måltider – beløb
+            <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($form['meal_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="meal_self_paid_currency" value="<?= h($form['meal_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $mru = (string)($form['meal_self_paid_receipt'] ?? ''); if ($mru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($mru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Hotel egenbetaling -->
+  <div class="mt8" <?= $assistOff ? '' : 'data-reveal="hotel_offered:no"' ?>>
+          <label>Hotel – beløb (samlet)
+            <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($form['hotel_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="hotel_self_paid_currency" value="<?= h($form['hotel_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <label class="ml8">Antal nætter
+            <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($form['hotel_self_paid_nights'] ?? '') ?>" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="hotel_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $hru = (string)($form['hotel_self_paid_receipt'] ?? ''); if ($hru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($hru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Evakuering egenbetaling -->
+  <div class="mt8" <?= $assistOff ? '' : 'data-reveal="blocked_train_alt_transport:no"' ?>>
+          <label>Transport væk – beløb
+            <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($form['blocked_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="blocked_self_paid_currency" value="<?= h($form['blocked_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $bru = (string)($form['blocked_self_paid_receipt'] ?? ''); if ($bru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($bru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Alternativ transport egenbetaling -->
+  <div class="mt8" data-reveal="alt_transport_provided:no">
+          <label>Alternativ transport til destination – beløb
+            <input type="number" step="0.01" name="alt_self_paid_amount" value="<?= h($form['alt_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="alt_self_paid_currency" value="<?= h($form['alt_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="alt_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $aru = (string)($form['alt_self_paid_receipt'] ?? ''); if ($aru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($aru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="small muted mt4">Tip: Angiv en fælles valuta under "Dokumentation & udgifter", feltet "Valuta". Den bruges som fallback her.</div>
+      </fieldset>
 
-      <?php $dcr = (string)($form['delay_confirmation_received'] ?? ''); ?>
-      <div class="mt8">6. Fik du skriftlig bekræftelse på forsinkelse/aflysning/mistet forbindelse? (Art. 20(4))</div>
-      <label><input type="radio" name="delay_confirmation_received" value="yes" <?= $dcr==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_received" value="no" <?= $dcr==='no'?'checked':'' ?> /> Nej</label>
-      <?php $dcu = (string)($form['delay_confirmation_upload'] ?? ''); ?>
-      <div class="mt4">
-        <input type="file" name="delay_confirmation_upload" />
-        <?php if ($dcu !== ''): ?><div class="small muted mt4">Uploadet: <?= h(basename($dcu)) ?></div><?php endif; ?>
-      </div>
+      <!-- Removed legacy C) Dokumentation & udgifter block; per-field uploads are provided below each beløbfelt -->
 
       
 
-      <?php if (isset($profile['articles']['art20_2']) && $profile['articles']['art20_2'] === false): ?>
+      
+
+      <?php if ($assistOff): ?>
         <div class="small mt8 hl">⚠️ Assistance (måltider/hotel/transport) kan være undtaget her. Vi logger dine udgifter og rejser krav efter lokale regler/kontraktvilkår.</div>
       <?php endif; ?>
     </div>
@@ -120,6 +173,7 @@ $reason_missed_conn = !empty($incident['missed']);
         <div id="assistNoteLaterNow" class="<?= $rem==='reroute_later' ? '' : 'hidden' ?> small hl">Rettigheder (omlægning senere efter ønske): Kun i den oprindelige forsinkelsesperiode, indtil du træffer dit valg.</div>
       </div>
 
+      <?php if (!$assistOff): ?>
       <div id="assistA_now">
         <div class="mt8"><strong>A) Tilbudt assistance</strong></div>
         <?php $mo = (string)($form['meal_offered'] ?? ''); ?>
@@ -144,6 +198,9 @@ $reason_missed_conn = !empty($incident['missed']);
         <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej</label>
       </div>
+      <?php else: ?>
+        <div class="small mt8 hl">⚠️ Assistance efter Art. 20(2) er markeret som undtaget for denne rejse. Udfyld direkte dine udgifter nedenfor (Art. 18(3)).</div>
+      <?php endif; ?>
 
       <div class="mt12"><strong>B) Alternative transporttjenester</strong></div>
       <?php $ap = (string)($form['alt_transport_provided'] ?? ''); ?>
@@ -151,42 +208,90 @@ $reason_missed_conn = !empty($incident['missed']);
       <label><input type="radio" name="alt_transport_provided" value="yes" <?= $ap==='yes'?'checked':'' ?> /> Ja</label>
       <label class="ml8"><input type="radio" name="alt_transport_provided" value="no" <?= $ap==='no'?'checked':'' ?> /> Nej</label>
 
-      <div class="mt12"><strong>C) Dokumentation & udgifter</strong></div>
-      <?php $exu = (string)($form['extra_expense_upload'] ?? ''); ?>
-      <div>5. Har du udgifter (taxi, bus, hotel, mad osv.)? (Upload kvitteringer)</div>
-      <input type="file" name="extra_expense_upload" />
-      <?php if ($exu !== ''): ?><div class="small muted mt4">Uploadet: <?= h(basename($exu)) ?></div><?php endif; ?>
-      <div class="grid-3 mt8">
-        <label>Måltider (beløb)
-          <input type="number" step="0.01" name="expense_breakdown_meals" value="<?= h($form['expense_breakdown_meals'] ?? '') ?>" />
-        </label>
-        <label>Hotel (nætter)
-          <input type="number" step="1" name="expense_breakdown_hotel_nights" value="<?= h($form['expense_breakdown_hotel_nights'] ?? '') ?>" />
-        </label>
-        <label>Lokal transport (beløb)
-          <input type="number" step="0.01" name="expense_breakdown_local_transport" value="<?= h($form['expense_breakdown_local_transport'] ?? '') ?>" />
-        </label>
-        <label>Andre beløb
-          <input type="number" step="0.01" name="expense_breakdown_other_amounts" value="<?= h($form['expense_breakdown_other_amounts'] ?? '') ?>" />
-        </label>
-        <label>Valuta
-          <input type="text" name="expense_breakdown_currency" value="<?= h($form['expense_breakdown_currency'] ?? '') ?>" placeholder="EUR" />
-        </label>
-      </div>
+      <fieldset class="fieldset mt12">
+        <legend>Dine udgifter (udfyld kun hvis du selv betaler)</legend>
+        <div class="small muted">Disse udgifter behandles som refusion af nødvendige udlæg efter Art. 18(3), når vederlagsfri hjælp efter Art. 20 ikke leveres.</div>
+        <!-- Måltider egenbetaling -->
+        <div class="mt8" <?= $assistOff ? '' : 'data-reveal="meal_offered:no"' ?>>
+          <label>Måltider – beløb
+            <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($form['meal_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="meal_self_paid_currency" value="<?= h($form['meal_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $mru = (string)($form['meal_self_paid_receipt'] ?? ''); if ($mru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($mru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Hotel egenbetaling -->
+  <div class="mt8" <?= $assistOff ? '' : 'data-reveal="hotel_offered:no"' ?>>
+          <label>Hotel – beløb (samlet)
+            <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($form['hotel_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="hotel_self_paid_currency" value="<?= h($form['hotel_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <label class="ml8">Antal nætter
+            <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($form['hotel_self_paid_nights'] ?? '') ?>" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="hotel_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $hru = (string)($form['hotel_self_paid_receipt'] ?? ''); if ($hru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($hru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Evakuering egenbetaling -->
+  <div class="mt8" <?= $assistOff ? '' : 'data-reveal="blocked_train_alt_transport:no"' ?>>
+          <label>Transport væk – beløb
+            <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($form['blocked_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="blocked_self_paid_currency" value="<?= h($form['blocked_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $bru = (string)($form['blocked_self_paid_receipt'] ?? ''); if ($bru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($bru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+  <!-- Alternativ transport egenbetaling -->
+  <div class="mt8" data-reveal="alt_transport_provided:no">
+          <label>Alternativ transport til destination – beløb
+            <input type="number" step="0.01" name="alt_self_paid_amount" value="<?= h($form['alt_self_paid_amount'] ?? '') ?>" />
+          </label>
+          <label class="ml8">Valuta
+            <input type="text" name="alt_self_paid_currency" value="<?= h($form['alt_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? '')) ?>" placeholder="EUR" />
+          </label>
+          <div class="mt4">
+            <label class="small">Upload kvittering (PDF/JPG/PNG)
+              <input type="file" name="alt_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+            </label>
+            <?php $aru = (string)($form['alt_self_paid_receipt'] ?? ''); if ($aru !== ''): ?>
+              <div class="small muted mt4">Uploadet: <?= h(basename($aru)) ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="small muted mt4">Tip: Angiv en fælles valuta under "Dokumentation & udgifter", feltet "Valuta". Den bruges som fallback her.</div>
+      </fieldset>
 
-      <?php $dcr = (string)($form['delay_confirmation_received'] ?? ''); ?>
-      <div class="mt8">6. Får du skriftlig bekræftelse på forsinkelse/aflysning/mistet forbindelse? (Art. 20(4))</div>
-      <label><input type="radio" name="delay_confirmation_received" value="yes" <?= $dcr==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_received" value="no" <?= $dcr==='no'?'checked':'' ?> /> Nej</label>
-      <?php $dcu = (string)($form['delay_confirmation_upload'] ?? ''); ?>
-      <div class="mt4">
-        <input type="file" name="delay_confirmation_upload" />
-        <?php if ($dcu !== ''): ?><div class="small muted mt4">Uploadet: <?= h(basename($dcu)) ?></div><?php endif; ?>
-      </div>
+      <!-- Removed legacy C) Dokumentation & udgifter block; per-field uploads are provided below each beløbfelt -->
 
       
 
-      <?php if (isset($profile['articles']['art20_2']) && $profile['articles']['art20_2'] === false): ?>
+      
+
+      <?php if ($assistOff): ?>
         <div class="small mt8 hl">⚠️ Assistance (måltider/hotel/transport) kan være undtaget her. Vi logger stadig udgifter og afprøver krav efter lokal praksis.</div>
       <?php endif; ?>
     </div>
@@ -199,3 +304,25 @@ $reason_missed_conn = !empty($incident['missed']);
 </div>
 
 <?= $this->Form->end() ?>
+
+<script>
+// Minimal conditional reveal: show self-paid fields when corresponding assistance was NOT offered
+function updateReveal() {
+  document.querySelectorAll('[data-reveal]')?.forEach(function(el){
+    var spec = el.getAttribute('data-reveal');
+    if (!spec) return;
+    var parts = spec.split(':');
+    if (parts.length !== 2) return;
+    var name = parts[0]; var val = parts[1];
+    var checked = document.querySelector('input[name="'+name+'"]:checked');
+    var on = checked ? (checked.value === val) : false;
+    el.style.display = on ? '' : 'none';
+  });
+}
+document.addEventListener('change', function(e){
+  if (e && e.target && ['meal_offered','hotel_offered','blocked_train_alt_transport','alt_transport_provided'].indexOf(e.target.name) !== -1) {
+    updateReveal();
+  }
+});
+document.addEventListener('DOMContentLoaded', updateReveal);
+</script>

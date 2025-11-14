@@ -20,6 +20,7 @@ class ClaimCalculator
         $trip = (array)($input['trip'] ?? []);
         $legs = (array)($trip['legs'] ?? []);
         $throughTicket = (bool)($trip['through_ticket'] ?? true);
+        $liablePartyTrip = (string)($trip['liable_party'] ?? ''); // 'operator' | 'retailer' | ''
         $disruption = (array)($input['disruption'] ?? []);
         $choices = (array)($input['choices'] ?? []);
         $expensesIn = (array)($input['expenses'] ?? []);
@@ -74,12 +75,21 @@ class ClaimCalculator
             if (in_array($ov, [25,50], true)) { $overridePct = $ov; }
         }
         $compEligible = false;
+        $missedConnection = (bool)($disruption['missed_connection'] ?? false);
+        $multiLeg = count($legs) > 1;
+        $art12Retailer75 = false;
         if ($compAllowed) {
-            if ($delay >= 120) { $compPct = 50; }
-            elseif ($delay >= 60) { $compPct = 25; }
-            // Allow caller override for UX preview
-            if ($overridePct !== null) { $compPct = max($compPct, $overridePct); }
-            $compEligible = $compPct > 0;
+            // Art.12(4) special rule: retailer liable for missed connection → 75% + full refund (handled below)
+            if ($missedConnection && $multiLeg && $liablePartyTrip === 'retailer') {
+                $art12Retailer75 = true;
+                $compPct = 75; // applied to whole transaction amount (or basis derived below)
+                $compEligible = true;
+            } else {
+                if ($delay >= 120) { $compPct = 50; }
+                elseif ($delay >= 60) { $compPct = 25; }
+                if ($overridePct !== null) { $compPct = max($compPct, $overridePct); }
+                $compEligible = $compPct > 0;
+            }
         }
         // Basis — Art. 19(3): leg price if available; for return with no split price -> 1/2; else whole fare
         [$compBaseAmount, $compBaseLabel] = $this->computeCompensationBasis($ticketTotal, $legs, $throughTicket, $trip, $disruption);
@@ -144,8 +154,20 @@ class ClaimCalculator
         }
 
         // Avoid double coverage: if refund covers whole fare, suppress compensation for same portion
-        if ($refundAmount >= $ticketTotal - 0.01) {
+        if ($refundAmount >= $ticketTotal - 0.01 && !$art12Retailer75) {
             $compEligible = false; $compPct = 0; $compAmount = 0.0; $compBasis = '-';
+        }
+        // Art.12(4) override: refund whole fare + 75% compensation — ensure refund covers total
+        if ($art12Retailer75) {
+            // Force refund to whole fare if not already
+            if ($refundAmount < $ticketTotal) {
+                $refundAmount = round($ticketTotal, 2);
+                $refundBasis = 'Art.12(4) full fare refund';
+            } else {
+                $refundBasis .= ' + Art.12(4) full fare refund';
+            }
+            $compBaseLabel = 'Art.12(4) 75% missed connection compensation';
+            $compRule = 'Art12(4)';
         }
 
         // 4) Expenses (Art.20)
@@ -187,6 +209,7 @@ class ClaimCalculator
                     'basis' => $compBaseLabel,
                     'amount' => $compAmount,
                     'rule' => $compRule,
+                    'art12_4' => $art12Retailer75 ? true : false,
                 ],
                 'expenses' => $expenses + ['total' => $expensesTotal],
                 'deductions' => ['already_refunded' => $alreadyRefunded],
@@ -204,6 +227,7 @@ class ClaimCalculator
                 'self_inflicted' => $selfInflicted,
                 'exemptions_applied' => !empty($exemptionsApplied) ? array_values(array_unique($exemptionsApplied)) : null,
                 'manual_review' => false,
+                'retailer_75' => $art12Retailer75,
             ],
         ];
     }
@@ -313,7 +337,24 @@ class ClaimCalculator
             return [max(0.0, $ticketTotal), 'Art.19(3) whole fare (through ticket)'];
         }
 
-        // 4) Single-leg/simple default → whole fare
+        // 4) Separate contracts (Art. 12 OFF) with multiple legs but no per-leg price:
+        //    Allocate proportional share instead of whole fare to avoid overcompensation for a single delayed leg.
+        //    Strategy: equal share unless future enrichment adds distance/time weighting.
+        if (!$throughTicket && $legsCount > 1) {
+            // Use delayed leg index to pick the affected portion; if missing fallback to first.
+            $delayedIdx = null;
+            if (isset($disruption['delayed_leg_index'])) {
+                $delayedIdx = max(0, (int)$disruption['delayed_leg_index']);
+                if ($delayedIdx >= $legsCount) { $delayedIdx = $legsCount - 1; }
+            } else {
+                $delayedIdx = 0;
+            }
+            // Equal division (later we can swap in distance/time weighting if legs enriched):
+            $share = $ticketTotal / $legsCount;
+            return [max(0.0, $share), 'Art.19(3) proportional share (separate contracts; leg ' . ($delayedIdx + 1) . ' of ' . $legsCount . ')'];
+        }
+
+        // 5) Single-leg/simple default → whole fare
         return [max(0.0, $ticketTotal), 'Art.19(3) whole fare'];
     }
 

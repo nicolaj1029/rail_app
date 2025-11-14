@@ -17,7 +17,11 @@ $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state'] === 'co
     .disabled-block { opacity: 0.6; }
 </style>
 <h1>TRIN 4 · Dine valg (Art. 18)</h1>
-<?= $this->Form->create(null) ?>
+<?php
+    $articles = (array)($profile['articles'] ?? []);
+    $showArt183 = !isset($articles['art18_3']) || $articles['art18_3'] !== false;
+?>
+<?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'choices']]) ?>
 
 <?php
 // Downgrade preview context (server-side): ticket price from controller or fallback
@@ -65,7 +69,7 @@ $preview = round($tp * $rate * $share, 2);
         <div id="rerouteSectionPast" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
             <div class="mt0"><strong>Omlægning</strong></div>
             <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
-            <div id="ri100PastWrap">
+            <div id="ri100PastWrap" <?= $showArt183 ? '' : 'class="hidden"' ?> data-art="18(3)">
                 <div class="mt8">Fik du besked om mulighederne for omlægning inden for 100 minutter? (Art. 18(3))
                     <span class="small muted">Vi bruger planlagt afgang + første omlægnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
@@ -74,13 +78,34 @@ $preview = round($tp * $rate * $share, 2);
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= ($ri100===''||$ri100==='unknown')?'checked':'' ?> /> Ved ikke</label>
             </div>
 
+            <!-- OFF-variant additions: always simple branch without 100-min dependency -->
+            <fieldset id="offerProvidedWrapPast" class="mt8" <?= $showArt183 ? 'hidden' : '' ?> >
+              <legend>Fik du et konkret omlægningstilbud fra operatøren?</legend>
+              <?php $offProv = (string)($form['offer_provided'] ?? ''); ?>
+              <label><input type="radio" name="offer_provided" value="yes" <?= $offProv==='yes'?'checked':'' ?> /> Ja</label>
+              <label class="ml8"><input type="radio" name="offer_provided" value="no" <?= $offProv==='no'?'checked':'' ?> /> Nej</label>
+              <label class="ml8"><input type="radio" name="offer_provided" value="unknown" <?= ($offProv===''||$offProv==='unknown')?'checked':'' ?> /> Ved ikke</label>
+            </fieldset>
+
             <?php $spt = (string)($form['self_purchased_new_ticket'] ?? ''); ?>
-            <div id="step2Past" style="display:none">
+                        <div id="step2Past" style="display:none">
                 <div class="mt8">Købte du selv en ny billet for at komme videre?</div>
                 <label><input type="radio" name="self_purchased_new_ticket" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="self_purchased_new_ticket" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
                 <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du købte selv ny billet, selvom omlægning blev tilbudt inden for 100 min — udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig være mulig.</div>
             </div>
+
+                        <fieldset id="opApprovalWrapPast" class="mt8" hidden>
+                            <legend>Var selvkøbet godkendt af operatøren?</legend>
+                            <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
+                            <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
+                            <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
+                            <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="unknown" <?= ($opOK===''||$opOK==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                        </fieldset>
+                        <div id="notesAreaPast" class="notes small">
+                            <p id="noteApprovedPast" class="note success" style="display:none;">✓ Selvkøb er oplyst som godkendt af operatøren.</p>
+                            <p id="noteNotRefundablePast" class="note warn" style="display:none;">⚠️ Selvkøb uden operatørens godkendelse refunderes normalt ikke.</p>
+                        </div>
 
             <div id="recBlockPast">
                 <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
@@ -130,8 +155,8 @@ $preview = round($tp * $rate * $share, 2);
                 </div>
             </div>
 
-            <?php if (isset($profile['articles']['art18_3']) && $profile['articles']['art18_3'] === false): ?>
-                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-min-reglen kan være undtaget her. Vi logger stadig udgifter og afprøver krav efter lokal praksis.</div>
+            <?php if (!$showArt183): ?>
+                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler spørgsmålet og anvender alternative vurderinger.</div>
             <?php endif; ?>
         </div>
     </div>
@@ -167,8 +192,8 @@ $preview = round($tp * $rate * $share, 2);
 
         <div id="rerouteSectionNow" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
             <div class="mt0"><strong>Omlægning</strong></div>
-            <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
-            <div id="ri100NowWrap">
+                        <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
+                        <div id="ri100NowWrap" <?= $showArt183 ? '' : 'class="hidden"' ?> data-art="18(3)">
                 <div class="mt8">Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))
                     <span class="small muted">Vi bruger planlagt afgang + første omlægnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
@@ -177,13 +202,34 @@ $preview = round($tp * $rate * $share, 2);
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= ($ri100===''||$ri100==='unknown')?'checked':'' ?> /> Ved ikke</label>
             </div>
 
+                        <!-- OFF-variant additions: always simple branch without 100-min dependency -->
+                        <fieldset id="offerProvidedWrapNow" class="mt8" <?= $showArt183 ? 'hidden' : '' ?> >
+                            <legend>Fik du et konkret omlægningstilbud fra operatøren?</legend>
+                            <?php $offProv = (string)($form['offer_provided'] ?? ''); ?>
+                            <label><input type="radio" name="offer_provided" value="yes" <?= $offProv==='yes'?'checked':'' ?> /> Ja</label>
+                            <label class="ml8"><input type="radio" name="offer_provided" value="no" <?= $offProv==='no'?'checked':'' ?> /> Nej</label>
+                            <label class="ml8"><input type="radio" name="offer_provided" value="unknown" <?= ($offProv===''||$offProv==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                        </fieldset>
+
             <?php $spt = (string)($form['self_purchased_new_ticket'] ?? ''); ?>
-            <div id="step2Now" style="display:none">
+                        <div id="step2Now" style="display:none">
                 <div class="mt8">Køber du selv en ny billet for at komme videre?</div>
                 <label><input type="radio" name="self_purchased_new_ticket" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="self_purchased_new_ticket" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
                 <div id="selfBuyNoteNow" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Hvis du selv køber billet, selvom operatøren tilbød omlægning inden for 100 min, refunderes den normalt ikke (Art. 18(3)). Kompensation kan stadig være mulig.</div>
             </div>
+
+                        <fieldset id="opApprovalWrapNow" class="mt8" hidden>
+                            <legend>Var selvkøbet godkendt af operatøren?</legend>
+                            <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
+                            <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
+                            <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
+                            <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="unknown" <?= ($opOK===''||$opOK==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                        </fieldset>
+                        <div id="notesAreaNow" class="notes small">
+                            <p id="noteApprovedNow" class="note success" style="display:none;">✓ Selvkøb er oplyst som godkendt af operatøren.</p>
+                            <p id="noteNotRefundableNow" class="note warn" style="display:none;">⚠️ Selvkøb uden operatørens godkendelse refunderes normalt ikke.</p>
+                        </div>
 
             <div id="recBlockNow">
                 <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
@@ -233,15 +279,15 @@ $preview = round($tp * $rate * $share, 2);
                 </div>
             </div>
 
-            <?php if (isset($profile['articles']['art18_3']) && $profile['articles']['art18_3'] === false): ?>
-                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-min-reglen kan være undtaget her. Vi logger stadig udgifter og afprøver krav efter lokal praksis.</div>
+            <?php if (!$showArt183): ?>
+                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler spørgsmålet og anvender alternative vurderinger.</div>
             <?php endif; ?>
         </div>
     </div>
 <?php endif; ?>
 
 <script>
-// TRIN 7 (Art. 18): klientlogik for valg og sektioner – kopieret fra one.php
+// TRIN 4 (Art. 18): klientlogik for valg og sektioner
 (function(){
     function s7Update() {
         var remEl = document.querySelector('input[name="remedyChoice"]:checked');
@@ -276,10 +322,18 @@ $preview = round($tp * $rate * $share, 2);
         // Art. 18(3) conditional: distinguish who rerouted vs self-purchase
         var ri100El = document.querySelector('input[name="reroute_info_within_100min"]:checked');
         var ri100 = ri100El ? ri100El.value : '';
-    var selfBuyEl = document.querySelector('input[name="self_purchased_new_ticket"]:checked');
-    var selfBuy = selfBuyEl ? selfBuyEl.value : '';
+        var selfBuyEl = document.querySelector('input[name="self_purchased_new_ticket"]:checked');
+        var selfBuy = selfBuyEl ? selfBuyEl.value : '';
+        var opApprEl = document.querySelector('input[name="self_purchase_approved_by_operator"]:checked');
+        var opAppr = opApprEl ? opApprEl.value : '';
         var notePast = document.getElementById('selfBuyNotePast');
         var noteNow = document.getElementById('selfBuyNoteNow');
+        var apprPast = document.getElementById('opApprovalWrapPast');
+        var apprNow = document.getElementById('opApprovalWrapNow');
+        var noteApprovedPast = document.getElementById('noteApprovedPast');
+        var noteApprovedNow = document.getElementById('noteApprovedNow');
+        var noteNotRefundPast = document.getElementById('noteNotRefundablePast');
+        var noteNotRefundNow = document.getElementById('noteNotRefundableNow');
     var advPast = document.getElementById('advPast');
     var advNow = document.getElementById('advNow');
     var live = document.getElementById('rerouteLive');
@@ -298,9 +352,13 @@ $preview = round($tp * $rate * $share, 2);
             else { el.classList.remove('disabled-block'); el.removeAttribute('aria-disabled'); }
         }
 
-    // Progressive visibility
-        // Step 1 → Step 2: show Step 2 only when 100-min is answered (any value)
-        var step1Answered = !!ri100;
+        // Feature flag for Art. 18(3) (true = ON). When OFF we collapse logic to simple self-purchase approval gating.
+        var artFlags = (window.__artFlags && window.__artFlags.art) || {};
+        var a183On = !(artFlags.hasOwnProperty('art18_3') && artFlags['art18_3'] === false);
+
+        // Progressive visibility
+        // Step 1 (only when 18(3) is ON) → Step 2: show Step 2 only when answered OR 18(3) OFF
+        var step1Answered = a183On ? !!ri100 : true;
         var step2Past = document.getElementById('step2Past');
         var step2Now = document.getElementById('step2Now');
     var advBox = document.getElementById('advToggle');
@@ -308,8 +366,8 @@ $preview = round($tp * $rate * $share, 2);
     if (step2Past) step2Past.style.display = (step1Answered || (advPast && advPast.open) || advOn) ? '' : 'none';
     if (step2Now) step2Now.style.display = (step1Answered || (advNow && advNow.open) || advOn) ? '' : 'none';
 
-    // Step 2 → Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
-    var step2Answered = (selfBuy === 'yes' || selfBuy === 'no');
+        // Step 2 → Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
+        var step2Answered = (selfBuy === 'yes' || selfBuy === 'no');
         if ((advPast && advPast.open) || advOn) {
             if (recBlockPast) recBlockPast.style.display = '';
             if (dgcBlockPast) dgcBlockPast.style.display = '';
@@ -334,8 +392,20 @@ $preview = round($tp * $rate * $share, 2);
         setBlockDisabled('dgcBlockPast', false);
         setBlockDisabled('dgcBlockNow', false);
 
-        // Scenario C: offered within 100 AND self purchased -> no extra costs eligible; hide downgrade
-        if (ri100 === 'yes' && selfBuy === 'yes') {
+        // Reset approval UI first
+        if (apprPast) apprPast.hidden = (selfBuy !== 'yes');
+        if (apprNow) apprNow.hidden = (selfBuy !== 'yes');
+        if (noteApprovedPast) noteApprovedPast.style.display='none';
+        if (noteApprovedNow) noteApprovedNow.style.display='none';
+        if (noteNotRefundPast) noteNotRefundPast.style.display='none';
+        if (noteNotRefundNow) noteNotRefundNow.style.display='none';
+
+        // Scenario logic differs when Art. 18(3) OFF:
+        // OFF: extra costs only if selfBuy==yes AND operator approved (opAppr==yes). Downgrade always shown for reroute.
+        // ON: retain legacy 100-min branching (C/A/B cases).
+        if (a183On) {
+            // Scenario C: offered within 100 AND self purchased -> no extra costs eligible; hide downgrade
+            if (ri100 === 'yes' && selfBuy === 'yes') {
             setRadio('reroute_extra_costs', 'no');
             disableGroup('reroute_extra_costs', true); // locked
             setBlockDisabled('recBlockPast', true);
@@ -348,9 +418,9 @@ $preview = round($tp * $rate * $share, 2);
             if (dgcNow) dgcNow.style.display = 'none';
             if (notePast) notePast.style.display = '';
             if (noteNow) noteNow.style.display = '';
-        }
-        // Scenario A: NOT offered within 100 AND self purchased -> extra costs allowed; hide downgrade
-        else if ((ri100 === 'no' || ri100 === 'unknown') && selfBuy === 'yes') {
+            }
+            // Scenario A: NOT offered within 100 AND self purchased -> extra costs allowed; hide downgrade
+            else if ((ri100 === 'no' || ri100 === 'unknown') && selfBuy === 'yes') {
             setRadio('reroute_extra_costs', 'yes');
             disableGroup('reroute_extra_costs', false); // user can edit amount
             setBlockDisabled('recBlockPast', false);
@@ -363,9 +433,9 @@ $preview = round($tp * $rate * $share, 2);
             if (dgcNow) dgcNow.style.display = 'none';
             if (notePast) notePast.style.display = 'none';
             if (noteNow) noteNow.style.display = 'none';
-        }
-        // Scenario B: offered within 100 AND did not self purchase -> default no extra costs; show downgrade
-        else if (ri100 === 'yes' && (selfBuy === 'no')) {
+            }
+            // Scenario B: offered within 100 AND did not self purchase -> default no extra costs; show downgrade
+            else if (ri100 === 'yes' && (selfBuy === 'no')) {
             // Default only if user hasn't chosen yet (or chose 'unknown'); don't override an explicit Yes/No selection
             if (!recVal || recVal === 'unknown') {
                 setRadio('reroute_extra_costs', 'no');
@@ -378,17 +448,43 @@ $preview = round($tp * $rate * $share, 2);
             setBlockDisabled('dgcBlockNow', false);
             if (notePast) notePast.style.display = 'none';
             if (noteNow) noteNow.style.display = 'none';
-            // downgrade question remains visible based on user's choice
+                // downgrade question remains visible based on user's choice
+            } else {
+                // fallback: keep groups enabled and notes hidden
+                disableGroup('reroute_extra_costs', false);
+                disableGroup('downgrade_occurred', false);
+                setBlockDisabled('recBlockPast', false);
+                setBlockDisabled('recBlockNow', false);
+                setBlockDisabled('dgcBlockPast', false);
+                setBlockDisabled('dgcBlockNow', false);
+                if (notePast) notePast.style.display = 'none';
+                if (noteNow) noteNow.style.display = 'none';
+            }
         } else {
-            // fallback: keep groups enabled and notes hidden
-            disableGroup('reroute_extra_costs', false);
-            disableGroup('downgrade_occurred', false);
-            setBlockDisabled('recBlockPast', false);
-            setBlockDisabled('recBlockNow', false);
-            setBlockDisabled('dgcBlockPast', false);
-            setBlockDisabled('dgcBlockNow', false);
-            if (notePast) notePast.style.display = 'none';
-            if (noteNow) noteNow.style.display = 'none';
+            // OFF variant
+            if (selfBuy === 'yes') {
+                if (opAppr === 'yes') {
+                    // Allow extra costs
+                    disableGroup('reroute_extra_costs', false);
+                    setBlockDisabled('recBlockPast', false);
+                    setBlockDisabled('recBlockNow', false);
+                    if (noteApprovedPast) noteApprovedPast.style.display='';
+                    if (noteApprovedNow) noteApprovedNow.style.display='';
+                } else {
+                    // Force no extra costs
+                    setRadio('reroute_extra_costs','no');
+                    disableGroup('reroute_extra_costs', true);
+                    setBlockDisabled('recBlockPast', true);
+                    setBlockDisabled('recBlockNow', true);
+                    if (noteNotRefundPast) noteNotRefundPast.style.display='';
+                    if (noteNotRefundNow) noteNotRefundNow.style.display='';
+                }
+            } else {
+                // Not self purchase: keep groups available (user may be downgraded)
+                disableGroup('reroute_extra_costs', false);
+                setBlockDisabled('recBlockPast', false);
+                setBlockDisabled('recBlockNow', false);
+            }
         }
 
         // If advanced view is open, show everything but keep disabled state as set above
@@ -418,11 +514,15 @@ $preview = round($tp * $rate * $share, 2);
         // Exemptions gating: hide 100-min question blocks when Art. 18(3) doesn't apply
         try {
             var art = (window.__artFlags && window.__artFlags.art) || {};
-            var a183 = !!(art['art18_3']);
+            var a183 = !(art.hasOwnProperty('art18_3') && art['art18_3'] === false) ;
             var riPast = document.getElementById('ri100PastWrap');
             var riNow = document.getElementById('ri100NowWrap');
+            var offProvPast = document.getElementById('offerProvidedWrapPast');
+            var offProvNow = document.getElementById('offerProvidedWrapNow');
             if (riPast) riPast.classList.toggle('hidden', !a183);
             if (riNow) riNow.classList.toggle('hidden', !a183);
+            if (offProvPast) offProvPast.hidden = a183; // only show in OFF variant
+            if (offProvNow) offProvNow.hidden = a183;
         } catch(e) { /* no-op */ }
 
         // Live downgrade preview (Annex II) for both Past/Now blocks if present
@@ -454,7 +554,7 @@ $preview = round($tp * $rate * $share, 2);
             window.__artFlags.scope = <?= json_encode($profile['scope'] ?? '') ?>;
         } catch(e) { /* no-op */ }
         s7Update();
-        document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"]').forEach(function(el){
+        document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
         var advPast = document.getElementById('advPast');
@@ -477,8 +577,9 @@ $preview = round($tp * $rate * $share, 2);
 <div id="rerouteLive" aria-live="polite" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Init</div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-        <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-        <?= $this->Form->button('Næste →', ['class' => 'button']) ?>
+    <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+    <?= $this->Form->button('Fortsæt →', ['class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsæt til næste trin']) ?>
+    <input type="hidden" name="_choices_submitted" value="1" />
 </div>
 
 <?= $this->Form->end() ?>

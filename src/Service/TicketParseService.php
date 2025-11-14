@@ -36,6 +36,102 @@ class TicketParseService
         }
         $debug['linesSample'] = array_slice($clean, 0, 30);
 
+        // DSB "Detaljer" layout (two stations listed, then Afg/Ank lines)
+        // Example sequence:
+        //   Detaljer
+        //   København H
+        //   Vejle St.
+        //   Afg: 05:56
+        //   Ank: 07:56
+        //   IC-Lyntog 19 til Vejle St.
+        //   Vejle St.
+        //   Herning St.
+        //   Afg: 08:03
+        //   Ank: 08:57
+        //   Arriva-tog 5917 til Herning St.
+        //   ...
+        // We pair consecutive station lines as from→to, and read the next Afg/Ank as times for that leg.
+        if (count($segments) === 0) {
+            $idxDetaljer = null;
+            foreach ($clean as $i => $ln) {
+                $low = mb_strtolower($ln, 'UTF-8');
+                if (strpos($low, 'detaljer') !== false) { $idxDetaljer = $i; break; }
+            }
+            if ($idxDetaljer !== null) {
+                $i = $idxDetaljer + 1;
+                $stationLike = function(string $s): bool {
+                    if ($s === '' || mb_strlen($s, 'UTF-8') < 3) return false;
+                    // Must contain letters and not be an obvious label
+                    if (!preg_match('/\p{L}/u', $s)) return false;
+                    $low = mb_strtolower($s, 'UTF-8');
+                    if (in_array($low, ['start/stop','detaljer','fra:','til:'], true)) return false;
+                    // Exclude obvious product/boilerplate lines (e.g., Arriva-tog 5952 til Vejle St., IC-Lyntog 62 ...)
+                    if (str_contains($low, 'arriva') || str_contains($low, 'lyntog') || preg_match('/\bic\b/u', $low)) return false;
+                    if (str_contains($low, ' tog ')) return false;
+                    if (str_contains($low, 'ordrenummer') || str_contains($low, 'cvr-nummer') || str_contains($low, 'læs mere')) return false;
+                    return true;
+                };
+                // Walk station pairs; do not skip too aggressively so we also capture the last leg
+                while ($i + 1 < count($clean)) {
+                    $a = $this->cleanStation($clean[$i]);
+                    $b = $this->cleanStation($clean[$i+1]);
+                    if ($stationLike($a) && $stationLike($b)) {
+                        // Seek Afg and Ank within the next few lines (up to +8)
+                        $dep = '';$arr = '';
+                        for ($k = 2; $k <= 8 && ($i+$k) < count($clean); $k++) {
+                            $probe = $clean[$i+$k];
+                            if ($dep === '' && preg_match('/\b(afg|ab|dep)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m)) {
+                                $dep = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
+                            }
+                            if ($arr === '' && preg_match('/\b(ank|an|arr)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m2)) {
+                                $arr = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[2]);
+                            }
+                            if ($dep !== '' && $arr !== '') break;
+                        }
+                        if ($a !== '' && $b !== '' && $a !== $b && !$this->isNonStationLabel($a) && !$this->isNonStationLabel($b)) {
+                            $segments[] = [ 'from' => $a, 'to' => $b, 'schedDep' => $dep, 'schedArr' => $arr, 'trainNo' => '' ];
+                            $debug['events'][] = ['src' => 'dsb-detaljer', 'station' => $a . '→' . $b, 'type' => 'pair', 'time' => $dep . '–' . $arr, 'prod' => '', 'line' => ''];
+                        }
+                        // Move window forward to next pair: advance by 2 (the two station lines) to avoid skipping the last leg
+                        $i += 2;
+                        continue;
+                    }
+                    $i++;
+                }
+            }
+            // Supplement: infer missing final leg from product lines like "IC-Lyntog 62 til København H" if not already captured
+            if (!empty($segments)) {
+                $existingTo = array_map(fn($s) => (string)$s['to'], $segments);
+                for ($x = 0; $x < count($clean); $x++) {
+                    $line = $clean[$x];
+                    if (preg_match('/\b(IC[- ]?Lyntog|Arriva[- ]?tog)\b[^\n]*?\b(\d{1,5})\b[^\n]*?\btil\b\s+([A-Za-zÀ-ÖØ-öø-ÿ .\-]{3,})/iu', $line, $pm)) {
+                        $destRaw = $this->cleanStation((string)$pm[3]);
+                        if ($destRaw !== '' && !in_array($destRaw, $existingTo, true) && !$this->isNonStationLabel($destRaw)) {
+                            // Assume origin = last segment 'to'
+                            $origin = (string)$segments[count($segments)-1]['to'];
+                            if ($origin !== '' && $origin !== $destRaw) {
+                                // Search nearby lines for times (forward within next 6 lines)
+                                $depT = '';$arrT='';
+                                for ($k=1; $k<=6 && ($x+$k)<count($clean); $k++) {
+                                    $probe = $clean[$x+$k];
+                                    if ($depT === '' && preg_match('/\b(afg|ab|dep)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m)) {
+                                        $depT = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
+                                    }
+                                    if ($arrT === '' && preg_match('/\b(ank|an|arr)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m2)) {
+                                        $arrT = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[2]);
+                                    }
+                                    if ($depT !== '' && $arrT !== '') break;
+                                }
+                                $segments[] = [ 'from' => $origin, 'to' => $destRaw, 'schedDep' => $depT, 'schedArr' => $arrT, 'trainNo' => '' ];
+                                $debug['events'][] = ['src' => 'dsb-detaljer-supp', 'station' => $origin . '→' . $destRaw, 'type' => 'supp', 'time' => $depT . '–' . $arrT, 'prod' => '', 'line' => $line];
+                                $existingTo[] = $destRaw;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Dedicated DB itinerary block pass: scan the section between the itinerary header and usage notes
         // This helps when other content on the page introduces noise that breaks generic parsing.
         $events = [];
@@ -167,7 +263,8 @@ class TicketParseService
                     if ($this->isNonStationLabel($station)) { continue; }
                     // Look ahead up to 3 lines for ab/an + time
                     $found = false;
-                    for ($k = 1; $k <= 3 && ($i+$k) < count($clean); $k++) {
+                    // If we fail to find either departure or arrival inside the immediate window, attempt an extended window
+                    for ($k = 2; $k <= 10 && ($i+$k) < count($clean); $k++) {
                         $ln2 = $clean[$i+$k];
                         if (preg_match('/\b(an|ank\.?|ankunft)\b\s*[: ]+((?:[01]?\d|2[0-3])[:.h]?\s*\d{2}|\b\d{3,4}\b)/iu', $ln2, $mm)) {
                             $time = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$mm[2]);
@@ -176,9 +273,9 @@ class TicketParseService
                             $found = true;
                         }
                         if (preg_match('/\b(ab|abf\.?|abfahrt|afg|dep)\b\s*[: ]+((?:[01]?\d|2[0-3])[:.h]?\s*\d{2}|\b\d{3,4}\b)/iu', $ln2, $mm2)) {
-                            $time = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$mm2[2]);
-                            $events[] = ['station' => $station, 'type' => 'ab', 'time' => $time, 'prod' => ''];
-                            $debug['events'][] = ['src' => 'multiline', 'station' => $station, 'type' => 'ab', 'time' => $time, 'prod' => '', 'line' => $ln2];
+                            $time2 = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$mm2[2]);
+                            $events[] = ['station' => $station, 'type' => 'ab', 'time' => $time2, 'prod' => ''];
+                            $debug['events'][] = ['src' => 'multiline', 'station' => $station, 'type' => 'ab', 'time' => $time2, 'prod' => '', 'line' => $ln2];
                             $found = true;
                         }
                         if ($found) { break; }
@@ -436,6 +533,49 @@ class TicketParseService
             if (isset($uniq[$key])) { continue; }
             $uniq[$key] = true;
             $out[] = $s;
+        }
+        // Secondary consolidation: collapse duplicate legs that differ only by time artifacts or case.
+        // This prevents a single direct journey (e.g. PARIS → MONTPELLIER) from appearing twice and creating a fake skift.
+        if (count($out) >= 2) {
+            $normStation = function(string $s): string {
+                $u = mb_strtoupper(trim($s), 'UTF-8');
+                // Remove punctuation and whitespace commonly causing OCR variants (e.g., ST-RO vs St-Roch)
+                $u = preg_replace('/[ .\-\'"\/\\_]+/u', '', (string)$u) ?? $u;
+                return $u;
+            };
+            $simpleSeen = [];
+            $collapsed = [];
+            foreach ($out as $seg) {
+                $k2 = $normStation((string)$seg['from']) . '|' . $normStation((string)$seg['to']);
+                // Allow multiple identical segments only when there is a meaningful difference (times present in one but not the other AND >2 segments overall)
+                $hasTimes = ($seg['schedDep'] !== '' || $seg['schedArr'] !== '');
+                if (isset($simpleSeen[$k2])) {
+                    // If both segments have times and they differ, keep the earliest dep / latest arr merge.
+                    $prevIdx = $simpleSeen[$k2];
+                    $prev = $collapsed[$prevIdx];
+                    $prevHasTimes = ($prev['schedDep'] !== '' || $prev['schedArr'] !== '');
+                    if ($prevHasTimes && $hasTimes) {
+                        // Merge times: min dep, max arr
+                        $depA = $prev['schedDep']; $depB = $seg['schedDep'];
+                        $arrA = $prev['schedArr']; $arrB = $seg['schedArr'];
+                        $pickDep = $depA; if ($depA === '' || ($depB !== '' && strcmp($depB, $depA) < 0)) { $pickDep = $depB; }
+                        $pickArr = $arrA; if ($arrA === '' || ($arrB !== '' && strcmp($arrB, $arrA) > 0)) { $pickArr = $arrB; }
+                        $collapsed[$prevIdx]['schedDep'] = $pickDep;
+                        $collapsed[$prevIdx]['schedArr'] = $pickArr;
+                    } elseif ($hasTimes && !$prevHasTimes) {
+                        // Prefer segment with times
+                        $collapsed[$prevIdx]['schedDep'] = $seg['schedDep'];
+                        $collapsed[$prevIdx]['schedArr'] = $seg['schedArr'];
+                        if (!empty($seg['trainNo'])) { $collapsed[$prevIdx]['trainNo'] = $seg['trainNo']; }
+                    }
+                    // Otherwise discard duplicate without additional information
+                    continue;
+                }
+                $simpleSeen[$k2] = count($collapsed);
+                $collapsed[] = $seg;
+            }
+            // If collapsing reduced to a single leg, return that to avoid phantom connection UI.
+            if (count($collapsed) >= 1) { $out = $collapsed; }
         }
         self::$lastDebug = $debug;
         return $out;

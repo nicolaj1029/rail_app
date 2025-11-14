@@ -1,0 +1,245 @@
+{
+    "meta": {
+        "file": "DE_Fahrgastrechte-Formular-English.pdf",
+        "units": "pdf_points",
+        "pages": 2,
+        "origin": "bottom-left",
+        "note": "DB standard-claim. S.1 rejse og hændelse; S.2 bank + persondata. 25% ≥60 min, 50% ≥120 min."
+    },
+    "1": {
+        "dep_date": {
+            "x": 115,
+            "y": 710,
+            "w": 80,
+            "type": "text"
+        },
+        "dep_station": {
+            "x": 115,
+            "y": 690,
+            "w": 220,
+            "type": "text"
+        },
+        "dep_time": {
+            "x": 365,
+            "y": 690,
+            "w": 60,
+            "type": "text"
+        },
+        "arr_station": {
+            "x": 115,
+            "y": 665,
+            "w": 220,
+            "type": "text"
+        },
+        "arr_time": {
+            "x": 365,
+            "y": 665,
+            "w": 60,
+            "type": "text"
+        },
+        "actual_arrival_date": {
+            "x": 115,
+            "y": 640,
+            "w": 80,
+            "type": "text"
+        },
+        "train_no": {
+            "x": 365,
+            "y": 640,
+            "w": 80,
+            "type": "text"
+        },
+        "operator": {
+            "x": 285,
+            "y": 640,
+            "w": 70,
+            "type": "text"
+        },
+        "actual_arr_time": {
+            "x": 455,
+            "y": 640,
+            "w": 60,
+            "type": "text"
+        },
+        "first_delayed_operator": {
+            "x": 285,
+            "y": 615,
+            "w": 70,
+            "type": "text"
+        },
+        "first_delayed_train_no": {
+            "x": 365,
+            "y": 615,
+            "w": 80,
+            "type": "text"
+        },
+        "first_delayed_dep_time": {
+            "x": 455,
+            "y": 615,
+            "w": 60,
+            "type": "text"
+        },
+        "missed_connection_at": {
+            "x": 115,
+            "y": 580,
+            "w": 220,
+            "type": "text"
+        },
+        "last_change_at": {
+            "x": 115,
+            "y": 560,
+            "w": 220,
+            "type": "text"
+        },
+        "did_not_start_or_returned": {
+            "x": 115,
+            "y": 535,
+            "w": 380,
+            "type": "text"
+        },
+        "continued_with_other_costs": {
+            "x": 115,
+            "y": 515,
+            "w": 380,
+            "type": "text"
+        },
+        "reason_delay": {
+            "x": 30,
+            "y": 740,
+            "type": "checkbox"
+        },
+        "reason_cancellation": {
+            "x": 30,
+            "y": 725,
+            "type": "checkbox"
+        },
+        "reason_missed_conn": {
+            "x": 30,
+            "y": 710,
+            "type": "checkbox"
+        }
+    },
+    "2": {
+        "payment_bank_transfer": {
+            "x": 120,
+            "y": 750,
+            "type": "checkbox"
+        },
+        "payment_voucher": {
+            "x": 380,
+            "y": 750,
+            "type": "checkbox"
+        },
+        "accountHolderName": {
+            "x": 120,
+            "y": 720,
+            "w": 250,
+            "type": "text"
+        },
+        "iban": {
+            "x": 120,
+            "y": 700,
+            "w": 250,
+            "type": "text"
+        },
+        "bic": {
+            "x": 120,
+            "y": 680,
+            "w": 250,
+            "type": "text"
+        },
+        "title_ms": {
+            "x": 120,
+            "y": 615,
+            "type": "checkbox"
+        },
+        "title_mr": {
+            "x": 200,
+            "y": 615,
+            "type": "checkbox"
+        },
+        "title_neutral": {
+            "x": 285,
+            "y": 615,
+            "type": "checkbox"
+        },
+        "company": {
+            "x": 120,
+            "y": 595,
+            "w": 250,
+            "type": "text"
+        },
+        "surname": {
+            "x": 120,
+            "y": 575,
+            "w": 250,
+            "type": "text"
+        },
+        "firstname": {
+            "x": 380,
+            "y": 575,
+            "w": 180,
+            "type": "text"
+        },
+        "address_extra": {
+            "x": 120,
+            "y": 555,
+            "w": 440,
+            "type": "text"
+        },
+        "phone": {
+            "x": 120,
+            "y": 535,
+            "w": 180,
+            "type": "text"
+        },
+        "street": {
+            "x": 120,
+            "y": 515,
+            "w": 260,
+            "type": "text"
+        },
+        "house_no": {
+            "x": 390,
+            "y": 515,
+            "w": 50,
+            "type": "text"
+        },
+        "country": {
+            "x": 120,
+            "y": 495,
+            "w": 130,
+            "type": "text"
+        },
+        "postcode": {
+            "x": 260,
+            "y": 495,
+            "w": 70,
+            "type": "text"
+        },
+        "city": {
+            "x": 340,
+            "y": 495,
+            "w": 220,
+            "type": "text"
+        },
+        "season_ticket_no": {
+            "x": 120,
+            "y": 475,
+            "w": 180,
+            "type": "text"
+        },
+        "signature_date": {
+            "x": 120,
+            "y": 420,
+            "w": 90,
+            "type": "text"
+        },
+        "signature_name": {
+            "x": 220,
+            "y": 420,
+            "w": 240,
+            "type": "text"
+        }
+    }
+}

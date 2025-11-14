@@ -71,8 +71,10 @@
     <button type="submit">Gem/Opdater</button>
   <?php $forceOfficial = (bool)($this->getRequest()->getQuery('allow_official') ?? $this->getRequest()->getQuery('debug') ?? false); ?>
   <?php $disableOfficial = $forceOfficial ? false : ((isset($liability_ok)&&!$liability_ok) || (isset($gdpr_ok)&&!$gdpr_ok) || (!empty($reason_missed_conn) && isset($art12['art12_applies']) && $art12['art12_applies']!==true)); ?>
-  <button type="submit" formaction="<?= $this->Url->build('/reimbursement/generate') ?>" formtarget="_blank" class="button">Generér PDF opsummering</button>
-  <button id="officialBtn" type="submit" formaction="<?= $this->Url->build('/reimbursement/official') ?>" formtarget="_blank" class="button official-btn" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <button type="submit" formaction="<?= $this->Url->build('/reimbursement/generate') ?>" formtarget="_blank" class="button">Reimbursement Claim Summary</button>
+  <button id="officialBtn" type="submit" formaction="<?= $this->Url->build('/reimbursement/official?eu=1') ?>" formtarget="_blank" class="button official-btn" data-base-disabled="<?= $disableOfficial?'1':'0' ?>" <?= $disableOfficial?'disabled':'' ?>>Officiel EU-formular</button>
+  <?php $ccOJ = strtolower((string)($meta['_auto']['operator_country']['value'] ?? ($form['operator_country'] ?? ''))); ?>
+  <button type="submit" formaction="<?= $this->Url->build('/reimbursement/official?prefer=national&country=') . h($ccOJ) ?>" formtarget="_blank" class="button" title="National officiel formular">National officiel formular</button>
   <button type="button" id="autofillToStep6" class="button">Autofyld TRIN 1–5 (missed connection)</button>
   <button type="button" id="resetSteps1to5" class="button">Nulstil TRIN 1–5</button>
   <?php if (!empty($formDecision)) :
@@ -810,6 +812,7 @@
                 <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= ($ri100===''||$ri100==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                
               </div>
 
               <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
@@ -886,6 +889,7 @@
                 <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= ($ri100===''||$ri100==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                
               </div>
 
               <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
@@ -1051,7 +1055,7 @@
             <div>7. Henviste operatøren til ekstraordinære forhold?</div>
             <label><input type="radio" name="extraordinary_claimed" value="yes" <?= $ec==='yes'?'checked':'' ?> /> Ja</label>
             <label class="ml8"><input type="radio" name="extraordinary_claimed" value="no" <?= $ec==='no'?'checked':'' ?> /> Nej</label>
-            <label class="ml8"><input type="radio" name="extraordinary_claimed" value="unknown" <?= ($ec===''||$ec==='unknown')?'checked':'' ?> /> Ved ikke</label>
+            <?php if ($ec==='unknown'): ?><div class="small muted mt4">Valgmuligheden "Ved ikke" er fjernet. Vælg Ja eller Nej.</div><?php endif; ?>
             <?php $et = (string)($form['extraordinary_type'] ?? ''); ?>
             <div class="mt4 <?= $ec==='yes' ? '' : 'hidden' ?>" id="extraTypePast">
               <label>Type
@@ -1149,7 +1153,7 @@
             <div>7. Henviser operatøren til ekstraordinære forhold?</div>
             <label><input type="radio" name="extraordinary_claimed" value="yes" <?= $ec==='yes'?'checked':'' ?> /> Ja</label>
             <label class="ml8"><input type="radio" name="extraordinary_claimed" value="no" <?= $ec==='no'?'checked':'' ?> /> Nej</label>
-            <label class="ml8"><input type="radio" name="extraordinary_claimed" value="unknown" <?= ($ec===''||$ec==='unknown')?'checked':'' ?> /> Ved ikke</label>
+            <?php if ($ec==='unknown'): ?><div class="small muted mt4">Valgmuligheden "Ved ikke" er fjernet. Vælg Ja eller Nej.</div><?php endif; ?>
             <?php $et = (string)($form['extraordinary_type'] ?? ''); ?>
             <div class="mt4 <?= $ec==='yes' ? '' : 'hidden' ?>" id="extraTypeNow">
               <label>Type

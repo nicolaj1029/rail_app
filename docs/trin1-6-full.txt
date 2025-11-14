@@ -1,0 +1,294 @@
+TRIN 1–6 fuld kode- og datagennemgang (controllers, views, flags, persistens)
+Dato: 2025-11-06
+
+INDHOLD
+- 0) Global flow-model (sessionstruktur, nøgler, typer)
+- 1) TRIN 1 · Start (EU-only + travel_state)
+- 2) TRIN 2 · Journey (incident main + 60-min signal)
+- 3) TRIN 3 · Entitlements (upload, OCR, hooks, Art. 9/12)
+- 4) TRIN 4 · Choices (Art. 18 – refusion/omlægning, 100-min, nedklassificering)
+- 5) TRIN 5 · Assistance (Art. 20 – tilbudt vs. egenbetaling, kvitteringer, 18(3))
+- 6) TRIN 6 · Compensation (Art. 19 – band, beregninger, undtagelser)
+- A) Krydsafhængigheder på tværs af trin
+- B) Normalisering og upload-algoritmer
+- C) Edge cases og kendte begrænsninger
+
+0) GLOBAL FLOW-MODEL
+---------------------------------
+Session-navnerum og typisk struktur (PHP Session):
+- flow.form        : array (brugerindtastninger på tværs af trin — primær “payload”)
+- flow.journey     : array (rejseobjekt + land/operator m.m.)
+- flow.meta        : array (auto-udledt, OCR-logs, multi-ticket, AUTO felter)
+- flow.compute     : array (beregnede toggles og kontekst — f.eks. euOnly, delayMinEU)
+- flow.flags       : array (tilstande/gating, fx travel_state)
+- flow.incident    : array (hændelsestyper, fx main=delay/cancellation, missed=bool)
+
+Kontrakt for PRG-actions (trin):
+- Input: HTTP GET/POST, formfelter, filuploads
+- Sideeffekter: Skriv nøgler under flow.* i session
+- Output: Render view eller redirect til næste trin
+
+Eksempel på session-snapshot (forkortet):
+{
+  "flow": {
+    "form": {
+      "remedyChoice": "reroute_soonest",
+      "reroute_info_within_100min": "yes",
+      "meal_offered": "no",
+      "meal_self_paid_amount": "12.50",
+      "meal_self_paid_currency": "EUR",
+      "meal_self_paid_receipt": "C:\\wamp64\\www\\rail_app\\webroot\\files\\uploads\\mrc_...pdf",
+      "eligible_under_18_3": "1",
+      "delayAtFinalMinutes": "125",
+      "compensationBand": "50"
+    },
+    "journey": {
+      "country": {"value": "DK"},
+      "segments": [ {"depDate": "2025-11-01", "country": "DK"} ],
+      "ticketPrice": {"value": "79 DKK"}
+    },
+    "meta": {
+      "_auto": {"operator": {"value": "DSB"}},
+      "logs": ["PDF: embedded text extracted from 1 page(s)."],
+      "_segments_auto": [ {"depDate": "2025-11-01"} ]
+    },
+    "compute": {"euOnly": true, "delayMinEU": 125},
+    "flags": {"travel_state": "completed"},
+    "incident": {"main": "delay", "missed": false}
+  }
+}
+
+
+1) TRIN 1 · Start (admin-styret EU-only + travel_state)
+---------------------------------
+Controller: src/Controller/FlowController.php::start()
+View     : templates/Flow/start.php
+Admin panel: /admin/flow (FlowAdminController) toggler session 'admin.mode'
+
+EU-only styring (ændret):
+- EU-only checkbox vises KUN hvis admin.mode=true (Basic Auth + /admin/flow toggle)
+- Ikke-admin: compute.euOnly defaultes til true (kun-EU anvendelse antages) og feltet skjules
+- Controller accepterer kun eu_only POST når isAdmin()==true; ellers bevares nuværende værdi eller sættes første gang til true
+
+Input (POST):
+- eu_only (kun admin): bool → compute.euOnly
+- travel_state: 'completed' | 'ongoing' | 'before_start' → flags.travel_state
+
+Persistens:
+- write('flow.compute.euOnly') (admin) eller implicit default
+- write('flow.flags.travel_state')
+
+Output:
+- Redirect → journey (TRIN 2)
+
+
+2) TRIN 2 · Journey (incident main + 60-min signal)
+---------------------------------
+Controller: src/Controller/FlowController.php::journey()
+View     : templates/Flow/journey.php
+
+GET:
+- Optional reset via ?reset=1 → sletter hele 'flow' for “clean slate” (men beholdt via Start er normalt)
+- Kører inferencer til visning i TRIN 3: JourneyScopeInferer, ExemptionProfileBuilder, Art12AutoDeriver, Art12Evaluator, Art9Evaluator,
+  RefundEvaluator, Art18RefusionEvaluator, suggestEuOnly(), ClaimFormSelector
+
+POST:
+- delayLikely60: bool (kun hvis flags.travel_state !== 'completed') → form.delayLikely60
+- incident_main: 'delay' | 'cancellation' → incident.main
+
+Persistens:
+- write('flow.form.delayLikely60') (betinget)
+- write('flow.incident.main')
+
+Output:
+- Redirect → entitlements (TRIN 3)
+
+
+3) TRIN 3 · Entitlements (Upload, OCR, hooks, Art. 9/12, admin EU-only override)
+---------------------------------
+Controller: src/Controller/FlowController.php::entitlements()
+View     : templates/Flow/entitlements.php
+
+GET (non-AJAX):
+- Hard refresh resetter store dele af flowet (inkl. TRIN 4 felter og uploads) for at undgå forældede data.
+
+POST hovedpunkter:
+- Billet-upload: ticket_upload (single), multi_ticket_upload[] (multi)
+  • Lagring: webroot/files/uploads
+  • OCR/Parsing kæde: Smalot PdfParser → pdftotext → (Imagick+Tesseract) → pdftoppm + Tesseract → LLM Vision (fallback)
+  • Multi-side note: For PDF-filer med flere sider kører vi nu altid en side-for-side OCR-pass (billedbaseret) udover embedded/pdftotext, så tekst fra billede-sider (fx rejseplan på side 2+) medtages.
+  • Udfylder meta._auto med felter; kopierer centrale til form (operator, operator_country, operator_product, dep/arr tider/station, train_no, ticket_no, price)
+- PMR-feltgruppe (Art. 9/20 hooks): pmr_user, pmr_booked, pmr_delivered_status, pmr_promised_missing, pmr_facility_details
+- Cykel (Art. 6 hooks): bike_was_present, bike_caused_issue, bike_reservation_made, bike_reservation_required, bike_denied_boarding, bike_refusal_reason_provided, bike_refusal_reason_type
+- Billet-typer (Art. 9): fare_flex_type, train_specificity
+- Klasse/reservation: fare_class_purchased, berth_seat_type, class_delivered_status, reserved_amenity_delivered
+- EU-only override: eu_only → compute.euOnly (ADMIN ONLY – hooks panel og entitlements view modtager isAdmin)
+- Art. 12 hook: same_transaction_all ('yes'|'no'|'unknown') i meta
+- Missed connection station → incident.missed = (form.missed_connection_station != '')
+- Multi-ticket passager-redigering: meta._multi_tickets[*].passengers
+
+Persistens (uddrag):
+- write('flow.meta._auto', ...), write('flow.meta.logs', ...)
+- write('flow.form.[operator, operator_country, ...]')
+- write('flow.meta._segments_auto'), write('flow.incident.missed')
+- write('flow.meta.pmr_*'), write('flow.meta.bike_*'), write('flow.meta.fare_*')
+- compute.knownDelayBeforePurchase settes her fra 'known_delay'
+
+Output:
+- Bliver typisk på siden indtil brugeren går videre (knap/link) → choices (TRIN 4)
+
+
+4) TRIN 4 · Choices (Art. 18)
+---------------------------------
+Controller: src/Controller/FlowController.php::choices()
+View     : templates/Flow/choices.php
+
+Input (POST):
+- remedyChoice: 'refund_return' | 'reroute_soonest' | 'reroute_later'
+- trip_cancelled_return_to_origin, refund_requested, refund_form_selected
+- reroute_same_conditions_soonest, reroute_later_at_choice
+- reroute_info_within_100min, self_purchased_new_ticket
+- reroute_extra_costs (bool), reroute_extra_costs_amount, reroute_extra_costs_currency
+- downgrade_occurred (bool), downgrade_comp_basis ('seat'|'couchette'|'sleeper'), downgrade_segment_share (0..1)
+- delayAtFinalMinutes, compensationBand, voucherAccepted
+
+Beregning (nedklassificering / Bilag II):
+- Udleder ticketPriceAmount (float) fra journey.ticketPrice/form.price
+- Validerer/klamper segmentShare til [0,1]
+- Udregner downgrade_refund_amount = ticketPriceAmount * rate(basis) * segmentShare
+- Persist: downgrade_segment_share, downgrade_refund_amount, downgrade_ticket_price
+
+Persistens:
+- write('flow.form', alle ovenstående felter)
+
+Output:
+- Redirect → assistance (TRIN 5)
+
+
+5) TRIN 5 · Assistance (Art. 20)
+---------------------------------
+Controller: src/Controller/FlowController.php::assistance()
+View     : templates/Flow/assistance.php
+
+Input (POST, tilbudt):
+- meal_offered ('yes'|'no')
+- hotel_offered ('yes'|'no'), overnight_needed ('yes'|'no')
+- blocked_train_alt_transport ('yes'|'no')
+- alt_transport_provided ('yes'|'no')
+
+Input (POST, egenbetaling når tilbudt = 'no'):
+- Måltider: meal_self_paid_amount, meal_self_paid_currency, meal_self_paid_receipt (file)
+- Hotel:    hotel_self_paid_amount, hotel_self_paid_currency, hotel_self_paid_nights, hotel_self_paid_receipt (file)
+- Evakuering fra blokeret spor: blocked_self_paid_amount, blocked_self_paid_currency, blocked_self_paid_receipt (file)
+- Alternativ transport til destination: alt_self_paid_amount, alt_self_paid_currency, alt_self_paid_receipt (file)
+
+Øvrige (legacy fra tidligere):
+- expense_breakdown_* (meals, hotel_nights, local_transport, other_amounts), expense_breakdown_currency
+- extra_expense_upload (beholdt i controller for bagudkompatibilitet)
+- NOTE: Q om forsinkelsesbekræftelse er fjernet fra TRIN 5-view; controller understøtter stadig delay_confirmation_upload (kan udfases)
+
+Normalisering:
+- money fields → locale-tolerant parser → standard decimal (.) → >= 0 → number_format(2)
+- currency fallback: hvis self_paid_currency mangler → brug expense_breakdown_currency
+
+Uploads:
+- Gemmes i webroot/files/uploads med unikke præfikser: mrc_, hrc_, brc_, arc_ (meal/hotel/blocked/alt)
+- Tilladte filtyper: pdf, jpg, jpeg, png
+- Persist: form['<key>_receipt'] = absolut filsti
+
+Afledt flag:
+- eligible_under_18_3 = '1' hvis (meal_offered='no' && meal_self_paid_amount!='') ELLER
+  (hotel_offered='no' && hotel_self_paid_amount!='') ELLER
+  (blocked_train_alt_transport='no' && blocked_self_paid_amount!='') ELLER
+  (alt_transport_provided='no' && alt_self_paid_amount!=''); ellers '0'
+
+Persistens:
+- write('flow.form', alle ovenstående felter + receipts + eligible_under_18_3)
+
+Output:
+- Redirect → compensation (TRIN 6)
+
+
+6) TRIN 6 · Compensation (Art. 19)
+---------------------------------
+Controller: src/Controller/FlowController.php::compensation()
+View     : templates/Flow/compensation.php
+
+Input (POST):
+- delayAtFinalMinutes (int)
+- compensationBand ('25'|'50'|''), band kan autoudledes af TRIN 6 (60min→25, 120min→50)
+- voucherAccepted (bool)
+- operatorExceptionalCircumstances (yes/no), operatorExceptionalType (string)
+- minThresholdApplies (bool)
+
+Beregning:
+- ClaimCalculator::calculate(...)
+  • currency: udledt fra journey.ticketPrice/form.price
+  • ticket_price_total: parse float fra price
+  • trip.legs: bygget fra meta._segments_auto (eller journey.segments)
+  • disruption: delay_minutes_final, eu_only, extraordinary, extraordinary_type, delayed_leg_index
+  • choices: wants_refund (remedyChoice), mv.
+- Ekstraudgifter i live preview: expense_breakdown_* (TRIN 3)
+
+Persistens:
+- write('flow.form', ovenstående felter)
+
+Output:
+- Redirect → extras (næste trin uden for denne oversigt)
+
+
+A) KRYDSAFHÆNGIGHEDER
+---------------------------------
+-- TRIN 1 flags.travel_state styrer om TRIN 2 må persistere delayLikely60
+-- EU-only kan nu kun ændres af admin (TRIN 1 eller TRIN 3 hooks); passagerflow kører altid med euOnly=true som standard
+- TRIN 3 GET resetter TRIN 4-relaterede felter og uploads (hard refresh)
+- TRIN 3 sætter incident.missed ud fra form.missed_connection_station
+- TRIN 4 valg påvirker TRIN 5 egenbetalingsrelevans (fx omlægning vs. refusion — men egenbetaling styres direkte af tilbudt assistance)
+- TRIN 5 sætter eligible_under_18_3, som kan bruges i sagsbehandling/opsummering
+- TRIN 6 bruger delayAtFinalMinutes + compute.delayMinEU (når tilgængelig) og journey/meta til beregninger
+
+
+B) NORMALISERING OG UPLOAD-ALGORITMER
+---------------------------------
+Pengefelt-normalisering (TRIN 5 eksempel):
+1) Fjern ikke-numeriske tegn bortset fra komma og punktum
+2) Hvis både komma og punktum forekommer → antag komma = tusind-separator → fjern kommaer
+3) Hvis kun komma forekommer → behandl komma som decimalseparator (erstat med '.')
+4) Cast til float, clamp til >= 0
+5) number_format(..., 2, '.', '')
+
+Upload-hjælper (TRIN 5 kvitteringer):
+- if (uploaded && error==OK):
+  • safeName = preg_replace(/[^A-Za-z0-9._-]/, '_', clientFilename)
+  • allow ext ∈ {pdf,jpg,jpeg,png}
+  • target = webroot/files/uploads/<prefix>_<safeName>
+  • moveTo(target)
+  • form[key] = target
+
+
+C) EDGE CASES OG KENDTE BEGRÆNSNINGER
+---------------------------------
+- PDF’er uden indlejret tekst: fallback via pdftotext/pdftoppm/Imagick+Tesseract/LLM Vision; resultat kan variere
+- Multi-ticket passengers: synkronisering kræver match på filnavn; defensive checks er på plads
+- TRIN 5: Controller accepterer stadig extra_expense_upload og delay_confirmation_upload (af hensyn til bagudkompatibilitet), men UI viser dem ikke længere i TRIN 5
+- Valuta-fallback: Hvis expense_breakdown_currency mangler og self_paid_currency er tom, ender currency tom — sagsbehandler skal evt. følge op
+- Kompensationsband: kan vælges manuelt; auto-beregning i TRIN 6 bruger delayAtFinalMinutes hvis udfyldt, ellers compute.delayMinEU
+
+FILREFERENCER (hurtig indeks)
+---------------------------------
+- Controllers
+  • src/Controller/FlowController.php: start, journey, entitlements, choices, assistance, compensation, extras, applicant, consent
+- Views
+  • templates/Flow/start.php
+  • templates/Flow/journey.php
+  • templates/Flow/entitlements.php
+  • templates/Flow/choices.php
+  • templates/Flow/assistance.php
+  • templates/Flow/compensation.php
+  • templates/Admin/FlowAdmin/index.php (nyt admin-panel for euOnly toggle + session-inspektion)
+
+JURIDISK KORTLÆGNING
+---------------------------------
+- TRIN 4 → Art. 18 (refusion/omlægning; 100-min-regel; nedklassificering Ann. II; selvkøbt omlægning)
+- TRIN 5 → Art. 20 (måltider, hotel, evakuering, alternativ transport; egenbetaling når ikke leveret → Art. 18(3))
+- TRIN 6 → Art. 19 (kompensation 25%/50%, undtagelser)

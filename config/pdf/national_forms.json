@@ -1,0 +1,64 @@
+{
+    "version": 1,
+    "countries": {
+        "FR": {
+            "prefer_national": true,
+            "aliases": [
+                "fr"
+            ],
+            "filenames": [
+                "files/fr_g30.pdf",
+                "files/france_g30.pdf"
+            ],
+            "notes": "SNCF/France: national G30 scheme preferred"
+        },
+        "IT": {
+            "prefer_national": true,
+            "aliases": [
+                "it"
+            ],
+            "filenames": [
+                "files/it_indennizzo.pdf",
+                "files/italy_indennizzo.pdf"
+            ],
+            "notes": "Trenitalia/Italy: national form preferred"
+        },
+        "NL": {
+            "prefer_national": true,
+            "aliases": [
+                "nl"
+            ],
+            "filenames": [
+                "files/nl_claim.pdf",
+                "files/netherlands_claim.pdf"
+            ],
+            "notes": "NS/Netherlands: national preferred where applicable"
+        },
+        "ES": {
+            "prefer_national": true,
+            "aliases": [
+                "es"
+            ],
+            "filenames": [
+                "files/es_reclamacion.pdf",
+                "files/spain_reclamacion.pdf"
+            ],
+            "notes": "Renfe/Spain: national form preferred"
+        },
+        "DK": {
+            "prefer_national": true,
+            "aliases": [
+                "dk"
+            ],
+            "filenames": [
+                "files/dk_refusion.pdf",
+                "files/denmark_refusion.pdf"
+            ],
+            "notes": "Denmark: national channels preferred"
+        }
+    },
+    "defaults": {
+        "prefer_national": false,
+        "filenames": []
+    }
+}

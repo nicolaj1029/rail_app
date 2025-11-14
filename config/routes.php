@@ -113,6 +113,15 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/flow/entitlements', ['controller' => 'Flow', 'action' => 'entitlements']);
     $builder->connect('/flow/summary', ['controller' => 'Flow', 'action' => 'summary']);
 
+        // Admin panel for flow (session flag toggle & read-only inspection)
+        $builder->connect('/admin/flow', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'index']);
+        $builder->connect('/admin/flow/toggle', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'toggle']);
+    // Cases admin (MVP)
+    $builder->connect('/admin/cases', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'index']);
+    $builder->connect('/admin/cases/view/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'view'])->setPass(['id']);
+    $builder->connect('/admin/cases/edit/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'edit'])->setPass(['id']);
+    $builder->connect('/admin/cases/create-from-session', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'createFromSession']);
+
     // Admin area (non-auth demo)
         $builder->connect('/admin/claims', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'index']);
         $builder->connect('/admin/claims/view/{id}', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'view'])

@@ -30,42 +30,34 @@ class EligibilityService
      */
     public function computeCompensation(array $ctx): array
     {
-        // Hard denials first
-        // E1: Only Art. 18 option (a) denies compensation; rerouting options (b)/(c) do not.
+        // 1. Hard denials (Art.19 exclusions + CIV/self-inflicted + Art.18(a) refund choice)
         if (!empty($ctx['selfInflicted'])) {
             return ['percent' => 0, 'source' => 'denied', 'notes' => 'Self-inflicted'];
         }
         if (!empty($ctx['refundAlready'])) {
             return ['percent' => 0, 'source' => 'denied', 'notes' => 'Refund already paid'];
         }
-        if (!empty($ctx['art18Option'])) {
-            $opt = strtolower((string)$ctx['art18Option']);
-            if ($opt === 'a') {
-                return ['percent' => 0, 'source' => 'denied', 'notes' => 'Art. 18(a) chosen (refund)'];
-            }
+        if (!empty($ctx['art18Option']) && strtolower((string)$ctx['art18Option']) === 'a') {
+            return ['percent' => 0, 'source' => 'denied', 'notes' => 'Art. 18(a) chosen (refund)'];
         }
         if (!empty($ctx['knownDelayBeforePurchase'])) {
             return ['percent' => 0, 'source' => 'denied', 'notes' => 'Known delay before purchase'];
         }
         if (!empty($ctx['extraordinary'])) {
-            // Art. 19(10): extraordinary circumstances exclude compensation
             return ['percent' => 0, 'source' => 'denied', 'notes' => 'Extraordinary circumstances'];
         }
 
-        // Check exemptions that remove Art. 19 entirely (only when country context is known)
-        $exMatched = [];
-        // Early block for any scope marked blocked in matrix (Model A and other full blocks)
+        // 2. Matrix scope blocks (national/regional) — early exit
         if (!empty($ctx['country']) && !empty($ctx['scope'])) {
-            $scopeName = (string)$ctx['scope'];
             $mx = $this->matrix ?: new ExemptionMatrixRepository();
-            $rows = $mx->find(['country' => $ctx['country'], 'scope' => $scopeName]);
+            $rows = $mx->find(['country' => $ctx['country'], 'scope' => (string)$ctx['scope']]);
             foreach ($rows as $r) {
                 if (!empty($r['blocked'])) {
                     $out = [
                         'percent' => 0,
                         'source' => 'denied',
-                        'notes' => ucfirst($scopeName) . ' scope blocked by national/regional exemption',
-                        'scope' => $scopeName,
+                        'notes' => ucfirst((string)$ctx['scope']) . ' scope blocked by national/regional exemption',
+                        'scope' => (string)$ctx['scope'],
                         'exemptions' => (array)($r['exemptions'] ?? []),
                     ];
                     if (!empty($r['reason'])) { $out['overrideNotes'] = (string)$r['reason']; }
@@ -73,59 +65,30 @@ class EligibilityService
                 }
             }
         }
+
+        $exMatched = [];
+        $article19Exempt = false;
         if (!empty($ctx['country'])) {
-            $ex = $this->exemptions->find([
+            $exMatched = $this->exemptions->find([
                 'country' => $ctx['country'],
                 'scope' => $ctx['scope'] ?? null,
             ]);
-            $exMatched = $ex;
-            foreach ($ex as $row) {
+            foreach ($exMatched as $row) {
                 if (isset($row['articlesExempt']) && in_array('19', (array)$row['articlesExempt'], true)) {
-                    // EU compensation not applicable; fall back to overrides if present
-                    $override = $this->overrides->findOne([
-                        'country' => $ctx['country'] ?? null,
-                        'operator' => $ctx['operator'] ?? null,
-                        'product' => $ctx['product'] ?? null,
-                    ]);
-                    if ($override) {
-                        [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
-                        // prefer override when strictly better, or equal but earlier threshold,
-                        // or when an exemption matched for the country/scope (prefer override if >=)
-                        $preferOverride = ($ovPercent > $percent) || ($ovPercent === $percent && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent)) || (!empty($exMatched) && $ovPercent >= $percent);
-                        if ($preferOverride) {
-                        $out = [
-                            'percent' => $ovPercent,
-                            'source' => 'override',
-                            'notes' => 'Art. 19 exempt; using national/operator override',
-                        ];
-                        if ($ovPayout) { $out['payout'] = $ovPayout; }
-                        if (!empty($override['notes'])) { $out['overrideNotes'] = (string)$override['notes']; }
-                        if (!empty($override['source'])) { $out['overrideSource'] = (string)$override['source']; }
-                        if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
-                        if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
-                        if (!empty($override['exemptions']) && empty($out['exemptions'])) { $out['exemptions'] = (array)$override['exemptions']; }
-                        if (!empty($override['scope']) && empty($out['scope'])) { $out['scope'] = (string)$override['scope']; }
-                        return $out;
-                    }
-                    $out = ['percent' => 0, 'source' => 'denied', 'notes' => 'Art. 19 exempt in this context'];
-                    if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
-                    if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
-                    return $out;
+                    $article19Exempt = true; break;
                 }
             }
         }
 
-        // Base EU rule
+        // 3. Base EU rule (percent only). If exempt, base is 0 and we will only consider override.
+        $delay = (int)($ctx['delayMin'] ?? 0);
         $percent = 0;
-        if ($ctx['delayMin'] >= 120) {
-            $percent = 50;
-        } elseif ($ctx['delayMin'] >= 60) {
-            $percent = 25;
+        if (!$article19Exempt) {
+            if ($delay >= 120) { $percent = 50; }
+            elseif ($delay >= 60) { $percent = 25; }
         }
 
-    // Note: throughTicket guidance – if throughTicket=false, callers should pass per-segment delayMin upstream.
-
-        // Apply national overrides if more generous
+        // 4. National/operator/product override tiers (may supply higher % or fixed payout)
         $override = $this->overrides->findOne([
             'country' => $ctx['country'] ?? null,
             'operator' => $ctx['operator'] ?? null,
@@ -133,42 +96,46 @@ class EligibilityService
         ]);
 
         if ($override) {
-            [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($ctx['delayMin'], $override['tiers'] ?? []);
-            $preferOverride = ($ovPercent > $percent) || ($ovPercent === $percent && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent)) || (!empty($exMatched) && $ovPercent >= $percent);
+            [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($delay, $override['tiers'] ?? []);
+            $preferOverride = ($ovPercent > $percent)
+                || ($ovPercent === $percent && $ovPercent > 0 && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent))
+                || ($article19Exempt && $ovPercent >= 0);
             if ($preferOverride) {
-                $out = ['percent' => $ovPercent, 'source' => 'override'];
+                $out = [
+                    'percent' => $ovPercent,
+                    'source' => $article19Exempt ? 'override_exempt' : 'override',
+                    'notes' => $article19Exempt ? 'Art. 19 exempt; override applied' : 'Override applied',
+                ];
                 if ($ovPayout) { $out['payout'] = $ovPayout; }
                 if (!empty($override['notes'])) { $out['overrideNotes'] = (string)$override['notes']; }
                 if (!empty($override['source'])) { $out['overrideSource'] = (string)$override['source']; }
-                // If exemptions were matched on the country, bubble them up for badges
-                if (!empty($exMatched)) {
-                    foreach ($exMatched as $row) {
-                        if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
-                        if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
-                    }
+                // bubble exemptions & scope
+                foreach ($exMatched as $row) {
+                    if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
+                    if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
                 }
-                // Also include override-specified exemptions/scope if present
-                if (!empty($override['exemptions']) && empty($out['exemptions'])) { $out['exemptions'] = (array)$override['exemptions']; }
-                if (!empty($override['scope']) && empty($out['scope'])) { $out['scope'] = (string)$override['scope']; }
+                if (empty($out['exemptions']) && !empty($override['exemptions'])) { $out['exemptions'] = (array)$override['exemptions']; }
+                if (empty($out['scope']) && !empty($override['scope'])) { $out['scope'] = (string)$override['scope']; }
                 return $out;
             }
         }
 
-        $out = ['percent' => $percent, 'source' => 'eu'];
-        if (!empty($exMatched)) {
+        // 5. If Art.19 was exempt and no override improved it, deny
+        if ($article19Exempt) {
+            $out = ['percent' => 0, 'source' => 'denied', 'notes' => 'Art. 19 exempt in this context'];
             foreach ($exMatched as $row) {
                 if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
                 if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
             }
-        }
-        // If no explicit exemptions matched, but override declares scope/exemptions, expose them for UI badges
-        if (empty($out['exemptions']) || empty($out['scope'])) {
-            if (!empty($override)) {
-                if (empty($out['exemptions']) && !empty($override['exemptions'])) { $out['exemptions'] = (array)$override['exemptions']; }
-                if (empty($out['scope']) && !empty($override['scope'])) { $out['scope'] = (string)$override['scope']; }
-            }
+            return $out;
         }
 
+        // 6. Return EU baseline result (with any exemption meta bubbled for UI badges)
+        $out = ['percent' => $percent, 'source' => 'eu'];
+        foreach ($exMatched as $row) {
+            if (!empty($row['articlesExempt'])) { $out['exemptions'] = (array)$row['articlesExempt']; }
+            if (!empty($row['scope'])) { $out['scope'] = (string)$row['scope']; }
+        }
         return $out;
     }
 

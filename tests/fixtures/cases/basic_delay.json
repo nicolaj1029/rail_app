@@ -1,0 +1,20 @@
+{
+    "country": "FR",
+    "serviceType": "international",
+    "finalArrivalDelayMin": 95,
+    "chosenPath": "reroute_later",
+    "rerouteInfoOfferedWithin100Min": false,
+    "rerouteSelfPurchased": true,
+    "downgradeOccurred": false,
+    "assistance": {
+        "meals": false,
+        "hotelOffered": false,
+        "altTransportFromBlockedTrack": false,
+        "writtenDelayProof": false
+    },
+    "throughTicket": true,
+    "clearlySeparateContracts": false,
+    "singleTransaction": "operator",
+    "multiOperatorsInItinerary": true,
+    "preinformedBeforePurchase": false
+}

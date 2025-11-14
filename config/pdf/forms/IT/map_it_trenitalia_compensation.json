@@ -1,0 +1,233 @@
+{
+    "meta": {
+        "file": "IT_Trenitalia_compensation_form.pdf",
+        "units": "pdf_points",
+        "pages": 2,
+        "origin": "bottom-left",
+        "note": "Samme schema dækker REFUND/COMPENSATION/PRM; 100-min-regel omtalt; bankoplysninger påkrævet ved transfer."
+    },
+    "1": {
+        "reason_delay": {
+            "x": 45,
+            "y": 640,
+            "type": "checkbox"
+        },
+        "reason_cancellation": {
+            "x": 45,
+            "y": 660,
+            "type": "checkbox"
+        },
+        "reason_missed_conn": {
+            "x": 45,
+            "y": 620,
+            "type": "checkbox"
+        },
+        "mode_purchase_agency": {
+            "x": 45,
+            "y": 515,
+            "type": "checkbox"
+        },
+        "mode_purchase_website": {
+            "x": 45,
+            "y": 480,
+            "type": "checkbox"
+        },
+        "mode_purchase_app": {
+            "x": 45,
+            "y": 462,
+            "type": "checkbox"
+        },
+        "mode_purchase_ticket_vend": {
+            "x": 45,
+            "y": 444,
+            "type": "checkbox"
+        },
+        "mode_purchase_ticket_office": {
+            "x": 45,
+            "y": 426,
+            "type": "checkbox"
+        },
+        "mode_purchase_callcentre": {
+            "x": 45,
+            "y": 408,
+            "type": "checkbox"
+        },
+        "mode_purchase_other": {
+            "x": 45,
+            "y": 372,
+            "type": "checkbox"
+        },
+        "payment_cash_station": {
+            "x": 45,
+            "y": 328,
+            "type": "checkbox"
+        },
+        "payment_bank_transfer": {
+            "x": 45,
+            "y": 312,
+            "type": "checkbox"
+        },
+        "payment_voucher": {
+            "x": 45,
+            "y": 296,
+            "type": "checkbox"
+        },
+        "payment_recredit_same": {
+            "x": 45,
+            "y": 280,
+            "type": "checkbox"
+        },
+        "payment_other": {
+            "x": 45,
+            "y": 264,
+            "type": "checkbox"
+        },
+        "ticket_no": {
+            "x": 110,
+            "y": 208,
+            "w": 170,
+            "type": "text"
+        },
+        "train_no": {
+            "x": 320,
+            "y": 208,
+            "w": 80,
+            "type": "text"
+        },
+        "dep_date": {
+            "x": 430,
+            "y": 208,
+            "w": 70,
+            "type": "text"
+        },
+        "season_ticket_no": {
+            "x": 110,
+            "y": 190,
+            "w": 170,
+            "type": "text"
+        },
+        "dep_station": {
+            "x": 110,
+            "y": 158,
+            "w": 220,
+            "type": "text"
+        },
+        "arr_station": {
+            "x": 370,
+            "y": 158,
+            "w": 220,
+            "type": "text"
+        },
+        "smartcard_serial_ti": {
+            "x": 110,
+            "y": 126,
+            "w": 220,
+            "type": "text"
+        },
+        "train_no_2": {
+            "x": 320,
+            "y": 126,
+            "w": 80,
+            "type": "text"
+        },
+        "dep_date_2": {
+            "x": 430,
+            "y": 126,
+            "w": 70,
+            "type": "text"
+        }
+    },
+    "2": {
+        "surname": {
+            "x": 110,
+            "y": 748,
+            "w": 220,
+            "type": "text"
+        },
+        "firstname": {
+            "x": 370,
+            "y": 748,
+            "w": 220,
+            "type": "text"
+        },
+        "street": {
+            "x": 110,
+            "y": 728,
+            "w": 220,
+            "type": "text"
+        },
+        "house_no": {
+            "x": 380,
+            "y": 728,
+            "w": 50,
+            "type": "text"
+        },
+        "postcode": {
+            "x": 110,
+            "y": 708,
+            "w": 90,
+            "type": "text"
+        },
+        "city": {
+            "x": 230,
+            "y": 708,
+            "w": 180,
+            "type": "text"
+        },
+        "province": {
+            "x": 430,
+            "y": 708,
+            "w": 60,
+            "type": "text"
+        },
+        "country": {
+            "x": 110,
+            "y": 688,
+            "w": 220,
+            "type": "text"
+        },
+        "phone": {
+            "x": 380,
+            "y": 688,
+            "w": 210,
+            "type": "text"
+        },
+        "email": {
+            "x": 110,
+            "y": 668,
+            "w": 480,
+            "type": "text"
+        },
+        "iban": {
+            "x": 110,
+            "y": 630,
+            "w": 480,
+            "type": "text"
+        },
+        "bic": {
+            "x": 110,
+            "y": 610,
+            "w": 480,
+            "type": "text"
+        },
+        "additional_info": {
+            "x": 30,
+            "y": 530,
+            "w": 550,
+            "multiline": true,
+            "type": "text"
+        },
+        "signature_date": {
+            "x": 110,
+            "y": 130,
+            "w": 120,
+            "type": "text"
+        },
+        "signature_name": {
+            "x": 260,
+            "y": 130,
+            "w": 220,
+            "type": "text"
+        }
+    }
+}

@@ -1,0 +1,337 @@
+{
+    "meta": {
+        "file": "FR_formulaire-g30-en.pdf",
+        "units": "pdf_points",
+        "pages": 2,
+        "origin": "bottom-left",
+        "note": "G30 – udfyld kontakt, rejse (op til 3 tog), produkt pr. tog, og brug din egen annex-side for Art. 9 og bankdetaljer ≥60 min."
+    },
+    "1": {
+        "booking_reference": {
+            "x": 70,
+            "y": 225,
+            "w": 160,
+            "type": "text"
+        },
+        "dep_date": {
+            "x": 148,
+            "y": 680,
+            "w": 80,
+            "type": "text"
+        },
+        "traveller_count": {
+            "x": 330,
+            "y": 680,
+            "w": 30,
+            "type": "text"
+        },
+        "traveller_1": {
+            "x": 40,
+            "y": 648,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_2": {
+            "x": 310,
+            "y": 648,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_3": {
+            "x": 40,
+            "y": 630,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_4": {
+            "x": 310,
+            "y": 630,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_5": {
+            "x": 40,
+            "y": 612,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_6": {
+            "x": 310,
+            "y": 612,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_7": {
+            "x": 40,
+            "y": 594,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_8": {
+            "x": 310,
+            "y": 594,
+            "w": 240,
+            "type": "text"
+        },
+        "traveller_9": {
+            "x": 40,
+            "y": 576,
+            "w": 240,
+            "type": "text"
+        },
+        "loyalty_gv": {
+            "x": 390,
+            "y": 708,
+            "w": 165,
+            "type": "text"
+        },
+        "title_mr": {
+            "x": 85,
+            "y": 540,
+            "type": "checkbox"
+        },
+        "title_ms": {
+            "x": 120,
+            "y": 540,
+            "type": "checkbox"
+        },
+        "surname": {
+            "x": 90,
+            "y": 520,
+            "w": 480,
+            "type": "text"
+        },
+        "firstname": {
+            "x": 90,
+            "y": 500,
+            "w": 480,
+            "type": "text"
+        },
+        "email": {
+            "x": 90,
+            "y": 480,
+            "w": 480,
+            "type": "text"
+        },
+        "address_number": {
+            "x": 90,
+            "y": 460,
+            "w": 40,
+            "type": "text"
+        },
+        "address_street": {
+            "x": 170,
+            "y": 460,
+            "w": 400,
+            "type": "text"
+        },
+        "address_complement": {
+            "x": 150,
+            "y": 440,
+            "w": 420,
+            "type": "text"
+        },
+        "postcode": {
+            "x": 90,
+            "y": 420,
+            "w": 60,
+            "type": "text"
+        },
+        "city": {
+            "x": 220,
+            "y": 420,
+            "w": 200,
+            "type": "text"
+        },
+        "country": {
+            "x": 90,
+            "y": 400,
+            "w": 480,
+            "type": "text"
+        },
+        "reason_delay": {
+            "x": 28,
+            "y": 745,
+            "type": "checkbox"
+        }
+    },
+    "2": {
+        "train_no": {
+            "x": 110,
+            "y": 770,
+            "w": 80,
+            "type": "text",
+            "source": "seg1_train_no"
+        },
+        "dep_station": {
+            "x": 110,
+            "y": 748,
+            "w": 460,
+            "type": "text",
+            "source": "seg1_dep_station"
+        },
+        "arr_station": {
+            "x": 110,
+            "y": 728,
+            "w": 460,
+            "type": "text",
+            "source": "seg1_arr_station"
+        },
+        "dep_time": {
+            "x": 480,
+            "y": 770,
+            "w": 90,
+            "type": "text",
+            "source": "seg1_dep_time"
+        },
+        "arr_time": {
+            "x": 520,
+            "y": 712,
+            "w": 50,
+            "type": "text",
+            "source": "seg1_arr_time"
+        },
+        "seg1_prod_tgv_inoui": {
+            "x": 82,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg1_prod_intercites": {
+            "x": 160,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg1_prod_ouigo": {
+            "x": 225,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg1_prod_ter": {
+            "x": 270,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg1_prod_tgv_lyria": {
+            "x": 345,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg1_prod_other": {
+            "x": 448,
+            "y": 760,
+            "type": "checkbox"
+        },
+        "seg2_train_no": {
+            "x": 110,
+            "y": 652,
+            "w": 80,
+            "type": "text"
+        },
+        "seg2_dep_station": {
+            "x": 110,
+            "y": 630,
+            "w": 460,
+            "type": "text"
+        },
+        "seg2_arr_station": {
+            "x": 110,
+            "y": 610,
+            "w": 460,
+            "type": "text"
+        },
+        "seg2_dep_time": {
+            "x": 480,
+            "y": 652,
+            "w": 90,
+            "type": "text"
+        },
+        "seg2_prod_tgv_inoui": {
+            "x": 82,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg2_prod_intercites": {
+            "x": 160,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg2_prod_ouigo": {
+            "x": 225,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg2_prod_ter": {
+            "x": 270,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg2_prod_tgv_lyria": {
+            "x": 345,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg2_prod_other": {
+            "x": 448,
+            "y": 644,
+            "type": "checkbox"
+        },
+        "seg3_train_no": {
+            "x": 110,
+            "y": 545,
+            "w": 80,
+            "type": "text"
+        },
+        "seg3_dep_station": {
+            "x": 110,
+            "y": 523,
+            "w": 460,
+            "type": "text"
+        },
+        "seg3_arr_station": {
+            "x": 110,
+            "y": 503,
+            "w": 460,
+            "type": "text"
+        },
+        "seg3_dep_time": {
+            "x": 480,
+            "y": 545,
+            "w": 90,
+            "type": "text"
+        },
+        "seg3_prod_tgv_inoui": {
+            "x": 82,
+            "y": 527,
+            "type": "checkbox"
+        },
+        "seg3_prod_intercites": {
+            "x": 160,
+            "y": 527,
+            "type": "checkbox"
+        },
+        "seg3_prod_ouigo": {
+            "x": 225,
+            "y": 527,
+            "type": "checkbox"
+        },
+        "seg3_prod_ter": {
+            "x": 270,
+            "y": 527,
+            "type": "checkbox"
+        },
+        "seg3_prod_tgv_lyria": {
+            "x": 345,
+            "y": 527,
+            "type": "checkbox"
+        },
+        "seg3_prod_other": {
+            "x": 448,
+            "y": 527,
+            "type": "checkbox"
+        }
+    },
+    "annex": {
+        "use_art9_page5": true,
+        "note": "Sæt din eksisterende side 5 (Art.9/assistance) ind som sidste side. Her kan du også placere IBAN/BIC + payoutvalg for ≥60 min."
+    }
+}

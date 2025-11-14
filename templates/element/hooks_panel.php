@@ -5,6 +5,10 @@
 <h3>Live hooks & AUTO</h3>
 <div class="small">Undtagelser (test)</div>
 <div class="small">scope: <code><?= h($profile['scope'] ?? '-') ?></code></div>
+<?php $ocrPages = isset($meta['_ocr_pages']) ? (int)$meta['_ocr_pages'] : null; ?>
+<?php if ($ocrPages && $ocrPages > 1): ?>
+  <div class="small">PDF sider (OCR): <code><?= h($ocrPages) ?></code></div>
+<?php endif; ?>
 <?php if (isset($euOnlySuggested)): ?>
   <div class="small">EU only (anbefalet): <code><?= h($euOnlySuggested) ?></code><?php if (!empty($this->getRequest()->getQuery('debug')) && !empty($euOnlyReason)): ?> · <span class="muted"><?= h($euOnlyReason) ?></span><?php endif; ?></div>
 <?php endif; ?>
@@ -201,16 +205,19 @@
   </form>
 <hr/>
 <div class="small"><strong>TRIN 2</strong> · EU-scope</div>
-<?php $euOnlyNow = isset($compute['euOnly']) ? (bool)$compute['euOnly'] : null; ?>
-<div class="small">eu_only (aktuel): <code><?= $euOnlyNow===null?'-':($euOnlyNow?'true':'false') ?></code></div>
+<?php $euOnlyNow = isset($compute['euOnly']) ? (bool)$compute['euOnly'] : null; $isAdmin = (bool)($isAdmin ?? false); ?>
+<div class="small">eu_only (aktuel): <code><?= $euOnlyNow===null?'-':($euOnlyNow?'true':'false') ?></code><?php if (isset($euOnlySuggested) && $euOnlySuggested === 'yes'): ?> · <span class="badge">anbefalet</span><?php endif; ?></div>
+<?php if ($isAdmin): ?>
 <form method="post" class="small" style="margin-top:6px;">
   <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
     <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
   <?php endif; ?>
   <label><input type="checkbox" name="eu_only" value="1" <?= $euOnlyNow?'checked':'' ?> /> Tving kun EU-regler (ignorer nationale)</label>
   <button type="submit" class="small ml8">Gem</button>
-  <?php if (isset($euOnlySuggested) && $euOnlySuggested === 'yes'): ?><span class="ml8 badge">anbefalet</span><?php endif; ?>
-  </form>
+</form>
+<?php else: ?>
+  <div class="small muted" style="margin-top:6px;">(Kun synlig for administratorer)</div>
+<?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 3</strong> · PMR/handicap</div>
 <?php $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : []; $pmrU = (string)($h9['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')); $pmrB = (string)($h9['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')); ?>
@@ -428,6 +435,14 @@ if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'throug
 <div class="small">band: <code><?= h($band ?: '-') ?></code></div>
 <?php if (isset($claim) && is_array($claim)): ?>
   <div class="small">calc.amount: <code><?= h(number_format((float)($claim['compensation_amount'] ?? 0),2,'.','')) ?></code> <?= h($claim['currency'] ?? '') ?></div>
+<?php endif; ?>
+<?php if (!empty($this->getRequest()->getSession()->read('admin.mode'))): ?>
+  <form method="post" action="<?= $this->Url->build('/admin/cases/create-from-session') ?>" class="small" style="margin-top:6px;">
+    <?php $csrf = $this->getRequest()->getAttribute('csrfToken'); if ($csrf): ?>
+      <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
+    <?php endif; ?>
+    <button type="submit" class="small">Gem som sag (admin)</button>
+  </form>
 <?php endif; ?>
 <hr/>
 <div class="small">AUTO felter</div>

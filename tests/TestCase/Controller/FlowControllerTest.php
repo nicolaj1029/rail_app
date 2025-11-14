@@ -49,4 +49,18 @@ class FlowControllerTest extends TestCase
         // Avoid left TOC duplication
         $this->assertStringNotContainsString('class="toc"', $body, 'TOC sidebar should not be included in hooks fragment.');
     }
+
+    public function testChoicesPostRedirectsToAssistance(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+        $data = [
+            'remedyChoice' => 'refund_return',
+            'refund_requested' => 'yes',
+            // minimal set of fields; controller should still redirect regardless of completeness
+        ];
+        $this->post('/flow/choices', $data);
+        $this->assertResponseCode(302);
+        $this->assertRedirect(['controller' => 'Flow', 'action' => 'assistance']);
+    }
 }

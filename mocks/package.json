@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "mocks": "tsx ./server.ts",
-    "gen:tickets": "tsx ./generate_tickets.ts"
+    "gen:tickets": "tsx ./generate_tickets.ts",
+    "test:validator": "tsx ./tests/validator.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

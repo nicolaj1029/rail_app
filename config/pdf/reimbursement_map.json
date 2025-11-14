@@ -91,6 +91,21 @@
     }
   },
   "3": {
+    "main_refund": {
+      "x": 22,
+      "y": 100,
+      "type": "checkbox"
+    },
+    "main_compensation": {
+      "x": 22,
+      "y": 109,
+      "type": "checkbox"
+    },
+    "main_expenses": {
+      "x": 22,
+      "y": 118,
+      "type": "checkbox"
+    },
     "remedy_cancel_return": {
       "x": 29,
       "y": 35,
@@ -161,6 +176,11 @@
     }
   },
   "5": {
+    "assistA_now": {
+      "x": 95,
+      "y": 98,
+      "type": "checkbox"
+    },
     "hasValidTicket": {
       "x": 30,
       "y": 60,
@@ -365,6 +385,127 @@
       "x": 100,
       "y": 208,
       "type": "checkbox"
+    },
+    "refund_form_selected": {
+      "x": 160,
+      "y": 156,
+      "w": 50,
+      "type": "text"
+    },
+    "self_purchased_new_ticket": {
+      "x": 160,
+      "y": 163,
+      "type": "checkbox"
+    },
+    "pmrQBooked": {
+      "x": 150,
+      "y": 166,
+      "type": "checkbox"
+    },
+    "pmrQDelivered": {
+      "x": 150,
+      "y": 173,
+      "type": "checkbox"
+    },
+    "pmrQPromised": {
+      "x": 150,
+      "y": 180,
+      "type": "checkbox"
+    },
+    "pmr_facility_details": {
+      "x": 150,
+      "y": 187,
+      "w": 60,
+      "type": "text"
+    },
+    "bike_was_present": {
+      "x": 150,
+      "y": 194,
+      "type": "checkbox"
+    },
+    "bike_caused_issue": {
+      "x": 150,
+      "y": 201,
+      "type": "checkbox"
+    },
+    "bike_reservation_made": {
+      "x": 150,
+      "y": 208,
+      "type": "checkbox"
+    },
+    "bike_reservation_required": {
+      "x": 150,
+      "y": 215,
+      "type": "checkbox"
+    },
+    "bike_denied_boarding": {
+      "x": 150,
+      "y": 222,
+      "type": "checkbox"
+    },
+    "bike_refusal_reason_provided": {
+      "x": 150,
+      "y": 229,
+      "type": "checkbox"
+    },
+    "bike_refusal_reason_type": {
+      "x": 150,
+      "y": 236,
+      "w": 60,
+      "type": "text"
+    },
+    "fare_flex_type": {
+      "x": 170,
+      "y": 40,
+      "w": 30,
+      "type": "text"
+    },
+    "train_specificity": {
+      "x": 170,
+      "y": 47,
+      "w": 30,
+      "type": "text"
+    },
+    "fare_class_purchased": {
+      "x": 170,
+      "y": 54,
+      "w": 30,
+      "type": "text"
+    },
+    "class_delivered_status": {
+      "x": 170,
+      "y": 61,
+      "w": 30,
+      "type": "text"
+    },
+    "berth_seat_type": {
+      "x": 170,
+      "y": 68,
+      "w": 30,
+      "type": "text"
+    },
+    "reserved_amenity_delivered": {
+      "x": 170,
+      "y": 75,
+      "w": 30,
+      "type": "text"
+    },
+    "preinformed_disruption": {
+      "x": 170,
+      "y": 82,
+      "type": "checkbox"
+    },
+    "preinfo_channel": {
+      "x": 170,
+      "y": 89,
+      "w": 40,
+      "type": "text"
+    },
+    "realtime_info_seen": {
+      "x": 170,
+      "y": 96,
+      "w": 40,
+      "type": "text"
     },
     "additional_info": {
       "x": 30,
