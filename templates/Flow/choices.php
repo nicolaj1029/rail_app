@@ -21,7 +21,7 @@ $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state'] === 'co
     $articles = (array)($profile['articles'] ?? []);
     $showArt183 = !isset($articles['art18_3']) || $articles['art18_3'] !== false;
 ?>
-<?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'choices']]) ?>
+<?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'choices'], 'novalidate' => true]) ?>
 
 <?php
 // Downgrade preview context (server-side): ticket price from controller or fallback
@@ -578,7 +578,8 @@ $preview = round($tp * $rate * $share, 2);
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
     <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-    <?= $this->Form->button('Fortsæt →', ['class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsæt til næste trin']) ?>
+    <?= $this->Form->button('Fortsæt →', ['class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsæt til næste trin', 'formnovalidate' => true]) ?>
+    <?= $this->Html->link('Spring over →', ['controller' => 'Flow', 'action' => 'assistance'], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'Gå til næste trin uden at gemme ændringer']) ?>
     <input type="hidden" name="_choices_submitted" value="1" />
 </div>
 

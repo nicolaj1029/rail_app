@@ -107,8 +107,13 @@ $incident = $incident ?? [];
   <?php
     // Bike flow visibility gating: show the block and preselect if OCR detected a bike on ticket
     $bikeAuto = (array)($meta['_bike_detection'] ?? []);
-    $bikeBookedAuto = (string)($meta['_auto']['bike_booked']['value'] ?? '') === 'Ja' || (string)($meta['bike_booked'] ?? '') === 'Ja';
-    $bikeWas = strtolower((string)($meta['bike_was_present'] ?? ($bikeBookedAuto ? 'yes' : '')));
+  // Normaliser cykel auto-detektion så både positiv og negativ auto-default kan forfylde radio-valg
+  $bikeBookedAutoRaw = (string)($meta['_auto']['bike_booked']['value'] ?? ($meta['bike_booked'] ?? ''));
+  $bikeBookedAutoNorm = strtolower($bikeBookedAutoRaw);
+  if ($bikeBookedAutoNorm === 'ja') $bikeBookedAutoNorm = 'yes';
+  if ($bikeBookedAutoNorm === 'nej') $bikeBookedAutoNorm = 'no';
+  // Brugerens eget svar har altid forrang; ellers bruger vi auto (ja eller nej). Tom betyder ingen forvalg.
+  $bikeWas = strtolower((string)($meta['bike_was_present'] ?? ''));
     $bikeCause = strtolower((string)($meta['bike_caused_issue'] ?? ''));
     $bikeResMade = strtolower((string)($meta['bike_reservation_made'] ?? ''));
     $bikeResReq = strtolower((string)($meta['bike_reservation_required'] ?? ''));
@@ -127,7 +132,7 @@ $incident = $incident ?? [];
     <?php endif; ?>
     <div class="small" style="margin-top:8px;">
       <div><strong>Spm 1.</strong> Havde du en cykel med på rejsen?</div>
-      <?php $w = $bikeWas !== '' ? $bikeWas : ($bikeBookedAuto ? 'yes' : ''); ?>
+  <?php $w = $bikeWas !== '' ? $bikeWas : ($bikeBookedAutoNorm==='yes' ? 'yes' : ($bikeBookedAutoNorm==='no' ? 'no' : '')); ?>
       <label class="mr8"><input type="radio" name="bike_was_present" value="yes" <?= $w==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="bike_was_present" value="no" <?= $w==='no'?'checked':'' ?> /> Nej</label>
     </div>

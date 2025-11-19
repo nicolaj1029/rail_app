@@ -110,8 +110,6 @@
         // TRIN 2 – Hændelse: delay + missed connection yes
         setRadio('incident_main', 'delay');
         setRadio('missed_connection', 'yes');
-        // TRIN 4 – Bekræft forsinkelse ≥ 60 min.
-        setCheckbox('delayLikely60', true);
         // TRIN 5 – Fornuftige default svar (ikke-selvforskyldt, ingen dokumentation påkrævet)
         setRadio('hasValidTicket', 'yes');
         setRadio('safetyMisconduct', 'no');
@@ -132,8 +130,7 @@
           // Clear TRIN 2
           clearRadios('incident_main');
           clearRadios('missed_connection');
-          // Clear TRIN 4 confirmation
-          setCheckbox('delayLikely60', false);
+          // TRIN 4 confirmation removed (using live delay data later)
           // Clear TRIN 5 CIV screening answers
           clearRadios('hasValidTicket');
           clearRadios('safetyMisconduct');
@@ -361,12 +358,6 @@
         </div>
 
   <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); $segAuto = (array)($meta['_segments_auto'] ?? []); $hasConnections = count($segAuto) >= 2; $missedInc = (!empty($incident['missed']) || !empty($form['missed_connection_station']) || $hasConnections); ?>
-        <div id="delayLikelyBox" class="card mt8 <?= $isCompleted ? 'hidden' : '' ?>">
-          <strong>Bekræftelse</strong>
-          <div class="mt8 small">Rejsen er ikke afsluttet. Bekræft venligst at en forsinkelse på ≥ 60 minutter er sandsynlig.</div>
-          <label class="mt8"><input type="checkbox" name="delayLikely60" value="1" <?= !empty($form['delayLikely60'])?'checked':'' ?> /> Forsinkelse ≥ 60 minutter er sandsynlig</label>
-          <div id="delayLikelyWarn" class="small warn mt8 <?= (!empty($form['delayLikely60'])) ? 'hidden' : '' ?>">Afkryds venligst boksen for at fortsætte til TRIN 5–7.</div>
-        </div>
 
         <div id="actualJourneyCard" class="card mt8 <?= $isCompleted ? '' : 'hidden' ?>">
           <strong>3.3. Actual journey — <span class="badge">AUTO</span></strong>
@@ -427,7 +418,7 @@
         </div>
       </fieldset>
 
-  <fieldset id="s5" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_missed_conn) || !empty($reason_cancellation) || !empty($reason_delay)) ? '' : 'hidden' ?>">
+  <fieldset id="s5" class="fieldset mt12 <?= ($isCompleted || !empty($reason_missed_conn) || !empty($reason_cancellation) || !empty($reason_delay)) ? '' : 'hidden' ?>">
   <legend>TRIN 5 · CIV vurdering</legend>
   <p class="muted">Opdelt i to trin: A) Selvforskyldt hændelse? B) Dokumentation for operatørens ansvar.</p>
         <?php
@@ -769,7 +760,7 @@
   <div id="s6Skip" class="small muted <?= $showArt12? ($autoOK? '' : 'hidden') : '' ?>"><?php if ($autoOK): ?>TRIN 6 springes over (AUTO).<?php else: ?>TRIN 6 springes over (ingen missed connection) – gå videre til næste trin.<?php endif; ?></div>
       </fieldset>
 
-  <fieldset id="s7" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
+  <fieldset id="s7" class="fieldset mt12 <?= ($isCompleted || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
         <legend>TRIN 7 · Dine valg (Art. 18)</legend>
 
         <?php if ($isCompleted): ?>
@@ -972,7 +963,7 @@
       
 
       <?php $isCompleted = (!empty($flags['travel_state']) && $flags['travel_state']==='completed'); ?>
-  <fieldset id="s8" class="fieldset mt12 <?= ($isCompleted || !empty($form['delayLikely60']) || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
+  <fieldset id="s8" class="fieldset mt12 <?= ($isCompleted || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
         <legend>TRIN 8 · Assistance og udgifter (Art. 20)</legend>
         <div class="small muted">Aktiveres ved forsinkelse ≥60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).</div>
 
@@ -1712,7 +1703,6 @@
     var missed = document.getElementById('missedRow');
     var stateRadios = document.querySelectorAll('input[name="travel_state"]');
     var actualCard = document.getElementById('actualJourneyCard');
-    var delayLikely = document.getElementById('delayLikelyBox');
     var missedOnly = document.getElementById('missedOnlyCard');
     var missedIn33 = document.getElementById('missedStationIn33');
     var missedIn33Wrap = document.getElementById('missedIn33Wrap');
@@ -1724,13 +1714,11 @@
   var art12Auto = document.getElementById('art12AutoOK');
   var officialBtns = document.querySelectorAll('.official-btn');
   var debugForceOfficial = (new URLSearchParams(window.location.search)).has('allow_official') || (new URLSearchParams(window.location.search)).has('debug');
-  var delayLikelyCheckbox = document.querySelector('input[name="delayLikely60"]');
   var s5Fieldset = document.getElementById('s5');
   var s6Fieldset = document.getElementById('s6');
   var s7Fieldset = document.getElementById('s7');
   var s8Fieldset = document.getElementById('s8');
   var s9Fieldset = document.getElementById('s9');
-  var delayLikelyWarn = document.getElementById('delayLikelyWarn');
     function update() {
       function setOfficialDisabled(flag) {
         try {
@@ -1750,12 +1738,9 @@
   var isOngoing = !!(document.querySelector('input[name="travel_state"][value="ongoing"]') && document.querySelector('input[name="travel_state"][value="ongoing"]').checked);
   var started = isCompleted || isOngoing;
   var missedYes = !!(document.querySelector('input[name="missed_connection"][value="yes"]') && document.querySelector('input[name="missed_connection"][value="yes"]').checked);
-  var needsDelayLikely = !isCompleted;
-  var hasDelayLikely = !!(delayLikelyCheckbox && delayLikelyCheckbox.checked);
   var hasIncident = !!(selected && (selected.value === 'delay' || selected.value === 'cancellation'));
         if (isCompleted) {
         if (actualCard) actualCard.classList.remove('hidden');
-        if (delayLikely) delayLikely.classList.add('hidden');
         if (missedOnly) missedOnly.classList.add('hidden');
         if (missedIn33) missedIn33.disabled = false;
         if (missedIn33Wrap) { if (missedYes) missedIn33Wrap.classList.remove('hidden'); else missedIn33Wrap.classList.add('hidden'); }
@@ -1766,13 +1751,11 @@
         if (s6Fieldset) s6Fieldset.classList.remove('hidden');
         if (s7Fieldset) s7Fieldset.classList.remove('hidden');
           if (s8Fieldset) s8Fieldset.classList.remove('hidden');
-    if (delayLikelyWarn) delayLikelyWarn.classList.add('hidden');
     var baseDisabled = false;
     if (officialBtns && officialBtns.length > 0) { baseDisabled = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }
     setOfficialDisabled(baseDisabled);
       } else {
         if (actualCard) actualCard.classList.add('hidden');
-        if (delayLikely) delayLikely.classList.remove('hidden');
         if (missedOnly) {
           if (missedYes) { missedOnly.classList.remove('hidden'); }
           else { missedOnly.classList.add('hidden'); }
@@ -1790,20 +1773,16 @@
         }
         // Relaxed gating: show TRIN 5–7 when any of the following is true:
         // - rejsen er afsluttet
-        // - ≥60 min. sandsynlig
         // - der er valgt delay/cancellation
         // - missed connection er Ja
-        var show567 = isCompleted || hasDelayLikely || hasIncident || missedYes;
+        var show567 = isCompleted || hasIncident || missedYes;
         if (s5Fieldset) s5Fieldset.classList.toggle('hidden', !show567);
         if (s6Fieldset) s6Fieldset.classList.toggle('hidden', !show567);
         if (s7Fieldset) s7Fieldset.classList.toggle('hidden', !show567);
         // TRIN 8: vis når samme betingelser, eller særskilt hvis cancellation/missed
-        var showS8 = isCompleted || hasDelayLikely || hasIncident || missedYes;
+        var showS8 = isCompleted || hasIncident || missedYes;
         if (s8Fieldset) s8Fieldset.classList.toggle('hidden', !showS8);
   // TRIN 9: følg serverens gating (vises kun på anmodning); ingen tvangsåbning her
-        // Delay-likely advarsel kun når ikke afsluttet, ikke ≥60, og heller ingen incident/missed
-        var showDelayWarn = needsDelayLikely && !hasDelayLikely && !(hasIncident || missedYes);
-        if (delayLikelyWarn) delayLikelyWarn.classList.toggle('hidden', !showDelayWarn);
         // Official-knapper: behold base disabled-state, ingen ekstra blokering her
         var baseDisabled2 = false;
         if (officialBtns && officialBtns.length > 0) { baseDisabled2 = (officialBtns[0].getAttribute('data-base-disabled') === '1'); }

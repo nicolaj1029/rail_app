@@ -108,14 +108,7 @@ class FlowController extends AppController
         if ($this->request->is('post')) {
             // Drop early numeric delay; use final delay later.
             // NOTE: 'known_delay' moved to TRIN 3 (entitlements) and 'extraordinary' moved to TRIN 6.
-            // TRIN 4-style confirmation from PRG journey step
-            // Only record 'delayLikely60' when the journey is NOT completed (TRIN 1)
-            $travelStateNow = (string)($flags['travel_state'] ?? '');
-            if ($travelStateNow !== 'completed') {
-                $form['delayLikely60'] = $this->truthy($this->request->getData('delayLikely60')) ? '1' : '';
-            } else {
-                unset($form['delayLikely60']);
-            }
+            // UI checkbox delayLikely60 removed – rely on live data (delay minutes) and TRIN 6 band selection
             // TRIN 2: Incident selection (missed-connection moved to TRIN 3)
             $main = (string)($this->request->getData('incident_main') ?? '');
             if (!in_array($main, ['delay','cancellation',''], true)) { $main = ''; }
@@ -235,7 +228,7 @@ class FlowController extends AppController
                 'dep_date','dep_time','dep_station','arr_station','arr_time',
                 'train_no','ticket_no','price',
                 'actual_arrival_date','actual_dep_time','actual_arr_time',
-                'missed_connection_station','delayLikely60'
+                'missed_connection_station'
             ] as $rk) { unset($form[$rk]); }
             // Reset PRG-local checkbox
             $compute['knownDelayBeforePurchase'] = false;
@@ -262,7 +255,7 @@ class FlowController extends AppController
                     'fare_class_purchased','berth_seat_type','reserved_amenity_delivered','class_delivered_status',
                     'bike_booked','bike_count','bike_was_present','bike_caused_issue','bike_reservation_made','bike_reservation_required','bike_denied_boarding','bike_refusal_reason_provided','bike_refusal_reason_type',
                     'pmr_user','pmr_booked','pmr_delivered_status','pmr_promised_missing','pmr_facility_details',
-                    'delayLikely60'
+                    
                 ] as $rk) { unset($form[$rk]); }
                 // Clear controller-built helpers
                 unset($form['_miss_conn_choices']);
@@ -802,11 +795,31 @@ class FlowController extends AppController
                         if (!empty($bike['bike_res_required'])) { $meta['_auto']['bike_res_required'] = ['value' => (string)$bike['bike_res_required'], 'source' => 'bike_detection']; }
                         if (!empty($bike['bike_reservation_type'])) { $meta['_auto']['bike_reservation_type'] = ['value' => (string)$bike['bike_reservation_type'], 'source' => 'bike_detection']; }
                         if (!empty($bike['bike_booked']) && empty($meta['bike_booked'])) { $meta['bike_booked'] = 'Ja'; }
+                        if (empty($bike['bike_booked']) && empty($meta['bike_booked'])) {
+                            // Simplified UX: preselect Nej when no bike signals at all (user can override to Ja)
+                            $meta['bike_booked'] = 'Nej';
+                            $meta['logs'][] = 'AUTO: bike_booked=Nej (no bike signals detected)';
+                        }
                         if (!empty($bike['bike_count']) && empty($meta['bike_count'])) { $meta['bike_count'] = (string)$bike['bike_count']; }
                         // PRG inline Article 6 flow convenience: seed bike_reservation_required when auto-known
                         if (!empty($bike['bike_res_required']) && empty($meta['bike_reservation_required'])) {
                             $val = (string)$bike['bike_res_required'];
                             if (in_array($val, ['yes','no'], true)) { $meta['bike_reservation_required'] = $val; }
+                        }
+                        // Todo #9: Server-side auto-default for bike_was_present (negative)
+                        // Only when user hasn't answered yet, and detection shows no bike evidence.
+                        // We record both a meta value and an _auto trace so evaluators/UI can see the provenance.
+                        $bw = strtolower((string)($meta['bike_was_present'] ?? ''));
+                        if ($bw === '' || $bw === 'unknown') {
+                            $conf = (float)($bike['confidence'] ?? 0.0);
+                            // No bike evidence: set explicit negative default when confidence is below ~0.5
+                            // Rationale: with the adjusted formula, 0 hits => 0.10, 1 hit => ~0.48. We only default 'no' when < 0.5.
+                            if (empty($bike['bike_booked']) && $conf < 0.5) {
+                                $meta['bike_was_present'] = 'no';
+                                if (!isset($meta['_auto']) || !is_array($meta['_auto'])) { $meta['_auto'] = []; }
+                                $meta['_auto']['bike_was_present'] = ['value' => 'no', 'source' => 'bike_detection'];
+                                $meta['logs'][] = 'AUTO: bike_was_present=no (no bike evidence; conf=' . number_format($conf, 2) . ')';
+                            }
                         }
                     } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Bike detection failed: ' . $e->getMessage(); }
 
@@ -1576,11 +1589,9 @@ class FlowController extends AppController
             $scopeCtx = (string)($profile['scope'] ?? '');
             $opCtx = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
             $prodCtx = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
-            // Use explicit delay minutes if set; otherwise, honor the "delayLikely60" confirmation from PRG journey step
+            // Use explicit delay minutes if set; do not use legacy UI confirmation anymore
             $delayCtx = (int)($compute['delayMinEU'] ?? 0);
             if ($delayCtx <= 0) {
-                $likely60 = (string)($form['delayLikely60'] ?? '');
-                if ($likely60 === '1') { $delayCtx = 60; }
                 // Treat explicit cancellation context as meeting override tier intents
                 $mainIncident = (string)($incident['main'] ?? '');
                 if ($delayCtx <= 0 && $mainIncident === 'cancellation') { $delayCtx = 120; }
@@ -2234,6 +2245,11 @@ class FlowController extends AppController
                         if (!empty($bike['bike_count'])) { $meta['_auto']['bike_count'] = ['value' => (string)$bike['bike_count'], 'source' => 'bike_detection']; }
                         if (!empty($bike['bike_booked'])) { $form['interest_bike'] = $form['interest_bike'] ?? '1'; }
                         if (!empty($bike['bike_booked']) && empty($meta['bike_booked'])) { $meta['bike_booked'] = 'Ja'; }
+                        if (empty($bike['bike_booked']) && empty($meta['bike_booked'])) {
+                            // Simplified UX: preselect Nej when no bike signals at all (user can override to Ja)
+                            $meta['bike_booked'] = 'Nej';
+                            $meta['logs'][] = 'AUTO: bike_booked=Nej (no bike signals detected)';
+                        }
                         if (!empty($bike['bike_count']) && empty($meta['bike_count'])) { $meta['bike_count'] = (string)$bike['bike_count']; }
                         if (!empty($bike['bike_res_required'])) { $meta['_auto']['bike_res_required'] = ['value' => (string)$bike['bike_res_required'], 'source' => 'bike_detection']; }
                         if (!empty($bike['bike_reservation_type'])) { $meta['_auto']['bike_reservation_type'] = ['value' => (string)$bike['bike_reservation_type'], 'source' => 'bike_detection']; }
@@ -2656,8 +2672,7 @@ class FlowController extends AppController
                 'name','email','operator','dep_date','dep_station','arr_station','dep_time','arr_time',
                 'train_no','ticket_no','price','actual_arrival_date','actual_dep_time','actual_arr_time',
                 'missed_connection_station',
-                // TRIN 4 – non-completed travel confirmation
-                'delayLikely60',
+                // TRIN 4 – non-completed travel confirmation (legacy removed)
                 // operator extra
                 'operator_country','operator_product',
                 // simple expenses capture (optional)
@@ -3070,11 +3085,9 @@ class FlowController extends AppController
             $scopeCtx = (string)($profile['scope'] ?? '');
             $opCtx = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
             $prodCtx = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
-            // Prefer explicit minutes; else use UI hints (delayLikely60 or cancellation)
+            // Prefer explicit minutes; else use cancellation as an intent hint
             $delayCtx = (int)($compute['delayMinEU'] ?? 0);
             if ($delayCtx <= 0) {
-                $likely60 = (string)($form['delayLikely60'] ?? '');
-                if ($likely60 === '1') { $delayCtx = 60; }
                 $mainIncident = (string)($incident['main'] ?? '');
                 if ($delayCtx <= 0 && $mainIncident === 'cancellation') { $delayCtx = 120; }
             }

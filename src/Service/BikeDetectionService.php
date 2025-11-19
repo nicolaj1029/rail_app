@@ -133,8 +133,15 @@ class BikeDetectionService
         // If we detected a separate reservation mention, res required is very likely yes
         if ($resReq === 'unknown' && $resType === 'separate') { $resReq = 'yes'; }
 
-        $booked = $hits > 0;
-        $confidence = min(1.0, 0.55 + 0.15 * min($hits, 3) + ($count ? 0.1 : 0.0));
+    $booked = $hits > 0;
+    // Confidence heuristic adjusted: lower baseline for absence, slightly higher per-hit weight.
+    // Previous formula: 0.55 + 0.15*hits + 0.1(count)
+    // New formula: base (0.10 if no hits, else 0.30) + 0.18*hits (cap 3) + 0.10 if count inferred.
+    // Rationale: A ticket with no bike indicators should not sit at mid confidence (0.55);
+    // positive evidence still reaches >0.55 quickly (e.g. 2 hits -> 0.30 + 0.36 = 0.66).
+    $base = $hits > 0 ? 0.30 : 0.10;
+    $confidence = $base + 0.18 * min($hits, 3) + ($count ? 0.10 : 0.0);
+    $confidence = min(1.0, $confidence);
 
         $out = [
             'bike_booked' => $booked,

@@ -95,9 +95,29 @@ class PmrDetectionService
             foreach ($crumbs[$vendor] ?? [] as $re) { if (preg_match($re, $text)) { $evidence[] = $re . ''; $bookedHits++; } }
         }
 
+        // Secondary (soft) hint patterns – lower weight, reduce false negatives without over-inflating confidence
+        $softPatterns = $this->regex([
+            // Generic assistance words in multiple languages (avoid counting when already booked patterns matched)
+            '\bassistance\b','\baide\b','\bayuda\b','\bassistenza\b','\bhjælp\b','\bhilfe\b',
+            'mobilit[ée] réduite','persona con movilidad reducida','mobilit[aà] ridotta','reduced mobility',
+        ]);
+        $softHits = 0;
+        foreach ($softPatterns as $re) { if (preg_match($re, $text)) { $softHits++; } }
+
         $pmrBooked = $bookedHits > 0;
-        $pmrUser = $pmrBooked || $discountHits > 0 || $iconHits > 0;
-        $confidence = min(1.0, ($pmrBooked ? 0.85 : 0.0) + $discountHits * 0.30 + $iconHits * 0.25);
+        $pmrUser = $pmrBooked || $discountHits > 0 || $iconHits > 0 || ($softHits > 0 && ($discountHits + $iconHits) > 0);
+
+        // Confidence model (heuristic):
+        //  - Booked assistance dominates (0.85 baseline once any booked hit)
+        //  - Each discount hit adds 0.35 (higher than before to emphasize fare evidence)
+        //  - Each icon hit adds 0.25 (unchanged)
+        //  - Soft hints contribute small increments only when not already booked (0.08 each, capped) to avoid false positives
+        $confidence = 0.0;
+        if ($pmrBooked) { $confidence += 0.85; }
+        $confidence += min(0.35 * $discountHits, 0.35 * 3); // cap discount contribution
+        $confidence += min(0.25 * $iconHits, 0.25 * 2);      // cap icon contribution
+        if (!$pmrBooked) { $confidence += min(0.08 * $softHits, 0.08 * 4); }
+        $confidence = min(1.0, $confidence);
         $discountType = $this->extractDiscountFromText($textLow);
 
         return [

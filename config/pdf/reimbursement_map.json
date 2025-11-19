@@ -92,31 +92,16 @@
   },
   "3": {
     "main_refund": {
-      "x": 22,
-      "y": 100,
-      "type": "checkbox"
-    },
-    "main_compensation": {
-      "x": 22,
-      "y": 109,
-      "type": "checkbox"
-    },
-    "main_expenses": {
-      "x": 22,
-      "y": 118,
-      "type": "checkbox"
-    },
-    "remedy_cancel_return": {
       "x": 29,
       "y": 35,
       "type": "checkbox"
     },
-    "remedy_reroute_soonest": {
+    "main_compensation": {
       "x": 29,
       "y": 52,
       "type": "checkbox"
     },
-    "remedy_reroute_later": {
+    "main_expenses": {
       "x": 29,
       "y": 90,
       "type": "checkbox"
@@ -176,6 +161,21 @@
     }
   },
   "5": {
+    "remedy_cancel_return": {
+      "x": 30,
+      "y": 140,
+      "type": "checkbox"
+    },
+    "remedy_reroute_soonest": {
+      "x": 30,
+      "y": 147,
+      "type": "checkbox"
+    },
+    "remedy_reroute_later": {
+      "x": 30,
+      "y": 154,
+      "type": "checkbox"
+    },
     "assistA_now": {
       "x": 95,
       "y": 98,

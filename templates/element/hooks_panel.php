@@ -93,7 +93,9 @@
     <?php $vb = strtolower($bikeB); ?>
     <label class="ml8"><input type="radio" name="bike_booked" value="Ja" <?= $vb==='ja'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="bike_booked" value="Nej" <?= $vb==='nej'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="bike_booked" value="unknown" <?= ($vb===''||$vb==='unknown')?'checked':'' ?> /> Ved ikke</label>
+    <?php if ($vb==='nej' && empty($bikeAuto['evidence'])): ?>
+      <span class="badge" style="margin-left:6px; background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:11px;">Auto: Ingen signaler</span>
+    <?php endif; ?>
   </div>
   <div class="small" style="margin-top:4px;">Antal cykler (valgfrit):
     <input type="number" min="1" max="6" step="1" name="bike_count" value="<?= h($bikeC) ?>" style="width:70px;" />

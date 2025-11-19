@@ -278,8 +278,122 @@ class ReimbursementController extends AppController
             $session = $this->request->getSession();
             $formSess = (array)$session->read('flow.form') ?: [];
             $metaSess = (array)$session->read('flow.meta') ?: [];
+            $incidentSess = (array)$session->read('flow.incident') ?: [];
         } catch (\Throwable $e) {
-            $formSess = []; $metaSess = [];
+            $formSess = []; $metaSess = []; $incidentSess = [];
+        }
+
+        // Developer aid: expose a JSON dump of relevant session values for debugging via DevTools
+        // Usage: /reimbursement/official?eu=1&session=1
+        $peekSess = (string)($this->request->getQuery('session') ?? $this->request->getQuery('peek') ?? '') === '1';
+        if ($peekSess) {
+            // Ensure core incident fields are surfaced even if only stored nested under metaSess['incident']
+            if (empty($data['incident_main'])) {
+                $im = '';
+                if (isset($formSess['incident']) && is_array($formSess['incident'])) {
+                    $im = (string)($formSess['incident']['main'] ?? '');
+                }
+                if ($im === '' && isset($metaSess['incident']) && is_array($metaSess['incident'])) {
+                    $im = (string)($metaSess['incident']['main'] ?? '');
+                }
+                if ($im === '' && isset($incidentSess['main'])) {
+                    $im = (string)$incidentSess['main'];
+                }
+                if ($im !== '') { $data['incident_main'] = $im; }
+            }
+            if (!isset($data['missed_connection'])) {
+                $mc = null;
+                if (isset($formSess['incident']) && is_array($formSess['incident'])) {
+                    $mc = $formSess['incident']['missed'] ?? null;
+                }
+                if ($mc === null && isset($metaSess['incident']) && is_array($metaSess['incident'])) {
+                    $mc = $metaSess['incident']['missed'] ?? null;
+                }
+                if ($mc === null && array_key_exists('missed', $incidentSess)) {
+                    $mc = $incidentSess['missed'];
+                }
+                if (!empty($mc)) { $data['missed_connection'] = true; }
+            }
+            $keys = [
+                // Incident / page 1
+                'incident_main','missed_connection','missed_connection_station','delay_min_eu',
+                'reason_delay','reason_cancellation','reason_missed_conn',
+                // PMR core
+                'pmr_user','pmr_booked','pmrQBooked','pmrQDelivered','pmrQPromised','pmr_facility_details',
+                // TRIN 4 (Remedy + reroute follow-ups)
+                'remedyChoice','chosenPath','reroute_info_within_100min','self_purchased_new_ticket','reroute_extra_costs','downgrade_occurred',
+                // TRIN 5 (Assistance toggles)
+                'meal_offered','hotel_offered','blocked_train_alt_transport','alt_transport_provided',
+                // TRIN 5 (Self-paid breakdowns)
+                'meal_self_paid_amount','meal_self_paid_currency',
+                'hotel_self_paid_amount','hotel_self_paid_currency','hotel_self_paid_nights',
+                'blocked_self_paid_amount','blocked_self_paid_currency',
+                'alt_self_paid_amount','alt_self_paid_currency',
+                // TRIN 3 (Art. 9(1) Information)
+                'preinformed_disruption','preinfo_channel','realtime_info_seen',
+            ];
+            $selected = [];
+            foreach ($keys as $k) {
+                $selected[$k] = $data[$k] ?? $formSess[$k] ?? $metaSess[$k] ?? null;
+            }
+            // Provide a full dump similar to the previous behavior, plus flattened views for quick searching
+            $flatten = function($arr, $prefix = '') use (&$flatten) {
+                $out = [];
+                if (!is_array($arr)) { return $out; }
+                foreach ($arr as $k => $v) {
+                    $key = $prefix === '' ? (string)$k : ($prefix . '.' . (string)$k);
+                    if (is_array($v)) {
+                        $out += $flatten($v, $key);
+                    } else {
+                        $out[$key] = $v;
+                    }
+                }
+                return $out;
+            };
+            $payload = [
+                'phpSessionId' => method_exists($session, 'id') ? $session->id() : null,
+                'now' => date('c'),
+                'notes' => 'selected shows common keys. data shows GET/POST. flow shows full stored session. flat.* are recursively flattened dot-keys for quick search.',
+                'selected' => $selected,
+                'data' => $data, // raw GET/POST that invoked this endpoint
+                'flow' => [
+                    'form' => $formSess,
+                    'meta' => $metaSess,
+                    'incident' => $incidentSess,
+                ],
+                'flat' => [
+                    'form' => $flatten($formSess),
+                    'meta' => $flatten($metaSess),
+                    'incident' => $flatten($incidentSess),
+                ],
+                // Provide a derived snapshot focused on remedyChoice (no extrapolation for reasons)
+                'final_preview' => (function() use ($data, $formSess, $metaSess) {
+                    // Merge a lightweight view: explicit data first, then form, then meta
+                    $snap = $data;
+                    foreach (['remedyChoice','refund_requested','request_expenses','meal_self_paid_amount','hotel_self_paid_amount','blocked_self_paid_amount','alt_self_paid_amount'] as $k) {
+                        if (!isset($snap[$k]) || $snap[$k] === '' || $snap[$k] === null) {
+                            if (isset($formSess[$k]) && $formSess[$k] !== '' && $formSess[$k] !== null) { $snap[$k] = $formSess[$k]; continue; }
+                            if (isset($metaSess[$k]) && $metaSess[$k] !== '' && $metaSess[$k] !== null) { $snap[$k] = $metaSess[$k]; }
+                        }
+                    }
+                    $isYes = function($v){
+                        $s = strtolower(trim((string)$v));
+                        return in_array($s, ['yes','ja','true','1'], true);
+                    };
+                    $choice = (string)($snap['remedyChoice'] ?? '');
+                    $snap['remedy_cancel_return'] = ($choice === 'refund_return');
+                    $snap['remedy_reroute_soonest'] = ($choice === 'reroute_soonest');
+                    $snap['remedy_reroute_later'] = ($choice === 'reroute_later');
+                    if ($choice === 'refund_return' || $isYes($snap['refund_requested'] ?? null)) { $snap['main_refund'] = true; }
+                    if ($choice === 'reroute_soonest' || $choice === 'reroute_later') { $snap['main_compensation'] = true; }
+                    $hasExp = $isYes($snap['request_expenses'] ?? null) || ($snap['meal_self_paid_amount'] ?? '') !== '' || ($snap['hotel_self_paid_amount'] ?? '') !== '' || ($snap['blocked_self_paid_amount'] ?? '') !== '' || ($snap['alt_self_paid_amount'] ?? '') !== '';
+                    if ($hasExp) { $snap['main_expenses'] = true; }
+                    return $snap;
+                })(),
+            ];
+            $this->disableAutoRender();
+            $this->response = $this->response->withType('json')->withStringBody((string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            return;
         }
 
         // Allow overriding template via query parameter for diagnostics, but only within webroot or webroot/files
@@ -357,8 +471,19 @@ class ReimbursementController extends AppController
                 $mapFields[$src] = true;
             }
         }
-        // Add supporting keys that influence derived fields (needed for EU page 1 checkboxes)
-        foreach (['incident_main','missed_connection','reason_delay','reason_cancellation','reason_missed_conn'] as $support) {
+        // Add supporting keys that influence derived fields (needed for EU page 1 checkboxes and page 3 claims)
+        foreach (['incident_main','missed_connection','reason_delay','reason_cancellation','reason_missed_conn','remedyChoice'] as $support) {
+            $mapFields[$support] = true;
+        }
+        // Also scan for PMR and related nested fields that may be stored under cards in flow.form/meta
+    foreach (['pmr_user','pmr_booked','pmr_delivered_status','pmr_promised_missing','pmrQBooked','pmrQDelivered','pmrQPromised','pmr_facility_details','missed_connection_station','delay_min_eu','remedyChoice',
+                  // Reroute follow-up questions (TRIN 4)
+                  'reroute_info_within_100min','self_purchased_new_ticket','reroute_extra_costs','downgrade_occurred',
+                  // Assistance self-paid breakdowns (TRIN 5)
+                  'meal_self_paid_amount','meal_self_paid_currency',
+                  'hotel_self_paid_amount','hotel_self_paid_currency','hotel_self_paid_nights',
+                  'blocked_self_paid_amount','blocked_self_paid_currency',
+                  'alt_self_paid_amount','alt_self_paid_currency'] as $support) {
             $mapFields[$support] = true;
         }
         // Backfill gaps from form/meta session so official PDF mirrors the live flow
@@ -371,6 +496,126 @@ class ReimbursementController extends AppController
             }
             if (array_key_exists($k, $metaSess) && $metaSess[$k] !== null && $metaSess[$k] !== '') {
                 $data[$k] = $metaSess[$k];
+            }
+        }
+        // Recursive scan for nested occurrences of target keys inside form/meta session structures (e.g., pmrFlowCard -> Handicap)
+        $targetKeys = array_keys($mapFields);
+        $scanNested = function($arr) use (&$scanNested, $targetKeys) {
+            $found = [];
+            if (!is_array($arr)) { return $found; }
+            foreach ($arr as $kk => $vv) {
+                if (in_array((string)$kk, $targetKeys, true)) {
+                    $found[(string)$kk] = $vv;
+                }
+                if (is_array($vv)) {
+                    $child = $scanNested($vv);
+                    if (!empty($child)) { $found = $found + $child; }
+                }
+            }
+            return $found;
+        };
+        $nestedForm = $scanNested($formSess);
+        $nestedMeta = $scanNested($metaSess);
+        foreach ([$nestedForm, $nestedMeta] as $bucket) {
+            foreach ($bucket as $kk => $vv) {
+                if (!array_key_exists($kk, $data) || $data[$kk] === null || $data[$kk] === '') {
+                    $data[$kk] = $vv;
+                }
+            }
+        }
+        // Also derive incident flags from nested meta structure if present (and from flow.incident bucket)
+        if (empty($data['incident_main'])) {
+            $im = '';
+            if (isset($metaSess['incident']) && is_array($metaSess['incident'])) {
+                $im = (string)($metaSess['incident']['main'] ?? '');
+            }
+            if ($im === '' && !empty($incidentSess['main'])) {
+                $im = (string)$incidentSess['main'];
+            }
+            if ($im !== '') { $data['incident_main'] = $im; }
+        }
+        if (!isset($data['missed_connection'])) {
+            $mc = null;
+            if (isset($metaSess['incident']) && is_array($metaSess['incident'])) {
+                $mc = $metaSess['incident']['missed'] ?? null;
+            }
+            if ($mc === null && array_key_exists('missed', $incidentSess)) {
+                $mc = $incidentSess['missed'];
+            }
+            if (!empty($mc)) { $data['missed_connection'] = true; }
+        }
+        if (!isset($data['reason_missed_conn'])) {
+            $hasMc = !empty($data['missed_connection']) || !empty($formSess['missed_connection_station']) || !empty($data['missed_connection_station']);
+            if ($hasMc) { $data['reason_missed_conn'] = true; }
+        }
+        // Alias / synonym mapping for fields present only in nested session but not in PDF field map
+        $normalizeYesNo = function($v) {
+            $s = mb_strtolower(trim((string)$v));
+            if ($s === 'ja' || $s === 'yes' || $s === 'true' || $s === '1') { return true; }
+            if ($s === 'nej' || $s === 'no' || $s === 'false' || $s === '0') { return false; }
+            return $v; // leave original (for text fields)
+        };
+        // single_booking_reference => shared_pnr_scope (if explicit yes and shared_pnr_scope missing)
+        if (!isset($data['shared_pnr_scope']) && isset($data['single_booking_reference'])) {
+            $val = $normalizeYesNo($data['single_booking_reference']);
+            if ($val === true) { $data['shared_pnr_scope'] = true; }
+        }
+        // seller_type_agency => seller_type_operator (negative means not operator; positive may confirm operator involvement)
+        if (!isset($data['seller_type_operator']) && isset($data['seller_type_agency'])) {
+            $val = $normalizeYesNo($data['seller_type_agency']);
+            // Only set true if agency value indicates yes; ignore 'Nej'
+            if ($val === true) { $data['seller_type_operator'] = true; }
+        }
+        // pm_bike_involved => bike_caused_issue if not already set
+        if (!isset($data['bike_caused_issue']) && isset($data['pm_bike_involved'])) {
+            $val = $normalizeYesNo($data['pm_bike_involved']);
+            if ($val === true) { $data['bike_caused_issue'] = true; }
+        }
+        // pmr_promised_missing => pmrQPromised (boolean)
+        if (!isset($data['pmrQPromised']) && isset($data['pmr_promised_missing'])) {
+            $val = $normalizeYesNo($data['pmr_promised_missing']);
+            $data['pmrQPromised'] = $val === true ? true : ($val === false ? false : $val);
+        }
+        // pmr_delivered_status => pmrQDelivered (translate partial, full, none)
+        if (!isset($data['pmrQDelivered']) && isset($data['pmr_delivered_status'])) {
+            $st = trim((string)$data['pmr_delivered_status']);
+            if ($st !== '') { $data['pmrQDelivered'] = $st; }
+        }
+        // If facility details provided but pmrQPromised not set, infer TRUE
+        if (!isset($data['pmrQPromised']) && !empty($data['pmr_facility_details'])) {
+            $text = trim((string)$data['pmr_facility_details']);
+            if ($text !== '') { $data['pmrQPromised'] = true; }
+        }
+        // pmr_booked => pmrQBooked (boolean booking of assistance before trip)
+        if (!isset($data['pmrQBooked']) && isset($data['pmr_booked'])) {
+            $val = $normalizeYesNo($data['pmr_booked']);
+            // Preserve original textual detail if not a simple yes/no
+            if ($val === true) { $data['pmrQBooked'] = true; }
+            elseif ($val === false) { $data['pmrQBooked'] = false; }
+            else { $data['pmrQBooked'] = $data['pmr_booked']; }
+        }
+        // Assistance aliasing: map self-paid fields into legacy aggregate keys for summary fallback
+        if (!isset($data['expense_breakdown_meals']) && isset($data['meal_self_paid_amount'])) {
+            $data['expense_breakdown_meals'] = $data['meal_self_paid_amount'];
+        }
+        if (!isset($data['expense_hotel']) && isset($data['hotel_self_paid_amount'])) {
+            $data['expense_hotel'] = $data['hotel_self_paid_amount'];
+        }
+        if (!isset($data['expense_breakdown_hotel_nights']) && isset($data['hotel_self_paid_nights'])) {
+            $data['expense_breakdown_hotel_nights'] = $data['hotel_self_paid_nights'];
+        }
+        if (!isset($data['expense_breakdown_local_transport']) && isset($data['blocked_self_paid_amount'])) {
+            $data['expense_breakdown_local_transport'] = $data['blocked_self_paid_amount'];
+        }
+        if (!isset($data['expense_alt_transport']) && isset($data['alt_self_paid_amount'])) {
+            $data['expense_alt_transport'] = $data['alt_self_paid_amount'];
+        }
+        // pmr_booked_detail: append to pmr_facility_details if available
+        if (isset($data['pmr_booked_detail'])) {
+            $detail = trim((string)$data['pmr_booked_detail']);
+            if ($detail !== '') {
+                $base = trim((string)($data['pmr_facility_details'] ?? ''));
+                $data['pmr_facility_details'] = $base === '' ? $detail : ($base . ' | ' . $detail);
             }
         }
         // Special-case: TRIN 7 exclusives derived from remedyChoice if only present in session
@@ -414,6 +659,91 @@ class ReimbursementController extends AppController
     $dy = (float)($this->request->getQuery('dy') ?? 0);
     // Optional per-box vertical nudge for quick testing: ?boxdy=-50
     $boxDy = (float)($this->request->getQuery('boxdy') ?? 0);
+
+    // Developer: return final PDF-ready snapshot after backfill/aliasing when requested
+    $finalReq = (string)($this->request->getQuery('final') ?? '') === '1';
+    if ($finalReq) {
+        $dataForPdf = $data;
+        $incident = strtolower((string)($dataForPdf['incident_main'] ?? ''));
+        // Derive reason_* with same rules as rendering loop
+        $incFlat = preg_replace('/[^a-z]/', '', strtolower((string)($dataForPdf['incident_main'] ?? '')));
+        $derive = function($current, $want) {
+            if ($current === null) { return (bool)$want; }
+            if (is_bool($current)) { return $current || (bool)$want; }
+            $s = mb_strtolower(trim((string)$current));
+            $isEmpty = ($s === '' || $s === '0' || $s === 'nej' || $s === 'no' || $s === 'false');
+            return $isEmpty ? (bool)$want : ($current ? true : (bool)$want);
+        };
+        $wantDelay = (strpos($incFlat, 'delay') !== false) || !empty($data['reason_delay']);
+        $wantCancel = (strpos($incFlat, 'cancel') !== false) || !empty($data['reason_cancellation']);
+        $wantMiss = (strpos($incFlat, 'missed') !== false) || !empty($data['missed_connection']) || !empty($data['reason_missed_conn']);
+        if (!$wantDelay && ($wantMiss) && isset($data['delay_min_eu']) && is_numeric($data['delay_min_eu']) && (float)$data['delay_min_eu'] > 0) {
+            $wantDelay = true;
+        }
+        $dataForPdf['reason_delay'] = $derive($dataForPdf['reason_delay'] ?? null, $wantDelay);
+        $dataForPdf['reason_cancellation'] = $derive($dataForPdf['reason_cancellation'] ?? null, $wantCancel);
+        $dataForPdf['reason_missed_conn'] = $derive($dataForPdf['reason_missed_conn'] ?? null, $wantMiss);
+
+        // Remedies exclusivity
+        $choice = (string)($data['remedyChoice'] ?? '');
+        if ($choice === '') {
+            if (!empty($data['reroute_later_at_choice'])) { $choice = 'reroute_later'; }
+            elseif (!empty($data['reroute_same_conditions_soonest'])) { $choice = 'reroute_soonest'; }
+            elseif (!empty($data['refund_requested'])) { $choice = 'refund_return'; }
+        }
+        $dataForPdf['remedy_cancel_return'] = ($choice === 'refund_return');
+        $dataForPdf['remedy_reroute_soonest'] = ($choice === 'reroute_soonest');
+        $dataForPdf['remedy_reroute_later'] = ($choice === 'reroute_later');
+
+        // Top-level flags: refund vs compensation per current policy
+        $choiceForTop = (string)($data['remedyChoice'] ?? '');
+        if ($choiceForTop === 'refund_return' || !empty($data['refund_requested'])) {
+            $dataForPdf['main_refund'] = true;
+        } elseif ($choiceForTop === 'reroute_soonest' || $choiceForTop === 'reroute_later') {
+            $dataForPdf['main_compensation'] = true;
+        }
+
+        // TRIN 5 group marker
+        if (!isset($dataForPdf['assistA_now'])) {
+            $anyAssist = !empty($data['meal_offered']) || !empty($data['hotel_offered']) || !empty($data['blocked_train_alt_transport']);
+            if ($anyAssist) { $dataForPdf['assistA_now'] = true; }
+        }
+
+        // Build payload similar to ?session=1 but with final snapshot
+        $flatten = function($arr, $prefix = '') use (&$flatten) {
+            $out = [];
+            if (!is_array($arr)) { return $out; }
+            foreach ($arr as $k => $v) {
+                $key = $prefix === '' ? (string)$k : ($prefix . '.' . (string)$k);
+                if (is_array($v)) { $out += $flatten($v, $key); } else { $out[$key] = $v; }
+            }
+            return $out;
+        };
+        // Rebuild selected keys list for consistency with session=1
+        $keys = [
+            'incident_main','missed_connection','missed_connection_station','delay_min_eu',
+            'reason_delay','reason_cancellation','reason_missed_conn','pmr_user','pmr_booked','pmrQBooked','pmrQDelivered','pmrQPromised','pmr_facility_details',
+            'remedyChoice','chosenPath','reroute_info_within_100min','self_purchased_new_ticket','reroute_extra_costs','downgrade_occurred',
+            'meal_offered','hotel_offered','blocked_train_alt_transport','alt_transport_provided',
+            'meal_self_paid_amount','meal_self_paid_currency','hotel_self_paid_amount','hotel_self_paid_currency','hotel_self_paid_nights',
+            'blocked_self_paid_amount','blocked_self_paid_currency','alt_self_paid_amount','alt_self_paid_currency',
+            'preinformed_disruption','preinfo_channel','realtime_info_seen'
+        ];
+        $sel = [];
+        foreach ($keys as $k) { $sel[$k] = $data[$k] ?? $formSess[$k] ?? $metaSess[$k] ?? null; }
+        $payload = [
+            'phpSessionId' => method_exists($session, 'id') ? $session->id() : null,
+            'now' => date('c'),
+            'final' => $dataForPdf,
+            'selected' => $sel,
+            'data' => $data,
+            'flow' => ['form' => $formSess, 'meta' => $metaSess],
+            'flat' => ['form' => $flatten($formSess), 'meta' => $flatten($metaSess)],
+        ];
+        $this->disableAutoRender();
+        $this->response = $this->response->withType('json')->withStringBody((string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        return;
+    }
 
     // Safe stringify to support arrays and uploaded files when filling into the official PDF
     $stringify = function($val) use (&$stringify): string {
@@ -480,6 +810,14 @@ class ReimbursementController extends AppController
     // Buffer for Section 6 content that we'll render on a dedicated blank page
     $pendingSection6 = [];
 
+    // If incident_main is missing (user opened official PDF direkte / refresh uden session merge), forsøg at inferere den
+    if (empty($data['incident_main'])) {
+        $guess = '';
+        if (!empty($data['reason_delay'])) { $guess = 'delay'; }
+        elseif (!empty($data['reason_cancellation'])) { $guess = 'cancellation'; }
+        elseif (!empty($data['missed_connection']) || !empty($data['reason_missed_conn']) || !empty($data['missed_connection_station'])) { $guess = 'missed_connection'; }
+        if ($guess !== '') { $data['incident_main'] = $guess; }
+    }
     // Build a data snapshot for PDF filling and page-6 fallback before the page loop,
     // mirroring the derivations done within the loop when we hit page 5.
     $dataSnap = $data;
@@ -544,15 +882,28 @@ class ReimbursementController extends AppController
             // - Also map 'missed_connection' boolean to reason_missed_conn if present
             $dataForPdf = $data;
             $incident = strtolower((string)($data['incident_main'] ?? ''));
-            if (!isset($dataForPdf['reason_delay'])) {
-                $dataForPdf['reason_delay'] = ($incident === 'delay') || !empty($data['reason_delay']);
+            // Derive reason_* with override from incident_main even if existing values are explicitly 'nej'/'0'/false
+            $incFlat = preg_replace('/[^a-z]/', '', strtolower((string)($dataForPdf['incident_main'] ?? '')));
+            $derive = function($current, $want) {
+                // Treat '', null, false, '0', 'nej', 'no', 'false' as empty
+                if ($current === null) { return (bool)$want; }
+                if (is_bool($current)) { return $current || (bool)$want; }
+                $s = mb_strtolower(trim((string)$current));
+                $isEmpty = ($s === '' || $s === '0' || $s === 'nej' || $s === 'no' || $s === 'false');
+                return $isEmpty ? (bool)$want : ($current ? true : (bool)$want);
+            };
+            $wantDelay = (strpos($incFlat, 'delay') !== false) || !empty($data['reason_delay']);
+            $wantCancel = (strpos($incFlat, 'cancel') !== false) || !empty($data['reason_cancellation']);
+            $wantMiss = (strpos($incFlat, 'missed') !== false) || !empty($data['missed_connection']) || !empty($data['reason_missed_conn']);
+            // Cross-cause: if missed connection and there is a positive delay minutes value, also tick delay
+            if (!$wantDelay && ($wantMiss) && isset($data['delay_min_eu']) && is_numeric($data['delay_min_eu']) && (float)$data['delay_min_eu'] > 0) {
+                $wantDelay = true;
             }
-            if (!isset($dataForPdf['reason_cancellation'])) {
-                $dataForPdf['reason_cancellation'] = ($incident === 'cancellation') || !empty($data['reason_cancellation']);
-            }
-            if (!isset($dataForPdf['reason_missed_conn'])) {
-                $dataForPdf['reason_missed_conn'] = ($incident === 'missed_connection') || !empty($data['missed_connection']) || !empty($data['reason_missed_conn']);
-            }
+            $dataForPdf['reason_delay'] = $derive($dataForPdf['reason_delay'] ?? null, $wantDelay);
+            $dataForPdf['reason_cancellation'] = $derive($dataForPdf['reason_cancellation'] ?? null, $wantCancel);
+            $dataForPdf['reason_missed_conn'] = $derive($dataForPdf['reason_missed_conn'] ?? null, $wantMiss);
+
+            // No extrapolation: reasons are driven by explicit incident_main / reason_* only
 
             // TRIN 7: Exclusive remedies (Option A) – only one checkbox can be marked based on remedyChoice
             // If remedyChoice absent, infer a single choice from boolean hints with fixed priority
@@ -595,27 +946,60 @@ class ReimbursementController extends AppController
             ];
 
             // Derive top-level EU Section 4 selections
-            // - main_refund: tick when user requested refund or chose refund remedy
-            // - main_compensation: tick when user indicated compensation (explicit request or band/threshold)
-            // - main_expenses: tick when any expense amount is present or explicit request_expenses
+            // Policy (2025-11):
+            //   a) If remedyChoice = refund_return -> only main_refund ticked; NEVER main_compensation (Art. 19 excludes compensation when refund chosen).
+            //   b) If remedyChoice = reroute_soonest or reroute_later -> always tick main_compensation (passenger retains compensation entitlement for qualifying delay bands).
+            //   c) Ignore request_comp_* and compensationBand for now; entitlement is implied by reroute choice.
+            //   d) main_expenses unchanged (explicit request_expenses OR any expense amount > 0).
             $amounts = [
                 (float)($data['expense_breakdown_meals'] ?? $data['expense_meals'] ?? 0),
                 (float)($data['expense_breakdown_hotel_nights'] ?? 0) > 0 ? 0.01 : (float)($data['expense_hotel'] ?? 0),
                 (float)($data['expense_breakdown_local_transport'] ?? $data['expense_alt_transport'] ?? 0),
                 (float)($data['expense_breakdown_other_amounts'] ?? $data['expense_other'] ?? 0),
             ];
+            // Allow explicit URL overrides: ?main_refund=0 prevents auto-setting even if remedyChoice matches
+            $normBool = function($v) {
+                $s = strtolower(trim((string)$v));
+                if ($s === '1' || $s === 'true' || $s === 'yes' || $s === 'ja') { return true; }
+                if ($s === '0' || $s === 'false' || $s === 'no' || $s === 'nej') { return false; }
+                return null; // ambiguous / not provided
+            };
+
+            $expRefund = array_key_exists('main_refund', $data);
+            $expComp = array_key_exists('main_compensation', $data);
+            $expExpenses = array_key_exists('main_expenses', $data);
+            $valRefund = $expRefund ? $normBool($data['main_refund']) : null;
+            $valComp = $expComp ? $normBool($data['main_compensation']) : null;
+            $valExpenses = $expExpenses ? $normBool($data['main_expenses']) : null;
+
             $hasExpenses = array_sum($amounts) > 0.0 || !empty($data['request_expenses']);
-            if ($hasExpenses) { $dataForPdf['main_expenses'] = true; }
+            if ($valExpenses === true) {
+                $dataForPdf['main_expenses'] = true; // forced on
+            } elseif ($valExpenses === false) {
+                // forced off
+            } elseif ($hasExpenses) {
+                $dataForPdf['main_expenses'] = true;
+            }
 
             $choiceForTop = (string)($data['remedyChoice'] ?? '');
-            $refundChosen = ($choiceForTop === 'refund_return') || !empty($data['refund_requested']);
-            if ($refundChosen) { $dataForPdf['main_refund'] = true; }
-
-            $bandSel = (string)($data['compensationBand'] ?? '');
-            $delayM = (int)($data['delayAtFinalMinutes'] ?? 0);
-            $compAsked = !empty($data['request_comp_60']) || !empty($data['request_comp_120']);
-            $compByBand = ($bandSel === '25' || $bandSel === '50' || $delayM >= 60);
-            if ($compAsked || $compByBand) { $dataForPdf['main_compensation'] = true; }
+            if ($valRefund === true) {
+                $dataForPdf['main_refund'] = true; // forced on
+            } elseif ($valRefund === false) {
+                // forced off
+            } else {
+                if ($choiceForTop === 'refund_return' || !empty($data['refund_requested'])) {
+                    $dataForPdf['main_refund'] = true;
+                }
+            }
+            if ($valComp === true) {
+                $dataForPdf['main_compensation'] = true; // forced on
+            } elseif ($valComp === false) {
+                // forced off
+            } else {
+                if ($choiceForTop === 'reroute_soonest' || $choiceForTop === 'reroute_later') {
+                    $dataForPdf['main_compensation'] = true;
+                }
+            }
 
             // Group A assistance marker for TRIN 5: set when any of the immediate assistance items are affirmative
             if (!isset($dataForPdf['assistA_now'])) {
@@ -949,64 +1333,146 @@ class ReimbursementController extends AppController
                         $art = $fieldArticle[$f] ?? '';
                         $groups[4][] = ['q' => $q, 'a' => $answerToText($val), 'art' => $art, 'field' => $f];
                     }
-                    // De-duplicate any TRIN items by field key to avoid double entries
+                    // De-duplicate any TRIN items by field key, preferring non-empty answers
                     foreach ($groups as $t => $items) {
-                        $seen = [];
-                        $uniq = [];
+                        $byKey = [];
                         foreach ($items as $it) {
                             $k = (string)($it['field'] ?? ($it['q'] ?? ''));
-                            if ($k === '') { $uniq[] = $it; continue; }
-                            if (isset($seen[$k])) { continue; }
-                            $seen[$k] = true;
-                            $uniq[] = $it;
+                            if ($k === '') { $byKey[] = $it; continue; }
+                            if (!isset($byKey[$k])) {
+                                $byKey[$k] = $it;
+                                continue;
+                            }
+                            $existing = $byKey[$k];
+                            $oldAns = trim((string)($existing['a'] ?? ''));
+                            $newAns = trim((string)($it['a'] ?? ''));
+                            if ($oldAns === '' && $newAns !== '') {
+                                $byKey[$k] = $it; // replace empty with richer answer
+                            }
                         }
-                        $groups[$t] = $uniq;
+                        // Preserve insertion order: iterate original list and emit chosen variant
+                        $ordered = [];
+                        $emitted = [];
+                        foreach ($items as $it) {
+                            $k = (string)($it['field'] ?? ($it['q'] ?? ''));
+                            if ($k === '') { $ordered[] = $it; continue; }
+                            if (isset($emitted[$k])) { continue; }
+                            $ordered[] = $byKey[$k];
+                            $emitted[$k] = true;
+                        }
+                        $groups[$t] = $ordered;
                     }
                     // Override TRIN 5 with custom assistance/alternative transport layout per specification
                     $currency = '';
                     if (!empty($dataForPdf['price']) && preg_match('/([A-Z]{3})/', (string)$dataForPdf['price'], $mm)) { $currency = strtoupper($mm[1]); }
-                    $mealAmt = $answerToText($dataForPdf['expense_breakdown_meals'] ?? ($dataForPdf['expense_meals'] ?? null));
-                    $hotelAmt = $answerToText($dataForPdf['expense_hotel'] ?? null); // fallback if breakdown hotel nights implies amount elsewhere
-                    $hotelNights = $answerToText($dataForPdf['expense_breakdown_hotel_nights'] ?? null);
-                    $blockedAmt = $answerToText($dataForPdf['expense_breakdown_local_transport'] ?? ($dataForPdf['expense_alt_transport'] ?? null));
-                    $altTransAmt = $answerToText($dataForPdf['expense_alt_transport'] ?? ($dataForPdf['expense_breakdown_local_transport'] ?? null));
+                    // Helper: pick first non-empty value from a list of candidates
+                    $firstNonEmpty = function(...$vals) {
+                        foreach ($vals as $v) {
+                            if ($v === null) { continue; }
+                            // Treat strings of only whitespace as empty
+                            if (is_string($v) && trim($v) === '') { continue; }
+                            // Allow numeric 0, but skip string '0' for amount context later via caller logic if needed
+                            return $v;
+                        }
+                        return null;
+                    };
+
+                    // Prefer self-paid breakdowns if present; else fall back to legacy fields (choose first non-empty)
+                    $mealAmtRaw = $firstNonEmpty($dataForPdf['meal_self_paid_amount'] ?? null, $dataForPdf['expense_breakdown_meals'] ?? null, $dataForPdf['expense_meals'] ?? null);
+                    $mealAmt = $answerToText($mealAmtRaw);
+                    $currencyMeals = trim((string)$firstNonEmpty($dataForPdf['meal_self_paid_currency'] ?? null, $currency));
+
+                    $hotelAmtRaw = $firstNonEmpty($dataForPdf['hotel_self_paid_amount'] ?? null, $dataForPdf['expense_hotel'] ?? null);
+                    $hotelAmt = $answerToText($hotelAmtRaw);
+                    $hotelNightsRaw = $firstNonEmpty($dataForPdf['hotel_self_paid_nights'] ?? null, $dataForPdf['expense_breakdown_hotel_nights'] ?? null);
+                    $hotelNights = $answerToText($hotelNightsRaw);
+                    $currencyHotel = trim((string)$firstNonEmpty($dataForPdf['hotel_self_paid_currency'] ?? null, $currency));
+
+                    $blockedAmtRaw = $firstNonEmpty($dataForPdf['blocked_self_paid_amount'] ?? null, $dataForPdf['expense_breakdown_local_transport'] ?? null, $dataForPdf['expense_alt_transport'] ?? null);
+                    $blockedAmt = $answerToText($blockedAmtRaw);
+                    $currencyBlocked = trim((string)$firstNonEmpty($dataForPdf['blocked_self_paid_currency'] ?? null, $currency));
+
+                    $altTransAmtRaw = $firstNonEmpty($dataForPdf['alt_self_paid_amount'] ?? null, $dataForPdf['expense_alt_transport'] ?? null, $dataForPdf['expense_breakdown_local_transport'] ?? null);
+                    $altTransAmt = $answerToText($altTransAmtRaw);
+                    $currencyAlt = trim((string)$firstNonEmpty($dataForPdf['alt_self_paid_currency'] ?? null, $currency));
                     $uploadVal = $answerToText($dataForPdf['extra_expense_upload'] ?? null);
                     $groups[5] = [];
                     // A) Tilbudt assistance
                     $groups[5][] = ['q' => 'Får du måltider/forfriskninger under ventetiden? (Art. 20(2)(a))', 'a' => $answerToText($dataForPdf['meal_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'meal_offered'];
                     $groups[5][] = ['q' => 'Måltider – beløb', 'a' => $mealAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_meals'];
-                    $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_meals'];
+                    $groups[5][] = ['q' => 'Valuta', 'a' => $currencyMeals, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_meals'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
                     $groups[5][] = ['q' => 'Får du hotel/indkvartering + transport dertil? (Art. 20(2)(b))', 'a' => $answerToText($dataForPdf['hotel_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'hotel_offered'];
                     $groups[5][] = ['q' => 'Hotel – beløb (samlet)', 'a' => $hotelAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_hotel'];
-                    $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_hotel'];
+                    $groups[5][] = ['q' => 'Valuta', 'a' => $currencyHotel, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_hotel'];
                     $groups[5][] = ['q' => 'Antal nætter', 'a' => $hotelNights, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_hotel_nights'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
+                    // Extra spacer BEFORE blocked train question to push this cluster downward
+                    $groups[5][] = ['q' => '', 'a' => '', 'art' => 'A) Tilbudt assistance', 'field' => '_spacer_blocked_transport_before'];
                     $groups[5][] = ['q' => 'Er toget blokeret på sporet — får du transport væk? (Art. 20(2)(c))', 'a' => $answerToText($dataForPdf['blocked_train_alt_transport'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'blocked_train_alt_transport'];
+                    // Spacer AFTER question before amount/currency lines
+                    $groups[5][] = ['q' => '', 'a' => '', 'art' => 'A) Tilbudt assistance', 'field' => '_spacer_blocked_transport_after'];
                     $groups[5][] = ['q' => 'Transport væk – beløb', 'a' => $blockedAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_local_transport'];
-                    $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_blocked'];
+                    $groups[5][] = ['q' => 'Valuta', 'a' => $currencyBlocked, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_blocked'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
                     // B) Alternative transporttjenester
                     $groups[5][] = ['q' => 'Får du alternative transporttjenester, hvis forbindelsen er afbrudt? (Art. 20(3))', 'a' => $answerToText($dataForPdf['alt_transport_provided'] ?? null), 'art' => 'B) Alternative transporttjenester', 'field' => 'alt_transport_provided'];
                     $groups[5][] = ['q' => 'Alternativ transport til destination – beløb', 'a' => $altTransAmt, 'art' => 'B) Alternative transporttjenester', 'field' => 'expense_alt_transport'];
-                    $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'B) Alternative transporttjenester', 'field' => '_currency_alt'];
+                    $groups[5][] = ['q' => 'Valuta', 'a' => $currencyAlt, 'art' => 'B) Alternative transporttjenester', 'field' => '_currency_alt'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'B) Alternative transporttjenester', 'field' => 'extra_expense_upload'];
                     // Ensure TRIN 3 (Art.12 + Art.9) items are present even if not mapped on page 5
+                    // Note: Do NOT include raw PMR synonyms here to avoid duplicates; we include normalized pmrQ* keys only.
                     $trin3Fields = [
                         'through_ticket_disclosure','single_txn_operator','single_txn_retailer','separate_contract_notice','shared_pnr_scope','seller_type_operator',
                         'one_contract_schedule','contact_info_provided','responsibility_explained','continue_national_rules',
                         // Hurtigste rejse ordering: fastest flag first then MCT realism
                         'fastest_flag_at_purchase','mct_realistic','alts_shown_precontract',
                         // Pris/fleksibilitet
-                        'info_requested_pre_purchase','coc_acknowledged','civ_marking_present','multiple_fares_shown','cheapest_highlighted'
+                        'info_requested_pre_purchase','coc_acknowledged','civ_marking_present','multiple_fares_shown','cheapest_highlighted',
+                        // Information (Art. 9(1))
+                        'preinformed_disruption','preinfo_channel','realtime_info_seen',
+                        // PMR (Art. 21-24)
+                        'pmr_user','pmrQBooked','pmrQDelivered','pmrQPromised','pmr_facility_details',
+                        // (pmr_delivered_status, pmr_promised_missing, pmr_booked_detail handled via alias/inference and not listed directly)
+                        // Additional booking & bike synonyms
+                        'single_booking_reference','seller_type_agency','pm_bike_involved'
                     ];
                     foreach ($trin3Fields as $f) {
                         $val = $dataForPdf[$f] ?? null;
-                        if ($val === null || $answerToText($val) === '') { continue; }
+                        $ans = $answerToText($val);
+                        $includeAlways = in_array($f, ['pmr_user','pmrQBooked','pmrQDelivered','pmrQPromised'], true);
+                        if ($val === null && !$includeAlways) { continue; }
+                        if ($ans === '' && !$includeAlways) { continue; }
+                        // Suppress empty facility details entirely
+                        if ($f === 'pmr_facility_details' && trim((string)$ans) === '') { continue; }
                         $q = $questionText[$f] ?? $f;
                         $art = $fieldArticle[$f] ?? '';
-                        $groups[3][] = ['q' => $q, 'a' => $answerToText($val), 'art' => $art, 'field' => $f];
+                        $groups[3][] = ['q' => $q, 'a' => $ans, 'art' => $art, 'field' => $f];
                     }
+                    // De-duplicate again after augmentation, still preferring non-empty answers
+                    foreach ($groups as $t => $items) {
+                        $byKey = [];
+                        foreach ($items as $it) {
+                            $k = (string)($it['field'] ?? ($it['q'] ?? ''));
+                            if ($k === '') { $byKey[] = $it; continue; }
+                            if (!isset($byKey[$k])) { $byKey[$k] = $it; continue; }
+                            $existing = $byKey[$k];
+                            $oldAns = trim((string)($existing['a'] ?? ''));
+                            $newAns = trim((string)($it['a'] ?? ''));
+                            if ($oldAns === '' && $newAns !== '') { $byKey[$k] = $it; }
+                        }
+                        $ordered = [];
+                        $emitted = [];
+                        foreach ($items as $it) {
+                            $k = (string)($it['field'] ?? ($it['q'] ?? ''));
+                            if ($k === '') { $ordered[] = $it; continue; }
+                            if (isset($emitted[$k])) { continue; }
+                            $ordered[] = $byKey[$k];
+                            $emitted[$k] = true;
+                        }
+                        $groups[$t] = $ordered;
+                    }
+
                     // Build a list of lines with TRIN headers and article subheaders
                     $groupTitles = [
                         3 => 'TRIN 3 · Art. 6, Art. 9, Art. 12 og Art. 21-24',
@@ -1017,7 +1483,7 @@ class ReimbursementController extends AppController
                     $allLines = [];
                     ksort($groups);
                     // Exclude selected complaint/national/entitlement flags from TRIN 3 only
-                    $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','info_requested_pre_purchase','coc_acknowledged','civ_marking_present','bike_res_required','bike_followup_offer'];
+                    $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer'];
                     foreach ($groups as $trin => $items) {
                         $title = $groupTitles[$trin] ?? sprintf('TRIN %d', $trin);
                         $allLines[] = $toPdf($title);
@@ -1202,7 +1668,31 @@ class ReimbursementController extends AppController
                         return !preg_match('/^\s*TRIN\s*1\b/i', (string)$l);
                     });
                     $pendingSection6 = array_values($filtered);
-                    // Skip per-field rendering for page 5 entirely
+                    // Render a minimal subset of page 5 checkboxes (PMR) so user-selected handicap assistance answers appear on the official template page as well.
+                    $pmrShow = ['pmr_user','pmr_booked','pmrQBooked','pmrQDelivered','pmrQPromised'];
+                    $fpdi->SetFont('Helvetica', '', 9);
+                    foreach ($pmrShow as $f) {
+                        if (empty($map[$pageNo][$f])) { continue; }
+                        $cfg = $map[$pageNo][$f];
+                        $type = $cfg['type'] ?? 'checkbox';
+                        [$x,$y,$w] = $this->adaptCoordinates(is_array($cfg)?$cfg:[], (float)$size['height'], $mapMeta, (float)$dx, (float)$dy);
+                        $val = $dataForPdf[$f] ?? null;
+                        $checked = !empty($val) && $val !== '0' && $val !== 'nej' && $val !== false;
+                        if ($type === 'checkbox') {
+                            if ($checked) {
+                                $fpdi->SetDrawColor(0,0,0);
+                                $fpdi->SetLineWidth(0.25);
+                                $fpdi->Line($x, $y, $x+4, $y+4);
+                                $fpdi->Line($x, $y+4, $x+4, $y);
+                            }
+                        } else {
+                            $s = $stringify($val);
+                            if ($s === '') { continue; }
+                            $fpdi->SetXY($x, $y);
+                            $fpdi->Cell($w > 0 ? $w : 0, 4, $toPdf($s), 0, 0);
+                        }
+                    }
+                    // Skip all other per-field rendering for page 5
                     continue;
                 }
 
@@ -1218,10 +1708,35 @@ class ReimbursementController extends AppController
                         if ($pageNo === 5 && in_array($srcFieldCk, ['request_refund','request_comp_60','request_comp_120','request_expenses'], true)) {
                             continue;
                         }
+
+                        // Normalise incident-based reason fields so exotic values like 'delayLikely60' still tick
+                        if (in_array($srcFieldCk, ['reason_delay','reason_cancellation','reason_missed_conn'], true)) {
+                            $cur = $dataForPdf[$srcFieldCk] ?? null;
+                            $curS = is_bool($cur) ? ($cur ? 'ja' : 'nej') : mb_strtolower(trim((string)$cur));
+                            $isFalsy = ($cur === null) || ($cur === false) || ($curS === '' || $curS === '0' || $curS === 'nej' || $curS === 'no' || $curS === 'false');
+                            if ($isFalsy) {
+                                $incNorm = strtolower((string)($dataForPdf['incident_main'] ?? ''));
+                                // remove non letters for substring checks (e.g. delay-likely-60)
+                                $incFlat2 = preg_replace('/[^a-z]/','', $incNorm);
+                                if ($srcFieldCk === 'reason_delay' && (strpos($incNorm,'delay') !== false || strpos($incFlat2,'delay') !== false)) {
+                                    $dataForPdf[$srcFieldCk] = true;
+                                } elseif ($srcFieldCk === 'reason_cancellation' && (strpos($incNorm,'cancel') !== false || strpos($incFlat2,'cancel') !== false)) {
+                                    $dataForPdf[$srcFieldCk] = true;
+                                } elseif ($srcFieldCk === 'reason_missed_conn' && (strpos($incNorm,'missed') !== false || strpos($incFlat2,'missed') !== false)) {
+                                    $dataForPdf[$srcFieldCk] = true;
+                                }
+                            }
+                        }
+
                         $checked = !empty($dataForPdf[$srcFieldCk]);
                         if ($checked) {
+                            // Draw a more visible checkbox mark: light square + thicker cross
                             $fpdi->SetDrawColor(0,0,0);
-                            $fpdi->SetLineWidth(0.3);
+                            $fpdi->SetLineWidth(0.25);
+                            // Optional bounding box (slightly larger than mapping coordinate) for reason_* on page 1
+                            if ($pageNo === 1 && in_array($srcFieldCk, ['reason_delay','reason_cancellation','reason_missed_conn'], true)) {
+                                $fpdi->Rect($x-0.5, $y-0.5, 5, 5);
+                            }
                             $fpdi->Line($x, $y, $x+4, $y+4);
                             $fpdi->Line($x, $y+4, $x+4, $y);
                         }
@@ -1318,6 +1833,15 @@ class ReimbursementController extends AppController
                 'preinfo_channel' => 'Hvis ja: Hvor blev det vist?',
                 'realtime_info_seen' => 'Så du realtime-opdateringer under rejsen?'
             ];
+            // Augment question text with alias fields so they appear with readable Danish labels
+            $questionText += [
+                'pmr_delivered_status' => 'Leveringsstatus for assistance (fuld/delvis/ingen)',
+                'pmr_promised_missing' => 'Manglede lovede PMR-faciliteter? (synonym)',
+                'pmr_booked_detail' => 'Detalje om bestilt assistance (afvist/andet)',
+                'single_booking_reference' => 'Var hele rejsen på ét bookingnummer?',
+                'seller_type_agency' => 'Var det et rejsebureau der solgte rejsen (synonym)?',
+                'pm_bike_involved' => 'Var cykel involveret i hændelsen? (synonym)'
+            ];
             // Fallback: field-to-article/subsection mapping (duplicate minimal set for local scope)
             $fieldArticle = [
                 // TRIN 3 · Art. 12
@@ -1346,6 +1870,13 @@ class ReimbursementController extends AppController
                 'pmrQDelivered' => 'PMR (Art. 21-24)',
                 'pmrQPromised' => 'PMR (Art. 21-24)',
                 'pmr_facility_details' => 'PMR (Art. 21-24)',
+                // Aliases map to existing articles
+                'pmr_delivered_status' => 'PMR (Art. 21-24)',
+                'pmr_promised_missing' => 'PMR (Art. 21-24)',
+                'pmr_booked_detail' => 'PMR (Art. 21-24)',
+                'single_booking_reference' => 'Art. 12',
+                'seller_type_agency' => 'Art. 12',
+                'pm_bike_involved' => 'Cykel (Art. 6)',
                 // TRIN 3 · Cykel (Art. 6)
                 'bike_res_required' => 'Cykel (Art. 6)',
                 'bike_followup_offer' => 'Cykel (Art. 6)',
@@ -1497,7 +2028,7 @@ class ReimbursementController extends AppController
             $allLines = [];
             ksort($groups);
             // Exclude selected complaint/national/entitlement flags from TRIN 3 only
-            $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','info_requested_pre_purchase','coc_acknowledged','civ_marking_present','bike_res_required','bike_followup_offer'];
+            $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer'];
             foreach ($groups as $trin => $items) {
                 $title = $groupTitles[$trin] ?? sprintf('TRIN %d', $trin);
                 $allLines[] = $toPdf($title);
