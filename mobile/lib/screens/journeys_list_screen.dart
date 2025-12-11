@@ -83,10 +83,32 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                       final delay = (j['delay_minutes'] ?? j['delay'] ?? '').toString();
                       final status = (j['status'] ?? '').toString();
                       final ended = status.toLowerCase() == 'ended';
+                      final statusColor = ended ? Colors.red : Colors.blue;
                       return Card(
                         child: ListTile(
                           title: Text('Journey $id'),
-                          subtitle: Text('$dep -> $arr  | delay: $delay min | $status'),
+                          subtitle: Text('$dep -> $arr  | delay: $delay min'),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  status,
+                                  style: TextStyle(color: statusColor),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextButton(
+                                onPressed: () => _openCaseClose(j),
+                                child: Text(ended ? 'Case Close' : 'Open'),
+                              ),
+                            ],
+                          ),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -94,10 +116,6 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                               ),
                             );
                           },
-                          trailing: TextButton(
-                            onPressed: () => _openCaseClose(j),
-                            child: Text(ended ? 'Case Close' : 'Open'),
-                          ),
                         ),
                       );
                     },

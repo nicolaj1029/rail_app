@@ -35,6 +35,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   List<Map<String, dynamic>> backendEvents = [];
   bool loadingEvents = false;
   NotificationsService? noti;
+  DateTime? trackingStartedAt;
 
   @override
   void initState() {
@@ -81,8 +82,10 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     if (tracking) {
       await tracker!.stop();
       _cancelNudges();
+      trackingStartedAt = null;
     } else {
       await tracker!.start();
+      trackingStartedAt = DateTime.now();
       _scheduleNudges();
     }
     setState(() {
@@ -233,7 +236,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
 
   void _scheduleNudges() {
     _cancelNudges();
-    // Dev-friendly short delays (in minutes -> here using seconds for demo)
+    // Demo durations: use minutes in prod (60/90/100)
     final entries = [
       const Duration(minutes: 1),
       const Duration(minutes: 2),
