@@ -220,6 +220,20 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   icon: const Icon(Icons.upload),
                   label: const Text('Tilføj kvittering'),
                 ),
+                TextButton(
+                  onPressed: () {
+                    // stub OCR fill
+                    _addReceipt();
+                    if (receipts.isNotEmpty) {
+                      final r = receipts.last;
+                      r.typeCtrl.text = 'hotel';
+                      r.amountCtrl.text = '450';
+                      r.currencyCtrl.text = 'DKK';
+                      r.dateCtrl.text = DateTime.now().toIso8601String();
+                    }
+                  },
+                  child: const Text('Scan (stub) - autofyld demo'),
+                ),
                 if (receipts.isEmpty) const Text('Ingen bilag tilføjet endnu.'),
                 for (int i = 0; i < receipts.length; i++)
                   _ReceiptTile(

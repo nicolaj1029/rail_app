@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../services/journeys_service.dart';
 import 'case_close_screen.dart';
+import 'journey_detail_screen.dart';
 
 class JourneysListScreen extends StatefulWidget {
   final String deviceId;
@@ -86,6 +87,13 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                         child: ListTile(
                           title: Text('Journey $id'),
                           subtitle: Text('$dep -> $arr  | delay: $delay min | $status'),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => JourneyDetailScreen(journey: j),
+                              ),
+                            );
+                          },
                           trailing: TextButton(
                             onPressed: () => _openCaseClose(j),
                             child: Text(ended ? 'Case Close' : 'Open'),

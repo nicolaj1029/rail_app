@@ -1,0 +1,126 @@
+import 'package:flutter/material.dart';
+
+import '../config.dart';
+import '../services/events_service.dart';
+import 'case_close_screen.dart';
+
+class JourneyDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> journey;
+  const JourneyDetailScreen({super.key, required this.journey});
+
+  @override
+  State<JourneyDetailScreen> createState() => _JourneyDetailScreenState();
+}
+
+class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
+  late final EventsService eventsService;
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> events = [];
+
+  @override
+  void initState() {
+    super.initState();
+    eventsService = EventsService(baseUrl: apiBaseUrl);
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    final id = (widget.journey['id'] ?? '').toString();
+    try {
+      final list = await eventsService.list(id);
+      setState(() {
+        events = list;
+      });
+    } catch (e) {
+      setState(() {
+        error = '$e';
+      });
+    } finally {
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final j = widget.journey;
+    final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
+    final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
+    final delay = (j['delay_minutes'] ?? j['delay'] ?? '').toString();
+    final status = (j['status'] ?? '').toString();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Journey detail')),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              child: ListTile(
+                title: Text('$dep -> $arr'),
+                subtitle: Text('Delay: $delay min | Status: $status'),
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CaseCloseScreen(journey: j),
+                      ),
+                    );
+                  },
+                  child: const Text('Case Close'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.chat),
+                  label: const Text('Kontakt support (stub)'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.alt_route),
+                  label: const Text('Anmod alternativ rute (stub)'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text('Hændelseslog', style: TextStyle(fontWeight: FontWeight.bold)),
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : error != null
+                      ? Center(child: Text('Fejl: $error'))
+                      : events.isEmpty
+                          ? const Text('Ingen events endnu.')
+                          : ListView.builder(
+                              itemCount: events.length,
+                              itemBuilder: (context, index) {
+                                final e = events[index];
+                                final type = (e['type'] ?? '').toString();
+                                final ts = (e['timestamp'] ?? '').toString();
+                                final desc = (e['description'] ?? '').toString();
+                                return ListTile(
+                                  leading: const Icon(Icons.timeline),
+                                  title: Text(type),
+                                  subtitle: Text('$ts\n$desc'),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
