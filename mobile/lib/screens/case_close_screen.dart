@@ -110,12 +110,13 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
       submitSuccess = null;
     });
     final svc = JourneysService(baseUrl: apiBaseUrl);
-    svc.confirm(id).then((_) {
+    final payload = _buildPayload();
+    svc.submit(id, payload).then((res) {
       setState(() {
-        submitSuccess = 'Indsendt (confirm journey $id)';
+        submitSuccess = 'Indsendt: ${res['data'] ?? res}';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Indsendt (stub): journey confirmed')),
+        const SnackBar(content: Text('Indsendt (stub)')),
       );
     }).catchError((e) {
       setState(() {
@@ -370,6 +371,43 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     if (gotTransport) parts.add('transport');
     if (selfPaidMeals || selfPaidHotel || selfPaidTransport) parts.add('selvbetalt');
     return parts.isEmpty ? 'Ingen' : parts.join(', ');
+  }
+
+  Map<String, dynamic> _buildPayload() {
+    return {
+      'journey': {
+        'dep': depCtrl.text,
+        'arr': arrCtrl.text,
+        'dep_time': depTimeCtrl.text,
+        'arr_time': arrTimeCtrl.text,
+        'ticket_type': ticketTypeCtrl.text,
+      },
+      'event': {
+        'type': eventType,
+        'delay_minutes': delayCtrl.text,
+      },
+      'receipts': receipts
+          .map((r) => {
+                'type': r.typeCtrl.text,
+                'amount': r.amountCtrl.text,
+                'currency': r.currencyCtrl.text,
+                'date': r.dateCtrl.text,
+              })
+          .toList(),
+      'assistance': {
+        'got_meals': gotMeals,
+        'got_hotel': gotHotel,
+        'got_transport': gotTransport,
+        'self_paid_meals': selfPaidMeals,
+        'self_paid_hotel': selfPaidHotel,
+        'self_paid_transport': selfPaidTransport,
+      },
+      'compensation': {
+        'choice': compensationChoice,
+        'price': refundAmountCtrl.text,
+        'currency': refundCurrencyCtrl.text,
+      },
+    };
   }
 }
 

@@ -208,6 +208,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/shadow/journeys', ['controller' => 'ShadowJourneys', 'action' => 'index']);
         $builder->connect('/shadow/journeys/{id}/confirm', ['controller' => 'ShadowJourneys', 'action' => 'confirm'])
             ->setPass(['id']);
+        $builder->connect('/shadow/journeys/{id}/submit', ['controller' => 'ShadowJourneys', 'action' => 'submit'])
+            ->setPass(['id']);
         // Stations endpoint for geofencing
         $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
         // Events logging

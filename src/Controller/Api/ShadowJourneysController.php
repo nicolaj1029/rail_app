@@ -113,4 +113,29 @@ class ShadowJourneysController extends AppController
             ],
         ]);
     }
+
+    /**
+     * POST /api/shadow/journeys/{id}/submit
+     * Body: { form: {...}, receipts: [...] }
+     * Persists to tmp/shadow_cases for inspection.
+     */
+    public function submit($id)
+    {
+        $id = (int)$id;
+        $payload = (array)$this->request->getData();
+        $dir = ROOT . DS . 'tmp' . DS . 'shadow_cases';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        $file = $dir . DS . 'case_' . $id . '_' . time() . '.json';
+        @file_put_contents($file, json_encode($payload, JSON_PRETTY_PRINT));
+
+        $this->set([
+            'success' => true,
+            'data' => [
+                'journey_id' => $id,
+                'stored' => basename($file),
+            ],
+        ]);
+    }
 }

@@ -30,4 +30,17 @@ class JourneysService {
     }
     throw Exception('Confirm failed: ${res.statusCode}');
   }
+
+  Future<Map<String, dynamic>> submit(String id, Map<String, dynamic> payload) async {
+    final uri = Uri.parse('$baseUrl/api/shadow/journeys/$id/submit');
+    final res = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(payload),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
+    throw Exception('Submit failed: ${res.statusCode}');
+  }
 }
