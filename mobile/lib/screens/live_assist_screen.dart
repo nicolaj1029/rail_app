@@ -27,6 +27,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   List<Map<String, dynamic>> journeys = [];
   String modeLabel = 'ukendt';
   bool _autoNavigated = false;
+  final List<Map<String, dynamic>> localEvents = [];
 
   @override
   void initState() {
@@ -81,6 +82,11 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     try {
       await api.post('/api/events', {
         'device_id': deviceId,
+        'type': type,
+        'payload': payload,
+      });
+      localEvents.add({
+        'ts': DateTime.now().toIso8601String(),
         'type': type,
         'payload': payload,
       });
@@ -268,6 +274,20 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               child: const Text('Se rejser / Case Close'),
             ),
             const SizedBox(height: 24),
+            if (localEvents.isNotEmpty) ...[
+              const Text('Seneste hændelser'),
+              const SizedBox(height: 8),
+              ...localEvents.reversed.take(5).map((e) {
+                final ts = e['ts'] ?? '';
+                final type = e['type'] ?? '';
+                return ListTile(
+                  leading: const Icon(Icons.timeline),
+                  title: Text(type.toString()),
+                  subtitle: Text(ts.toString()),
+                );
+              }),
+              const SizedBox(height: 24),
+            ],
             const Text('Offers'),
             Wrap(
               spacing: 8,

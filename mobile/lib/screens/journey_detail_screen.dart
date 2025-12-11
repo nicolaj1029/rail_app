@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../services/events_service.dart';
 import 'case_close_screen.dart';
+import 'reroute_screen.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
   final Map<String, dynamic> journey;
@@ -88,7 +89,13 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => RerouteScreen(destination: arr),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.alt_route),
                   label: const Text('Anmod alternativ rute (stub)'),
                 ),
@@ -101,22 +108,27 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : error != null
                       ? Center(child: Text('Fejl: $error'))
-                      : events.isEmpty
-                          ? const Text('Ingen events endnu.')
-                          : ListView.builder(
-                              itemCount: events.length,
-                              itemBuilder: (context, index) {
-                                final e = events[index];
-                                final type = (e['type'] ?? '').toString();
-                                final ts = (e['timestamp'] ?? '').toString();
-                                final desc = (e['description'] ?? '').toString();
-                                return ListTile(
-                                  leading: const Icon(Icons.timeline),
-                                  title: Text(type),
-                                  subtitle: Text('$ts\n$desc'),
-                                );
-                              },
-                            ),
+                      : ListView.builder(
+                          itemCount: (events.isEmpty ? 1 : events.length),
+                          itemBuilder: (context, index) {
+                            if (events.isEmpty) {
+                              return const ListTile(
+                                leading: Icon(Icons.timeline),
+                                title: Text('Ingen events endnu'),
+                                subtitle: Text('Events vil blive vist her (stub).'),
+                              );
+                            }
+                            final e = events[index];
+                            final type = (e['type'] ?? '').toString();
+                            final ts = (e['timestamp'] ?? '').toString();
+                            final desc = (e['description'] ?? '').toString();
+                            return ListTile(
+                              leading: const Icon(Icons.timeline),
+                              title: Text(type),
+                              subtitle: Text('$ts\n$desc'),
+                            );
+                          },
+                        ),
             ),
           ],
         ),
