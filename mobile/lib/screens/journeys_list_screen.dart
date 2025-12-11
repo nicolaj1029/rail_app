@@ -81,13 +81,14 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                       final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
                       final delay = (j['delay_minutes'] ?? j['delay'] ?? '').toString();
                       final status = (j['status'] ?? '').toString();
+                      final ended = status.toLowerCase() == 'ended';
                       return Card(
                         child: ListTile(
                           title: Text('Journey $id'),
                           subtitle: Text('$dep -> $arr  | delay: $delay min | $status'),
                           trailing: TextButton(
                             onPressed: () => _openCaseClose(j),
-                            child: const Text('Case Close'),
+                            child: Text(ended ? 'Case Close' : 'Open'),
                           ),
                         ),
                       );

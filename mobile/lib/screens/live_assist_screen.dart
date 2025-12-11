@@ -24,6 +24,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   int? stationCount;
   String? info;
   List<Map<String, dynamic>> journeys = [];
+  String modeLabel = 'ukendt';
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       });
       // Fetch journeys once registered
       await _refreshJourneys();
+      _updateMode();
     } catch (e) {
       // Keep UI alive even if backend is unreachable.
       setState(() {
@@ -130,6 +132,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       setState(() {
         journeys = list;
       });
+      _updateMode();
     } catch (e) {
       // ignore for now
     }
@@ -147,6 +150,24 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
         error = 'Confirm error: $e';
       });
     }
+  }
+
+  void _updateMode() {
+    // simple heuristic: if any journey has status 'ended', set ended, else in_progress if any journey exists
+    String nextMode = 'in_progress';
+    for (final j in journeys) {
+      final status = (j['status'] ?? '').toString().toLowerCase();
+      if (status == 'ended') {
+        nextMode = 'ended';
+        break;
+      }
+    }
+    if (journeys.isEmpty) {
+      nextMode = tracking ? 'in_progress' : 'ukendt';
+    }
+    setState(() {
+      modeLabel = nextMode;
+    });
   }
 
   @override
@@ -167,6 +188,13 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               const SizedBox(height: 4),
               Text(info!, style: const TextStyle(color: Colors.green)),
             ],
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Text('Mode: '),
+                Text(modeLabel, style: TextStyle(color: modeLabel == 'ended' ? Colors.red : Colors.blue)),
+              ],
+            ),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(

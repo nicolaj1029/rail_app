@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
+import '../services/journeys_service.dart';
+
 class CaseCloseScreen extends StatefulWidget {
   final Map<String, dynamic> journey;
   const CaseCloseScreen({super.key, required this.journey});
@@ -10,6 +13,9 @@ class CaseCloseScreen extends StatefulWidget {
 
 class _CaseCloseScreenState extends State<CaseCloseScreen> {
   int currentStep = 0;
+  bool submitting = false;
+  String? submitError;
+  String? submitSuccess;
 
   // Step 1
   late TextEditingController depCtrl;
@@ -96,9 +102,30 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
   }
 
   void _submit() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Submitting claim... (stub)')),
-    );
+    if (submitting) return;
+    final id = (widget.journey['id'] ?? '').toString();
+    setState(() {
+      submitting = true;
+      submitError = null;
+      submitSuccess = null;
+    });
+    final svc = JourneysService(baseUrl: apiBaseUrl);
+    svc.confirm(id).then((_) {
+      setState(() {
+        submitSuccess = 'Indsendt (confirm journey $id)';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Indsendt (stub): journey confirmed')),
+      );
+    }).catchError((e) {
+      setState(() {
+        submitError = '$e';
+      });
+    }).whenComplete(() {
+      setState(() {
+        submitting = false;
+      });
+    });
   }
 
   StepState _stateFor(int step) {
@@ -292,6 +319,16 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                 _summaryRow('Kompensation', compensationChoice ?? 'Ikke valgt'),
                 const SizedBox(height: 12),
                 const Text('Tryk Indsend for at sende kravet.'),
+                if (submitSuccess != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(submitSuccess!, style: const TextStyle(color: Colors.green)),
+                  ),
+                if (submitError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(submitError!, style: const TextStyle(color: Colors.red)),
+                  ),
               ],
             ),
           ),
