@@ -6,6 +6,7 @@ import '../services/device_service.dart';
 import '../services/journeys_service.dart';
 import '../services/shadow_tracker.dart';
 import '../services/stations_service.dart';
+import 'case_close_screen.dart';
 import 'journeys_list_screen.dart';
 
 class LiveAssistScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   String? info;
   List<Map<String, dynamic>> journeys = [];
   String modeLabel = 'ukendt';
+  bool _autoNavigated = false;
 
   @override
   void initState() {
@@ -168,10 +170,39 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     setState(() {
       modeLabel = nextMode;
     });
+    _maybeAutoNavigate(nextMode);
+  }
+
+  void _maybeAutoNavigate(String mode) {
+    if (!mounted) return;
+    if (mode != 'ended') return;
+    if (_autoNavigated) return;
+    final endedJourneys = journeys.where((j) {
+      final status = (j['status'] ?? '').toString().toLowerCase();
+      return status == 'ended';
+    }).toList();
+    if (endedJourneys.isEmpty) return;
+    _autoNavigated = true;
+    final first = endedJourneys.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CaseCloseScreen(journey: first),
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final List<String> nudges = [];
+    if (tracking && modeLabel == 'in_progress') {
+      nudges.add('Tracking aktiv - pings sendes til backend.');
+    }
+    if (modeLabel == 'ended') {
+      nudges.add('Rejsen er afsluttet - udfyld Case Close.');
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Live Assist')),
       body: SingleChildScrollView(
@@ -195,6 +226,22 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                 Text(modeLabel, style: TextStyle(color: modeLabel == 'ended' ? Colors.red : Colors.blue)),
               ],
             ),
+            if (nudges.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...nudges.map((n) => Card(
+                    color: Colors.amber.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info, color: Colors.orange),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(n)),
+                        ],
+                      ),
+                    ),
+                  )),
+            ],
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(
