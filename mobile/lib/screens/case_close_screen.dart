@@ -20,6 +20,10 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
   final ReceiptService receiptService = ReceiptService();
   bool skipReceipts = false;
   bool skipAssistance = false;
+  // Accessibility / special needs
+  bool needsWheelchair = false;
+  bool needsEscort = false;
+  final TextEditingController otherNeedsCtrl = TextEditingController();
 
   // Step 1
   late TextEditingController depCtrl;
@@ -69,6 +73,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     delayCtrl.dispose();
     refundAmountCtrl.dispose();
     refundCurrencyCtrl.dispose();
+    otherNeedsCtrl.dispose();
     for (final r in receipts) {
       r.dispose();
     }
@@ -317,6 +322,23 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   value: selfPaidTransport,
                   onChanged: (v) => setState(() => selfPaidTransport = v ?? false),
                 ),
+                const Divider(),
+                const Text('Særlige behov / handicapassistance'),
+                CheckboxListTile(
+                  title: const Text('Kørestol / mobilitetshjælp'),
+                  value: needsWheelchair,
+                  onChanged: (v) => setState(() => needsWheelchair = v ?? false),
+                ),
+                CheckboxListTile(
+                  title: const Text('Ledsager / assistance ved ombordstigning'),
+                  value: needsEscort,
+                  onChanged: (v) => setState(() => needsEscort = v ?? false),
+                ),
+                TextField(
+                  controller: otherNeedsCtrl,
+                  decoration: const InputDecoration(labelText: 'Andre behov (valgfrit)'),
+                  maxLines: 2,
+                ),
                 ],
               ],
             ),
@@ -442,6 +464,9 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
               'self_paid_meals': selfPaidMeals,
               'self_paid_hotel': selfPaidHotel,
               'self_paid_transport': selfPaidTransport,
+              'needs_wheelchair': needsWheelchair,
+              'needs_escort': needsEscort,
+              'other_needs': otherNeedsCtrl.text,
             },
       'compensation': {
         'choice': compensationChoice,
