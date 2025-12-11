@@ -23,10 +23,26 @@
   <h2>Start appen (Android/iOS)</h2>
   <div class="card">
     <h3>Flutter run</h3>
-    <p>Kør i terminal (PC IP skal være din LAN IP):</p>
-    <code>flutter run --dart-define=API_BASE_URL=<?= h($baseUrl) ?></code>
-    <p class="note">Forklaring: <code>--dart-define</code> sætter <code>API_BASE_URL</code> ind i appen, så telefonen kalder dit backend-host. Hvis du ændrer IP, opdaterer du bare værdien.</p>
+    <p>Kør fra <code>mobile/</code> mappen (ellers får du “No pubspec.yaml”):</p>
+    <code>cd mobile<br>flutter run --dart-define=API_BASE_URL=<?= h($baseUrl) ?></code>
+    <p class="note">Forklaring: <code>--dart-define</code> sætter <code>API_BASE_URL</code> ind i appen, så telefonen kalder dit backend-host (PC IP). Skift IP efter behov.</p>
   </div>
+
+  <h2>Hvad kan du i appen?</h2>
+  <ul>
+    <li><strong>Live Assist</strong>: Start/stop tracking (GPS-pings til backend), log “Offers” (mad/hotel/transport), log “Self-paid” udgifter og status (stranded/aflyst). Knap “Se rejser / Case Close” åbner rejseoversigt.</li>
+    <li><strong>Se rejser</strong>: Liste fra <code>/api/shadow/journeys</code> for dit device. Åbn en rejse i Case Close.</li>
+    <li><strong>Case Close (6 trin)</strong>: Stepper der samler data efter rejsen:
+      <ol>
+        <li>Bekræft rejseoplysninger</li>
+        <li>Vælg hændelse (delay/aflysning/missed connection)</li>
+        <li>Upload bilag (scan/upload, rediger felter)</li>
+        <li>Assistance (mad/hotel/transport, selvbetalt/operatør)</li>
+        <li>Kompensation (refusion/omlægning/voucher + billetpris)</li>
+        <li>Gennemse og indsend (submit er stub i denne version)</li>
+      </ol>
+    </li>
+  </ul>
 
   <h2>Shadow endpoints (hurtig test)</h2>
   <div class="cards">
