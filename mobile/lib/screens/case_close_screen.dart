@@ -241,17 +241,20 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   onPressed: () async {
                     _addReceipt();
                     if (receipts.isEmpty) return;
-                    final parsed = await receiptService.scanDemo();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Scanner kvittering...')),
+                    );
+                    final parsed = await receiptService.scanAndParse();
                     final r = receipts.last;
                     r.typeCtrl.text = (parsed['type'] ?? '').toString();
                     r.amountCtrl.text = (parsed['amount'] ?? '').toString();
                     r.currencyCtrl.text = (parsed['currency'] ?? '').toString();
                     r.dateCtrl.text = (parsed['date'] ?? '').toString();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('OCR/LLM demo udfyldt')),
+                      const SnackBar(content: Text('OCR udfyldt (ML Kit)')),
                     );
                   },
-                  child: const Text('Scan (LLM stub)'),
+                  child: const Text('Scan (ML Kit)'),
                 ),
                 if (receipts.isEmpty) const Text('Ingen bilag tilføjet endnu.'),
                 for (int i = 0; i < receipts.length; i++)
