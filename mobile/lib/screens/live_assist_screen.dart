@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../services/api_client.dart';
 import '../services/device_service.dart';
+import '../services/events_service.dart';
 import '../services/journeys_service.dart';
 import '../services/shadow_tracker.dart';
 import '../services/stations_service.dart';
@@ -30,6 +31,8 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   final List<Map<String, dynamic>> localEvents = [];
   final List<String> _nudgeMessages = [];
   final List<Timer> _nudgeTimers = [];
+  List<Map<String, dynamic>> backendEvents = [];
+  bool loadingEvents = false;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       });
       // Fetch journeys once registered
       await _refreshJourneys();
+      await _refreshEvents();
       _updateMode();
     } catch (e) {
       // Keep UI alive even if backend is unreachable.
@@ -147,6 +151,26 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       _updateMode();
     } catch (e) {
       // ignore for now
+    }
+  }
+
+  Future<void> _refreshEvents() async {
+    if (deviceId == null) return;
+    setState(() {
+      loadingEvents = true;
+    });
+    try {
+      final svc = EventsService(baseUrl: api.baseUrl);
+      final list = await svc.list(deviceId: deviceId, limit: 20);
+      setState(() {
+        backendEvents = list;
+      });
+    } catch (_) {
+      // ignore
+    } finally {
+      setState(() {
+        loadingEvents = false;
+      });
     }
   }
 
@@ -307,6 +331,27 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               child: const Text('Se rejser / Case Close'),
             ),
             const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Hændelseslog'),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: deviceId == null ? null : _refreshEvents,
+                ),
+              ],
+            ),
+            if (loadingEvents) const LinearProgressIndicator(),
+            ...backendEvents.map((e) {
+              final ts = e['received_at'] ?? e['timestamp'] ?? e['ts'] ?? '';
+              final type = e['type'] ?? '';
+              return ListTile(
+                leading: const Icon(Icons.history),
+                title: Text(type.toString()),
+                subtitle: Text(ts.toString()),
+              );
+            }),
+            if (backendEvents.isNotEmpty) const SizedBox(height: 12),
             if (localEvents.isNotEmpty) ...[
               const Text('Seneste hændelser'),
               const SizedBox(height: 8),

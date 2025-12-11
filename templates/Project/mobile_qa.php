@@ -67,6 +67,16 @@
       <p>POST: <code>/api/shadow/journeys/{id}/confirm</code></p>
       <div class="note">Opretter sag (stub) og markerer journey som confirmed.</div>
     </div>
+    <div class="card">
+      <h3>Submit case</h3>
+      <p>POST: <code>/api/shadow/journeys/{id}/submit</code></p>
+      <div class="note">Gemmer payload i tmp/shadow_cases (debug).</div>
+    </div>
+    <div class="card">
+      <h3>Events log</h3>
+      <a href="<?= h($this->Url->build('/api/events', ['fullBase' => true])) ?>" target="_blank">/api/events</a>
+      <div class="note">GET med <code>?device_id=</code> for log; POST via app-knapper.</div>
+    </div>
   </div>
 
   <h2>Hurtig test-guide</h2>
