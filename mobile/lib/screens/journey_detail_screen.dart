@@ -93,7 +93,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => RerouteScreen(destination: arr),
+                        builder: (_) => RerouteScreen(destination: arr, deviceId: (j['device_id'] ?? '').toString()),
                       ),
                     );
                   },

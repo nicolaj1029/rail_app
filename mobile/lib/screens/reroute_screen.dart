@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
+import '../services/api_client.dart';
 import '../services/reroute_service.dart';
 
 class RerouteScreen extends StatefulWidget {
   final String destination;
-  const RerouteScreen({super.key, required this.destination});
+  final String? deviceId;
+  const RerouteScreen({super.key, required this.destination, this.deviceId});
 
   @override
   State<RerouteScreen> createState() => _RerouteScreenState();
@@ -12,12 +15,14 @@ class RerouteScreen extends StatefulWidget {
 
 class _RerouteScreenState extends State<RerouteScreen> {
   final RerouteService _service = RerouteService();
+  late final ApiClient api;
   bool loading = true;
   List<Map<String, String>> options = [];
 
   @override
   void initState() {
     super.initState();
+    api = ApiClient(baseUrl: apiBaseUrl);
     _load();
   }
 
@@ -28,6 +33,23 @@ class _RerouteScreenState extends State<RerouteScreen> {
       options = list;
       loading = false;
     });
+  }
+
+  Future<void> _select(Map<String, String> option) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Valgte: ${option['title']}')),
+    );
+    if (widget.deviceId != null && widget.deviceId!.isNotEmpty) {
+      try {
+        await api.post('/api/events/add', {
+          'device_id': widget.deviceId,
+          'type': 'reroute_selected',
+          'payload': option,
+        });
+      } catch (_) {
+        // ignore
+      }
+    }
   }
 
   @override
@@ -46,11 +68,7 @@ class _RerouteScreenState extends State<RerouteScreen> {
                     title: Text(o['title'] ?? ''),
                     subtitle: Text('${o['eta'] ?? ''}\n${o['desc'] ?? ''}'),
                     trailing: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Valgte: ${o['title']} (stub)')),
-                        );
-                      },
+                      onPressed: () => _select(o),
                       child: const Text('Vælg'),
                     ),
                   ),
