@@ -1,0 +1,27 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions SE regional >150km (re-enabled)",
+        "journey": {
+            "segments": [
+                {
+                    "from": "Stockholm",
+                    "to": "Goteborg",
+                    "country": "SE",
+                    "distance_km": 180
+                }
+            ],
+            "distance_km": 180
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "regional",
+            "profile.articles.art8": true,
+            "profile.articles_sub.art9_1": true,
+            "profile.articles.art17": true,
+            "profile.articles.art18_3": true,
+            "profile.articles.art19": true,
+            "profile.articles.art20_2": true
+        }
+    }
+}

@@ -1,0 +1,31 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions PL intl beyond EU (RU)",
+        "journey": {
+            "is_international_beyond_eu": true,
+            "segments": [
+                {
+                    "from": "Warszawa",
+                    "to": "Terespol",
+                    "country": "PL",
+                    "distance_km": 200
+                },
+                {
+                    "from": "Brest",
+                    "to": "Minsk",
+                    "country": "RU",
+                    "distance_km": 300
+                }
+            ],
+            "distance_km": 500
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "intl_beyond_eu",
+            "profile.articles.art12": false,
+            "profile.articles.art18_3": false,
+            "profile.articles.art10": false
+        }
+    }
+}

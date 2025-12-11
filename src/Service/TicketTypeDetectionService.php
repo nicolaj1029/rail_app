@@ -54,7 +54,7 @@ class TicketTypeDetectionService
             '/\bFlexpreis\b/i',
             // SNCF
             '/\b(Billet|Tarif).*Flex\b/i',
-            '/\b(remboursable|échangeable)\s*(sans|sans frais|à tout moment)\b/i',
+            '/\\b(remboursable|echangeable)\\s*(sans|sans frais|a tout moment)\\b/i',
             // DSB
             '/\b(fuldt\s*refunderbar|fuld\s*refusion)\b/i',
             // Trenitalia
@@ -70,7 +70,8 @@ class TicketTypeDetectionService
             '/\bSparpreis\b/i',
             // SNCF
             '/\b(Billet|Tarif).*(Modul|Semi|Loisir)\b/i',
-            '/\béchangeable\b/i',
+            '/\\bechangeable\\b/i',
+            '/\\bchangeable\\b/i',
             // DSB
             '/\bFlex?bil\s*med\s*gebyr\b/i',
             // Trenitalia
@@ -85,7 +86,7 @@ class TicketTypeDetectionService
             // DB
             '/\bSuper\s*Sparpreis\b/i',
             // SNCF
-            '/\bnon\s*(remboursable|échangeable)\b/i',
+            '/\\b(remboursable|echangeable)\\s*(sans|sans frais|a tout moment)\\b/i',
             // DSB
             '/\bOrange\b/i',
             // Trenitalia
@@ -124,28 +125,33 @@ class TicketTypeDetectionService
             '/valable\s*uniquement\s*sur\s*le\s*train/i',
             '/solo\s*per\s*il\s*treno\s*prenotato/i',
             '/kun\s*for\s*(dette|det)\s*tog/i',
-            '/res(ervation)?\s*obligatoire\b.*(train|num[eé]ro)/i',
+            '/r.{0,3}servation\\s*obligatoire\\b/i',
             // Explicit train number + reserved seat often implies specificity
             '/\b(train|zug|nr\.?|no\.?|numero)\s*[A-Z]?\s*\d{2,6}\b/i',
-            '/\b(seat|plads|platz|si[eè]ge)\b/i',
         ], $ev);
         $anyDay = $this->hitAny($text, [
             '/\bany\s*train\s*(that\s*day|same\s*day)\b/i',
-            '/g[aä]ltig\s*am\s*geltungstag\b/i',
-            '/valable\s*(le\s*jour|toute\s*la\s*journ[eé]e)\b/i',
+            '/galtig\s*am\s*geltungstag\b/i',
+            '/valable\s*(le\s*jour|toute\s*la\s*journ[e]e)\b/i',
             '/valido\s*(per\s*la\s*giornata|tutta\s*la\s*giornata)\b/i',
             '/gyldig\s*hele\s*dagen\b/i',
             '/\bopen\s*ticket\b/i',
+            '/open\s*ticket.*any\s*train\s*same\s*day/i',
+            '/any\s*train\s*same\s*day/i',
         ], $ev);
+        if (!$anyDay and stripos($text, "open ticket") !== false and stripos($text, "train") !== false) {
+            $anyDay = true;
+            $ev[] = 'HEURISTIC: open ticket any train same day';
+        }
 
-        if ($specific && !$anyDay) return 'specific';
-        if ($anyDay && !$specific) return 'any_day';
+        if ($specific and !$anyDay) return 'specific';
+        if ($anyDay and !$specific) return 'any_day';
 
         // Heuristic: TrainNo + Seat + Time -> specific
         $hasTrainNo = (bool)preg_match('/\b(train|zug|nr\.?|no\.?|numero)\s*[A-Z]?\s*\d{2,6}\b/i', $text);
-        $hasSeat    = (bool)preg_match('/\b(seat|plads|platz|siege|si[eè]ge)\b/i', $text);
+        $hasSeat    = (bool)preg_match('/(seat|plads|platz|siege|si.{0,4}ge)/i', $text);
         $hasTime    = (bool)preg_match('/\b([01]?\d|2[0-3])[:h][0-5]\d\b/', $text);
-        if ($hasTrainNo && $hasSeat && $hasTime) {
+        if ($hasTrainNo and $hasSeat and $hasTime) {
             $ev[] = 'HEURISTIC:TrainNo+Seat+Time';
             return 'specific';
         }
@@ -167,7 +173,7 @@ class TicketTypeDetectionService
     private function pushContext(string $s, int $idx, int $len, array &$ev, int $pad = 18): void
     {
         $start = max(0, $idx - $pad); $end = min(strlen($s), $idx + $len + $pad);
-        $ev[] = '…' . substr($s, $start, $end - $start) . '…';
+        $ev[] = 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦' . substr($s, $start, $end - $start) . 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦';
     }
 
     private function normalize(string $s): string
@@ -178,3 +184,5 @@ class TicketTypeDetectionService
 
     private function round2(float $n): float { return round($n * 100) / 100; }
 }
+
+

@@ -82,6 +82,9 @@
   $bikeC = (string)($meta['bike_count'] ?? ($meta['_auto']['bike_count']['value'] ?? ''));
 ?>
 <div class="small">bike_booked (auto): <code><?= h($bikeB ?: 'unknown') ?></code><?php if ($bikeC!==''): ?> · antal: <code><?= h($bikeC) ?></code><?php endif; ?></div>
+<?php if (!empty($meta['_auto']['bike_was_present']['value'])): ?>
+  <div class="small">bike_was_present (auto): <code><?= h((string)$meta['_auto']['bike_was_present']['value']) ?></code></div>
+<?php endif; ?>
 <?php if (!empty($bikeAuto)): ?>
   <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($bikeAuto['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($bikeAuto['confidence'] ?? '')) ?></code></div>
 <?php endif; ?>
@@ -137,6 +140,42 @@
   <button type="submit" class="small" style="margin-top:4px;">Gem</button>
   <div class="small muted" style="margin-top:4px;">Match: Art. 9 – Bilag II del I</div>
   </form>
+<?php
+// Pricing transparency – read dedicated evaluator block when available
+$art9Pricing = is_array($art9_pricing ?? null) ? (array)$art9_pricing : [];
+if (!empty($art9Pricing)) {
+  $prStatus = $art9Pricing['compliance_status'] ?? null;
+  $prReasons = (array)($art9Pricing['reasoning'] ?? []);
+  echo '<div class="card info"><h4>Art. 9(1) · Billetpriser</h4>';
+  if ($prStatus !== null) {
+    $lbl = ($prStatus === true) ? 'Opfyldt' : 'Ikke opfyldt';
+    echo '<div class="small">status: <span class="badge" style="border:1px solid #d0d7de;">' . h($lbl) . '</span></div>';
+  }
+  if (!empty($prReasons)) {
+    echo '<ul>';
+    foreach ($prReasons as $m) { echo '<li>' . h((string)$m) . '</li>'; }
+    echo '</ul>';
+  }
+  echo '<div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 3</div></div>';
+} else {
+  // Fallback to hooks-based minimal messages
+  $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
+  $multiShown = strtolower((string)($h9['multiple_fares_shown'] ?? ($meta['multiple_fares_shown'] ?? 'unknown')));
+  $cheapHi = strtolower((string)($h9['cheapest_highlighted'] ?? ($meta['cheapest_highlighted'] ?? 'unknown')));
+  $pricingMsgs = [];
+  if ($multiShown === 'nej' || $multiShown === 'no') {
+    $pricingMsgs[] = 'Flere prisniveauer ser ikke ud til at være vist før købet.';
+  }
+  if ($cheapHi === 'nej' || $cheapHi === 'no') {
+    $pricingMsgs[] = 'Billigste pris ser ikke ud til at være fremhævet.';
+  }
+  if (!empty($pricingMsgs)) {
+    echo '<div class="card info"><h4>Art. 9(1) · Billetpriser</h4><ul>'; 
+    foreach ($pricingMsgs as $m) { echo '<li>' . h($m) . '</li>'; }
+    echo '</ul><div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 3</div></div>';
+  }
+}
+?>
 <hr/>
 <div class="small"><strong>TRIN 3</strong> · Klasse og reserverede faciliteter</div>
 <?php 
@@ -176,6 +215,39 @@
   </div>
   <button type="submit" class="small" style="margin-top:4px;">Gem</button>
 </form>
+<?php // Downgrade per-leg summary placed near class/reservation to group related elements ?>
+<?php if (!empty($downgrade) && is_array($downgrade)): ?>
+  <?php $dgStatus = $downgrade['compliance_status'] ?? null; $dgRes = (array)($downgrade['results'] ?? []); ?>
+  <div class="card info" style="margin-top:6px;">
+    <h4>Nedgradering pr. stræk</h4>
+    <?php if ($dgStatus !== null): ?>
+      <div class="small">status: <span class="badge" style="border:1px solid #d0d7de;"><?= ($dgStatus===true?'Beregnede refusioner':'Mangler data til beregning') ?></span></div>
+    <?php endif; ?>
+    <?php if (!empty($dgRes)): ?>
+      <ul>
+        <?php foreach ($dgRes as $row): if (empty($row['downgraded'])) continue; ?>
+          <li>
+            <strong><?= h((string)($row['segment'] ?? '')) ?></strong>:
+            <?php $rf=(array)($row['refund']??[]); $meth=(string)($rf['method']??''); ?>
+            <?php if (!empty($rf['amount'])): ?>
+              Refusion: <code><?= h(number_format((float)$rf['amount'],2,'.','')) ?></code> <?= h((string)($rf['currency']??'')) ?> (<?= h($meth) ?>)
+            <?php elseif (!empty($rf['percent'])): ?>
+              Refusion: <code><?= h((string)$rf['percent']) ?>%</code> (<?= h($meth) ?>)
+            <?php else: ?>
+              Refusion: <span class="muted">(beløb udregnes)</span>
+            <?php endif; ?>
+            <?php $rs=(array)($row['reasoning']??[]); if (!empty($rs)): ?>
+              <div class="small">Årsag: <?= h(implode('; ', array_map('strval',$rs))) ?></div>
+            <?php endif; ?>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php else: ?>
+      <div class="small">Ingen nedgradering af klasse eller reserveret plads registreret.</div>
+    <?php endif; ?>
+    <div class="small muted">jf. CIV + GCC‑CIV/PRR · jf. Art. 9(1) · (ved omlægning jf. Art. 18(2))</div>
+  </div>
+<?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 1</strong> · Forsinkelse & hændelse</div>
 <?php $delayNow = (int)($compute['delayMinEU'] ?? (int)($form['delayAtFinalMinutes'] ?? 0)); $kd = !empty($compute['knownDelayBeforePurchase']); ?>
@@ -205,6 +277,51 @@
   <button type="submit" class="small ml8">Gem</button>
   <span class="muted" style="margin-left:6px;">(opdaterer efter næste handling)</span>
   </form>
+<?php
+  // Preknown disruption/delay – read dedicated evaluator block when available
+  $art9Preknown = is_array($art9_preknown ?? null) ? (array)$art9_preknown : [];
+  if (!empty($art9Preknown)) {
+    $pkStatus = $art9Preknown['compliance_status'] ?? null;
+    $pkReasons = (array)($art9Preknown['reasoning'] ?? []);
+    echo '<div class="card info"><h4>Art. 9(1) · Forhåndsoplysning om afbrydelser/forsinkelser</h4>';
+    if ($pkStatus !== null) {
+      $lbl = ($pkStatus === true) ? 'Opfyldt' : 'Ikke opfyldt';
+      echo '<div class="small">status: <span class="badge" style="border:1px solid #d0d7de;">' . h($lbl) . '</span></div>';
+    }
+    if (!empty($pkReasons)) {
+      echo '<ul>';
+      foreach ($pkReasons as $m) { echo '<li>' . h((string)$m) . '</li>'; }
+      echo '</ul>';
+    }
+    echo '<div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 7 · Art. 19(9)</div></div>';
+  } else {
+    // Fallback minimal messages using hooks/meta
+    $h9f = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
+    $preInf = strtolower((string)($h9f['preinformed_disruption'] ?? ($meta['preinformed_disruption'] ?? 'unknown')));
+    $channels = (array)($h9f['preinfo_channels'] ?? ($meta['preinfo_channels'] ?? []));
+    $kdMin = (string)($h9f['known_delay_before_purchase_minutes'] ?? ($meta['known_delay_before_purchase_minutes'] ?? ''));
+    $msgs = [];
+    if ($preInf === 'ja' || $preInf === 'yes' || $preInf === 'true' || $preInf === '1') {
+      $msgs[] = 'Forsinkelsen/afbrydelsen var oplyst før køb. Dette kan begrænse kompensation (Art. 19(9)).';
+      $kdi = is_numeric($kdMin) ? (int)$kdMin : null;
+      if ($kdi !== null && $kdi >= 60) {
+        $msgs[] = 'Kendt forsinkelse ≥ 60 min ved købstidspunkt (kan udelukke kompensation).';
+      }
+      if (!empty($channels)) {
+        $msgs[] = 'Kilde: ' . implode(', ', array_map('h', array_map('strval', $channels)));
+      }
+    } elseif ($preInf === 'nej' || $preInf === 'no' || $preInf === 'false' || $preInf === '0') {
+      $msgs[] = 'Ingen forudgående oplysning om relevant afbrydelse/forsinkelse ved køb.';
+    } else {
+      $msgs[] = 'Uklarhed om forudgående oplysning. Vurdering afhænger af dokumentation (før købstidspunkt).';
+    }
+    if (!empty($msgs)) {
+      echo '<div class="card info"><h4>Art. 9(1) · Forhåndsoplysning om afbrydelser/forsinkelser</h4><ul>';
+      foreach ($msgs as $m) { echo '<li>' . (is_string($m) ? h($m) : h(strval($m))) . '</li>'; }
+      echo '</ul><div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 7 · Art. 19(9)</div></div>';
+    }
+  }
+?>
 <hr/>
 <div class="small"><strong>TRIN 2</strong> · EU-scope</div>
 <?php $euOnlyNow = isset($compute['euOnly']) ? (bool)$compute['euOnly'] : null; $isAdmin = (bool)($isAdmin ?? false); ?>
@@ -222,8 +339,27 @@
 <?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 3</strong> · PMR/handicap</div>
-<?php $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : []; $pmrU = (string)($h9['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')); $pmrB = (string)($h9['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')); ?>
-<div class="small">pmr_user (auto): <code><?= h($pmrU ?: 'unknown') ?></code> · pmr_booked: <code><?= h($pmrB ?: 'unknown') ?></code></div>
+<?php
+  // Prefer explicit AUTO provenance for display; fall back to current meta/hooks for user-answered values
+  $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
+  $pmrUAuto = (string)($meta['_auto']['pmr_user']['value'] ?? '');
+  $pmrBAuto = (string)($meta['_auto']['pmr_booked']['value'] ?? '');
+  // Normalize yes/no in both DA and EN for display
+  $norm = function(string $v): string {
+    $v = strtolower(trim($v));
+    if ($v === 'ja') return 'Ja'; if ($v === 'nej') return 'Nej';
+    if ($v === 'yes') return 'Ja'; if ($v === 'no') return 'Nej';
+    return $v === '' ? 'unknown' : $v;
+  };
+  $pmrUDisp = $norm($pmrUAuto);
+  $pmrBDisp = $norm($pmrBAuto);
+  if ($pmrUDisp === 'unknown') { $pmrUDisp = $norm((string)($h9['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown'))); }
+  if ($pmrBDisp === 'unknown') { $pmrBDisp = $norm((string)($h9['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown'))); }
+  // Also keep raw values for the form preselection (prefer user/meta over auto)
+  $pmrU = (string)($h9['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown'));
+  $pmrB = (string)($h9['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown'));
+?>
+<div class="small">pmr_user (auto): <code><?= h($pmrUDisp ?: 'unknown') ?></code> · pmr_booked: <code><?= h($pmrBDisp ?: 'unknown') ?></code></div>
 <?php if (!empty($meta['_pmr_detection'])): $pd=(array)$meta['_pmr_detection']; ?>
   <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($pd['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($pd['confidence'] ?? '')) ?></code></div>
 <?php endif; ?>
@@ -232,16 +368,14 @@
     <input type="hidden" name="_csrfToken" value="<?= h($csrf) ?>" />
   <?php endif; ?>
   <div class="small">Har du et handicap eller nedsat mobilitet?
-    <?php $v = strtolower($pmrU); ?>
-    <label class="ml8"><input type="radio" name="pmr_user" value="Ja" <?= $v==='ja'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="pmr_user" value="Nej" <?= $v==='nej'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="pmr_user" value="unknown" <?= ($v===''||$v==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  <?php $v = strtolower($pmrU); ?>
+  <label class="ml8"><input type="radio" name="pmr_user" value="Ja" <?= $v==='ja'?'checked':'' ?> /> Ja</label>
+  <label class="ml8"><input type="radio" name="pmr_user" value="Nej" <?= $v==='nej'?'checked':'' ?> /> Nej</label>
   </div>
   <div class="small" style="margin-top:4px;">Bestilte du assistance før rejsen?
-    <?php $vb = strtolower($pmrB); ?>
-    <label class="ml8"><input type="radio" name="pmr_booked" value="Ja" <?= $vb==='ja'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="pmr_booked" value="Nej" <?= $vb==='nej'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="pmr_booked" value="unknown" <?= ($vb===''||$vb==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  <?php $vb = strtolower($pmrB); ?>
+  <label class="ml8"><input type="radio" name="pmr_booked" value="Ja" <?= $vb==='ja'?'checked':'' ?> /> Ja</label>
+  <label class="ml8"><input type="radio" name="pmr_booked" value="Nej" <?= $vb==='nej'?'checked':'' ?> /> Nej</label>
   </div>
   <button type="submit" class="small" style="margin-top:4px;">Gem</button>
 </form>
@@ -265,6 +399,42 @@
       <button type="submit" class="small ml8">Gem</button>
     </form>
   <?php endif; ?>
+  <?php
+    // Fastest-route – read dedicated evaluator block when available
+    $art9Fastest = is_array($art9_fastest ?? null) ? (array)$art9_fastest : [];
+    if (!empty($art9Fastest)) {
+      $faStatus = $art9Fastest['compliance_status'] ?? null;
+      $faReasons = (array)($art9Fastest['reasoning'] ?? []);
+      echo '<div class="card info"><h4>Art. 9(1) · Hurtigste rejse</h4>';
+      if ($faStatus !== null) {
+        $lbl = ($faStatus === true) ? 'Opfyldt' : 'Ikke opfyldt';
+        echo '<div class="small">status: <span class="badge" style="border:1px solid #d0d7de;">' . h($lbl) . '</span></div>';
+      }
+      if (!empty($faReasons)) {
+        echo '<ul>';
+        foreach ($faReasons as $m) { echo '<li>' . h((string)$m) . '</li>'; }
+        echo '</ul>';
+      }
+      echo '<div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 2</div></div>';
+    } else {
+      // Fallback minimal messages
+      $h9 = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
+      $fastFlag = strtolower((string)($h9['fastest_flag_at_purchase'] ?? ($meta['fastest_flag_at_purchase'] ?? 'unknown')));
+      $altsShown = strtolower((string)($h9['alts_shown_precontract'] ?? ($meta['alts_shown_precontract'] ?? 'unknown')));
+      $fastMsgs = [];
+      if ($fastFlag === 'nej' || $fastFlag === 'no') {
+        $fastMsgs[] = 'Der er indikationer på, at “hurtigste rute” ikke blev tydeligt fremhævet. Det kan påvirke omlægning efter Art. 18.';
+      }
+      if ($altsShown === 'nej' || $altsShown === 'no') {
+        $fastMsgs[] = 'Alternative ruter med kortere samlet rejsetid ser ikke ud til at være vist.';
+      }
+      if (!empty($fastMsgs)) {
+        echo '<div class="card info"><h4>Art. 9(1) · Hurtigste rejse</h4><ul>';
+        foreach ($fastMsgs as $m) { echo '<li>' . h($m) . '</li>'; }
+        echo '</ul><div class="small muted">jf. Art. 9(1) + Bilag II, pkt. 2</div></div>';
+      }
+    }
+  ?>
   <hr/>
 <?php endif; ?>
 <?php if (isset($art12flow) && is_array($art12flow)): ?>
@@ -413,6 +583,73 @@ if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'throug
     <div class="small">Barcode: <code><?= h((string)($bc['format'] ?? '')) ?></code> (<?= h((string)($bc['chars'] ?? '')) ?> chars)</div>
   <?php endif; ?>
 </details>
+<?php // Art. 6 – Cykel: conditional, source-aware messages derived from evaluator ?>
+<?php if (!empty($art6) && is_array($art6)): ?>
+  <?php
+    $art6Msgs = [];
+    $ar = strtolower((string)($art6['reservation_required'] ?? 'unknown'));
+    $am = strtolower((string)($art6['reservation_made'] ?? 'unknown'));
+    $den = strtolower((string)($art6['denied_boarding'] ?? 'unknown'));
+    $rt = strtolower((string)($art6['refusal_reason_type'] ?? 'unknown'));
+    $allowed = in_array($rt, ['capacity','equipment','weight_dim'], true);
+    if ($ar === 'yes' && $am === 'no' && $allowed) {
+        $art6Msgs[] = 'Det ser ud til, at cykelreservation var påkrævet, og at reservation ikke var foretaget. Hvis det var oplyst på forhånd, kan afvisningen være berettiget efter artikel 6 (kapacitet/udstyr/regelhensyn).';
+    }
+    if ($ar === 'yes' && ($am === 'unknown' || !$allowed)) {
+        $art6Msgs[] = 'Det er uklart, om reservation var påkrævet, eller om afvisningen var sagligt begrundet. Du kan have krav efter artikel 18 (omlægning/refusion).';
+    }
+    if ($den === 'yes' && in_array($rt, ['unknown','none','unspecified'], true)) {
+        $art6Msgs[] = 'Du blev afvist uden begrundet årsag (kapacitet/sikkerhed/udstyr). Det kan være i strid med artikel 6. Du kan gå videre efter artikel 18.';
+    }
+    if ($den !== 'yes' && $ar === 'yes' && $am === 'no') {
+        $art6Msgs[] = 'Bemærk: Reservation er påkrævet. Uden reservation kan boarding blive afvist ved fulde tog.';
+    }
+  ?>
+  <?php if (!empty($art6Msgs)): ?>
+    <div class="card info">
+      <h4>Art. 6 – Cykel</h4>
+      <ul>
+        <?php foreach ($art6Msgs as $m): ?>
+          <li><?= h($m) ?></li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+  <?php endif; ?>
+<?php endif; ?>
+<?php // PMR – Safe, conditional messages (Art.21–24 + Art.9(1)) ?>
+<?php
+  $pmMsgs = [];
+  $pmUser = strtolower((string)($h['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')));
+  $pmBooked = strtolower((string)($h['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')));
+  $pmDelivered = strtolower((string)($h['pmr_delivered_status'] ?? ($meta['pmr_delivered_status'] ?? 'unknown')));
+  $pmPromMiss = strtolower((string)($h['pmr_promised_missing'] ?? ($meta['pmr_promised_missing'] ?? 'unknown')));
+  if ($pmUser === 'ja' || $pmUser === 'yes') {
+    if ($pmBooked === 'ja' || $pmBooked === 'yes') {
+      if ($pmDelivered === 'no') {
+        $pmMsgs[] = 'Bestilt assistance blev ikke leveret. Det kan være i strid med artikel 21–24. Du kan klage over manglende assistance.';
+      } elseif ($pmDelivered === 'partial') {
+        $pmMsgs[] = 'Assistance blev delvist leveret. Du kan have et krav efter artikel 21–24 for den manglende del.';
+      }
+    } elseif ($pmBooked === 'attempted_refused') {
+      $pmMsgs[] = 'Forsøg på at bestille assistance blev afvist. Det kan være i strid med artikel 21–24.';
+    }
+    if ($pmPromMiss === 'ja' || $pmPromMiss === 'yes') {
+      $pmMsgs[] = 'Lovede PMR‑faciliteter før køb var ikke tilgængelige (Art.9(1)). Det kan også være i strid med artikel 21–24.';
+    }
+  } else {
+    $pmMsgs[] = 'PMR‑rettigheder (Art.21–24) gælder normalt ikke, men generel assistance ved forsinkelse kan gælde (Art.20(2)).';
+  }
+?>
+<?php if (!empty($pmMsgs)): ?>
+  <div class="card info">
+    <h4>Art. 21–24 · PMR</h4>
+    <ul>
+      <?php foreach ($pmMsgs as $m): ?>
+        <li><?= h($m) ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
 <?php endif; // showArt12Section ?>
 <hr/>
 <div class="small"><strong>TRIN 7</strong> · Art. 18 (remedies)</div>

@@ -1,0 +1,23 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions FI regional <150km",
+        "journey": {
+            "segments": [
+                {
+                    "from": "Helsinki",
+                    "to": "Tampere",
+                    "country": "FI",
+                    "distance_km": 110
+                }
+            ],
+            "distance_km": 110
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "regional",
+            "profile.articles.art19": false,
+            "profile.articles.art20_2": false
+        }
+    }
+}

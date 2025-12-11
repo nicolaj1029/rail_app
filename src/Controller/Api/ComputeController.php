@@ -16,25 +16,17 @@ class ComputeController extends AppController
         $this->viewBuilder()->setClassName('Json');
     }
 
+    private function gone(): void
+    {
+        $this->response = $this->response->withStatus(404);
+        $this->set(['status' => 404, 'error' => 'Endpoint disabled']);
+        $this->viewBuilder()->setOption('serialize', ['status','error']);
+    }
+
     public function compensation(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-        $art9meta = (array)($payload['meta'] ?? []);
-
-        $segments = (array)($journey['segments'] ?? []);
-        $last = !empty($segments) ? $segments[array_key_last($segments)] : [];
-
-        $schedArr = (string)($last['schedArr'] ?? '');
-        $actArr = (string)($last['actArr'] ?? '');
-        $minutes = null;
-        if ($schedArr !== '' && $actArr !== '') {
-            $t1 = strtotime($schedArr);
-            $t2 = strtotime($actArr);
-            if ($t1 && $t2) {
-                $minutes = max(0, (int)round(($t2 - $t1) / 60));
-            }
+        $this->gone();
+    }
         }
 
         // Fallback to journey.actualArrTime + dep date when segment info missing
@@ -130,72 +122,31 @@ class ComputeController extends AppController
 
     public function art12(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-        $meta = (array)($payload['meta'] ?? []);
-        $svc = new \App\Service\Art12Evaluator();
-        $res = $svc->evaluate($journey, $meta);
-        $this->set($res);
-        $this->viewBuilder()->setOption('serialize', array_keys($res));
+        $this->gone();
     }
 
     public function exemptions(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-
-        $builder = new \App\Service\ExemptionProfileBuilder();
-        $profile = $builder->build($journey);
-
-        $this->set(['profile' => $profile]);
-        $this->viewBuilder()->setOption('serialize', ['profile']);
+        $this->gone();
     }
 
     public function art9(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-        $meta = (array)($payload['meta'] ?? []);
-        $svc = new \App\Service\Art9Evaluator();
-        $res = $svc->evaluate($journey, $meta);
-        $this->set($res);
-        $this->viewBuilder()->setOption('serialize', array_keys($res));
+        $this->gone();
     }
 
     public function refund(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-        $meta = (array)($payload['meta'] ?? []);
-        $svc = new \App\Service\RefundEvaluator();
-        $res = $svc->evaluate($journey, $meta);
-        $this->set($res);
-        $this->viewBuilder()->setOption('serialize', array_keys($res));
+        $this->gone();
     }
 
     public function refusion(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $payload = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $journey = (array)($payload['journey'] ?? []);
-        $meta = (array)($payload['meta'] ?? []);
-        $svc = new \App\Service\Art18RefusionEvaluator();
-        $res = $svc->evaluate($journey, $meta);
-        $this->set($res);
-        $this->viewBuilder()->setOption('serialize', array_keys($res));
+        $this->gone();
     }
 
     public function claim(): void
     {
-        $this->request->allowMethod(['get','post']);
-        $input = $this->request->is('get') ? (array)$this->request->getQueryParams() : (array)$this->request->getData();
-        $calc = new \App\Service\ClaimCalculator();
-        $out = $calc->calculate($input);
-        $this->set($out);
-        $this->viewBuilder()->setOption('serialize', array_keys($out));
+        $this->gone();
     }
 }

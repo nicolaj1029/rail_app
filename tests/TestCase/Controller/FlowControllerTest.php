@@ -63,4 +63,45 @@ class FlowControllerTest extends TestCase
         $this->assertResponseCode(302);
         $this->assertRedirect(['controller' => 'Flow', 'action' => 'assistance']);
     }
+
+    public function testBikeWasPresentAutoDefaultsToNoOnEntitlements(): void
+    {
+        // Step 1: POST OCR text with no bike signals to trigger detection with low confidence and no hits
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+        $data = [
+            'ocr_text' => 'Standard billet\nVoksen 1\nSæde 12A\nAfgang 08:12',
+        ];
+        $this->post('/flow/entitlements', $data);
+        $this->assertResponseOk();
+
+        // Step 2: GET same page to render template using session state set by controller
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        // Assert the radio for bike_was_present=no is preselected (checked)
+        $this->assertStringContainsString('name="bike_was_present" value="no" checked', $body);
+    }
+
+    public function testAssistanceHotelSelfPaidFieldsVisibleWhenHotelNotOffered(): void
+    {
+        // Seed session so Art. 20 is active (cancellation) and hotel_offered = no
+        $this->session([
+            'flow.incident' => ['main' => 'cancellation'],
+            'flow.form' => [
+                'hotel_offered' => 'no',
+                'art20_expected_delay_60' => 'yes',
+            ],
+        ]);
+
+        $this->get('/flow/assistance');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        // Self-paid hotel fields should be present in the HTML (gated client-side via data-show-if)
+        $this->assertStringContainsString('name="hotel_self_paid_amount"', $body);
+        $this->assertStringContainsString('name="hotel_self_paid_currency"', $body);
+        $this->assertStringContainsString('name="hotel_self_paid_nights"', $body);
+    }
 }

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://togforsinkelse/schema/base_price_ranges-v1.json",
+  "meals": {
+    "LOW": { "min": 6, "max": 10 },
+    "MID": { "min": 8, "max": 15 },
+    "HIGH": { "min": 10, "max": 18 }
+  },
+  "hotelPerNight": {
+    "LOW": { "min": 60, "max": 90 },
+    "MID": { "min": 80, "max": 130 },
+    "HIGH": { "min": 110, "max": 180 }
+  },
+  "taxiShortKm": {
+    "LOW": { "min": 4, "max": 8 },
+    "MID": { "min": 6, "max": 12 },
+    "HIGH": { "min": 8, "max": 14 }
+  },
+  "taxiMediumKm": {
+    "LOW": { "min": 6, "max": 12 },
+    "MID": { "min": 10, "max": 18 },
+    "HIGH": { "min": 12, "max": 22 }
+  },
+  "taxiLongKm": {
+    "LOW": { "min": 12, "max": 20 },
+    "MID": { "min": 18, "max": 30 },
+    "HIGH": { "min": 22, "max": 40 }
+  },
+  "taxiVeryLongKm": {
+    "LOW": { "min": 20, "max": 35 },
+    "MID": { "min": 30, "max": 50 },
+    "HIGH": { "min": 40, "max": 80 }
+  },
+  "altTransportRegional": {
+    "LOW": { "min": 3, "max": 8 },
+    "MID": { "min": 5, "max": 12 },
+    "HIGH": { "min": 8, "max": 15 }
+  },
+  "altTransportIntercity": {
+    "LOW": { "min": 5, "max": 15 },
+    "MID": { "min": 10, "max": 25 },
+    "HIGH": { "min": 15, "max": 30 }
+  },
+  "altTransportHighspeed": {
+    "LOW": { "min": 10, "max": 25 },
+    "MID": { "min": 20, "max": 50 },
+    "HIGH": { "min": 30, "max": 70 }
+  },
+  "upgradeFirstClass": {
+    "LOW": { "min": 5, "max": 15 },
+    "MID": { "min": 15, "max": 35 },
+    "HIGH": { "min": 25, "max": 50 }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://togforsinkelse/schema/currency_fx-v1.json",
+  "baseCurrency": "EUR",
+  "rates": {
+    "EUR": 1.0,
+    "DKK": 7.45,
+    "SEK": 11.0,
+    "NOK": 11.0,
+    "PLN": 4.3,
+    "CZK": 25.0,
+    "HUF": 400.0,
+    "CHF": 0.95,
+    "GBP": 0.85
+  },
+  "rounding": {
+    "EUR": 1,
+    "DKK": 5,
+    "SEK": 5,
+    "NOK": 5,
+    "PLN": 5,
+    "CZK": 10,
+    "HUF": 100,
+    "CHF": 1,
+    "GBP": 1
+  }
+}

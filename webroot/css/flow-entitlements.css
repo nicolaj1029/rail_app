@@ -1,0 +1,227 @@
+:root {
+    --fe-card-bg: #fff;
+    --fe-card-border: #ddd;
+    --fe-card-radius: 8px;
+    --fe-muted: #637381;
+    --fe-badge-bg: #eef2ff;
+    --fe-badge-border: #c7d2fe;
+    --fe-accent: #2f85ae;
+    --fe-outline: #e9ecef;
+}
+
+/* Page header */
+.fe-header {
+    margin-bottom: 12px;
+}
+
+.fe-header .fe-step {
+    display: inline-block;
+    font-size: 12px;
+    color: #375;
+    background: #e9f7ef;
+    border: 1px solid #c7e9d1;
+    padding: 3px 8px;
+    border-radius: 999px;
+}
+
+.fe-header .fe-title {
+    margin: 8px 0 4px;
+    font-size: 24px;
+    line-height: 1.25;
+}
+
+.fe-header .fe-sub {
+    margin: 0;
+    color: var(--fe-muted);
+    font-size: 14px;
+}
+
+/* Sections */
+.section-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.mt4 {
+    margin-top: 4px
+}
+
+.mt6 {
+    margin-top: 6px
+}
+
+.mt8 {
+    margin-top: 8px
+}
+
+.mt10 {
+    margin-top: 10px
+}
+
+.mt12 {
+    margin-top: 12px
+}
+
+.ml6 {
+    margin-left: 6px
+}
+
+.ml8 {
+    margin-left: 8px
+}
+
+.mr8 {
+    margin-right: 8px
+}
+
+.ml-auto {
+    margin-left: auto
+}
+
+.small {
+    font-size: 13px;
+}
+
+.muted {
+    color: var(--fe-muted);
+}
+
+/* Cards */
+.card {
+    background: var(--fe-card-bg);
+    border: 1px solid var(--fe-card-border);
+    border-radius: var(--fe-card-radius);
+    padding: 12px;
+}
+
+.debug-card {
+    background: #f9fbff;
+    border-color: #eef;
+}
+
+.hooks-card {
+    position: sticky;
+    top: 12px;
+    max-height: 80vh;
+    overflow: auto;
+    background: #f9fbff;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    background: var(--fe-badge-bg);
+    border: 1px solid var(--fe-badge-border);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+
+.badge-muted {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+}
+
+/* Buttons */
+.button-outline {
+    background: #eee !important;
+    color: #333 !important;
+    border-color: #ddd !important;
+}
+
+/* Upload */
+.upload-dropzone {
+    margin-top: 8px;
+    border: 2px dashed #9bb;
+    background: #f7fbff;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 100px;
+    text-align: center;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+.upload-dropzone.drag {
+    background: #eef7ff;
+    border-color: #7aa7c7;
+}
+
+.upload-title {
+    font-size: 14px;
+    color: #345;
+}
+
+.upload-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.file-list {
+    margin-top: 12px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+/* Grid helpers for inputs */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+@media (max-width: 860px) {
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tables */
+.fe-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.fe-table th {
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    padding: 6px 4px;
+    font-weight: 600;
+}
+
+.fe-table td {
+    border-bottom: 1px solid #f3f3f3;
+    padding: 6px 4px;
+}
+
+.fe-table tbody tr:hover {
+    background: #fafbff;
+}
+
+/* Actions row */
+.actions-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 12px;
+}
+
+/* Hooks toolbar */
+.hooks-toolbar {
+    margin-top: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Simple error */
+.error {
+    color: #b33;
+}

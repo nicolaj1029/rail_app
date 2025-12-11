@@ -1,0 +1,28 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions DE regional partial Art.9(2) + others",
+        "journey": {
+            "segments": [
+                {
+                    "from": "Hamburg",
+                    "to": "Bremen",
+                    "country": "DE",
+                    "distance_km": 120
+                }
+            ],
+            "distance_km": 120
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "regional",
+            "profile.articles_sub.art9_2": false,
+            "profile.articles.art20_2": false,
+            "profile.articles.art30_1": false,
+            "profile.articles.art29": false,
+            "profile.articles_sub.art9_1": true,
+            "profile.articles_sub.art9_3": true,
+            "profile.articles.art9": true
+        }
+    }
+}

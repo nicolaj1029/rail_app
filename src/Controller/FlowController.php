@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Service\ExemptionResolver;
+use App\Service\PriceHintsService;
+
 class FlowController extends AppController
 {
     private function isAdmin(): bool
@@ -159,9 +162,21 @@ class FlowController extends AppController
         } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Art12AutoDeriver failed: ' . $e->getMessage(); }
         try { $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art12 = ['hooks'=>[]]; $meta['logs'][] = 'WARN: Art12Evaluator failed: ' . $e->getMessage(); }
         try { $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art9 = null; $meta['logs'][] = 'WARN: Art9Evaluator failed: ' . $e->getMessage(); }
+        // Art. 6 (bicycles) evaluator for UI messages
+        try { $art6 = (new \App\Service\Art6BikeEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art6 = null; $meta['logs'][] = 'WARN: Art6BikeEvaluator failed: ' . $e->getMessage(); }
+        // Art. 21–24 (PMR assistance) for UI messages
+        try { $pmr = (new \App\Service\Art21to24PmrEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $pmr = null; $meta['logs'][] = 'WARN: Art21to24PmrEvaluator failed: ' . $e->getMessage(); }
+        try { $art20 = (new \App\Service\Art20AssistanceEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art20 = null; $meta['logs'][] = 'WARN: Art20AssistanceEvaluator failed: ' . $e->getMessage(); }
         $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
         $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
         [$euOnlySuggested, $euOnlyReason] = $this->suggestEuOnly($journey, $meta);
+        // Service policy warnings (suburban + regional-blocked)
+        $serviceWarnings = [];
+        if (!empty($journey['is_suburban'])) {
+            $serviceWarnings[] = 'Suburban/lokaltog er ikke understøttet i denne app (national håndtering påkrævet).';
+        } elseif (!empty($profile['blocked']) && (string)($profile['scope'] ?? '') === 'regional') {
+            $serviceWarnings[] = 'Regional trafik i dette land er undtaget fra EU-flowet her (følg operatørens nationale procedure).';
+        }
         // Compute ClaimFormSelector recommendation early so TRIN 3 shows EU vs national
         try {
             $countryCtx = (string)($journey['country']['value'] ?? ($form['operator_country'] ?? ''));
@@ -175,7 +190,7 @@ class FlowController extends AppController
             ]);
         } catch (\Throwable $e) { $formDecision = ['form'=>'eu_standard_claim','reason'=>'Fallback','notes'=>['err:'.$e->getMessage()]]; }
 
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','refund','refusion','euOnlySuggested','euOnlyReason','formDecision'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','art6','pmr','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
         return null;
     }
 
@@ -192,13 +207,75 @@ class FlowController extends AppController
             // Targeted reset: clear form + meta (auto extraction) but keep journey/compute/flags/incident
             $session->delete('flow.form');
             $session->delete('flow.meta');
+            $session->delete('flow.leg_class_delivered');
+            $session->delete('flow.leg_class_delivered_locked');
             // Leave flow.journey / flow.compute / flow.flags / flow.incident intact
         }
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
         $compute = (array)$session->read('flow.compute') ?: [];
         $form = (array)$session->read('flow.form') ?: [];
+        // Defensive restore: when navigating back (GET) keep the last saved per-leg delivered selections
+        $hasPersistedDelivered = false;
+        $deliveredLocked = (bool)$session->read('flow.leg_class_delivered_locked');
+        // If form already contains a delivered value from an earlier POST, lock it immediately
+        if (!empty($form['leg_class_delivered'])) {
+            $deliveredLocked = true;
+            $session->write('flow.leg_class_delivered', (array)$form['leg_class_delivered']);
+            $session->write('flow.leg_class_delivered_locked', true);
+        }
+        if ($this->request->is('get')) {
+            $persistedDelivered = (array)$session->read('flow.leg_class_delivered') ?: [];
+            if (!empty($persistedDelivered)) {
+                $form['leg_class_delivered'] = $persistedDelivered;
+                $hasPersistedDelivered = true;
+                $deliveredLocked = true;
+                $session->write('flow.leg_class_delivered_locked', true);
+            } elseif (!empty($meta['saved_leg_class_delivered'])) {
+                $form['leg_class_delivered'] = (array)$meta['saved_leg_class_delivered'];
+                $hasPersistedDelivered = true;
+                $deliveredLocked = true;
+                $session->write('flow.leg_class_delivered_locked', true);
+            }
+        }
+        // Restore per-leg felter fra backup hvis de mangler (behold brugerens valg)
+        $fnameCurr = (string)($form['_ticketFilename'] ?? '');
+        if (!$deliveredLocked) {
+            if ($fnameCurr !== '' && !empty($meta['saved_leg_by_file'][$fnameCurr])) {
+                $byFile = (array)$meta['saved_leg_by_file'][$fnameCurr];
+                if (!$hasPersistedDelivered && empty($form['leg_class_delivered']) && !empty($byFile['delivered'])) {
+                    $form['leg_class_delivered'] = (array)$byFile['delivered'];
+                }
+                if (empty($form['leg_class_purchased']) && !empty($byFile['purchased'])) {
+                    $form['leg_class_purchased'] = (array)$byFile['purchased'];
+                }
+                if (empty($form['leg_downgraded']) && !empty($byFile['downgraded'])) {
+                    $form['leg_downgraded'] = (array)$byFile['downgraded'];
+                }
+            } else {
+                if (!$hasPersistedDelivered && empty($form['leg_class_delivered']) && !empty($meta['saved_leg_class_delivered'])) {
+                    $form['leg_class_delivered'] = (array)$meta['saved_leg_class_delivered'];
+                }
+                if (empty($form['leg_class_purchased']) && !empty($meta['saved_leg_class_purchased'])) {
+                    $form['leg_class_purchased'] = (array)$meta['saved_leg_class_purchased'];
+                }
+                if (empty($form['leg_downgraded']) && !empty($meta['saved_leg_downgraded'])) {
+                    $form['leg_downgraded'] = (array)$meta['saved_leg_downgraded'];
+                }
+            }
+        }
         $incident = (array)$session->read('flow.incident') ?: [];
+        // Hvis leveret-niveau mangler i form, seed fra auto-detektion (men overskriv ikke brugerens valg)
+        if (!$deliveredLocked && !$hasPersistedDelivered && empty($form['leg_class_delivered']) && !empty($meta['_auto']['class_delivered']) && is_array($meta['_auto']['class_delivered'])) {
+            $seed = [];
+            foreach ((array)$meta['_auto']['class_delivered'] as $idx => $row) {
+                $seed[$idx] = (string)($row['value'] ?? '');
+            }
+            if (!empty($seed)) {
+                $form['leg_class_delivered'] = $seed;
+                $session->write('flow.form', $form);
+            }
+        }
         // De-duplicate any lingering multi-ticket entries by filename (defensive against accidental resubmits)
         if (!empty($meta['_multi_tickets']) && is_array($meta['_multi_tickets'])) {
             $seen = [];
@@ -236,6 +313,10 @@ class FlowController extends AppController
             $session->write('flow.meta', $meta);
             $session->write('flow.journey', $journey);
             $session->write('flow.form', $form);
+            if (!empty($form['leg_class_delivered'])) {
+                $session->write('flow.leg_class_delivered', (array)$form['leg_class_delivered']);
+                $session->write('flow.leg_class_delivered_locked', true);
+            }
             $session->write('flow.compute', $compute);
         }
 
@@ -391,7 +472,12 @@ class FlowController extends AppController
             }
             // Derive a consolidated flag for downstream evaluators/UX
             try {
-                $hadBike = (string)($meta['bike_was_present'] ?? '') === 'yes' || (string)($meta['bike_booked'] ?? '') === 'Ja' || !empty($meta['_auto']['bike_booked']);
+                // Normalize booked value across locales (Ja/Nej vs yes/no) and consider AUTO fallback value
+                $bookedRaw = (string)($meta['bike_booked'] ?? ($meta['_auto']['bike_booked']['value'] ?? ''));
+                $bookedLow = strtolower($bookedRaw);
+                if ($bookedLow === 'ja') { $bookedLow = 'yes'; }
+                if ($bookedLow === 'nej') { $bookedLow = 'no'; }
+                $hadBike = (string)($meta['bike_was_present'] ?? '') === 'yes' || $bookedLow === 'yes' || !empty($meta['_auto']['bike_booked']);
                 $bikeCause = (string)($meta['bike_caused_issue'] ?? '') === 'yes';
                 if ($hadBike && $bikeCause) { $meta['pm_bike_involved'] = 'yes'; }
                 elseif ($hadBike && (string)($meta['bike_caused_issue'] ?? '') === 'no') { $meta['pm_bike_involved'] = 'no'; }
@@ -452,6 +538,59 @@ class FlowController extends AppController
                 $cdsLow = strtolower(trim($cds));
                 $allowedCds = ['ok','downgrade','upgrade','unknown'];
                 if (in_array($cdsLow, $allowedCds, true)) { $meta['class_delivered_status'] = $cdsLow; }
+            }
+            // TRIN 3: Persist nedgradering (basis + status), andel auto-beregnet i controller
+            if ($this->request->getData('downgrade_occurred') !== null) {
+                $form['downgrade_occurred'] = (string)$this->request->getData('downgrade_occurred');
+            }
+            if ($this->request->getData('downgrade_comp_basis') !== null) {
+                $form['downgrade_comp_basis'] = (string)$this->request->getData('downgrade_comp_basis');
+            }
+            if ($this->request->getData('downgrade_segment_share') !== null && $this->request->getData('downgrade_segment_share') !== '') {
+                $form['downgrade_segment_share'] = (string)$this->request->getData('downgrade_segment_share');
+            }
+            // Persist per-leg klasse/nedgradering tabel (Trin 3) for senere trin/PDF
+            foreach (['leg_class_purchased','leg_class_delivered','leg_downgraded'] as $lf) {
+                $val = $this->request->getData($lf);
+                if ($val === null) { continue; }
+                if (is_array($val)) {
+                    // Bevar tidligere ikke-tomme værdier for individuelle indeks hvor POST sender tom streng
+                    if (isset($form[$lf]) && is_array($form[$lf])) {
+                        foreach ($val as $i => $v) {
+                            if (($v === '' || $v === null) && isset($form[$lf][$i]) && $form[$lf][$i] !== '' && $form[$lf][$i] !== null) {
+                                $val[$i] = $form[$lf][$i];
+                            }
+                        }
+                    }
+                    $nonEmpty = array_filter($val, static function($v){ return $v !== null && $v !== ''; });
+                    if (!empty($nonEmpty)) {
+                        $form[$lf] = $val;
+                    } elseif (isset($form[$lf])) {
+                        // behold tidligere værdi hvis hele arrayet er tomt
+                        $val = $form[$lf];
+                    }
+                } else {
+                    $form[$lf] = (string)$val;
+                }
+            }
+            // Gem per-leg felter også i meta som backup (for at undgå at de overskrives ved refresh)
+            if (!empty($form['leg_class_purchased']) || !empty($form['leg_class_delivered']) || !empty($form['leg_downgraded'])) {
+                $meta['saved_leg_class_purchased'] = $form['leg_class_purchased'] ?? [];
+                $meta['saved_leg_class_delivered'] = $form['leg_class_delivered'] ?? [];
+                $meta['saved_leg_downgraded']      = $form['leg_downgraded'] ?? [];
+                // Keep a separate session-level copy so GET navigation cannot lose the delivered selection
+                $session->write('flow.leg_class_delivered', $meta['saved_leg_class_delivered']);
+                $session->write('flow.leg_class_delivered_locked', !empty($meta['saved_leg_class_delivered']));
+                // Bind per filnavn hvis det findes
+                $fname = (string)($form['_ticketFilename'] ?? '');
+                if ($fname !== '') {
+                    $meta['saved_leg_by_file'][$fname] = [
+                        'purchased' => $meta['saved_leg_class_purchased'],
+                        'delivered' => $meta['saved_leg_class_delivered'],
+                        'downgraded'=> $meta['saved_leg_downgraded'],
+                    ];
+                }
+                $session->write('flow.meta', $meta);
             }
             // Allow explicit EU-only override from hooks panel (TRIN 2)
             // Allow explicit EU-only override from hooks panel (TRIN 2) — admin only
@@ -772,6 +911,24 @@ class FlowController extends AppController
                         // Set explicit hooks to 'Ja' only when positively detected; otherwise leave unknown and ask later
                         if (!empty($pmr['pmr_user']) && empty($meta['pmr_user'])) { $meta['pmr_user'] = 'Ja'; }
                         if (!empty($pmr['pmr_booked']) && empty($meta['pmr_booked'])) { $meta['pmr_booked'] = 'Ja'; }
+                        // Server-side auto-default: if no PMR evidence and low confidence, default to 'Nej' so user can be/afkræfte
+                        $pmrConf = (float)($pmr['confidence'] ?? 0.0);
+                        $hasEvidence = !empty($pmr['pmr_user']) || !empty($pmr['pmr_booked']) || (!empty($meta['_pmr_detection']['evidence']));
+                        if (!$hasEvidence && $pmrConf < 0.30) {
+                            // pmr_user default
+                            $cur = strtolower((string)($meta['pmr_user'] ?? ''));
+                            if ($cur === '' || $cur === 'unknown') {
+                                $meta['pmr_user'] = 'Nej';
+                                $meta['_auto']['pmr_user'] = ['value' => 'Nej', 'source' => 'pmr_detection'];
+                                $meta['logs'][] = 'AUTO: pmr_user=Nej (no PMR signals; conf=' . number_format($pmrConf, 2) . ')';
+                            }
+                            // pmr_booked default
+                            $curB = strtolower((string)($meta['pmr_booked'] ?? ''));
+                            if ($curB === '' || $curB === 'unknown') {
+                                $meta['pmr_booked'] = 'Nej';
+                                $meta['_auto']['pmr_booked'] = ['value' => 'Nej', 'source' => 'pmr_detection'];
+                            }
+                        }
                     } catch (\Throwable $e) {
                         $meta['logs'][] = 'WARN: PMR detection failed: ' . $e->getMessage();
                     }
@@ -883,6 +1040,58 @@ class FlowController extends AppController
                         }
                         if ($opened) { $form['interest_class'] = $form['interest_class'] ?? '1'; }
                     } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Class/reservation detection failed: ' . $e->getMessage(); }
+
+                    // Fallback heuristik hvis class detection ikke gav resultat
+                    try {
+                        if (!isset($meta['_auto']) || !is_array($meta['_auto'])) { $meta['_auto'] = []; }
+                        $lowTxt = mb_strtolower($textBlob, 'UTF-8');
+                        $autoClass = (string)($meta['_auto']['fare_class_purchased']['value'] ?? '');
+                        $autoBerth = (string)($meta['_auto']['berth_seat_type']['value'] ?? '');
+                        if ($autoClass === '') {
+                            if (preg_match('/\\b(1\\.?\\s*kl|1st|first|premiere|business)\\b/i', $textBlob)) {
+                                $autoClass = '1st_class';
+                            } elseif (preg_match('/\\b(2\\.?\\s*kl|2nd|second|seconde|standard|economy)\\b/i', $textBlob)) {
+                                $autoClass = '2nd_class';
+                            }
+                            if ($autoClass !== '') {
+                                $meta['_auto']['fare_class_purchased'] = ['value' => $autoClass, 'source' => 'regex_fallback'];
+                                if (empty($meta['fare_class_purchased'])) { $meta['fare_class_purchased'] = $autoClass; }
+                            }
+                        }
+                        if ($autoBerth === '') {
+                            if (preg_match('/sleeper|sove|couchette|ligge|sleeping\\s*car/i', $textBlob)) {
+                                $autoBerth = preg_match('/couchette|ligge/i', $textBlob) ? 'couchette' : 'sleeper';
+                            } elseif (preg_match('/reserved\\s*seat|seat\\s*res|pladsreservation|reserv\\w* plads/i', $textBlob)) {
+                                $autoBerth = 'seat_reserved';
+                            }
+                            if ($autoBerth !== '') {
+                                $meta['_auto']['berth_seat_type'] = ['value' => $autoBerth, 'source' => 'regex_fallback'];
+                                if (empty($meta['berth_seat_type'])) { $meta['berth_seat_type'] = $autoBerth; }
+                            }
+                        }
+                    } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Class regex fallback failed: ' . $e->getMessage(); }
+
+                    // Resolve exemptions/blocked based on country + product using operators catalog
+                    try {
+                        $countryVal = strtoupper((string)($meta['_auto']['operator_country']['value'] ?? ($form['operator_country'] ?? '')));
+                        $productVal = (string)($meta['_auto']['operator_product']['value'] ?? ($form['operator_product'] ?? ''));
+                        if ($countryVal !== '' && $productVal !== '') {
+                            $resolver = new ExemptionResolver();
+                            $ex = $resolver->resolve($countryVal, $productVal, [
+                                'dep_station' => (string)($form['dep_station'] ?? ($journey['dep_station'] ?? '')),
+                                'arr_station' => (string)($form['arr_station'] ?? ($journey['arr_station'] ?? '')),
+                                'isInternational' => !empty($journey['isInternational']),
+                                'endsOutsideEU' => !empty($journey['endsOutsideEU']),
+                            ]);
+                            $form['_exemption'] = $ex;
+                            if (!empty($ex['blocked'])) {
+                                $session->write('flow.form', $form);
+                                $session->write('flow.meta', $meta);
+                                try { $this->Flash->error('Tjenesten er undtaget (produkt: ' . $productVal . ' i ' . $countryVal . '). Vi kan ikke fortsætte med EU-flowet.'); } catch (\Throwable $e) { /* ignore flash */ }
+                                return $this->redirect(['action' => 'start']);
+                            }
+                        }
+                    } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Exemption resolver failed: ' . $e->getMessage(); }
 
                     // Heuristic patch-ups for operator/country/product when extractor is weak
                     try {
@@ -1451,6 +1660,39 @@ class FlowController extends AppController
                 'segments' => (array)($mt['segments'] ?? []),
             ];
         }
+        // Deduplicate entries with same file/pnr/dep_date to avoid dobbelte grupper
+        if (!empty($allForGrouping)) {
+            $seen = [];
+            $uniq = [];
+            foreach ($allForGrouping as $g) {
+                $key = ($g['file'] ?? '') . '|' . ($g['pnr'] ?? '') . '|' . ($g['dep_date'] ?? '');
+                if (isset($seen[$key])) { continue; }
+                $seen[$key] = true;
+                $uniq[] = $g;
+            }
+            $allForGrouping = $uniq;
+        }
+        // Dedupliker på filnavn: behold den med mest data (PNR/dep_date/segments)
+        if (!empty($allForGrouping)) {
+            $byFile = [];
+            foreach ($allForGrouping as $g) {
+                $f = (string)($g['file'] ?? '');
+                if ($f === '') { $byFile[] = $g; continue; }
+                $score = 0;
+                if (!empty($g['pnr'])) { $score += 2; }
+                if (!empty($g['dep_date'])) { $score += 2; }
+                if (!empty($g['segments'])) { $score += 1; }
+                if (!isset($byFile[$f]) || $score > ($byFile[$f]['_score'] ?? -1)) {
+                    $g['_score'] = $score;
+                    $byFile[$f] = $g;
+                }
+            }
+            $allForGrouping = [];
+            foreach ($byFile as $k => $v) {
+                if (isset($v['_score'])) { unset($v['_score']); }
+                $allForGrouping[] = $v;
+            }
+        }
         $groupedTickets = [];
         if (!empty($allForGrouping)) { $groupedTickets = (new \App\Service\TicketJoinService())->groupTickets($allForGrouping); }
 
@@ -1729,9 +1971,25 @@ class FlowController extends AppController
         $flags = (array)$this->request->getSession()->read('flow.flags') ?: [];
         $incident = (array)$this->request->getSession()->read('flow.incident') ?: [];
 
-        $currency = 'EUR';
-        $priceRaw = (string)($journey['ticketPrice']['value'] ?? '0 EUR');
-        if (preg_match('/([A-Z]{3})/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+                $currency = 'EUR';
+                $priceRaw = (string)($journey['ticketPrice']['value'] ?? '0 EUR');
+                // Normalize local symbols to ISO codes before regex ISO extraction
+                $symMap = [
+                    'KČ' => 'CZK','Kč' => 'CZK','ZŁ' => 'PLN','zł' => 'PLN','FT' => 'HUF','Ft' => 'HUF','LEI' => 'RON','лв' => 'BGN'
+                ];
+                foreach ($symMap as $sym => $iso) { if (stripos($priceRaw, $sym) !== false && !preg_match('/\b'.$iso.'\b/i', $priceRaw)) { $priceRaw .= ' ' . $iso; break; } }
+                if (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|EUR)\b/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+                // Ambiguous 'kr' handling: map using operator country if present
+                if ($currency === 'EUR' && preg_match('/\bkr\b/i', $priceRaw)) {
+                        $opCountry = strtoupper((string)($journey['country']['value'] ?? ($meta['operator_country'] ?? '')));
+                        if (in_array($opCountry, ['DK','SE'], true)) { $currency = $opCountry === 'DK' ? 'DKK' : 'SEK'; }
+                }
+                // Fallback by operator country for non-euro members if still EUR without explicit code
+                if ($currency === 'EUR') {
+                        $opCountry = strtoupper((string)($journey['country']['value'] ?? ($meta['operator_country'] ?? '')));
+                        $nonEuro = ['BG'=>'BGN','CZ'=>'CZK','DK'=>'DKK','HU'=>'HUF','PL'=>'PLN','RO'=>'RON','SE'=>'SEK'];
+                        if (isset($nonEuro[$opCountry])) { $currency = $nonEuro[$opCountry]; }
+                }
 
         // Derive Art.19(10) extraordinary from TRIN 6 toggle if set; OR with earlier compute flag
         $extraordinary = (bool)($compute['extraordinary'] ?? false);
@@ -1792,6 +2050,20 @@ class FlowController extends AppController
             'expenses' => [ 'meals' => 0, 'hotel' => 0, 'alt_transport' => 0, 'other' => 0 ],
             'already_refunded' => 0,
         ]);
+
+        if ((string)($form['remedyChoice'] ?? '') === 'refund_return') {
+            $compAmt = (float)($claim['breakdown']['compensation']['amount'] ?? 0);
+            $claim['breakdown']['compensation']['amount'] = 0.0;
+            $claim['breakdown']['compensation']['pct'] = 0;
+            $claim['breakdown']['compensation']['basis'] = 'Art. 19 udelukket pga. refund';
+            // Show refund of billetpris (Art. 18(1)(1)) in breakdown and totals
+            $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', (string)($journey['ticketPrice']['value'] ?? 0));
+            $claim['breakdown']['refund']['amount'] = $ticketPriceAmount;
+            $claim['breakdown']['refund']['basis'] = 'Art. 18(1)(1)';
+            $existingGross = (float)($claim['totals']['gross_claim'] ?? 0);
+            $claim['totals']['gross_claim'] = max($existingGross - $compAmt, $ticketPriceAmount);
+        }
+
 
         // Map incidents to reimbursement reason fields
         $reason_delay = !empty($incident['main']) && $incident['main'] === 'delay';
@@ -2225,6 +2497,22 @@ class FlowController extends AppController
                         if (!empty($pmr['pmr_booked'])) { $meta['_auto']['pmr_booked'] = ['value' => 'Ja', 'source' => 'pmr_detection']; }
                         if (!empty($pmr['pmr_user']) && empty($meta['pmr_user'])) { $meta['pmr_user'] = 'Ja'; }
                         if (!empty($pmr['pmr_booked']) && empty($meta['pmr_booked'])) { $meta['pmr_booked'] = 'Ja'; }
+                        // Server-side auto-default (single-page): if no evidence and low confidence, default to 'Nej'
+                        $pmrConf = (float)($pmr['confidence'] ?? 0.0);
+                        $hasEvidence = !empty($pmr['pmr_user']) || !empty($pmr['pmr_booked']) || (!empty($meta['_pmr_detection']['evidence']));
+                        if (!$hasEvidence && $pmrConf < 0.30) {
+                            $cur = strtolower((string)($meta['pmr_user'] ?? ''));
+                            if ($cur === '' || $cur === 'unknown') {
+                                $meta['pmr_user'] = 'Nej';
+                                $meta['_auto']['pmr_user'] = ['value' => 'Nej', 'source' => 'pmr_detection'];
+                                $meta['logs'][] = 'AUTO: pmr_user=Nej (no PMR signals; conf=' . number_format($pmrConf, 2) . ')';
+                            }
+                            $curB = strtolower((string)($meta['pmr_booked'] ?? ''));
+                            if ($curB === '' || $curB === 'unknown') {
+                                $meta['pmr_booked'] = 'Nej';
+                                $meta['_auto']['pmr_booked'] = ['value' => 'Nej', 'source' => 'pmr_detection'];
+                            }
+                        }
                     } catch (\Throwable $e) { $meta['logs'][] = 'WARN: PMR detection failed: ' . $e->getMessage(); }
                     // Bike auto-detection (single-page flow): if bicycle detected, preselect TRIN 9 bike interest
                     try {
@@ -2586,6 +2874,8 @@ class FlowController extends AppController
                     if ($mf->getError() !== UPLOAD_ERR_OK) { continue; }
                     $name2 = (string)($mf->getClientFilename() ?? ('ticket_' . bin2hex(random_bytes(4))));
                     $safe2 = preg_replace('/[^A-Za-z0-9._-]/', '_', $name2) ?: ('ticket_' . bin2hex(random_bytes(4)));
+                    // Skip if this is the same as the primary ticket already uploaded
+                    if (!empty($form['_ticketFilename']) && (string)$form['_ticketFilename'] === $safe2) { continue; }
                     $destDir2 = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads';
                     if (!is_dir($destDir2)) { @mkdir($destDir2, 0775, true); }
                     $dest2 = $destDir2 . DIRECTORY_SEPARATOR . $safe2;
@@ -2670,7 +2960,7 @@ class FlowController extends AppController
             // Minimal applicant/journey form fields to drive reimbursement PDF filling
             $allowedFormKeys = [
                 'name','email','operator','dep_date','dep_station','arr_station','dep_time','arr_time',
-                'train_no','ticket_no','price','actual_arrival_date','actual_dep_time','actual_arr_time',
+                'train_no','ticket_no','price','price_currency','actual_arrival_date','actual_dep_time','actual_arr_time',
                 'missed_connection_station',
                 // TRIN 4 – non-completed travel confirmation (legacy removed)
                 // operator extra
@@ -2689,8 +2979,14 @@ class FlowController extends AppController
                 'reroute_extra_costs','reroute_extra_costs_amount','reroute_extra_costs_currency','downgrade_occurred','downgrade_comp_basis',
                 // TRIN 6 – Compensation
                 'delayAtFinalMinutes','compensationBand','voucherAccepted','operatorExceptionalCircumstances','minThresholdApplies',
-                // TRIN 8 – Assistance/expenses
-                'meal_offered','hotel_offered','overnight_needed','blocked_train_alt_transport','alt_transport_provided',
+                // TRIN 8 - Assistance/expenses
+                'meal_offered','assistance_meals_unavailable_reason',
+                'hotel_offered','overnight_needed','assistance_hotel_accessible',
+                'blocked_train_alt_transport','blocked_on_track','stranded_at_station','stranded_unknown','assistance_blocked_transport_possible','assistance_blocked_transport_to','assistance_blocked_transport_time',
+                'alt_transport_provided','assistance_info_provided','assistance_alt_transport_offered_by','assistance_alt_transport_type','assistance_alt_departure_time','assistance_alt_arrival_time','assistance_alt_to_destination',
+                'assistance_info_source','assistance_updates_channel','assistance_info_time_first','assistance_info_time_last','assistance_expected_dep','assistance_expected_arr',
+                'assistance_confirmation_requested','assistance_confirmation_provided','assistance_confirmation_type','assistance_confirmation_upload',
+                'assistance_pmr_priority_applied','assistance_pmr_companion_supported','assistance_pmr_dog_supported',
                 'extra_expense_upload','expense_breakdown_meals','expense_breakdown_hotel_nights','expense_breakdown_local_transport','expense_breakdown_other_amounts','expense_breakdown_currency',
                 'delay_confirmation_received','delay_confirmation_upload','extraordinary_claimed','extraordinary_type',
                 // TRIN 9 – Auto EU request flags
@@ -2727,6 +3023,12 @@ class FlowController extends AppController
                     $form[$k] = (string)$v;
                 }
                 // Ignore arrays/objects for these keys
+            }
+
+            if (!empty($form['assistance_confirmation_provided'])) {
+                $form['delay_confirmation_received'] = (string)$form['assistance_confirmation_provided'];
+            } elseif (!empty($form['delay_confirmation_received']) && empty($form['assistance_confirmation_provided'])) {
+                $form['assistance_confirmation_provided'] = (string)$form['delay_confirmation_received'];
             }
 
             // Map 3.2.7 Ticket Number(s)/Booking Reference to journey.bookingRef when sensible
@@ -2795,6 +3097,9 @@ class FlowController extends AppController
             try {
                 $u2 = $this->request->getUploadedFile('delay_confirmation_upload');
             } catch (\Throwable $e) { $u2 = null; }
+            try {
+                $uConf = $this->request->getUploadedFile('assistance_confirmation_upload');
+            } catch (\Throwable $e) { $uConf = null; }
             $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
             if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
             if ($u1 && $u1->getError() === \UPLOAD_ERR_OK) {
@@ -2806,14 +3111,26 @@ class FlowController extends AppController
             } elseif (($raw = $this->request->getData('extra_expense_upload')) && is_string($raw)) {
                 $form['extra_expense_upload'] = $raw;
             }
-            if ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
+            if ($uConf && $uConf->getError() === \UPLOAD_ERR_OK) {
+                $name = $uConf->getClientFilename();
+                $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
+                $target = $uploadDir . (uniqid('conf_') . '_' . $safe);
+                $uConf->moveTo($target);
+                $form['assistance_confirmation_upload'] = $target;
+                $form['delay_confirmation_upload'] = $target;
+            } elseif ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
                 $name = $u2->getClientFilename();
                 $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
                 $target = $uploadDir . (uniqid('dcr_') . '_' . $safe);
                 $u2->moveTo($target);
                 $form['delay_confirmation_upload'] = $target;
+                if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $target; }
+            } elseif (($rawConf = $this->request->getData('assistance_confirmation_upload')) && is_string($rawConf)) {
+                $form['assistance_confirmation_upload'] = $rawConf;
+                if (empty($form['delay_confirmation_upload'])) { $form['delay_confirmation_upload'] = $rawConf; }
             } elseif (($raw2 = $this->request->getData('delay_confirmation_upload')) && is_string($raw2)) {
                 $form['delay_confirmation_upload'] = $raw2;
+                if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $raw2; }
             }
 
             // TRIN 9 – Art. 9: Handle uploads (CoC and complaint receipt)
@@ -3016,9 +3333,20 @@ class FlowController extends AppController
         // Compute claim (used by hooks panel) before potential AJAX short-circuit
         $currency = 'EUR';
         $priceRaw = (string)($journey['ticketPrice']['value'] ?? '0 EUR');
-        if (preg_match('/([A-Z]{3})/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+        $symMap = ['KČ'=>'CZK','Kč'=>'CZK','ZŁ'=>'PLN','zł'=>'PLN','FT'=>'HUF','Ft'=>'HUF','LEI'=>'RON','лв'=>'BGN'];
+        foreach ($symMap as $sym => $iso) { if (stripos($priceRaw, $sym) !== false && !preg_match('/\b'.$iso.'\b/i', $priceRaw)) { $priceRaw .= ' ' . $iso; break; } }
+        if (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|EUR)\b/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+        if ($currency === 'EUR' && preg_match('/\bkr\b/i', $priceRaw)) {
+            $opCountry = strtoupper((string)($journey['country']['value'] ?? ($meta['operator_country'] ?? '')));
+            if (in_array($opCountry, ['DK','SE'], true)) { $currency = $opCountry === 'DK' ? 'DKK' : 'SEK'; }
+        }
+        if ($currency === 'EUR') {
+            $opCountry = strtoupper((string)($journey['country']['value'] ?? ($meta['operator_country'] ?? '')));
+            $nonEuro = ['BG'=>'BGN','CZ'=>'CZK','DK'=>'DKK','HU'=>'HUF','PL'=>'PLN','RO'=>'RON','SE'=>'SEK'];
+            if (isset($nonEuro[$opCountry])) { $currency = $nonEuro[$opCountry]; }
+        }
         // Build claim input similar to claims page, including expenses and fee logic
-        $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0 EUR'));
+    $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0 EUR'));
         $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', $ticketPriceStr);
         $delayForClaim = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
         $expensesIn = [
@@ -3051,6 +3379,19 @@ class FlowController extends AppController
             // Apply 25% fee on expenses only, not on compensation base (ticket price)
             'service_fee_mode' => 'expenses_only',
         ]);
+
+        // If user chose refund_return (Art. 18(1)(1)), zero Art.19 and surface refund of ticket price
+        if ((string)($form['remedyChoice'] ?? '') === 'refund_return') {
+            $compAmt = (float)($claim['breakdown']['compensation']['amount'] ?? 0);
+            $claim['breakdown']['compensation']['amount'] = 0.0;
+            $claim['breakdown']['compensation']['pct'] = 0;
+            $claim['breakdown']['compensation']['basis'] = 'Art. 19 udelukket pga. refund';
+            $claim['breakdown']['refund']['amount'] = (float)$ticketPriceAmount;
+            $claim['breakdown']['refund']['basis'] = 'Art. 18(1)(1)';
+            // Keep gross at least at refund amount, after removing comp component
+            $existingGross = (float)($claim['totals']['gross_claim'] ?? 0);
+            $claim['totals']['gross_claim'] = max($existingGross - $compAmt, (float)$ticketPriceAmount);
+        }
 
         // Build a simple multi-ticket grouped overview for hooks panel
         $multiTickets = (array)($meta['_multi_tickets'] ?? []);
@@ -3154,6 +3495,20 @@ class FlowController extends AppController
         $singleTxn = isset($form['singleTxn']) ? (bool)$this->truthy($form['singleTxn']) : false;
         $separateDisclosed = isset($form['separateContractsDisclosed']) ? (bool)$this->truthy($form['separateContractsDisclosed']) : false;
         $missedConnBlock = ($reason_missed_conn && $singleTxn && $separateDisclosed);
+
+        // Auto-beregn nedgraderingsandel (tid/distance) i TRIN 3 og gem i form/session
+        try {
+            if (empty($form['downgrade_segment_share'])) {
+                $segments = (array)($meta['_segments_auto'] ?? ($journey['segments'] ?? []));
+                $missedStation = (string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? ''));
+                $auto = $this->computeDowngradeSegmentShareAuto($segments, $missedStation);
+                $shareAuto = max(0.0, min(1.0, (float)($auto['share'] ?? 1.0)));
+                $form['downgrade_segment_share'] = (string)round($shareAuto, 3);
+                $form['downgrade_segment_share_basis'] = (string)($auto['basis'] ?? 'unknown');
+                $form['downgrade_segment_share_conf'] = (string)($auto['confidence'] ?? '0');
+                $this->request->getSession()->write('flow.form', $form);
+            }
+        } catch (\Throwable $e) { /* ignore */ }
 
         // TRIN 5–6 – Entitlements and choices
         $delayAtFinal = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
@@ -3266,9 +3621,23 @@ class FlowController extends AppController
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
         if ($this->request->is('post')) {
-            foreach (['remedyChoice','trip_cancelled_return_to_origin','refund_requested','refund_form_selected','reroute_same_conditions_soonest','reroute_later_at_choice','reroute_info_within_100min','self_purchased_new_ticket','self_purchase_approved_by_operator','offer_provided','reroute_extra_costs','reroute_extra_costs_amount','reroute_extra_costs_currency','downgrade_occurred','downgrade_comp_basis','delayAtFinalMinutes','compensationBand','voucherAccepted'] as $k) {
+            foreach (['remedyChoice','trip_cancelled_return_to_origin','refund_requested','refund_form_selected','return_to_origin_expense','return_to_origin_amount','return_to_origin_currency','reroute_same_conditions_soonest','reroute_later_at_choice','reroute_info_within_100min','self_purchased_new_ticket','self_purchase_approved_by_operator','offer_provided','reroute_extra_costs','reroute_extra_costs_amount','reroute_extra_costs_currency','downgrade_occurred','downgrade_comp_basis','delayAtFinalMinutes','compensationBand','voucherAccepted','art18_expected_delay_60','delay_confirmation_received','delay_confirmation_info'] as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
+            }
+            try { $delayFile = $this->request->getUploadedFile('delay_confirmation_upload'); } catch (\Throwable $e) { $delayFile = null; }
+            $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+            if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
+            if ($delayFile && $delayFile->getError() === \UPLOAD_ERR_OK) {
+                $name = (string)$delayFile->getClientFilename();
+                $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name);
+                $target = $uploadDir . (uniqid('delay_conf_') . '_' . $safe);
+                try { $delayFile->moveTo($target); $form['delay_confirmation_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
+            } elseif (($rawUpload = $this->request->getData('delay_confirmation_upload')) && is_string($rawUpload)) {
+                $form['delay_confirmation_upload'] = $rawUpload;
+            }
+            if (($form['delay_confirmation_received'] ?? '') !== 'yes') {
+                unset($form['delay_confirmation_upload']);
             }
 
             // Enforce Art. 18(3) OFF behavior: only allow extra costs for reroute when self-purchase is approved by operator
@@ -3300,6 +3669,64 @@ class FlowController extends AppController
                 $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', $ticketPriceStr);
                 $segShareIn = $this->request->getData('downgrade_segment_share');
                 $segmentShare = is_numeric($segShareIn) ? (float)$segShareIn : (float)($form['downgrade_segment_share'] ?? 1.0);
+                // If no manual share provided, derive from per-leg auto flags (TRIN 3 table)
+                $legsPurchased = (array)($this->request->getData('leg_class_purchased') ?? ($form['leg_class_purchased'] ?? []));
+                $legsDelivered = (array)($this->request->getData('leg_class_delivered') ?? ($form['leg_class_delivered'] ?? []));
+                $legDowngraded = (array)($this->request->getData('leg_downgraded') ?? ($form['leg_downgraded'] ?? []));
+                $autoShare = null;
+                $autoBasis = null;
+                $rank = [
+                    'sleeper' => 5,
+                    '1st_class' => 4,
+                    'seat_reserved' => 3,
+                    'couchette' => 3,
+                    '2nd_class' => 2,
+                    'other' => 2,
+                    'free_seat' => 1,
+                ];
+                $rateFromDelta = function (string $buy, string $del) use ($rank): array {
+                    $rb = $rank[$buy] ?? 0;
+                    $rd = $rank[$del] ?? 0;
+                    if ($rb <= $rd || $rb === 0 || $rd === 0) { return [0.0, null]; }
+                    if ($buy === 'sleeper') { return [0.75, 'sleeper']; }
+                    if ($buy === 'couchette' || ($rb >= 3 && $rd <= 2)) { return [0.50, 'couchette']; }
+                    return [0.25, 'seat'];
+                };
+                if (!empty($legsPurchased) && !empty($legsDelivered) && count($legsPurchased) === count($legsDelivered)) {
+                    $total = count($legsPurchased);
+                    $downgLegs = 0;
+                    $bestRate = 0.0;
+                    $bestBasis = null;
+                    foreach ($legsPurchased as $i => $buy) {
+                        $del = (string)($legsDelivered[$i] ?? '');
+                        $flag = (string)($legDowngraded[$i] ?? '');
+                        if ($flag === '1') {
+                            $downgLegs++;
+                            [$r, $b] = $rateFromDelta((string)$buy, $del);
+                            if ($r > $bestRate) { $bestRate = $r; $bestBasis = $b; }
+                        } else {
+                            // infer even if flag mangler
+                            [$r, $b] = $rateFromDelta((string)$buy, $del);
+                            if ($r > 0) {
+                                $downgLegs++;
+                                if ($r > $bestRate) { $bestRate = $r; $bestBasis = $b; }
+                            }
+                        }
+                    }
+                    if ($total > 0 && $downgLegs > 0) {
+                        $autoShare = round($downgLegs / $total, 3);
+                        $autoBasis = $bestBasis;
+                        $segmentShare = $autoShare;
+                        $form['downgrade_segment_share'] = (string)$segmentShare;
+                        if (empty($form['downgrade_occurred'])) { $form['downgrade_occurred'] = 'yes'; }
+                        if (empty($form['downgrade_comp_basis']) && $autoBasis !== null) {
+                            $form['downgrade_comp_basis'] = $autoBasis;
+                        }
+                        $form['leg_class_purchased'] = $legsPurchased;
+                        $form['leg_class_delivered'] = $legsDelivered;
+                        $form['leg_downgraded'] = $legDowngraded;
+                    }
+                }
                 if (!is_finite($segmentShare)) { $segmentShare = 1.0; }
                 if ($segmentShare < 0.0) { $segmentShare = 0.0; }
                 if ($segmentShare > 1.0) { $segmentShare = 1.0; }
@@ -3330,6 +3757,14 @@ class FlowController extends AppController
             $journey = $inferRes['journey'];
         } catch (\Throwable $e) { /* ignore for choices */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        // Final defensive restore of delivered-klasse fra session, i tilfælde af at andre operationer nulstillede den
+        $persistedDelivered = (array)$session->read('flow.leg_class_delivered') ?: [];
+        if (!empty($persistedDelivered)) {
+            $form['leg_class_delivered'] = $persistedDelivered;
+            $meta['saved_leg_class_delivered'] = $persistedDelivered;
+            $session->write('flow.form', $form);
+            $session->write('flow.leg_class_delivered_locked', true);
+        }
         // Derive ticket price amount for downgrade preview in view
         try {
             $ticketPriceStr = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? '0'));
@@ -3361,7 +3796,13 @@ class FlowController extends AppController
         $missedConnBlock = ($reason_missed_conn && $singleTxn && $separateDisclosed);
         $allow_refund = (!$missedConnBlock) && (($compute['delayMinEU'] ?? 0) >= 60 || $reason_cancellation);
         $allow_compensation = (!$missedConnBlock) && ($delayAtFinal >= 60);
-        $this->set(compact('form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','ticketPrice','autoDowngradeShare'));
+        // Art. 18 gating is based on expected delay (EU minutes) or cancellation/missed connection
+        $expectedDelay = (int)($compute['delayMinEU'] ?? 0);
+        $art18Active = ($expectedDelay >= 60) || $reason_cancellation || $reason_missed_conn;
+        if (!$art18Active && ((string)($form['art18_expected_delay_60'] ?? '') === 'yes')) { $art18Active = true; }
+        $art18Blocked = (!$art18Active) && ((string)($form['art18_expected_delay_60'] ?? '') === 'no');
+        $showArt18Fallback = (!$art18Active) && (!$art18Blocked);
+        $this->set(compact('form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','ticketPrice','autoDowngradeShare','art18Active','showArt18Fallback','art18Blocked'));
         return null;
     }
 
@@ -3382,23 +3823,28 @@ class FlowController extends AppController
         if ($this->request->is('post')) {
             // Persist Art. 20 fields (as in one() TRIN 8) + self-paid fields for Art. 18(3) eligibility
             $keys = [
-                // Art. 20(2)(a) – meals offered
-                'meal_offered',
-                // Art. 20(2)(b) – hotel offered + overnight needed
-                'hotel_offered','overnight_needed',
-                // Art. 20(2)(c) – evacuation/alt transport away from blocked train
-                'blocked_train_alt_transport',
-                // Art. 20(3) – alternative transport services to destination
-                'alt_transport_provided',
+                // Art. 20(2)(a) - meals offered
+                'meal_offered','assistance_meals_unavailable_reason',
+                // Art. 20(2)(b) - hotel offered + overnight needed
+                'hotel_offered','overnight_needed','assistance_hotel_accessible',
+                // Art. 20(2)(c) - evacuation/alt transport away from blocked train
+                'blocked_train_alt_transport','blocked_on_track','stranded_at_station','stranded_unknown','assistance_blocked_transport_possible','assistance_blocked_transport_to','assistance_blocked_transport_time',
+                // Art. 20(3) - alternative transport services to destination
+                'alt_transport_provided','assistance_alt_transport_offered_by','assistance_alt_transport_type','assistance_alt_departure_time','assistance_alt_arrival_time','assistance_alt_to_destination',
+                // Art. 20(1) - info updates tracked earlier (still available via info card)
+                'assistance_info_source','assistance_updates_channel','assistance_info_time_first','assistance_info_time_last','assistance_expected_dep','assistance_expected_arr',
+                // Art. 20(4) - confirmation info + type
+                'assistance_confirmation_requested','assistance_confirmation_provided','assistance_confirmation_type','assistance_confirmation_upload',
+                // Art. 20(5) - PMR priority
+                'assistance_pmr_priority_applied','assistance_pmr_companion_supported','assistance_pmr_dog_supported',
                 // Generic expense breakdown (legacy, kept)
                 'expense_breakdown_meals','expense_breakdown_hotel_nights','expense_breakdown_local_transport','expense_breakdown_other_amounts','expense_breakdown_currency',
-                // Delay confirmation
-                'delay_confirmation_received',
                 // NEW: self-paid fields to capture out-of-pocket expenses when Art. 20 assistance was not delivered
                 'meal_self_paid_amount','meal_self_paid_currency',
                 'hotel_self_paid_amount','hotel_self_paid_currency','hotel_self_paid_nights',
                 'blocked_self_paid_amount','blocked_self_paid_currency',
                 'alt_self_paid_amount','alt_self_paid_currency',
+                'art20_expected_delay_60',
             ];
             foreach ($keys as $k) {
                 $v = $this->request->getData($k);
@@ -3408,6 +3854,7 @@ class FlowController extends AppController
             // Handle uploads for receipts and delay confirmation (mirror one())
             try { $u1 = $this->request->getUploadedFile('extra_expense_upload'); } catch (\Throwable $e) { $u1 = null; }
             try { $u2 = $this->request->getUploadedFile('delay_confirmation_upload'); } catch (\Throwable $e) { $u2 = null; }
+            try { $uConf = $this->request->getUploadedFile('assistance_confirmation_upload'); } catch (\Throwable $e) { $uConf = null; }
             // NEW: per-field self-paid receipt uploads
             try { $uMeal = $this->request->getUploadedFile('meal_self_paid_receipt'); } catch (\Throwable $e) { $uMeal = null; }
             try { $uHotel = $this->request->getUploadedFile('hotel_self_paid_receipt'); } catch (\Throwable $e) { $uHotel = null; }
@@ -3423,13 +3870,32 @@ class FlowController extends AppController
             } elseif (($raw = $this->request->getData('extra_expense_upload')) && is_string($raw)) {
                 $form['extra_expense_upload'] = $raw;
             }
-            if ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
+            if ($uConf && $uConf->getError() === \UPLOAD_ERR_OK) {
+                $name = (string)$uConf->getClientFilename();
+                $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
+                $target = $uploadDir . (uniqid('conf_') . '_' . $safe);
+                try { $uConf->moveTo($target); $form['assistance_confirmation_upload'] = $target; $form['delay_confirmation_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
+            } elseif ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
                 $name = (string)$u2->getClientFilename();
                 $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
                 $target = $uploadDir . (uniqid('dcr_') . '_' . $safe);
-                try { $u2->moveTo($target); $form['delay_confirmation_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
+                try {
+                    $u2->moveTo($target);
+                    $form['delay_confirmation_upload'] = $target;
+                    if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $target; }
+                } catch (\Throwable $e) { /* ignore */ }
+            } elseif (($rawConf = $this->request->getData('assistance_confirmation_upload')) && is_string($rawConf)) {
+                $form['assistance_confirmation_upload'] = $rawConf;
+                if (empty($form['delay_confirmation_upload'])) { $form['delay_confirmation_upload'] = $rawConf; }
             } elseif (($raw2 = $this->request->getData('delay_confirmation_upload')) && is_string($raw2)) {
                 $form['delay_confirmation_upload'] = $raw2;
+                if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $raw2; }
+            }
+
+            if (!empty($form['assistance_confirmation_provided'])) {
+                $form['delay_confirmation_received'] = (string)$form['assistance_confirmation_provided'];
+            } elseif (!empty($form['delay_confirmation_received']) && empty($form['assistance_confirmation_provided'])) {
+                $form['assistance_confirmation_provided'] = (string)$form['delay_confirmation_received'];
             }
 
             // Save per-field self-paid receipts if provided
@@ -3528,7 +3994,28 @@ class FlowController extends AppController
         } catch (\Throwable $e) { /* ignore for assistance */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
 
-        $this->set(compact('form','flags','incident','profile'));
+        try { $art20 = (new \App\Service\Art20AssistanceEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art20 = null; $meta['logs'][] = 'WARN: Art20AssistanceEvaluator failed: ' . $e->getMessage(); }
+        $reason_cancellation = (!empty($incident['main']) && $incident['main'] === 'cancellation');
+        // New gating per spec: ONLY cancellation auto-activates; otherwise ask user
+        $art20Active = $reason_cancellation;
+        if (!$art20Active && ((string)($form['art20_expected_delay_60'] ?? '') === 'yes')) { $art20Active = true; }
+        $art20Blocked = (!$art20Active) && ((string)($form['art20_expected_delay_60'] ?? '') === 'no');
+        $showArt20Fallback = (!$art20Active) && (!$art20Blocked);
+        // Price hints (meals/hotel/taxi/alt) to pre-fill intervals in TRIN 5 UI
+        $priceHints = null;
+        try {
+            $ctxHints = $this->buildPriceContextForHints($form, $journey, $meta);
+            $fxRates = $this->loadFxRatesForHints();
+            $fxFetcher = function (string $cur) use ($fxRates): ?float {
+                $c = strtoupper(trim($cur));
+                return isset($fxRates[$c]) && is_numeric($fxRates[$c]) ? (float)$fxRates[$c] : null;
+            };
+            $priceHints = (new PriceHintsService())->build($ctxHints, $fxFetcher);
+            $meta['price_hints'] = $priceHints;
+            $session->write('flow.meta', $meta);
+        } catch (\Throwable $e) { /* ignore hints errors */ }
+
+        $this->set(compact('form','flags','incident','profile','art20','art20Active','showArt20Fallback','art20Blocked','priceHints'));
         return null;
     }
 
@@ -3605,13 +4092,17 @@ class FlowController extends AppController
             try { $thr25 = isset($nationalPolicy['thresholds']['25']) ? (int)$nationalPolicy['thresholds']['25'] : null; } catch (\Throwable $e) { $thr25 = null; }
             if ($thr25 !== null && $delayAtFinal >= $thr25) { $selectedBand = '25'; }
         }
-        $refundChosen = (string)($form['remedyChoice'] ?? '') === 'refund_return' || !empty($form['refund_requested']);
+        // Only gate compensation when refusion (refund) is explicitly valgt; et "nej"/"ved ikke" til refund_requested skal ikke trigge.
+        $refundChosen = (string)($form['remedyChoice'] ?? '') === 'refund_return';
         $preinformed = ((string)($form['preinformed_disruption'] ?? '') === 'yes') || (bool)($compute['knownDelayBeforePurchase'] ?? false);
         $rerouteUnder60 = ($delayAtFinal > 0 && $delayAtFinal < 60) && (
             (bool)($this->truthy($form['reroute_same_conditions_soonest'] ?? '')) ||
             (bool)($this->truthy($form['reroute_later_at_choice'] ?? ''))
         );
         $art19Allowed = (bool)($profile['articles']['art19'] ?? true);
+        if ((string)($form['remedyChoice'] ?? '') === 'refund_return') {
+            $art19Allowed = false;
+        }
 
         // Season pass logging and summary (Art. 19(2)): log even if normal Art.19(1) is gated out
         $seasonSummary = null;
@@ -3632,8 +4123,42 @@ class FlowController extends AppController
         // Live breakdown preview using ClaimCalculator
         try {
             $currency = 'EUR';
+            $explicitCurrency = null;
+            // Prefer explicit currency from journey/form/auto if available (e.g. LLM parse in TRIN 3)
+            foreach ([
+                (string)($journey['ticketPrice']['currency'] ?? ''),
+                (string)($form['price_currency'] ?? ''),
+                (string)($meta['_auto']['price_currency']['value'] ?? ''),
+                (string)($meta['_auto']['price']['currency'] ?? ''),
+            ] as $c) {
+                $cNorm = strtoupper(trim($c));
+                if ($cNorm !== '' && preg_match('/^(EUR|DKK|SEK|BGN|CZK|HUF|PLN|RON)$/', $cNorm)) { $explicitCurrency = $cNorm; break; }
+            }
             $priceRaw = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? ($meta['_auto']['price']['value'] ?? '0 EUR')));
-            if (preg_match('/([A-Z]{3})/i', $priceRaw, $mm)) { $currency = strtoupper($mm[1]); }
+            // Extend symbol detection (non-euro EU currencies)
+            $symMap = ['KČ'=>'CZK','Kč'=>'CZK','ZŁ'=>'PLN','zł'=>'PLN','FT'=>'HUF','Ft'=>'HUF','LEI'=>'RON','лв'=>'BGN'];
+            foreach ($symMap as $sym => $iso) { if (stripos($priceRaw, $sym) !== false && !preg_match('/\b'.$iso.'\b/i', $priceRaw)) { $priceRaw .= ' ' . $iso; break; } }
+            // Use explicit currency if we captured it upstream (takes precedence over symbol parsing)
+            if ($explicitCurrency !== null) {
+                $currency = $explicitCurrency;
+            } elseif (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|EUR)\b/i', $priceRaw, $mm)) {
+                $currency = strtoupper($mm[1]);
+            } elseif ($currency === 'EUR' && preg_match('/\bkr\b/i', $priceRaw)) {
+                $opCountry = strtoupper((string)(
+                    $journey['country']['value'] ??
+                    ($meta['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))
+                ));
+                if (in_array($opCountry, ['DK','SE'], true)) { $currency = $opCountry === 'DK' ? 'DKK' : 'SEK'; }
+                else { $currency = 'DKK'; } // default to DKK if kr not disambiguated
+            }
+            if ($currency === 'EUR') {
+                $opCountry = strtoupper((string)(
+                    $journey['country']['value'] ??
+                    ($meta['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))
+                ));
+                $nonEuro = ['BG'=>'BGN','CZ'=>'CZK','DK'=>'DKK','HU'=>'HUF','PL'=>'PLN','RO'=>'RON','SE'=>'SEK'];
+                if (isset($nonEuro[$opCountry])) { $currency = $nonEuro[$opCountry]; }
+            }
             $ticketPriceAmount = (float)preg_replace('/[^0-9.]/', '', $priceRaw);
             $delayForClaim = (int)($form['delayAtFinalMinutes'] ?? ($compute['delayMinEU'] ?? 0));
             $extraordinary = (bool)($compute['extraordinary'] ?? false);
@@ -3666,6 +4191,7 @@ class FlowController extends AppController
             // Derive liable party note for UI (operator vs retailer) per Art. 12(3)/(4) and defaults
             $liableParty = null; $liableBasis = null;
             $art12Liable = (string)($art12['liable_party'] ?? 'unknown');
+            $isArt124Retailer = !empty($art12) && ($art12['art12_applies'] ?? false) === true && $art12Liable === 'agency';
             if (!empty($art12) && ($art12['art12_applies'] ?? false) === true) {
                 if ($art12Liable === 'operator') { $liableParty = 'operator'; $liableBasis = 'Art. 12(3)'; }
                 elseif ($art12Liable === 'agency') { $liableParty = 'retailer'; $liableBasis = 'Art. 12(4)'; }
@@ -3687,44 +4213,117 @@ class FlowController extends AppController
             $altAmt = $pick(['alt_self_paid_amount','expense_breakdown_local_transport','expense_alt_transport']);
             $blockedAltAmt = $pick(['blocked_self_paid_amount']);
             $otherAmt = $pick(['expense_breakdown_other_amounts','expense_other']);
+            // Currency-aware conversion per udgiftskategori (TRIN 5) -> billetvaluta
+            $fx = ['EUR'=>1.0,'DKK'=>7.45,'SEK'=>11.0,'BGN'=>1.96,'CZK'=>25.0,'HUF'=>385.0,'PLN'=>4.35,'RON'=>4.95];
+            $fxConv = function(float $amt, string $from, string $to) use (&$fx): ?float {
+                $from = strtoupper(trim($from)); $to = strtoupper(trim($to));
+                if (!isset($fx[$from]) || !isset($fx[$to]) || $fx[$from] <= 0 || $fx[$to] <= 0) return null;
+                $eur = $amt / $fx[$from];
+                return $eur * $fx[$to];
+            };
+            $conv = function(float $amt, string $fromCur, string $toCur) use ($fxConv){
+                if ($fromCur === '' || $toCur === '' || $fromCur === $toCur) return $amt;
+                $c = $fxConv($amt, $fromCur, $toCur);
+                return $c !== null ? $c : $amt;
+            };
+            $mealsCur = strtoupper((string)($form['meal_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? $currency)));
+            $hotelCur = strtoupper((string)($form['hotel_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? $currency)));
+            $altCur = strtoupper((string)($form['alt_self_paid_currency'] ?? $form['blocked_self_paid_currency'] ?? ($form['expense_breakdown_currency'] ?? $currency)));
+            $otherCur = strtoupper((string)($form['expense_breakdown_currency'] ?? $currency));
             $expensesIn = [
-                'meals' => $mealsAmt,
-                'hotel' => $hotelAmt,
-                'alt_transport' => max(0.0, $altAmt + $blockedAltAmt),
-                'other' => $otherAmt,
+                'meals' => $conv($mealsAmt, $mealsCur, $currency),
+                'hotel' => $conv($hotelAmt, $hotelCur, $currency),
+                'alt_transport' => $conv(max(0.0, $altAmt + $blockedAltAmt), $altCur, $currency),
+                'other' => $conv($otherAmt, $otherCur, $currency),
             ];
-            $claim = (new \App\Service\ClaimCalculator())->calculate([
-                'country_code' => (string)($journey['country']['value'] ?? 'EU'),
-                'currency' => $currency,
-                'ticket_price_total' => $ticketPriceAmount,
-                'trip' => [
-                    'through_ticket' => $throughTicket,
-                    'trip_type' => (count($legs) === 2 ? 'return' : ($form['trip_type'] ?? null)),
-                    'legs' => $legs,
-                    'liable_party' => $liableParty,
-                ],
-                'disruption' => [
-                    'delay_minutes_final' => $delayForClaim,
-                    'eu_only' => (bool)($compute['euOnly'] ?? true),
-                    'notified_before_purchase' => (bool)($compute['knownDelayBeforePurchase'] ?? false),
-                    'extraordinary' => $extraordinary,
-                    'extraordinary_type' => $extraordinaryType,
-                    'self_inflicted' => false,
-                    'delayed_leg_index' => $delayedLegIndex,
-                    'missed_connection' => !empty($incident['missed']),
-                ],
-                'choices' => [
-                    'wants_refund' => ((string)($form['remedyChoice'] ?? '') === 'refund_return'),
-                    'wants_reroute_same_soonest' => ((string)($form['remedyChoice'] ?? '') === 'reroute_soonest'),
-                    'wants_reroute_later_choice' => ((string)($form['remedyChoice'] ?? '') === 'reroute_later'),
-                ],
-                'expenses' => $expensesIn,
-                'already_refunded' => 0,
-                'service_fee_mode' => 'expenses_only',
-                // If user selected a band, honor it for preview by overriding compensation pct
-                'override_comp_pct' => ($selectedBand === '25' || $selectedBand === '50') ? (int)$selectedBand : null,
-                'apply_min_threshold' => (bool)$this->truthy($form['minThresholdApplies'] ?? ''),
-            ]);
+            // Convert expenses from TRIN 5 currency to ticket currency if needed (static FX)
+            try {
+                $fx = ['EUR'=>1.0,'DKK'=>7.45,'SEK'=>11.0,'BGN'=>1.96,'CZK'=>25.0,'HUF'=>385.0,'PLN'=>4.35,'RON'=>4.95];
+                $fxConv = function(float $amt, string $from, string $to) use (&$fx): ?float {
+                    $from = strtoupper(trim($from)); $to = strtoupper(trim($to));
+                    if (!isset($fx[$from]) || !isset($fx[$to]) || $fx[$from] <= 0 || $fx[$to] <= 0) return null;
+                    $eur = $amt / $fx[$from];
+                    return $eur * $fx[$to];
+                };
+                $expenseCur = strtoupper((string)($form['expense_breakdown_currency'] ?? $form['expense_currency'] ?? $currency));
+                $targetCur = $currency;
+                if ($expenseCur !== '' && $targetCur !== '' && $expenseCur !== $targetCur) {
+                    foreach ($expensesIn as $k => $v) {
+                        $conv = $fxConv((float)$v, $expenseCur, $targetCur);
+                        if ($conv !== null) { $expensesIn[$k] = $conv; }
+                    }
+                }
+            } catch (\Throwable $e) { /* ignore FX errors */ }
+            // Art. 12(4) billetudsteder hæfter: 100 % refund + 75 % komp af transaktionsbeløb
+            if ($isArt124Retailer) {
+                $baseAmount = max(0.0, $ticketPriceAmount);
+                $refundAmt = $baseAmount;
+                $compAmt = round($baseAmount * 0.75, 2);
+                $expensesTotal = array_sum(array_map('floatval', $expensesIn));
+                $claim = [
+                    'flags' => ['retailer_75' => true],
+                    'breakdown' => [
+                        'compensation' => [
+                            'eligible' => true,
+                            'amount' => $compAmt,
+                            'currency' => $currency,
+                            'pct' => 75,
+                            'basis' => 'Art. 12(4) billetudsteder: 75% af transaktionsbeløb',
+                            'regime' => 'EU_ART_12_4',
+                        ],
+                        'refund' => [
+                            'amount' => $refundAmt,
+                            'currency' => $currency,
+                            'pct' => 100,
+                            'basis' => 'Art. 12(4) billetudsteder: fuld refundering af transaktionsbeløb',
+                        ],
+                        'expenses' => [
+                            'amount' => $expensesTotal,
+                            'currency' => $currency,
+                            'basis' => 'Assistance/udlæg (konverteret til billetvaluta)',
+                        ],
+                    ],
+                    'totals' => [
+                        'gross_claim' => round($refundAmt + $compAmt + $expensesTotal, 2),
+                        'currency' => $currency,
+                    ],
+                ];
+                $liableParty = 'retailer';
+                $liableBasis = 'Art. 12(4)';
+            } else {
+                $claim = (new \App\Service\ClaimCalculator())->calculate([
+                    'country_code' => (string)($journey['country']['value'] ?? 'EU'),
+                    'currency' => $currency,
+                    'ticket_price_total' => $ticketPriceAmount,
+                    'trip' => [
+                        'through_ticket' => $throughTicket,
+                        'trip_type' => (count($legs) === 2 ? 'return' : ($form['trip_type'] ?? null)),
+                        'legs' => $legs,
+                        'liable_party' => $liableParty,
+                    ],
+                    'disruption' => [
+                        'delay_minutes_final' => $delayForClaim,
+                        'eu_only' => (bool)($compute['euOnly'] ?? true),
+                        'notified_before_purchase' => (bool)($compute['knownDelayBeforePurchase'] ?? false),
+                        'extraordinary' => $extraordinary,
+                        'extraordinary_type' => $extraordinaryType,
+                        'self_inflicted' => false,
+                        'delayed_leg_index' => $delayedLegIndex,
+                        'missed_connection' => !empty($incident['missed']),
+                    ],
+                    'choices' => [
+                        'wants_refund' => ((string)($form['remedyChoice'] ?? '') === 'refund_return'),
+                        'wants_reroute_same_soonest' => ((string)($form['remedyChoice'] ?? '') === 'reroute_soonest'),
+                        'wants_reroute_later_choice' => ((string)($form['remedyChoice'] ?? '') === 'reroute_later'),
+                    ],
+                    'expenses' => $expensesIn,
+                    'already_refunded' => 0,
+                    'service_fee_mode' => 'expenses_only',
+                    // If user selected a band, honor it for preview by overriding compensation pct
+                    'override_comp_pct' => ($selectedBand === '25' || $selectedBand === '50') ? (int)$selectedBand : null,
+                    'apply_min_threshold' => (bool)$this->truthy($form['minThresholdApplies'] ?? ''),
+                ]);
+            }
         } catch (\Throwable $e) { $claim = null; $liableParty = null; $liableBasis = null; }
 
         // Decide recommended form (EU vs national) using resolver and uploaded matrix
@@ -3798,6 +4397,123 @@ class FlowController extends AppController
         $gdpr_ok = isset($form['gdprConsent']) ? (bool)$this->truthy($form['gdprConsent']) : false;
         $this->set(compact('form','gdpr_ok'));
         return null;
+    }
+
+    /**
+     * Build price-hint context from TRIN 3 data (country/station/train/currency/time).
+     *
+     * @param array $form
+     * @param array $journey
+     * @param array $meta
+     * @return array{countryCode:string,stationType:string,trainType:string,arrivalLocalHour:int,currencyOverride?:string}
+     */
+    private function buildPriceContextForHints(array $form, array $journey, array $meta): array
+    {
+        $country = strtoupper((string)(
+            $form['operator_country'] ??
+            ($journey['country']['value'] ?? '') ??
+            ($meta['_auto']['operator_country']['value'] ?? '')
+        ));
+        if ($country === '') { $country = 'DE'; }
+
+        $station = (string)($form['arr_station'] ?? ($journey['arrival']['station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
+        $stationType = $this->inferStationTypeForHints($station);
+
+        $trainNo = (string)($form['train_no'] ?? ($journey['trainNo'] ?? ($meta['_auto']['train_no']['value'] ?? '')));
+        $product = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
+        $trainType = $this->inferTrainTypeForHints($trainNo, $product);
+
+        $arrivalTime = (string)($form['actual_arrival_time'] ?? ($form['arr_time'] ?? ($journey['arrival']['time'] ?? ($meta['_auto']['arr_time']['value'] ?? ''))));
+        $arrivalHour = $this->parseHourForHints($arrivalTime);
+
+        $currencyOverride = (string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? ''));
+        if (strcasecmp($currencyOverride, 'auto') === 0) { $currencyOverride = ''; }
+
+        return [
+            'countryCode' => $country,
+            'stationType' => $stationType,
+            'trainType' => $trainType,
+            'arrivalLocalHour' => $arrivalHour,
+            'currencyOverride' => $currencyOverride !== '' ? strtoupper($currencyOverride) : null,
+        ];
+    }
+
+    private function inferStationTypeForHints(string $stationName): string
+    {
+        $s = mb_strtolower(trim($stationName), 'UTF-8');
+        if ($s === '') { return 'REGIONAL'; }
+        $metroKeywords = ['hovedbanegård','hauptbahnhof','central','gare du nord','gare de lyon','central station','centrale','hb'];
+        foreach ($metroKeywords as $m) { if (mb_stripos($s, $m, 0, 'UTF-8') !== false) { return 'METRO'; } }
+        $ruralKeywords = ['landevej','halt','dorf','village','by'];
+        foreach ($ruralKeywords as $r) { if (mb_stripos($s, $r, 0, 'UTF-8') !== false) { return 'RURAL'; } }
+        return 'REGIONAL';
+    }
+
+    private function inferTrainTypeForHints(string $trainNo, string $product): string
+    {
+        $t = strtoupper($trainNo);
+        $p = strtoupper($product);
+        if (preg_match('/(ICE|TGV|RJ|RJX|LYN|AV|AVE|FR|ES)/', $t) || preg_match('/(HIGH|FRECCIAROSSA|AVE|TGV|ICE|RJ)/', $p)) {
+            return 'HIGHSPEED';
+        }
+        if (preg_match('/(IC|EC|IR)/', $t) || preg_match('/INTERCITY|IC|EC/', $p)) {
+            return 'INTERCITY';
+        }
+        return 'REGIONAL';
+    }
+
+    private function parseHourForHints(string $hhmm): int
+    {
+        if (preg_match('/^(\d{1,2}):(\d{2})/', $hhmm, $m)) {
+            $h = (int)$m[1];
+            if ($h >= 0 && $h <= 23) { return $h; }
+        }
+        return 12;
+    }
+
+    /**
+     * Load FX rates (EUR base) for price hints. Uses cached TMP/rates.json if fresh, else frankfurter, else static.
+     *
+     * @return array<string,float>
+     */
+    private function loadFxRatesForHints(): array
+    {
+        static $cache = null;
+        if ($cache !== null) { return $cache; }
+        $fx = [
+            'EUR' => 1.0,
+            'DKK' => 7.45,
+            'SEK' => 11.0,
+            'BGN' => 1.96,
+            'CZK' => 25.0,
+            'HUF' => 385.0,
+            'PLN' => 4.35,
+            'RON' => 4.95,
+            'CHF' => 0.95,
+            'GBP' => 0.85,
+        ];
+        $fxCachePath = TMP . 'rates.json';
+        try {
+            $useCache = false;
+            if (is_file($fxCachePath)) {
+                $age = time() - filemtime($fxCachePath);
+                if ($age < 22 * 3600) { $useCache = true; }
+            }
+            if ($useCache) {
+                $data = json_decode((string)file_get_contents($fxCachePath), true);
+                if (is_array($data) && !empty($data['rates'])) { $fx = $data['rates']; }
+            } else {
+                $api = 'https://api.frankfurter.app/latest?base=EUR&symbols=DKK,SEK,BGN,CZK,HUF,PLN,RON,CHF,GBP';
+                $resp = @file_get_contents($api);
+                $json = json_decode((string)$resp, true);
+                if (is_array($json) && !empty($json['rates'])) {
+                    $fx = array_merge(['EUR' => 1.0], $json['rates']);
+                    @file_put_contents($fxCachePath, json_encode(['ts' => time(), 'rates' => $fx]));
+                }
+            }
+        } catch (\Throwable $e) { /* keep fallback */ }
+        $cache = $fx;
+        return $fx;
     }
 
     /**

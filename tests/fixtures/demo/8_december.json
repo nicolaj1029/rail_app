@@ -1,0 +1,241 @@
+{
+    "fixture": {
+        "id": "8_december",
+        "version": 2,
+        "label": "Captured wizard session 2025-12-08T13:12:46+00:00",
+        "journey": [],
+        "meta": {
+            "_multi_tickets": [
+                {
+                    "file": "Hjemrejse-billet__1_.pdf",
+                    "pnr": "51HERNING",
+                    "dep_date": "2024-03-05",
+                    "passengers": [],
+                    "segments": [
+                        {
+                            "from": "Herning Messecenter",
+                            "to": "Herning St.",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        },
+                        {
+                            "from": "Herning St.",
+                            "to": "Vejle St.",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        },
+                        {
+                            "from": "18.03.24",
+                            "to": "03:11 2",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        }
+                    ]
+                }
+            ],
+            "enriched": true
+        },
+        "wizard": {
+            "step1": {
+                "travel_state": "before_start"
+            },
+            "step2": {
+                "incident_main": "delay"
+            },
+            "step3_entitlements": {
+                "leg_class_purchased": [
+                    "couchette",
+                    "couchette",
+                    "couchette",
+                    "couchette"
+                ],
+                "leg_class_delivered": [],
+                "leg_downgraded": [],
+                "pmr_user": "Nej",
+                "pmr_booked": "Nej",
+                "pmrQBooked": null,
+                "pmrQDelivered": null,
+                "pmrQPromised": null,
+                "pmr_facility_details": null,
+                "fare_flex_type": null,
+                "train_specificity": null,
+                "fare_class_purchased": null,
+                "berth_seat_type": null,
+                "reserved_amenity_delivered": null,
+                "class_delivered_status": null,
+                "preinformed_disruption": "Ved ikke",
+                "preinfo_channel": "Ved ikke",
+                "realtime_info_seen": [],
+                "downgrade_occurred": null,
+                "downgrade_comp_basis": null,
+                "downgrade_segment_share": "1",
+                "eligible_under_18_3": "1"
+            },
+            "step4_choices": {
+                "art18_expected_delay_60": "yes",
+                "remedyChoice": "refund_return",
+                "self_purchased_new_ticket": null,
+                "self_purchase_approved_by_operator": "unknown",
+                "offer_provided": "unknown",
+                "reroute_same_conditions_soonest": null,
+                "reroute_later_at_choice": null,
+                "reroute_info_within_100min": "unknown",
+                "reroute_extra_costs": "unknown",
+                "reroute_extra_costs_amount": null,
+                "reroute_extra_costs_currency": null,
+                "delayAtFinalMinutes": null,
+                "compensationBand": null,
+                "voucherAccepted": null,
+                "trip_cancelled_return_to_origin": "yes",
+                "return_to_origin_expense": "yes",
+                "return_to_origin_amount": "1000",
+                "return_to_origin_currency": "CZK",
+                "delay_confirmation_info": "unknown",
+                "delay_confirmation_received": "unknown",
+                "delay_confirmation_upload": null,
+                "delay_confirmation_type": null
+            },
+            "step5_assistance": {
+                "art20_expected_delay_60": "yes",
+                "meal_offered": "no",
+                "assistance_meals_unavailable_reason": "unreasonable_terms",
+                "hotel_offered": "no",
+                "overnight_needed": "yes",
+                "assistance_hotel_transport_included": null,
+                "assistance_hotel_accessible": null,
+                "blocked_train_alt_transport": "irrelevant",
+                "assistance_blocked_transport_to": null,
+                "assistance_blocked_transport_time": null,
+                "assistance_blocked_transport_possible": null,
+                "alt_transport_provided": "irrelevant",
+                "assistance_alt_transport_offered_by": null,
+                "assistance_alt_transport_type": null,
+                "assistance_alt_to_destination": null,
+                "assistance_alt_departure_time": null,
+                "assistance_alt_arrival_time": null,
+                "assistance_pmr_priority_applied": null,
+                "assistance_pmr_companion_supported": null,
+                "assistance_pmr_dog_supported": null,
+                "meal_self_paid_amount": "100.00",
+                "meal_self_paid_currency": "DKK",
+                "meal_self_paid_receipt": null,
+                "hotel_self_paid_nights": "5",
+                "hotel_self_paid_amount": "100.00",
+                "hotel_self_paid_currency": "DKK",
+                "hotel_self_paid_receipt": null,
+                "blocked_self_paid_amount": null,
+                "blocked_self_paid_currency": null,
+                "blocked_self_paid_receipt": null,
+                "alt_self_paid_amount": null,
+                "alt_self_paid_currency": null,
+                "alt_self_paid_receipt": null
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": false,
+            "delayAtFinalMinutes": null
+        },
+        "expected": [],
+        "journeyBasic": {
+            "dep_date": "2017-03-18",
+            "dep_time": "17:51",
+            "dep_station": "Til rejsen Herning Messecenter St.",
+            "arr_station": "K\u00f8benhavn H",
+            "arr_time": "21:02",
+            "train_no": "DSB 1",
+            "ticket_no": "05",
+            "operator": "DSB",
+            "operator_country": "DK",
+            "operator_product": "IC",
+            "price": "155 kr."
+        },
+        "segments": [
+            {
+                "from": "Herning Messecenter",
+                "to": "Herning St.",
+                "schedDep": "17:51",
+                "schedArr": "17:51",
+                "trainNo": "",
+                "depDate": "2024-03-05",
+                "arrDate": "2024-03-05",
+                "pnr": "05",
+                "carrier": "DSB"
+            },
+            {
+                "from": "Herning St.",
+                "to": "Vejle St.",
+                "schedDep": "17:51",
+                "schedArr": "17:51",
+                "trainNo": "",
+                "depDate": "2024-03-05",
+                "arrDate": "2024-03-05",
+                "pnr": "05",
+                "carrier": "DSB"
+            }
+        ],
+        "art12_meta": {
+            "seller_type_operator": "Ja",
+            "seller_type_agency": "Nej",
+            "single_booking_reference": "Ja",
+            "shared_pnr_scope": "Ja",
+            "multi_operator_trip": "Nej",
+            "separate_contract_notice": "Ved ikke",
+            "through_ticket_disclosure": "Ved ikke"
+        },
+        "art9_meta": {
+            "preinformed_disruption": "unknown",
+            "fastest_flag_at_purchase": "unknown",
+            "alts_shown_precontract": "unknown",
+            "language_accessible": "unknown",
+            "accessibility_format": "unknown",
+            "multi_channel_information": "unknown",
+            "accessible_formats_offered": "unknown",
+            "pmr_user": "Nej",
+            "pmr_booked": "Nej",
+            "pmr_promised_missing": "unknown",
+            "bike_reservation_type": "separate",
+            "bike_res_required": "Ja",
+            "fare_flex_type": "nonflex",
+            "train_specificity": "unknown",
+            "multiple_fares_shown": "unknown",
+            "cheapest_highlighted": "unknown",
+            "fare_class_purchased": "unknown",
+            "berth_seat_type": "couchette",
+            "promised_facilities": "unknown",
+            "through_ticket_disclosure": "unknown",
+            "single_txn_operator": "Ja",
+            "single_txn_retailer": "unknown",
+            "separate_contract_notice": "unknown",
+            "info_on_rights": "unknown",
+            "rights_notice_displayed": "unknown",
+            "rights_contact_provided": "unknown",
+            "complaint_channel_seen": "unknown",
+            "complaint_already_filed": "unknown",
+            "complaint_receipt_upload": "unknown",
+            "submit_via_official_channel": "unknown",
+            "realtime_info_seen": "unknown",
+            "info_during_disruption": "unknown",
+            "station_board_updates": "unknown",
+            "onboard_announcements": "unknown",
+            "disruption_updates_frequency": "unknown",
+            "assistance_contact_visible": "unknown",
+            "pmr_delivered_status": "unknown",
+            "bike_denied_reason": "unknown",
+            "bike_followup_offer": "unknown",
+            "bike_delay_bucket": "unknown",
+            "facilities_delivered_status": "unknown",
+            "facility_impact_note": "unknown",
+            "class_delivered_status": "unknown",
+            "reserved_amenity_delivered": "unknown"
+        }
+    }
+}

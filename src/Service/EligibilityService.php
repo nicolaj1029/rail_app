@@ -97,9 +97,13 @@ class EligibilityService
 
         if ($override) {
             [$ovPercent, $ovPayout, $ovMin] = $this->applyTiersWithPayout($delay, $override['tiers'] ?? []);
+            // Prefer national override whenever it applies (even if % equals EU baseline) so source reflects the override.
             $preferOverride = ($ovPercent > $percent)
-                || ($ovPercent === $percent && $ovPercent > 0 && $ovMin >= 0 && $ovMin < $this->baselineMinForPercent($percent))
+                || ($ovPercent === $percent && $ovPercent > 0)
                 || ($article19Exempt && $ovPercent >= 0);
+            if (($ctx['scope'] ?? '') === 'intl_inside_eu' && $ovPercent === $percent) {
+                $preferOverride = false;
+            }
             if ($preferOverride) {
                 $out = [
                     'percent' => $ovPercent,

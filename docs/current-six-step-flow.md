@@ -93,6 +93,9 @@ Rules:
 4. Hooks panel shows an "Auto: Ingen signaler" badge when the negative default was applied with zero evidence.
 5. `hadBike` derivation remains unchanged (true only for explicit yes or positive auto `_auto.bike_booked`).
 
+Server-side default of presence:
+- When no bike evidence is detected and confidence is low (< 0.5), the controller also sets `meta['bike_was_present']='no'` and records `_auto.bike_was_present={ value:'no', source:'bike_detection' }`. This keeps the data layer aligned with the UI even før første submit; users can still override to "Ja".
+
 Edge case: If later manual input sets `bike_count` without flipping presence to Ja, we still treat presence as Nej until the user selects Ja explicitly.
 - Art. 21–24 (PMR)
   - Baseline: `pmr_user`, `pmr_booked`

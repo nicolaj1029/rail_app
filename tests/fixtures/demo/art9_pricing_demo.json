@@ -1,0 +1,63 @@
+{
+    "fixture": {
+        "id": "art9-pricing-demo",
+        "version": 1,
+        "label": "Art.9 pricing/flex demo",
+        "journey": [],
+        "wizard": {
+            "step1": {
+                "travel_state": "completed"
+            },
+            "step2": {
+                "incident_main": "delay"
+            },
+            "step3_entitlements": {
+                "fare_flex_type": "nonflex",
+                "train_specificity": "specific",
+                "pmr_user": "Nej",
+                "pmr_booked": "Nej"
+            },
+            "step4_choices": {
+                "remedyChoice": "reroute_soonest",
+                "delayAtFinalMinutes": 75,
+                "voucherAccepted": "no"
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": false,
+            "delayAtFinalMinutes": 75
+        },
+        "expected": [],
+        "journeyBasic": {
+            "dep_date": "2025-12-03",
+            "dep_time": "08:00",
+            "dep_station": "A",
+            "arr_station": "B",
+            "arr_time": "10:00",
+            "train_no": "OP 123",
+            "ticket_no": "XYZ123",
+            "operator": "OP",
+            "operator_country": "EU",
+            "operator_product": "IC",
+            "price": "49.00 EUR"
+        },
+        "segments": [
+            {
+                "from": "A",
+                "to": "B",
+                "schedDep": "08:00",
+                "schedArr": "10:00",
+                "trainNo": "OP 123",
+                "depDate": "2025-12-03",
+                "arrDate": "2025-12-03",
+                "carrier": "OP"
+            }
+        ],
+        "art9_meta": {
+            "multiple_fares_shown": "Nej",
+            "cheapest_highlighted": "Nej",
+            "fare_flex_type": "nonflex",
+            "train_specificity": "specific"
+        }
+    }
+}

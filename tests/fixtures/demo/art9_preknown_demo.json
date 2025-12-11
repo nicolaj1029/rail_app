@@ -1,0 +1,66 @@
+{
+    "fixture": {
+        "id": "art9-preknown-demo",
+        "version": 1,
+        "label": "Art.9 preknown disruption demo",
+        "journey": [],
+        "wizard": {
+            "step1": {
+                "travel_state": "planned"
+            },
+            "step2": {
+                "incident_main": "delay"
+            },
+            "step3_entitlements": {
+                "preinformed_disruption": "Ja",
+                "preinfo_channel": "Operatør-site/app",
+                "pmr_user": "Nej",
+                "pmr_booked": "Nej"
+            },
+            "step4_choices": {
+                "remedyChoice": "continue",
+                "delayAtFinalMinutes": 120,
+                "voucherAccepted": "no"
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": true,
+            "delayAtFinalMinutes": 120
+        },
+        "expected": [],
+        "journeyBasic": {
+            "dep_date": "2025-12-05",
+            "dep_time": "09:00",
+            "dep_station": "C",
+            "arr_station": "D",
+            "arr_time": "12:00",
+            "train_no": "OP 456",
+            "ticket_no": "ABC789",
+            "operator": "OP",
+            "operator_country": "EU",
+            "operator_product": "REG",
+            "price": "35.00 EUR"
+        },
+        "segments": [
+            {
+                "from": "C",
+                "to": "D",
+                "schedDep": "09:00",
+                "schedArr": "12:00",
+                "trainNo": "OP 456",
+                "depDate": "2025-12-05",
+                "arrDate": "2025-12-05",
+                "carrier": "OP"
+            }
+        ],
+        "art9_meta": {
+            "preinformed_disruption": true,
+            "preinfo_channels": [
+                "operator_website"
+            ],
+            "known_delay_before_purchase_minutes": 90,
+            "ticket_purchase_time": "2025-12-01T10:00:00Z",
+            "realtime_info_seen": "unknown"
+        }
+    }
+}

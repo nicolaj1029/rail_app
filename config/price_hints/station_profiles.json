@@ -1,0 +1,23 @@
+{
+  "$schema": "https://togforsinkelse/schema/station_profiles-v1.json",
+  "stationTypes": {
+    "RURAL": {
+      "label": "Landområde / lille station",
+      "mealMultiplier": 0.8,
+      "hotelMultiplier": 0.8,
+      "taxiMultiplier": 0.8
+    },
+    "REGIONAL": {
+      "label": "Regional by / mellemstor station",
+      "mealMultiplier": 1.0,
+      "hotelMultiplier": 1.0,
+      "taxiMultiplier": 1.0
+    },
+    "METRO": {
+      "label": "Storby / hovedbanegård",
+      "mealMultiplier": 1.3,
+      "hotelMultiplier": 1.5,
+      "taxiMultiplier": 1.3
+    }
+  }
+}

@@ -203,15 +203,9 @@ endif;
                         <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
                         <a href="<?= $this->Url->build('/upload') ?>">Upload</a>
                         <a href="<?= $this->Url->build('/reimbursement') ?>">Reimbursement</a>
-                        <a href="<?= $this->Url->build('/api/demo/generate-mocks') ?>" target="_blank">Genér mocks</a>
+                        <a href="<?= $this->Url->build('/api/demo/generate-mocks') ?>" target="_blank">Gen?r mocks</a>
                         <a href="<?= $this->Url->build('/api/demo/mock-tickets') ?>" target="_blank">Scan mocks</a>
-                        <a href="<?= $this->Url->build('/api/compute/compensation?euOnly=1&delayMinEU=120') ?>" target="_blank">Compute: compensation</a>
-                        <a href="<?= $this->Url->build('/api/compute/art12') ?>" target="_blank">Compute: art12</a>
-                        <a href="<?= $this->Url->build('/api/compute/art9') ?>" target="_blank">Compute: art9</a>
-                        <a href="<?= $this->Url->build('/api/compute/refund') ?>" target="_blank">Compute: refund</a>
-                        <a href="<?= $this->Url->build('/api/compute/refusion') ?>" target="_blank">Compute: refusion</a>
-                        <a href="<?= $this->Url->build('/api/compute/claim') ?>" target="_blank">Compute: claim</a>
-                        <h3>Getting Started</h3>
+<h3>Getting Started</h3>
                         <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/en/">CakePHP Documentation</a>
                         <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/en/tutorials-and-examples/cms/installation.html">The 20 min CMS Tutorial</a>
                     </div>

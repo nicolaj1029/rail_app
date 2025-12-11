@@ -695,16 +695,25 @@ class OcrHeuristicsMapper
 
         // Train no/category: prefer labeled capture first
         // Train no/category: avoid capturing French 'Classe 2' or 'Classe' rows; require at least 2 digits to avoid 'InterCity 2'
-        if (preg_match('/(?:Train\s*(?:no\.|number|category)?|Tognummer|Treno|Tåg)[:\s]*([A-ZÄÖÜÅÆØ]{1,12}\s*\d{2,6}[A-Z]?)/iu', $text, $m) && !preg_match('/\bclasse\b\s*\d+/iu', $text)) {
+        if (preg_match('/(?:Train\s*(?:no\.|number|category)?|Tognummer|Tognr\.?|Treno|TǾg)[:\s]*([A-ZÆØÅæøåA-Za-z0-9 .-]{1,18}\s*\d{1,6}[A-Z]?)/iu', $text, $m) && !preg_match('/\bclasse\b\s*\d+/iu', $text)) {
             $auto['train_no'] = ['value' => trim($m[1]), 'source' => 'ocr'];
             $logs[] = 'AUTO: train_no=' . $auto['train_no']['value'];
-        } elseif (preg_match('/\b(?:TGV|ICE|IC|EC|EN|TER|AVE|REG|RE|RB|IR|RJX?|SJ|DSB|SBB|ÖBB|OEBB|NS|SNCF|CFL|CP|PKP|ZSSK)\s*\d{2,6}[A-Z]?\b/u', $text, $m)) {
+        } elseif (preg_match('/\b(?:TGV|ICE|IC|EC|EN|TER|AVE|REG|RE|RB|IR|RJX?|SJ|DSB|SBB|ÖBB|OEBB|NS|SNCF|CFL|CP|PKP|ZSSK)\s*\d{1,6}[A-Z]?\b/u', $text, $m)) {
             $auto['train_no'] = ['value' => trim($m[0]), 'source' => 'ocr'];
             $logs[] = 'AUTO: train_no=' . $auto['train_no']['value'];
+        } elseif (preg_match('/\bTognr\.?\s*:?\s*([^\r\n]+)/iu', $text, $m)) {
+            $cand = trim($m[1]);
+            $auto['train_no'] = ['value' => $cand, 'source' => 'ocr'];
+            $logs[] = 'AUTO: train_no (DK)=' . $cand;
         }
 
-        // Ticket/Booking ref (PNR) — prefer lettered 6-8 char codes (e.g., SNCF Dossier QFKDQB) over long numeric receipts
+        // Ticket/Booking ref (PNR) � prefer lettered 6-8 char codes (e.g., SNCF Dossier QFKDQB) over long numeric receipts
         $ticketCandidate = null;
+        // DK-specific: Billetnummer typically starts with 5 and includes letters/digits
+        if (preg_match('/Billetnummer\s*[:#]?\s*(5[A-Z0-9]{5,})/iu', $text, $mdk)) {
+            $ticketCandidate = strtoupper($mdk[1]);
+            $logs[] = 'CAND: ticket_no (dk billetnummer)=' . $ticketCandidate;
+        }
         // Common English/Danish labels
         if (preg_match('/\b(?:PNR|Booking\s*Reference|Billetnummer|Ticket\s*(?:no\.|number|reference))\b[:\s]*([A-Z0-9\-]+)/iu', $text, $m)) {
             $ticketCandidate = $m[1];
@@ -724,8 +733,9 @@ class OcrHeuristicsMapper
             $logs[] = 'AUTO: ticket_no=' . $ticketCandidate;
         }
 
-        // Price with decimals, symbols and currencies
-        if (preg_match('/(?:Price|Pris|Ticket\s*price|Preis|Prix)[:\s]*([0-9]+(?:[\.,][0-9]{2})?)\s*(€|EUR|DKK|SEK|NOK|USD|CHF|GBP|kr)?/iu', $text, $m)) {
+        // Price with decimals, symbols and currencies (extended with non-euro codes and local symbols)
+        // Capture ISO codes or common local symbols, later normalized upstream.
+        if (preg_match('/(?:Price|Pris|Ticket\s*price|Preis|Prix)[:\s]*([0-9]+(?:[\.,][0-9]{2})?)\s*(€|EUR|DKK|SEK|NOK|USD|CHF|GBP|BGN|CZK|HUF|PLN|RON|Ft|zł|Kč|Lei|лв|kr)?/iu', $text, $m)) {
             $val = $m[1]; if (str_contains($val, ',')) { $val = str_replace(',', '.', $val); }
             $auto['price'] = ['value' => $val . (isset($m[2]) && $m[2] ? (' ' . strtoupper($m[2])) : ''), 'source' => 'ocr'];
             $logs[] = 'AUTO: price=' . $auto['price']['value'];

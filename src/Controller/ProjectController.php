@@ -67,40 +67,16 @@ class ProjectController extends AppController
     {
         $groups = [
             [
-                'name' => 'Client UI',
-                'links' => [
-                    ['title' => 'Upload (start)', 'href' => '/upload', 'method' => 'GET', 'desc' => 'Upload billede/PDF eller indsæt Journey JSON. Kører Art. 12/9/18/19 og samlet claim. Bruger live forsinkelse, hvis USE_LIVE_APIS=true.'],
-                    ['title' => 'Wizard (start)', 'href' => '/wizard', 'method' => 'GET', 'desc' => 'Trinvis klientflow: spørgsmål, udgifter, opsummering og indsendelse.'],
-                    ['title' => 'Claims (start)', 'href' => '/claims', 'method' => 'GET', 'desc' => 'Simpel claims testside til hurtig beregning.'],
-                    ['title' => 'Reimbursement (demo)', 'href' => '/reimbursement', 'method' => 'GET', 'desc' => 'Demo af refusionsflow.'],
-                    ['title' => 'Admin: Claims (demo, no auth)', 'href' => '/admin/claims', 'method' => 'GET', 'desc' => 'Admin oversigt over sager (demo uden login).'],
-                    ['title' => 'Project: flowchart (v4)', 'href' => '/project/flowchart', 'method' => 'GET', 'desc' => 'Flow chart dokument.'],
-                    ['title' => 'Project: forklaring (v2)', 'href' => '/project/forklaring', 'method' => 'GET', 'desc' => 'Forklaring til flow chart.'],
-                ],
-            ],
-            [
                 'name' => 'Demo / Mocks',
                 'links' => [
                     ['title' => 'Fixtures', 'href' => '/api/demo/fixtures', 'method' => 'GET', 'desc' => 'Liste over demo fixtures (JSON).'],
-                    ['title' => 'Exemption Fixtures', 'href' => '/api/demo/exemption-fixtures', 'method' => 'GET', 'desc' => 'Eksempler på undtagelsesprofiler (JSON).'],
-                    ['title' => 'Art. 12 Fixtures', 'href' => '/api/demo/art12-fixtures', 'method' => 'GET', 'desc' => 'Scenarier for gennemgående billet (JSON).'],
+                    ['title' => 'Exemption Fixtures', 'href' => '/api/demo/exemption-fixtures', 'method' => 'GET', 'desc' => 'Eksempler p? undtagelsesprofiler (JSON).'],
+                    ['title' => 'Art. 12 Fixtures', 'href' => '/api/demo/art12-fixtures', 'method' => 'GET', 'desc' => 'Scenarier for gennemg?ende billet (JSON).'],
                     ['title' => 'Scenarios (list)', 'href' => '/api/demo/scenarios', 'method' => 'GET', 'desc' => 'Opsummerede scenarier til test.'],
                     ['title' => 'Scenarios (with eval)', 'href' => '/api/demo/scenarios?withEval=1', 'method' => 'GET', 'desc' => 'Scenarier med beregnet profil + Art.12/9 (JSON).'],
-                    ['title' => 'Run Scenarios', 'href' => '/api/demo/run-scenarios', 'method' => 'GET', 'desc' => 'Kører scenarierne og returnerer resultater.'],
-                    ['title' => 'Analyze Mock Tickets', 'href' => '/api/demo/mock-tickets', 'method' => 'GET', 'desc' => 'Scanner mocks/tests/fixtures og kører fuld analyse (Art. 12/9, refund, refusion, claim).'],
-                    ['title' => 'Analyze Mock Tickets + RNE', 'href' => '/api/demo/mock-tickets?withRne=1', 'method' => 'GET', 'desc' => 'Som ovenfor, men med RNE-enrichment slået til.'],
-                ],
-            ],
-            [
-                'name' => 'Compute APIs (POST)',
-                'links' => [
-                    ['title' => 'Compensation (Art. 19)', 'href' => '/api/compute/compensation', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Kompensationsprocent/-beløb ud fra forsinkelse + pris.'],
-                    ['title' => 'Exemptions Profile', 'href' => '/api/compute/exemptions', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Bygger undtagelsesprofil (Art. 2 matrix) fra journey.'],
-                    ['title' => 'Art. 12', 'href' => '/api/compute/art12', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Evaluerer gennemgående billet (Art. 12).'],
-                    ['title' => 'Art. 9', 'href' => '/api/compute/art9', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Evaluerer informationspligt (Art. 9).'],
-                    ['title' => 'Refund', 'href' => '/api/compute/refund', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Refund-berettigelse (Art. 18-lignende).'],
-                    ['title' => 'Refusion (Art. 18)', 'href' => '/api/compute/refusion', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Rerouting/assistance (Art. 18).'],
-                    ['title' => 'Unified Claim', 'href' => '/api/compute/claim', 'method' => 'POST', 'note' => 'JSON body', 'desc' => 'Samlet krav: kompensation + udgifter – 25% servicefee.'],
+                    ['title' => 'Run Scenarios', 'href' => '/api/demo/run-scenarios', 'method' => 'GET', 'desc' => 'K?rer scenarierne og returnerer resultater.'],
+                    ['title' => 'Analyze Mock Tickets', 'href' => '/api/demo/mock-tickets', 'method' => 'GET', 'desc' => 'Scanner mocks/tests/fixtures og k?rer fuld analyse (Art. 12/9, refund, refusion, claim).'],
+                    ['title' => 'Analyze Mock Tickets + RNE', 'href' => '/api/demo/mock-tickets?withRne=1', 'method' => 'GET', 'desc' => 'Som ovenfor, men med RNE-enrichment sl?et til.'],
                 ],
             ],
             [
@@ -114,14 +90,14 @@ class ProjectController extends AppController
                     ['title' => 'DB Lookup', 'href' => '/api/providers/db/lookup', 'method' => 'GET', 'desc' => 'Stub for DB lookup.'],
                     ['title' => 'DSB Realtime', 'href' => '/api/providers/dsb/realtime', 'method' => 'GET', 'desc' => 'Stub for DSB realtidsdata.'],
                     ['title' => 'DSB Trip', 'href' => '/api/providers/dsb/trip', 'method' => 'GET', 'desc' => 'Stub for DSB rejseopslag.'],
-                    ['title' => 'RNE Realtime', 'href' => '/api/providers/rne/realtime', 'method' => 'GET', 'desc' => 'Stub for RNE realtidsdata (bruges også i demo analyzer).'],
-                    ['title' => 'Open RT', 'href' => '/api/providers/open/rt', 'method' => 'GET', 'desc' => 'Åben generisk realtime stub.'],
+                    ['title' => 'RNE Realtime', 'href' => '/api/providers/rne/realtime', 'method' => 'GET', 'desc' => 'Stub for RNE realtidsdata (bruges ogs? i demo analyzer).'],
+                    ['title' => 'Open RT', 'href' => '/api/providers/open/rt', 'method' => 'GET', 'desc' => '?ben generisk realtime stub.'],
                 ],
             ],
             [
                 'name' => 'OCR / Ingest Stub',
                 'links' => [
-                    ['title' => 'Ingest Ticket (stub)', 'href' => '/api/ingest/ticket', 'method' => 'POST', 'note' => 'Optional JSON/form', 'desc' => 'OCR/indlæsning stub: returnerer journey-skelet og logs.'],
+                    ['title' => 'Ingest Ticket (stub)', 'href' => '/api/ingest/ticket', 'method' => 'POST', 'note' => 'Optional JSON/form', 'desc' => 'OCR/indl?sning stub: returnerer journey-skelet og logs.'],
                     ['title' => 'Unified Pipeline (all-in-one)', 'href' => '/api/pipeline/run', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Samler ingest + Exemptions + Art.12/9 + kompensation + refund/refusion + claim.'],
                 ],
             ],
@@ -129,6 +105,90 @@ class ProjectController extends AppController
 
         $this->set(compact('groups'));
         $this->viewBuilder()->setTemplate('links');
+    }
+
+    /**
+     * Extended links page with v2 demo/fixture runner endpoints and current flow/wizard URLs.
+     */
+    public function linksV2(): void
+    {
+        $groups = [
+            [
+                'name' => 'Client flows / UI',
+                'links' => [
+                    ['title' => 'Flow (single-page)', 'href' => '/flow/one', 'method' => 'GET', 'desc' => 'Legacy ONE-page wizard (ikke primær).'],
+                    ['title' => 'Flow (split steps)', 'href' => '/flow/start', 'method' => 'GET', 'desc' => 'PRIMÆR: trinvis wizard (trin 1-6).'],
+                    ['title' => 'Wizard (legacy MVP)', 'href' => '/wizard', 'method' => 'GET', 'desc' => 'Legacy checkout-flow med eget variabelsæt (ikke i aktiv brug).'],
+                    ['title' => 'Upload (OCR entry)', 'href' => '/upload', 'method' => 'GET', 'desc' => 'Ingest-demo; output mappes ikke 1:1 til split-steps state.'],
+                    ['title' => 'Claims start (dev)', 'href' => '/claims', 'method' => 'GET', 'desc' => 'Dev-inspektionsview af komp/refusion; ikke bundet til split-steps.'],
+                    ['title' => 'Reimbursement demo', 'href' => '/reimbursement', 'method' => 'GET', 'desc' => 'Demo af PDF/official form; egen state (ikke split-steps).'],
+                ],
+            ],
+            [
+                'name' => 'Demo v2 (fixtures & scenarios)',
+                'links' => [
+                    ['title' => 'Fixtures (v2 list)', 'href' => '/api/demo/v2/fixtures', 'method' => 'GET', 'desc' => 'Liste over v2-fixtures (tests/fixtures/demo).'],
+                    ['title' => 'Scenarios (v2)', 'href' => '/api/demo/v2/scenarios', 'method' => 'GET', 'desc' => 'Vis fixtures; append ?withEval=1 for runtime eval.'],
+                    ['title' => 'Run Scenarios (v2)', 'href' => '/api/demo/v2/run-scenarios', 'method' => 'GET', 'desc' => 'Testrunner; ?id= eller ?limit= for subset.'],
+                    ['title' => 'Dump Session → Fixture', 'href' => '/api/demo/v2/dump-session?asFixture=1', 'method' => 'GET', 'desc' => 'Eksporter aktuel flow-session som v2-fixture skeleton.'],
+                ],
+            ],
+            [
+                'name' => 'Demo legacy (v1 endpoints)',
+                'links' => [
+                    ['title' => 'Fixtures', 'href' => '/api/demo/fixtures', 'method' => 'GET', 'desc' => 'Legacy fixtures (JSON).'],
+                    ['title' => 'Exemption Fixtures', 'href' => '/api/demo/exemption-fixtures', 'method' => 'GET', 'desc' => 'Undtagelsesprofiler (JSON).'],
+                    ['title' => 'Art. 12 Fixtures', 'href' => '/api/demo/art12-fixtures', 'method' => 'GET', 'desc' => 'Gennemgående billet scenarier.'],
+                    ['title' => 'Scenarios (list)', 'href' => '/api/demo/scenarios', 'method' => 'GET', 'desc' => 'Legacy scenarios.'],
+                    ['title' => 'Scenarios (with eval)', 'href' => '/api/demo/scenarios?withEval=1', 'method' => 'GET', 'desc' => 'Legacy scenarios med beregning.'],
+                    ['title' => 'Run Scenarios', 'href' => '/api/demo/run-scenarios', 'method' => 'GET', 'desc' => 'Legacy testrunner.'],
+                    ['title' => 'Analyze Mock Tickets', 'href' => '/api/demo/mock-tickets', 'method' => 'GET', 'desc' => 'Scan mocks/tests/fixtures og kør fuld analyse.'],
+                    ['title' => 'Analyze Mock Tickets + RNE', 'href' => '/api/demo/mock-tickets?withRne=1', 'method' => 'GET', 'desc' => 'Som ovenfor med RNE enrichment.'],
+                ],
+            ],
+            [
+                'name' => 'Ingest / Pipeline',
+                'links' => [
+                    ['title' => 'Ingest Ticket (stub)', 'href' => '/api/ingest/ticket', 'method' => 'POST', 'note' => 'JSON/form', 'desc' => 'OCR/ingest stub der returnerer journey + logs.'],
+                    ['title' => 'Unified Pipeline', 'href' => '/api/pipeline/run', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Kører ingest + Art12/9/18/19 + claim i ét kald.'],
+                    ['title' => 'Compute: Compensation (Art.19)', 'href' => '/api/compute/compensation', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'EU kompensation (Art. 19) beregning.'],
+                    ['title' => 'Compute: Exemptions', 'href' => '/api/compute/exemptions', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Undtagelsesprofil (scope/blocked).'],
+                    ['title' => 'Compute: Art.12', 'href' => '/api/compute/art12', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Gennemgående billet evaluator.'],
+                    ['title' => 'Compute: Art.9', 'href' => '/api/compute/art9', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Information forpligtelser.'],
+                    ['title' => 'Compute: Refund (Art.18-like)', 'href' => '/api/compute/refund', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Refund evaluator.'],
+                    ['title' => 'Compute: Refusion (Art.18)', 'href' => '/api/compute/refusion', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Rerouting/assistance evaluator.'],
+                    ['title' => 'Compute: Claim (unified)', 'href' => '/api/compute/claim', 'method' => 'POST', 'note' => 'JSON', 'desc' => 'Samlet kravberegning.'],
+                ],
+            ],
+            [
+                'name' => 'Provider stubs',
+                'links' => [
+                    ['title' => 'SNCF Realtime', 'href' => '/api/providers/sncf/realtime', 'method' => 'GET'],
+                    ['title' => 'SNCF Trains', 'href' => '/api/providers/sncf/trains', 'method' => 'GET'],
+                    ['title' => 'SNCF Booking Validate', 'href' => '/api/providers/sncf/booking/validate', 'method' => 'GET'],
+                    ['title' => 'DB Realtime', 'href' => '/api/providers/db/realtime', 'method' => 'GET'],
+                    ['title' => 'DB Trip', 'href' => '/api/providers/db/trip', 'method' => 'GET'],
+                    ['title' => 'DB Lookup', 'href' => '/api/providers/db/lookup', 'method' => 'GET'],
+                    ['title' => 'DSB Realtime', 'href' => '/api/providers/dsb/realtime', 'method' => 'GET'],
+                    ['title' => 'DSB Trip', 'href' => '/api/providers/dsb/trip', 'method' => 'GET'],
+                    ['title' => 'RNE Realtime', 'href' => '/api/providers/rne/realtime', 'method' => 'GET'],
+                    ['title' => 'Open RT', 'href' => '/api/providers/open/rt', 'method' => 'GET'],
+                ],
+            ],
+        ];
+
+        $this->set(compact('groups'));
+        $this->viewBuilder()->setTemplate('links');
+    }
+
+    /**
+     * Flow QA: quick links for split-steps, fixture dump, and v2 runners.
+     * Aimed at beginners: step-by-step instructions on how to create and run tests.
+     */
+    public function flowQa(): void
+    {
+        $this->set('baseUrl', $this->request->getUri()->getScheme() . '://' . $this->request->getUri()->getHost() . ($this->request->getUri()->getPort() ? ':' . $this->request->getUri()->getPort() : '') . $this->request->getAttribute('webroot'));
+        $this->viewBuilder()->setTemplate('flow_qa');
     }
 
     /**

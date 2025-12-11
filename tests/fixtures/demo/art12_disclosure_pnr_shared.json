@@ -1,0 +1,35 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Art12 disclosure+shared PNR (exception test)",
+        "journey": [],
+        "wizard": {
+            "step1": {
+                "travel_state": "completed"
+            },
+            "step2": {
+                "incident_main": "delay"
+            },
+            "step3_entitlements": {
+                "eligible_under_18_3": "1",
+                "preinformed_disruption": "Nej",
+                "preinfo_channel": "Ved ikke",
+                "realtime_info_seen": []
+            }
+        },
+        "computeOverrides": {},
+        "art12_meta": {
+            "seller_type_operator": "Nej",
+            "seller_type_agency": "Ja",
+            "single_booking_reference": "Ja",
+            "shared_pnr_scope": "Ja",
+            "multi_operator_trip": "Ja",
+            "separate_contract_notice": "Ja",
+            "through_ticket_disclosure": "Ja"
+        },
+        "expected": {
+            "art12.art12_applies": false,
+            "art12.liable_party": "retailer"
+        }
+    }
+}

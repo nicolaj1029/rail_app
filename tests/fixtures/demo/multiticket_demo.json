@@ -1,0 +1,52 @@
+{
+  "fixture": {
+    "id": "multiticket-demo",
+    "version": 2,
+    "label": "Multi-ticket / multi-passenger demo (trin 3 hooks)",
+    "journey": [],
+    "meta": {
+      "ticket_upload_count": "2",
+      "ticket_multi_passenger": "yes",
+      "claimant_is_legal_representative": "yes",
+      "_multi_tickets": [
+        {
+          "file": "ticket_primary.pdf",
+          "pnr": "ABC123",
+          "dep_date": "2025-12-10",
+          "passengers": [
+            { "name": "Anna Madsen", "age_category": "adult", "is_claimant": true },
+            { "name": "Lucas Madsen", "age_category": "child", "is_claimant": false }
+          ]
+        },
+        {
+          "file": "ticket_extra.pdf",
+          "pnr": "ABC123",
+          "dep_date": "2025-12-10",
+          "passengers": [
+            { "name": "Freja Madsen", "age_category": "child", "is_claimant": false }
+          ]
+        }
+      ]
+    },
+    "wizard": {
+      "step1": {
+        "travel_state": "completed"
+      },
+      "step2": {
+        "incident_main": "delay"
+      },
+      "step3_entitlements": {
+        "pmr_user": "Nej",
+        "pmr_booked": "Nej",
+        "fare_flex_type": "nonflex",
+        "train_specificity": "specific"
+      },
+      "step4_choices": {},
+      "step5_assistance": {}
+    },
+    "computeOverrides": {
+      "knownDelayBeforePurchase": false
+    },
+    "expected": []
+  }
+}

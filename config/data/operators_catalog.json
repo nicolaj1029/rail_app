@@ -235,5 +235,228 @@
     "fa": "Frecciargento",
     "fb": "Frecciabianca",
     "pendolino": "Pendolino"
+  },
+  "downgrade_policies": {
+    "SNCF": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "notes": "Refund difference between purchased and delivered class per affected leg; no fixed % publicly standard"
+      },
+      "supplement_map": {
+        "seat": {
+          "amount": 0,
+          "currency": "EUR"
+        },
+        "couchette": {
+          "amount": 0,
+          "currency": "EUR"
+        },
+        "sleeper": {
+          "amount": 0,
+          "currency": "EUR"
+        }
+      }
+    },
+    "DB": {
+      "downgrade_rules": {
+        "method": "fixed",
+        "fixedAmount": 20,
+        "currency": "EUR",
+        "notes": "Sparpreis fixed comp when 1st not available"
+      },
+      "supplement_map": {
+        "seat": {
+          "amount": 4,
+          "currency": "EUR"
+        }
+      }
+    },
+    "DSB": {
+      "downgrade_rules": {
+        "method": "supplement",
+        "notes": "Refund DSB 1’ and seat supplements when downgraded"
+      },
+      "supplement_map": {
+        "dsb1": {
+          "amount": 120,
+          "currency": "DKK"
+        },
+        "seat": {
+          "amount": 30,
+          "currency": "DKK"
+        }
+      }
+    },
+    "SJ": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.5,
+        "notes": "Default to refunding class difference; goodwill cases may pay higher"
+      },
+      "supplement_map": {
+        "seat": {
+          "amount": 0,
+          "currency": "SEK"
+        }
+      }
+    },
+    "OEBB": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.5,
+        "notes": "Refund difference; use uplift ratio if exact tariff unknown"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 25,
+          "currency": "EUR"
+        },
+        "sleeper": {
+          "amount": 50,
+          "currency": "EUR"
+        }
+      }
+    },
+    "SBB": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "notes": "Refund difference only when train carried no 1st class at all"
+      },
+      "supplement_map": {
+        "seat": {
+          "amount": 0,
+          "currency": "CHF"
+        }
+      }
+    },
+    "TRENITALIA": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.4,
+        "notes": "Refund difference per leg; if unknown, use conservative uplift"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 20,
+          "currency": "EUR"
+        },
+        "sleeper": {
+          "amount": 40,
+          "currency": "EUR"
+        }
+      }
+    },
+    "RENFE": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "notes": "Often refund class difference on claim; some products restrictive"
+      },
+      "supplement_map": {
+        "seat": {
+          "amount": 0,
+          "currency": "EUR"
+        }
+      }
+    },
+    "NS": {
+      "downgrade_rules": {
+        "method": "prorata",
+        "upliftRatio": 0.3,
+        "notes": "Typically no automatic compensation; fallback prorata if applicable"
+      },
+      "supplement_map": {}
+    },
+    "PKP": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.5,
+        "notes": "Refund difference (e.g., EIP→EIC) per claim; percent may vary"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 15,
+          "currency": "PLN"
+        },
+        "sleeper": {
+          "amount": 30,
+          "currency": "PLN"
+        }
+      }
+    },
+    "SNCB": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "notes": "Case-by-case refund of difference when lower class delivered"
+      },
+      "supplement_map": {}
+    },
+    "CD": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.5,
+        "notes": "Refund difference per SPPO; claim-based"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 300,
+          "currency": "CZK"
+        },
+        "sleeper": {
+          "amount": 600,
+          "currency": "CZK"
+        }
+      }
+    },
+    "ZSSK": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "upliftRatio": 0.5,
+        "notes": "Refund difference; often via claim"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 10,
+          "currency": "EUR"
+        },
+        "sleeper": {
+          "amount": 20,
+          "currency": "EUR"
+        }
+      }
+    },
+    "VR": {
+      "downgrade_rules": {
+        "method": "tariff",
+        "notes": "Refund 1st-class uplift when lower class delivered"
+      },
+      "supplement_map": {
+        "couchette": {
+          "amount": 0,
+          "currency": "EUR"
+        },
+        "sleeper": {
+          "amount": 0,
+          "currency": "EUR"
+        }
+      }
+    },
+    "EUROSTAR": {
+      "downgrade_rules": {
+        "method": "fixed",
+        "fixedAmount": 0,
+        "currency": "EUR",
+        "notes": "Typically 50% voucher; treat via fixed method if needed"
+      },
+      "supplement_map": {}
+    },
+    "THALYS": {
+      "downgrade_rules": {
+        "method": "fixed",
+        "fixedAmount": 0,
+        "currency": "EUR",
+        "notes": "Historically vouchers or difference; treat similar to Eurostar post-integration"
+      },
+      "supplement_map": {}
+    }
   }
 }

@@ -4,10 +4,23 @@ $compute = $compute ?? [];
 $form = $form ?? [];
 $incident = $incident ?? [];
 ?>
-<h1>TRIN 3 · Rejsedetaljer (Upload billet)</h1>
+<?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
+<div class="fe-header">
+  <div class="fe-step">Trin 3</div>
+  <h1 class="fe-title">Rejsedetaljer og rettigheder</h1>
+  <p class="fe-sub">Upload billetter, bekræft rejsen og svar kort på spørgsmål. Sidepanelet viser løbende dine rettigheder.</p>
+</div>
 <?php
   // UI banners derived from exemption profile (global notices)
   $uiBanners = (array)($profile['ui_banners'] ?? []);
+  $serviceWarnings = (array)($serviceWarnings ?? []);
+  if (!empty($serviceWarnings)) {
+      echo '<div class="small" style="margin-top:6px;">';
+      foreach ($serviceWarnings as $ban) {
+          echo '<div style="background:#ffecec; border:1px solid #e0aaaa; padding:6px; border-radius:6px; margin-top:6px;">' . h($ban) . '</div>';
+      }
+      echo '</div>';
+  }
   if (!empty($uiBanners)) {
       echo '<div class="small" style="margin-top:6px;">';
       foreach ($uiBanners as $ban) {
@@ -21,20 +34,30 @@ $incident = $incident ?? [];
   $showArt9_1 = !isset($articlesSub['art9_1']) || $articlesSub['art9_1'] !== false;
 ?>
 <?= $this->Form->create(null, ['type' => 'file', 'id' => 'entitlementsForm']) ?>
+  <?php $pcVal = (string)($form['purchaseChannel'] ?? ''); ?>
+  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
+    <strong>Hvor blev billetten købt?</strong>
+    <div class="small" style="margin-top:6px;">
+      <label class="mr8"><input type="radio" name="purchaseChannel" value="web_app" <?= $pcVal==='web_app'?'checked':'' ?> /> Online / app</label>
+      <label class="mr8"><input type="radio" name="purchaseChannel" value="station" <?= $pcVal==='station'?'checked':'' ?> /> Station / automat</label>
+      <label class="mr8"><input type="radio" name="purchaseChannel" value="onboard" <?= $pcVal==='onboard'?'checked':'' ?> /> I toget</label>
+      <label class="mr8"><input type="radio" name="purchaseChannel" value="other" <?= $pcVal==='other'?'checked':'' ?> /> Andet</label>
+    </div>
+  </div>
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-    <strong>Billetter</strong>
-  <div id="uploadDropzone" tabindex="0" style="margin-top:8px; border:2px dashed #9bb; background:#f7fbff; border-radius:8px; padding:12px; min-height:100px; text-align:center; cursor:pointer;">
-      <div style="font-size:14px; color:#345;">Slip filer her eller klik for at tilføje</div>
+    <div class="section-title">Billetter</div>
+  <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
+      <div class="upload-title">Slip filer her eller klik for at tilføje</div>
       <div class="small muted" style="margin-top:6px;">Understøtter PDF, JPG, PNG, PKPASS, TXT</div>
-      <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+      <div class="upload-actions">
         <button type="button" id="addFilesBtn" class="button">Tilføj filer</button>
-        <button type="button" id="clearFilesBtn" class="button" style="background:#eee; color:#333;">Fjern alle</button>
+        <button type="button" id="clearFilesBtn" class="button button-outline">Fjern alle</button>
       </div>
     </div>
     <!-- Hidden real inputs wired by JS -->
     <input type="file" id="ticketSingle" name="ticket_upload" accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
     <input type="file" id="ticketMulti" name="multi_ticket_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
-    <ul id="selectedFilesList" class="small" style="list-style:none; padding-left:0; margin:12px 0 0 0;"></ul>
+    <ul id="selectedFilesList" class="small file-list" style="list-style:none; padding-left:0; margin:12px 0 0 0;"></ul>
   </div>
   <?php
     // Lightweight status so users see that parsing happened even when no choices are shown
@@ -43,394 +66,8 @@ $incident = $incident ?? [];
     $llmOnTop = in_array(strtolower((string)$llmFlagRawTop), ['1','true','yes','on'], true);
   ?>
   <div class="small muted" style="margin-top:6px;">
-    Auto: <?= (int)$segCountTop ?> segmenter fundet<?= $segCountTop===0 ? (' — LLM-strukturering: ' . ($llmOnTop ? 'til' : 'fra')) : '' ?>.
+    Auto: <?= (int)$segCountTop ?> segmenter fundet<?= $segCountTop===0 ? (' - LLM-strukturering: ' . ($llmOnTop ? 'til' : 'fra')) : '' ?>.
   </div>
-
-  <?php
-    // PMR block gating
-    $pmrAuto = (array)($meta['_pmr_detection'] ?? []);
-    $pmrDetectedFlag = !empty($meta['_pmr_detected']) || !empty($pmrAuto);
-    // Use Art.9 hooks if present for normalized echo, falling back to meta
-    $art9Hooks = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
-    $pmrUserVal = strtolower((string)($art9Hooks['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')));
-    // Accept both 'Ja'/'Nej' and 'yes'/'no' variants
-    if ($pmrUserVal==='ja') $pmrUserVal='yes'; if ($pmrUserVal==='nej') $pmrUserVal='no';
-    $showPmr = $pmrDetectedFlag || $pmrUserVal==='yes';
-    $pmrBookedVal = strtolower((string)($art9Hooks['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')));
-    if ($pmrBookedVal==='ja') $pmrBookedVal='yes'; if ($pmrBookedVal==='nej') $pmrBookedVal='no';
-    $pmrDeliveredVal = strtolower((string)($art9Hooks['pmr_delivered_status'] ?? ($meta['pmr_delivered_status'] ?? 'unknown')));
-    $pmrPromisedMissingVal = strtolower((string)($art9Hooks['pmr_promised_missing'] ?? ($meta['pmr_promised_missing'] ?? 'unknown')));
-    $pmrFacilityDetails = (string)($meta['pmr_facility_details'] ?? '');
-  ?>
-  <?php if ($showPmr): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="pmrFlowCard">
-    <strong>♿ PMR/handicap (Art. 18 og 20)</strong>
-    <?php if ($pmrDetectedFlag): ?>
-      <div class="small" style="margin-top:6px;">
-        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har fundet PMR/assistance i billetten — du kan have ekstra rettigheder.
-      </div>
-    <?php endif; ?>
-    <div class="small" style="margin-top:8px;">
-      <div><strong>Spm 1.</strong> Har du et handicap eller nedsat mobilitet, som krævede assistance?</div>
-      <label class="mr8"><input type="radio" name="pmr_user" value="yes" <?= $pmrUserVal==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="pmr_user" value="no" <?= $pmrUserVal==='no'?'checked':'' ?> /> Nej</label>
-    </div>
-    <div id="pmrQBooked" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 2.</strong> Bestilte du assistance før rejsen?</div>
-      <label class="mr8"><input type="radio" name="pmr_booked" value="yes" <?= $pmrBookedVal==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="pmr_booked" value="no" <?= $pmrBookedVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="pmr_booked" value="refused" <?= $pmrBookedVal==='refused'?'checked':'' ?> /> Forsøgte men fik afslag</label>
-    </div>
-    <div id="pmrQDelivered" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes' && $pmrBookedVal!=='no')?'block':'none' ?>;">
-      <div><strong>Spm 3.</strong> Blev den bestilte assistance leveret?</div>
-      <select name="pmr_delivered_status">
-        <option value="">— vælg —</option>
-        <option value="yes_full" <?= $pmrDeliveredVal==='yes_full'?'selected':'' ?>>Ja, fuldt ud</option>
-        <option value="partial" <?= $pmrDeliveredVal==='partial'?'selected':'' ?>>Delvist</option>
-        <option value="no" <?= $pmrDeliveredVal==='no'?'selected':'' ?>>Nej</option>
-      </select>
-    </div>
-    <div id="pmrQPromised" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 4.</strong> Manglede der PMR-faciliteter, som var lovet før købet?</div>
-      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="yes" <?= $pmrPromisedMissingVal==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="no" <?= $pmrPromisedMissingVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="unknown" <?= ($pmrPromisedMissingVal===''||$pmrPromisedMissingVal==='unknown')?'checked':'' ?> /> Ved ikke</label>
-    </div>
-    <div id="pmrQDetails" class="small" style="margin-top:8px; display:<?= ($pmrPromisedMissingVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 5.</strong> Hvilke faciliteter manglede? (rampe, skiltning, lift …)</div>
-      <textarea name="pmr_facility_details" rows="2" style="width:100%;" placeholder="Beskriv kort"><?= h($pmrFacilityDetails) ?></textarea>
-    </div>
-  </div>
-  <?php endif; ?>
-
-  <?php
-    // Bike flow visibility gating: show the block and preselect if OCR detected a bike on ticket
-    $bikeAuto = (array)($meta['_bike_detection'] ?? []);
-  // Normaliser cykel auto-detektion så både positiv og negativ auto-default kan forfylde radio-valg
-  $bikeBookedAutoRaw = (string)($meta['_auto']['bike_booked']['value'] ?? ($meta['bike_booked'] ?? ''));
-  $bikeBookedAutoNorm = strtolower($bikeBookedAutoRaw);
-  if ($bikeBookedAutoNorm === 'ja') $bikeBookedAutoNorm = 'yes';
-  if ($bikeBookedAutoNorm === 'nej') $bikeBookedAutoNorm = 'no';
-  // Brugerens eget svar har altid forrang; ellers bruger vi auto (ja eller nej). Tom betyder ingen forvalg.
-  $bikeWas = strtolower((string)($meta['bike_was_present'] ?? ''));
-    $bikeCause = strtolower((string)($meta['bike_caused_issue'] ?? ''));
-    $bikeResMade = strtolower((string)($meta['bike_reservation_made'] ?? ''));
-    $bikeResReq = strtolower((string)($meta['bike_reservation_required'] ?? ''));
-    $bikeDenied = strtolower((string)($meta['bike_denied_boarding'] ?? ''));
-    $bikeReasonProv = strtolower((string)($meta['bike_refusal_reason_provided'] ?? ''));
-    $bikeReasonType = strtolower((string)($meta['bike_refusal_reason_type'] ?? ''));
-  ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="bikeFlowCard">
-    <strong>🚲 Cykel på rejsen (Artikel 6)</strong>
-    <?php if (!empty($bikeAuto)): ?>
-      <div class="small" style="margin-top:6px;">
-        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har fundet cykelhenvisning på billetten — du har muligvis rettigheder efter Art. 6.
-        <?php if (!empty($bikeAuto['count'])): ?><span class="ml8">(antal: <?= (int)$bikeAuto['count'] ?>)</span><?php endif; ?>
-      </div>
-    <?php endif; ?>
-    <div class="small" style="margin-top:8px;">
-      <div><strong>Spm 1.</strong> Havde du en cykel med på rejsen?</div>
-  <?php $w = $bikeWas !== '' ? $bikeWas : ($bikeBookedAutoNorm==='yes' ? 'yes' : ($bikeBookedAutoNorm==='no' ? 'no' : '')); ?>
-      <label class="mr8"><input type="radio" name="bike_was_present" value="yes" <?= $w==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="bike_was_present" value="no" <?= $w==='no'?'checked':'' ?> /> Nej</label>
-    </div>
-    <div class="small" id="bikeQ2" style="margin-top:8px; display:<?= ($w==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 2.</strong> Er det cyklen eller håndteringen af cyklen, der har forsinket dig?</div>
-      <label class="mr8"><input type="radio" name="bike_caused_issue" value="yes" <?= $bikeCause==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="bike_caused_issue" value="no" <?= $bikeCause==='no'?'checked':'' ?> /> Nej</label>
-    </div>
-    <div id="bikeArticle6" style="margin-top:8px; display:<?= ($w==='yes' && $bikeCause==='yes')?'block':'none' ?>;">
-      <div class="small"><strong>Spm 3.</strong> Havde du reserveret plads til en cykel?</div>
-      <div class="small" style="margin-top:4px;">
-        <label class="mr8"><input type="radio" name="bike_reservation_made" value="yes" <?= $bikeResMade==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="mr8"><input type="radio" name="bike_reservation_made" value="no" <?= $bikeResMade==='no'?'checked':'' ?> /> Nej</label>
-      </div>
-      <div id="bikeQ3B" class="small" style="margin-top:8px; display:<?= ($bikeResMade==='no')?'block':'none' ?>;">
-        <div><strong>Spm 3B.</strong> Var det et tog, hvor der ikke krævedes cykelreservation?</div>
-        <label class="mr8"><input type="radio" name="bike_reservation_required" value="yes" <?= $bikeResReq==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="mr8"><input type="radio" name="bike_reservation_required" value="no" <?= $bikeResReq==='no'?'checked':'' ?> /> Nej</label>
-        <label class="mr8"><input type="radio" name="bike_reservation_required" value="unknown" <?= ($bikeResReq===''||$bikeResReq==='unknown')?'checked':'' ?> /> Ved ikke</label>
-      </div>
-      <div id="bikeQ4" class="small" style="margin-top:8px;">
-        <div><strong>Spm 4.</strong> Blev du nægtet at tage cyklen med?</div>
-        <label class="mr8"><input type="radio" name="bike_denied_boarding" value="yes" <?= $bikeDenied==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="mr8"><input type="radio" name="bike_denied_boarding" value="no" <?= $bikeDenied==='no'?'checked':'' ?> /> Nej</label>
-      </div>
-      <div id="bikeQ5" class="small" style="margin-top:8px; display:<?= ($bikeDenied==='yes')?'block':'none' ?>;">
-        <div><strong>Spm 5.</strong> Blev du informeret om, hvorfor du ikke måtte tage cyklen med?</div>
-        <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="yes" <?= $bikeReasonProv==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="no" <?= $bikeReasonProv==='no'?'checked':'' ?> /> Nej</label>
-      </div>
-      <div id="bikeQ6" class="small" style="margin-top:8px; display:<?= ($bikeDenied==='yes' && $bikeReasonProv==='yes')?'block':'none' ?>;">
-        <div><strong>Spm 6.</strong> Hvad var begrundelsen for afvisningen?</div>
-        <?php $opt = $bikeReasonType; ?>
-        <select name="bike_refusal_reason_type">
-          <option value="">— vælg —</option>
-          <option value="capacity" <?= $opt==='capacity'?'selected':'' ?>>Pladsmangel / Spidsbelastning</option>
-          <option value="equipment" <?= $opt==='equipment'?'selected':'' ?>>Teknisk udstyr tillader det ikke</option>
-          <option value="weight_dim" <?= $opt==='weight_dim'?'selected':'' ?>>Vægt eller dimensioner</option>
-          <option value="other" <?= $opt==='other'?'selected':'' ?>>Andet</option>
-          <option value="unknown" <?= $opt==='unknown'?'selected':'' ?>>Ved ikke</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <?php
-    // 3) Billetpriser og fleksibilitet (Art. 9) — show simple Qs with auto-prefill
-    $fftVal = (string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? ''));
-    $tsVal = (string)($meta['train_specificity'] ?? ($meta['_auto']['train_specificity']['value'] ?? 'unknown'));
-    $hasAutoPricing = !empty($meta['_auto']['fare_flex_type']['value'] ?? null) || !empty($meta['_auto']['train_specificity']['value'] ?? null);
-  ?>
-  <?php if ($showArt9_1): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="pricingBlock" data-art="9(1)">
-    <strong>💶 3) Billetpriser og fleksibilitet (Art. 9 stk. 1)</strong>
-    <?php if ($hasAutoPricing): ?>
-      <div class="small" style="margin-top:6px;">
-        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har et bud på købstype og togbinding — ret selv hvis det ikke passer.
-      </div>
-    <?php endif; ?>
-    <div class="mt8 small">1. Købstype (fleksibilitet)</div>
-    <?php $curFft = strtolower($fftVal); ?>
-    <select name="fare_flex_type">
-      <option value="" <?= $curFft===''?'selected':'' ?>>— vælg —</option>
-      <option value="nonflex" <?= $curFft==='nonflex'?'selected':'' ?>>Standard/Non-flex</option>
-      <option value="semiflex" <?= $curFft==='semiflex'?'selected':'' ?>>Semi-flex</option>
-      <option value="flex" <?= $curFft==='flex'?'selected':'' ?>>Flex</option>
-      <option value="pass" <?= $curFft==='pass'?'selected':'' ?>>Abonnement/Periodekort</option>
-      <option value="other" <?= $curFft==='other'?'selected':'' ?>>Andet</option>
-    </select>
-
-    <?php
-      // Season/period pass details (Art. 19(2)) — shown when "Abonnement/Periodekort" is selected
-      $season = (array)($meta['season_pass'] ?? []);
-      $seasonHas = ($curFft === 'pass') || !empty($season['has']);
-      $seasonType = (string)($season['type'] ?? '');
-      $seasonOp = (string)($season['operator'] ?? ($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')));
-      $seasonFrom = (string)($season['valid_from'] ?? '');
-      $seasonTo = (string)($season['valid_to'] ?? '');
-    ?>
-    <div id="seasonPassBlock" class="mt8" style="display:<?= $seasonHas ? 'block' : 'none' ?>;">
-      <div class="small" style="margin-bottom:6px;">
-        🔹 Abonnement/Periodekort (Art. 19, stk. 2) — gentagne forsinkelser i gyldighedsperioden kan udløse kompensation efter operatørens ordning.
-      </div>
-      <input type="hidden" name="season_pass_has" value="<?= $seasonHas ? '1' : '' ?>" />
-      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <label>Type
-          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="Pendler / Periode / Årskort" />
-        </label>
-        <label>Operatør
-          <input type="text" name="season_pass_operator" value="<?= h($seasonOp) ?>" placeholder="DSB / DB / SNCF …" />
-        </label>
-        <label>Gyldig fra (YYYY-MM-DD)
-          <input type="text" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" placeholder="YYYY-MM-DD" />
-        </label>
-        <label>Gyldig til (YYYY-MM-DD)
-          <input type="text" name="season_pass_valid_to" value="<?= h($seasonTo) ?>" placeholder="YYYY-MM-DD" />
-        </label>
-      </div>
-      <div class="small muted" style="margin-top:6px;">Tip: Små forsinkelser (&lt; 60 min) kan kumuleres i perioden efter operatørens ordning.</div>
-    </div>
-
-    <div class="mt8 small">2. Gælder billetten kun for specifikt tog?</div>
-    <?php $curTs = strtolower($tsVal ?: 'unknown'); ?>
-    <label class="small"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
-    <label class="small ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
-    <label class="small ml8"><input type="radio" name="train_specificity" value="unknown" <?= ($curTs===''||$curTs==='unknown')?'checked':'' ?> /> Ved ikke</label>
-  </div>
-  <?php else: ?>
-    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Billetpriser og fleksibilitet (Art. 9 stk. 1) er undtaget for denne rejse og vises ikke.</div>
-  <?php endif; ?>
-
-  <?php
-    // 6) Klasse og reserverede faciliteter — altid synlig i TRIN 3
-    $art9Hooks = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
-    $fcp = (string)($meta['fare_class_purchased'] ?? ($art9Hooks['fare_class_purchased'] ?? ''));
-    $bst = (string)($meta['berth_seat_type'] ?? ($art9Hooks['berth_seat_type'] ?? ''));
-    $cds = (string)($meta['class_delivered_status'] ?? ($art9Hooks['class_delivered_status'] ?? ''));
-    $rad = (string)($meta['reserved_amenity_delivered'] ?? ($art9Hooks['reserved_amenity_delivered'] ?? ''));
-    $classAuto = (array)($meta['_class_detection'] ?? []);
-  ?>
-  <?php if ($showArt9_1): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="classBlock" data-art="9(1)">
-    <strong>💺 6) Klasse og reserverede faciliteter (Art. 9 stk. 1)</strong>
-    <?php if (!empty($classAuto) || !empty($meta['_auto']['fare_class_purchased']['value'] ?? null) || !empty($meta['_auto']['berth_seat_type']['value'] ?? null)): ?>
-      <div class="small" style="margin-top:6px;">
-        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har fundet klasse/reservation i billetten — ret selv hvis det ikke passer.
-      </div>
-    <?php endif; ?>
-    <div class="mt8 small">1. Hvilken klasse var købt?</div>
-    <select name="fare_class_purchased">
-      <option value="" <?= $fcp===''?'selected':'' ?>>— vælg —</option>
-      <option value="1" <?= $fcp==='1'?'selected':'' ?>>1. klasse</option>
-      <option value="2" <?= $fcp==='2'?'selected':'' ?>>2. klasse</option>
-      <option value="other" <?= $fcp==='other'?'selected':'' ?>>Andet</option>
-      <option value="unknown" <?= $fcp==='unknown'?'selected':'' ?>>Ved ikke</option>
-    </select>
-
-    <?php $showQ2 = ($fcp !== '' && $fcp !== 'unknown'); ?>
-    <div id="classQ2" class="mt8" style="display:<?= $showQ2 ? 'block' : 'none' ?>;">
-      <div class="small">2. Fik du den klasse, du betalte for?</div>
-      <label class="small"><input type="radio" name="class_delivered_status" value="ok" <?= $cds==='ok'?'checked':'' ?> /> Ja</label>
-      <label class="small ml8"><input type="radio" name="class_delivered_status" value="downgrade" <?= $cds==='downgrade'?'checked':'' ?> /> Nej, nedklassificeret</label>
-      <label class="small ml8"><input type="radio" name="class_delivered_status" value="upgrade" <?= $cds==='upgrade'?'checked':'' ?> /> Nej, opgraderet</label>
-    </div>
-
-    <div class="mt8 small">3. Var der reserveret plads/kupe/ligge/sove?</div>
-    <select name="berth_seat_type">
-      <option value="" <?= $bst===''?'selected':'' ?>>— vælg —</option>
-      <option value="seat" <?= $bst==='seat'?'selected':'' ?>>Fast sæde</option>
-      <option value="free" <?= $bst==='free'?'selected':'' ?>>Fri plads</option>
-      <option value="couchette" <?= $bst==='couchette'?'selected':'' ?>>Liggevogn</option>
-      <option value="sleeper" <?= $bst==='sleeper'?'selected':'' ?>>Sovevogn</option>
-      <option value="none" <?= $bst==='none'?'selected':'' ?>>Ingen</option>
-    </select>
-
-    <?php $needsDelivery = in_array($bst, ['seat','couchette','sleeper'], true); ?>
-    <div id="classQ4" class="mt8" style="display:<?= $needsDelivery ? 'block' : 'none' ?>;">
-      <div class="small">4. Blev reserveret plads/ligge/sove leveret?</div>
-      <label class="small"><input type="radio" name="reserved_amenity_delivered" value="yes" <?= $rad==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="small ml8"><input type="radio" name="reserved_amenity_delivered" value="no" <?= $rad==='no'?'checked':'' ?> /> Nej</label>
-      <label class="small ml8"><input type="radio" name="reserved_amenity_delivered" value="partial" <?= $rad==='partial'?'checked':'' ?> /> Delvist</label>
-    </div>
-  </div>
-  <?php else: ?>
-    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Klasse og reserverede faciliteter (Art. 9 stk. 1) er undtaget for denne rejse og vises ikke.</div>
-  <?php endif; ?>
-
-  <?php
-    // 7) Afbrydelser/forsinkelser før køb (Art. 9(1))
-    // Q1 vises altid; Q2+Q3 vises når Q1=Ja. Q3 kun hvis Art. 10 gælder (realtime information).
-    $art10Applies = $profile['articles']['art10'] ?? true;
-    $pid = (string)($form['preinformed_disruption'] ?? ($art9['hooks']['preinformed_disruption'] ?? ''));
-    $pic = (string)($form['preinfo_channel'] ?? ($art9['hooks']['preinfo_channel'] ?? ''));
-    $ris = (string)($form['realtime_info_seen'] ?? ($art9['hooks']['realtime_info_seen'] ?? ''));
-  ?>
-  <?php if ($showArt9_1): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="disruptionBlock" data-art="9(1)">
-    <strong>⚠️ 7) Afbrydelser/forsinkelser — oplyst før køb (Art. 9 stk. 1)</strong>
-    <div class="small" style="margin-top:6px;">1. Var der meddelt afbrydelse/forsinkelse før dit køb?</div>
-    <div class="small" style="margin-top:4px;">
-      <label class="mr8"><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="preinformed_disruption" value="unknown" <?= ($pid===''||$pid==='unknown')?'checked':'' ?> /> Ved ikke</label>
-    </div>
-    <div id="disQ2" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
-      <div>2. Hvis ja: Hvor blev det vist?</div>
-      <select name="preinfo_channel">
-        <option value="" <?= $pic===''?'selected':'' ?>>— vælg —</option>
-        <option value="journey_planner" <?= $pic==='journey_planner'?'selected':'' ?>>Rejseplan</option>
-        <option value="operator_site_app" <?= $pic==='operator_site_app'?'selected':'' ?>>Operatør-site/app</option>
-        <option value="ticket_overview" <?= $pic==='ticket_overview'?'selected':'' ?>>Billetoverblik</option>
-        <option value="other" <?= $pic==='other'?'selected':'' ?>>Andet</option>
-      </select>
-    </div>
-    <?php if ($art10Applies): ?>
-    <div id="disQ3" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
-      <div>3. Så du realtime-opdateringer under rejsen?</div>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="app" <?= $ris==='app'?'checked':'' ?> /> Ja, i app</label>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="on_train" <?= $ris==='on_train'?'checked':'' ?> /> Ja, i toget</label>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="station" <?= $ris==='station'?'checked':'' ?> /> Ja, på station</label>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="no" <?= $ris==='no'?'checked':'' ?> /> Nej</label>
-    </div>
-    <?php endif; ?>
-    <div id="disruptionReqError" class="small" style="margin-top:8px; color:#b33; display:none;">Udfyld venligst punkt 7: marker om der var oplyst forsinkelse før køb<?= $art10Applies ? ' (og besvar opfølgning)' : '' ?>.</div>
-  </div>
-  <?php else: ?>
-    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Oplysningspligt før køb (Art. 9 stk. 1) er undtaget — vi behøver ikke disse svar.</div>
-  <?php endif; ?>
-
-  <?php
-    // Minimal Art. 12 questions inline in TRIN 3 (PGR only)
-    // Show only if evaluator suggests missing basics or if values are unknown
-    $a12hooks = (array)($art12['hooks'] ?? []);
-    $a12missing = (array)($art12['missing'] ?? []);
-    $norm = function($v){ $s=strtolower((string)$v); if(in_array($s,['ja','yes','y','1','true'],true)) return 'yes'; if(in_array($s,['nej','no','n','0','false'],true)) return 'no'; if($s===''||$s==='-'||$s==='unknown'||$s==='ved ikke') return 'unknown'; return $s; };
-    $scnVal = $norm($meta['separate_contract_notice'] ?? ($a12hooks['separate_contract_notice'] ?? 'unknown'));
-    $ttdVal = $norm($meta['through_ticket_disclosure'] ?? ($a12hooks['through_ticket_disclosure'] ?? 'unknown'));
-    // Seller channel inference from meta hooks
-    $sellerInf = 'unknown';
-    $sto = $norm($meta['seller_type_operator'] ?? '');
-    $sta = $norm($meta['seller_type_agency'] ?? '');
-    if ($sto==='yes') $sellerInf = 'operator'; elseif ($sta==='yes') $sellerInf = 'retailer';
-    // Same transaction inference when multiple PNRs
-    $stOp = $norm($meta['single_txn_operator'] ?? '');
-    $stRt = $norm($meta['single_txn_retailer'] ?? '');
-    $sameTxnInf = ($stOp==='yes'||$stRt==='yes') ? 'yes' : (($stOp==='no'&&$stRt==='no') ? 'no' : 'unknown');
-    // Gate visibility: show if evaluator is missing any of these, or if values are unknown
-    $needA12 = in_array('separate_contract_notice', $a12missing, true) || in_array('through_ticket_disclosure', $a12missing, true)
-      || $scnVal==='unknown' || $ttdVal==='unknown' || $sellerInf==='unknown';
-    // Also compute PNR count + shared scope hint for same-transaction prompt
-    $pnrCountInline = 0; try {
-      $pnrSet = [];
-      $br = (string)($journey['bookingRef'] ?? ''); if ($br!=='') { $pnrSet[$br]=true; }
-      foreach ((array)($groupedTickets ?? []) as $g) { $p=(string)($g['pnr'] ?? ''); if ($p!=='') { $pnrSet[$p]=true; } }
-      $pnrCountInline = count($pnrSet);
-    } catch (\Throwable $e) { $pnrCountInline = 0; }
-  ?>
-  <?php if ($needA12): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
-    <strong>🔗 Art. 12 · Kontraktoplysninger (TRIN 3)</strong>
-    <div class="small" style="margin-top:6px;">Hvem solgte dig hele rejsen?</div>
-    <div class="small" style="margin-top:4px;">
-      <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> Operatør (jernbane)</label>
-      <label class="mr8"><input type="radio" name="seller_channel" value="retailer" <?= $sellerInf==='retailer'?'checked':'' ?> /> Forhandler/rejsebureau</label>
-      <label class="mr8"><input type="radio" name="seller_channel" value="unknown" /> Ved ikke</label>
-    </div>
-    <div class="small" style="margin-top:10px;">Blev det oplyst før køb, at billetten var gennemgående?</div>
-    <div class="small" style="margin-top:4px;">
-      <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="yes" <?= $ttdVal==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="no" <?= $ttdVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="unknown" /> Ved ikke</label>
-    </div>
-    <div class="small" style="margin-top:10px;">Blev separate kontrakter oplyst?</div>
-    <div class="small" style="margin-top:4px;">
-      <label class="mr8"><input type="radio" name="separate_contract_notice" value="yes" <?= $scnVal==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="separate_contract_notice" value="no" <?= $scnVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="separate_contract_notice" value="unknown" /> Ved ikke</label>
-    </div>
-    <?php $showSameTxn = ($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no'); ?>
-    <?php if ($showSameTxn): ?>
-    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter købt i én transaktion?</div>
-    <div class="small" style="margin-top:4px;">
-      <label class="mr8"><input type="radio" name="same_transaction" value="yes" <?= $sameTxnInf==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="same_transaction" value="no" <?= $sameTxnInf==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="same_transaction" value="unknown" /> Ved ikke</label>
-    </div>
-    <?php endif; ?>
-    <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
-  </div>
-  <?php endif; ?>
-
-  
-
-  <?php if (!empty($meta['_passengers_auto'])): ?>
-  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-    <strong>📋 Fundne passagerer på billetten</strong>
-    <div class="small" style="margin-top:6px;">Redigér navne og markér hvem der klager:</div>
-    <div class="small" style="margin-top:6px;">
-      <?php $paxList = (array)$meta['_passengers_auto']; ?>
-      <?php foreach ($paxList as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
-        <div style="margin-top:6px;">
-          <label>Navn
-            <input type="text" name="passenger[<?= (int)$i ?>][name]" value="<?= h($nameVal) ?>" placeholder="Passager #<?= (int)($i+1) ?>" />
-          </label>
-          <span class="badge" style="margin-left:6px; background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;"><?= h(ucfirst($age)) ?></span>
-          <label class="ml8"><input type="checkbox" name="passenger[<?= (int)$i ?>][is_claimant]" value="1" <?= $isC?'checked':'' ?> /> Klager</label>
-        </div>
-      <?php endforeach; ?>
-    </div>
-    <div class="small" style="margin-top:8px;">
-      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk værge/ansvarlig for andre på billetten</label>
-    </div>
-  </div>
-  <?php endif; ?>
-
-  <!-- Multi-upload helper replaced by the unified dropzone above -->
 
   <?php if (!empty($groupedTickets)): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
@@ -447,7 +84,7 @@ $incident = $incident ?? [];
           <li>
             <?= h((string)($t['file'] ?? '')) ?><?= (!empty($t['pnr'])||!empty($t['dep_date'])) ? (': ' . h(trim((string)($t['pnr'] ?? '') . ' ' . (string)($t['dep_date'] ?? '')))) : '' ?>
             <?php $pc = isset($t['passengers']) ? count((array)$t['passengers']) : 0; if ($pc>0): ?>
-              <span class="badge" style="margin-left:6px; background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">pax <?= (int)$pc ?></span>
+              <span class="badge" style="margin-left:6px; background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;"><?= (int)$pc ?> pax</span>
             <?php endif; ?>
             <?php if (!empty($t['file'])): ?>
               <button type="button" class="small remove-ticket-btn" data-file="<?= h((string)$t['file']) ?>" style="margin-left:6px;">Fjern</button>
@@ -522,13 +159,36 @@ $incident = $incident ?? [];
         ?>
         <input type="text" name="ticket_no" value="<?= h((string)$ticketNoVal) ?>" />
       </label>
+      <?php
+        $priceVal = (string)($meta['_auto']['price']['value'] ?? ($form['price'] ?? ''));
+        $currencyCandidates = [
+          (string)($form['price_currency'] ?? ''),
+          (string)($meta['_auto']['price_currency']['value'] ?? ''),
+          (string)($meta['_auto']['price']['currency'] ?? ''),
+          (string)($journey['ticketPrice']['currency'] ?? ''),
+        ];
+        $curCurrency = '';
+        foreach ($currencyCandidates as $c) {
+          $cc = strtoupper(trim($c));
+          if ($cc !== '' && preg_match('/^(EUR|DKK|SEK|BGN|CZK|HUF|PLN|RON)$/', $cc)) { $curCurrency = $cc; break; }
+        }
+      ?>
       <label>3.2.8. Ticket price(s)
-        <input type="text" name="price" value="<?= h($meta['_auto']['price']['value'] ?? ($form['price'] ?? '')) ?>" placeholder="100 EUR" />
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="text" name="price" value="<?= h($priceVal) ?>" placeholder="100 EUR" style="flex:1 1 200px;" />
+          <select name="price_currency" style="min-width:120px;">
+            <option value="">Auto</option>
+            <?php foreach (['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+              <option value="<?= $cc ?>" <?= $curCurrency===$cc?'selected':'' ?>><?= $cc ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="small muted" style="margin-top:4px;">Vælg valuta hvis auto-detektion ikke rammer rigtigt.</div>
       </label>
       <?php
         // Build journey summary + missed-connection station choices with both arrival and next departure times
   $mcChoicesInline = [];
-        $journeyRows = [];
+        $journeyRowsInline = [];
         $changeBullets = [];
         // Prefer segments detected for the current upload; if empty, use first non-empty grouped ticket
         $segAutoInline = (array)($meta['_segments_auto'] ?? []);
@@ -555,12 +215,12 @@ $incident = $incident ?? [];
               $prod = trim((string)($s['trainNo'] ?? ''));
               $depD = (string)($s['depDate'] ?? ($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? '')));
               $arrD = (string)($s['arrDate'] ?? $depD);
-              $journeyRows[] = [
-                'leg' => $from . ' → ' . $to,
+              $journeyRowsInline[] = [
+                'leg' => $from . ' ? ' . $to,
                 'dep' => ($dep ? ($fmtDk($depD) . ' kl. ' . $dep) : ''),
                 'arr' => ($arr ? ($fmtDk($arrD) . ' kl. ' . $arr) : ''),
                 'train' => $prod,
-                'change' => ($i < $last ? ('Skift i ' . $to) : '— (slutstation)'),
+                'change' => ($i < $last ? ('Skift i ' . $to) : '(slutstation)'),
               ];
               if ($i < $last) {
                 $next = $segAutoInline[$i+1] ?? [];
@@ -571,20 +231,20 @@ $incident = $incident ?? [];
                 if ($m1 !== null && $m2 !== null) { $lay = $m2 - $m1; if ($lay < 0) { $lay += 24*60; } }
                 $label = $toName;
                 if ($arr || $nextDep) {
-                  $label .= ' (ank. ' . ($arr ?: '—') . ' → afg. ' . ($nextDep ?: '—') . (($lay !== null && $lay >= 0 && $lay <= 360) ? (', ophold ' . $lay . ' min') : '') . ')';
+                  $label .= ' (ank. ' . ($arr ?: '-') . ' • afg. ' . ($nextDep ?: '-') . (($lay !== null && $lay >= 0 && $lay <= 360) ? (', ophold ' . $lay . ' min') : '') . ')';
                 }
                 // Append MCT judgement if available
                 $ev = $mctByStation[$norm($toName)] ?? null;
                 if (is_array($ev)) {
                   $ok = !empty($ev['realistic']); $thr = (int)($ev['threshold'] ?? 0);
-                  $label .= $ok ? ' [MCT ok ≥ ' . $thr . 'm]' : ' [MCT kort < ' . $thr . 'm]';
+                  $label .= $ok ? ' [MCT ok = ' . $thr . 'm]' : ' [MCT kort < ' . $thr . 'm]';
                 }
                 // Collect ALL changes without deduping by station to ensure multiple skift are shown
                 if (!isset($mcChoicesInline) || !is_array($mcChoicesInline)) { $mcChoicesInline = []; }
                 $mcChoicesInline[] = ['station' => $toName, 'label' => $label];
                 if ($lay !== null && $lay >= 0 && $lay <= 360) {
-                  $bullet = '➡️ i ' . $toName . ' (ankomst ' . $arr . ', afgang ' . $nextDep . '), 🕓 Opholdstid: ' . $lay . ' minutter';
-                  if (is_array($ev)) { $bullet .= !empty($ev['realistic']) ? ' — MCT: OK' : ' — MCT: for kort'; }
+                  $bullet = 'Skift i ' . $toName . ' (ankomst ' . ($arr ?: '-') . ', afgang ' . ($nextDep ?: '-') . '), opholdstid: ' . $lay . ' minutter';
+                  if (is_array($ev)) { $bullet .= !empty($ev['realistic']) ? ' - MCT: OK' : ' - MCT: for kort'; }
                   $changeBullets[] = $bullet;
                 }
               }
@@ -648,10 +308,17 @@ $incident = $incident ?? [];
         <?php endif; ?>
       </div>
     </div>
-    <?php if (!empty($journeyRows)): ?>
+    <?php if (!empty($journeyRowsInline)): ?>
       <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflæst fra billetten)</strong></div>
       <div class="small" style="overflow:auto;">
-        <table style="width:100%; border-collapse:collapse;">
+        <style>
+          /* Skjul leveret/nedgraderet kolonner i MC-tabellen */
+          #mcJourneyTable th:nth-child(6),
+          #mcJourneyTable td:nth-child(6),
+          #mcJourneyTable th:nth-child(7),
+          #mcJourneyTable td:nth-child(7) { display:none; }
+        </style>
+        <table id="mcJourneyTable" class="fe-table">
           <thead>
             <tr>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Strækning</th>
@@ -659,16 +326,39 @@ $incident = $incident ?? [];
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Skift</th>
+              <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Misset?</th>
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($journeyRows as $r): ?>
+            <?php foreach ($journeyRowsInline as $idx => $r): ?>
+              <?php
+                // Brug gemt værdi, ellers evt. auto-detektion; fald ikke tilbage til "købt"-valg
+                $deliveredVal = (string)($form['leg_class_delivered'][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ''));
+                $downgVal = isset($form['leg_downgraded'][$idx]) && $form['leg_downgraded'][$idx] === '1';
+              ?>
               <tr>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['leg']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['dep']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['arr']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['train']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['change']) ?></td>
+                <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
+                  <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
+                    <option value=""><?= __('Vælg leveret niveau') ?></option>
+                    <option value="1st_class" <?= $deliveredVal==='1st_class'?'selected':'' ?>>1. klasse</option>
+                    <option value="2nd_class" <?= $deliveredVal==='2nd_class'?'selected':'' ?>>2. klasse</option>
+                    <option value="seat_reserved" <?= $deliveredVal==='seat_reserved'?'selected':'' ?>>Reserveret sæde</option>
+                    <option value="couchette" <?= $deliveredVal==='couchette'?'selected':'' ?>>Ligge (couchette)</option>
+                    <option value="sleeper" <?= $deliveredVal==='sleeper'?'selected':'' ?>>Sovevogn</option>
+                    <option value="free_seat" <?= $deliveredVal==='free_seat'?'selected':'' ?>>Fri plads / ingen reservation</option>
+                  </select>
+                </td>
+                <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
+                  <label class="small">
+                    <input type="checkbox" name="leg_downgraded[<?= (int)$idx ?>]" value="1" <?= $downgVal?'checked':'' ?> />
+                    <?= __('Nedgraderet') ?>
+                  </label>
+                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -676,7 +366,7 @@ $incident = $incident ?? [];
       </div>
       <?php if (!empty($changeBullets)): ?>
         <div class="small" style="margin-top:8px;">
-          <div><strong>📍 Der er <?= count($changeBullets) ?> skift<?= count($changeBullets)===1?'':'e' ?>:</strong></div>
+          <div><strong>Der er <?= count($changeBullets) ?> skift<?= count($changeBullets)===1?'':'e' ?>:</strong></div>
           <ul style="margin:6px 0 0 16px;">
             <?php foreach ($changeBullets as $b): ?>
               <li><?= h($b) ?></li>
@@ -685,16 +375,534 @@ $incident = $incident ?? [];
         </div>
       <?php endif; ?>
       <?php if (empty($mcChoicesInline)): ?>
-        <div class="small muted" style="margin-top:8px;">Ingen skift fundet — punkt 3.5 vises kun, når der er et skift i rejsen.</div>
+        <div class="small muted" style="margin-top:8px;">Ingen skift fundet – punkt 3.5 vises kun, når der er et skift i rejsen.</div>
       <?php endif; ?>
     <?php endif; ?>
   </div>
+
+
+
+  <?php
+    // PMR block gating
+    $pmrAuto = is_array($meta['_pmr_detection'] ?? null) ? (array)$meta['_pmr_detection'] : [];
+    // Two separate flags: one to decide visibility (exists), one to show the Auto badge (actual signal)
+    $pmrDetectedExists = !empty($meta['_pmr_detected']) || !empty($pmrAuto);
+    $pmrAutoBadgeFlag = false;
+    if (!empty($meta['_pmr_detected'])) { $pmrAutoBadgeFlag = true; }
+    elseif (!empty($pmrAuto['evidence']) && count((array)$pmrAuto['evidence']) > 0) { $pmrAutoBadgeFlag = true; }
+    elseif (!empty($pmrAuto['confidence']) && (float)$pmrAuto['confidence'] > 0.0) { $pmrAutoBadgeFlag = true; }
+    // Use Art.9 hooks if present for normalized echo, falling back to meta
+    $art9Hooks = is_array($art9??null) ? (array)($art9['hooks'] ?? []) : [];
+    $pmrUserVal = strtolower((string)($art9Hooks['pmr_user'] ?? ($meta['pmr_user'] ?? 'unknown')));
+    // Accept both 'Ja'/'Nej' and 'yes'/'no' variants
+    if ($pmrUserVal==='ja') $pmrUserVal='yes'; if ($pmrUserVal==='nej') $pmrUserVal='no';
+    // If still unknown, fall back to AUTO value from detector
+    if ($pmrUserVal==='unknown' || $pmrUserVal==='') {
+      $autoU = strtolower((string)($meta['_auto']['pmr_user']['value'] ?? ''));
+      if ($autoU==='ja') $autoU='yes'; if ($autoU==='nej') $autoU='no';
+      if (in_array($autoU, ['yes','no'], true)) { $pmrUserVal = $autoU; }
+    }
+    // Show card if detection ran (exists) or the user already said Yes
+    $showPmr = $pmrDetectedExists || $pmrUserVal==='yes';
+    $pmrBookedVal = strtolower((string)($art9Hooks['pmr_booked'] ?? ($meta['pmr_booked'] ?? 'unknown')));
+    if ($pmrBookedVal==='ja') $pmrBookedVal='yes'; if ($pmrBookedVal==='nej') $pmrBookedVal='no';
+    if ($pmrBookedVal==='unknown' || $pmrBookedVal==='') {
+      $autoB = strtolower((string)($meta['_auto']['pmr_booked']['value'] ?? ''));
+      if ($autoB==='ja') $autoB='yes'; if ($autoB==='nej') $autoB='no';
+      if (in_array($autoB, ['yes','no','refused'], true)) { $pmrBookedVal = $autoB; }
+    }
+    $pmrDeliveredVal = strtolower((string)($art9Hooks['pmr_delivered_status'] ?? ($meta['pmr_delivered_status'] ?? 'unknown')));
+    $pmrPromisedMissingVal = strtolower((string)($art9Hooks['pmr_promised_missing'] ?? ($meta['pmr_promised_missing'] ?? 'unknown')));
+    $pmrFacilityDetails = (string)($meta['pmr_facility_details'] ?? '');
+  ?>
+  <?php if ($showPmr): ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="pmrFlowCard">
+    <strong>♿ PMR/handicap (Art. 18 og 20)</strong>
+    <?php if ($pmrAutoBadgeFlag): $confVal = (string)($pmrAuto['confidence'] ?? ''); ?>
+      <div class="small" style="margin-top:6px;">
+        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
+        <?php if ($confVal !== ''): ?>
+          <span class="badge" style="margin-left:6px;border:1px solid #d0d7de;background:#f6f8fa;">conf: <?= h($confVal) ?></span>
+        <?php endif; ?>
+        Vi har fundet PMR/assistance i billetten – du kan have ekstra rettigheder.
+      </div>
+    <?php endif; ?>
+    <div class="small" style="margin-top:8px;">
+      <div><strong>Vi har registreret følgende oplysninger om handicap på billetten – ret venligst, hvis noget ikke er korrekt.</strong></div>
+      <div><strong>Spm 1.</strong> Har du et handicap eller nedsat mobilitet, som krævede assistance?</div>
+      <label class="mr8"><input type="radio" name="pmr_user" value="yes" <?= $pmrUserVal==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="pmr_user" value="no" <?= $pmrUserVal==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <div id="pmrQBooked" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
+      <div><strong>Spm 2.</strong> Bestilte du assistance før rejsen?</div>
+      <label class="mr8"><input type="radio" name="pmr_booked" value="yes" <?= $pmrBookedVal==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="pmr_booked" value="no" <?= $pmrBookedVal==='no'?'checked':'' ?> /> Nej</label>
+      <label class="mr8"><input type="radio" name="pmr_booked" value="refused" <?= $pmrBookedVal==='refused'?'checked':'' ?> /> Forsøgte men fik afslag</label>
+    </div>
+    <div id="pmrQDelivered" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes' && $pmrBookedVal!=='no')?'block':'none' ?>;">
+      <div><strong>Spm 3.</strong> Blev den bestilte assistance leveret?</div>
+      <select name="pmr_delivered_status">
+        <option value="">- vælg -</option>
+        <option value="yes_full" <?= $pmrDeliveredVal==='yes_full'?'selected':'' ?>>Ja, fuldt ud</option>
+        <option value="partial" <?= $pmrDeliveredVal==='partial'?'selected':'' ?>>Delvist</option>
+        <option value="no" <?= $pmrDeliveredVal==='no'?'selected':'' ?>>Nej</option>
+      </select>
+    </div>
+    <div id="pmrQPromised" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
+      <div><strong>Spm 4.</strong> Manglede der PMR-faciliteter, som var lovet før købet?</div>
+      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="yes" <?= $pmrPromisedMissingVal==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="no" <?= $pmrPromisedMissingVal==='no'?'checked':'' ?> /> Nej</label>
+      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="unknown" <?= ($pmrPromisedMissingVal===''||$pmrPromisedMissingVal==='unknown')?'checked':'' ?> /> Ved ikke</label>
+    </div>
+    <div id="pmrQDetails" class="small" style="margin-top:8px; display:<?= ($pmrPromisedMissingVal==='yes')?'block':'none' ?>;">
+      <div><strong>Spm 5.</strong> Hvilke faciliteter manglede? (rampe, skiltning, lift …)</div>
+      <textarea name="pmr_facility_details" rows="2" style="width:100%;" placeholder="Beskriv kort"><?= h($pmrFacilityDetails) ?></textarea>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <?php
+    // Bike flow visibility gating: show the block and preselect if OCR detected a bike on ticket
+    $bikeAuto = (array)($meta['_bike_detection'] ?? []);
+  // Normaliser cykel auto-detektion så både positiv og negativ auto-default kan forfylde radio-valg
+  $bikeBookedAutoRaw = (string)($meta['_auto']['bike_booked']['value'] ?? ($meta['bike_booked'] ?? ''));
+  $bikeBookedAutoNorm = strtolower($bikeBookedAutoRaw);
+  if ($bikeBookedAutoNorm === 'ja') $bikeBookedAutoNorm = 'yes';
+  if ($bikeBookedAutoNorm === 'nej') $bikeBookedAutoNorm = 'no';
+  // Brugerens eget svar har altid forrang; ellers bruger vi auto (ja eller nej). Tom betyder ingen forvalg.
+  $bikeWas = strtolower((string)($meta['bike_was_present'] ?? ''));
+    $bikeCause = strtolower((string)($meta['bike_caused_issue'] ?? ''));
+    $bikeResMade = strtolower((string)($meta['bike_reservation_made'] ?? ''));
+    $bikeResReq = strtolower((string)($meta['bike_reservation_required'] ?? ''));
+    $bikeDenied = strtolower((string)($meta['bike_denied_boarding'] ?? ''));
+    $bikeReasonProv = strtolower((string)($meta['bike_refusal_reason_provided'] ?? ''));
+    $bikeReasonType = strtolower((string)($meta['bike_refusal_reason_type'] ?? ''));
+  ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="bikeFlowCard">
+    <strong>🚲 Cykel på rejsen (Artikel 6)</strong>
+    <?php if (!empty($bikeAuto)): ?>
+      <div class="small" style="margin-top:6px;">
+        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
+        Vi har registreret følgende oplysninger om cyklen på billetten – ret venligst, hvis noget ikke stemmer.
+        <?php if (!empty($bikeAuto['count'])): ?><span class="ml8">(antal: <?= (int)$bikeAuto['count'] ?>)</span><?php endif; ?>
+      </div>
+    <?php endif; ?>
+    <div class="small" style="margin-top:8px;">
+      <div><strong>Spm 1.</strong> Havde du en cykel med på rejsen?</div>
+  <?php $w = $bikeWas !== '' ? $bikeWas : ($bikeBookedAutoNorm==='yes' ? 'yes' : ($bikeBookedAutoNorm==='no' ? 'no' : 'no')); ?>
+      <label class="mr8"><input type="radio" name="bike_was_present" value="yes" <?= $w==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="bike_was_present" value="no" <?= $w==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <div class="small" id="bikeQ2" style="margin-top:8px; display:<?= ($w==='yes')?'block':'none' ?>;">
+      <div><strong>Spm 2.</strong> Er det cyklen eller håndteringen af cyklen, der har forsinket dig?</div>
+      <label class="mr8"><input type="radio" name="bike_caused_issue" value="yes" <?= $bikeCause==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="bike_caused_issue" value="no" <?= $bikeCause==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <div id="bikeArticle6" style="margin-top:8px; display:<?= ($w==='yes' && $bikeCause==='yes')?'block':'none' ?>;">
+      <div class="small"><strong>Spm 3.</strong> Havde du reserveret plads til en cykel?</div>
+      <div class="small" style="margin-top:4px;">
+        <label class="mr8"><input type="radio" name="bike_reservation_made" value="yes" <?= $bikeResMade==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="bike_reservation_made" value="no" <?= $bikeResMade==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div id="bikeQ3B" class="small" style="margin-top:8px; display:<?= ($bikeResMade==='no')?'block':'none' ?>;">
+        <div><strong>Spm 3B.</strong> Var det et tog, hvor der ikke krævedes cykelreservation?</div>
+        <label class="mr8"><input type="radio" name="bike_reservation_required" value="yes" <?= $bikeResReq==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="bike_reservation_required" value="no" <?= $bikeResReq==='no'?'checked':'' ?> /> Nej</label>
+        <label class="mr8"><input type="radio" name="bike_reservation_required" value="unknown" <?= ($bikeResReq===''||$bikeResReq==='unknown')?'checked':'' ?> /> Ved ikke</label>
+      </div>
+      <div id="bikeQ4" class="small" style="margin-top:8px;">
+        <div><strong>Spm 4.</strong> Blev du nægtet at tage cyklen med?</div>
+        <label class="mr8"><input type="radio" name="bike_denied_boarding" value="yes" <?= $bikeDenied==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="bike_denied_boarding" value="no" <?= $bikeDenied==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div id="bikeQ5" class="small" style="margin-top:8px; display:<?= ($bikeDenied==='yes')?'block':'none' ?>;">
+        <div><strong>Spm 5.</strong> Blev du informeret om, hvorfor du ikke måtte tage cyklen med?</div>
+        <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="yes" <?= $bikeReasonProv==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="no" <?= $bikeReasonProv==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div id="bikeQ6" class="small" style="margin-top:8px; display:<?= ($bikeDenied==='yes' && $bikeReasonProv==='yes')?'block':'none' ?>;">
+        <div><strong>Spm 6.</strong> Hvad var begrundelsen for afvisningen?</div>
+        <?php $opt = $bikeReasonType; ?>
+        <select name="bike_refusal_reason_type">
+          <option value="">- vælg -</option>
+          <option value="capacity" <?= $opt==='capacity'?'selected':'' ?>>Pladsmangel / Spidsbelastning</option>
+          <option value="equipment" <?= $opt==='equipment'?'selected':'' ?>>Teknisk udstyr tillader det ikke</option>
+          <option value="weight_dim" <?= $opt==='weight_dim'?'selected':'' ?>>Vægt eller dimensioner</option>
+          <option value="other" <?= $opt==='other'?'selected':'' ?>>Andet</option>
+          <option value="unknown" <?= $opt==='unknown'?'selected':'' ?>>Ved ikke</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <?php
+    // 3) Billetpriser og fleksibilitet (Art. 9) – show simple Qs with auto-prefill
+    $fftVal = (string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? ''));
+    $tsVal = (string)($meta['train_specificity'] ?? ($meta['_auto']['train_specificity']['value'] ?? 'unknown'));
+    $hasAutoPricing = !empty($meta['_auto']['fare_flex_type']['value'] ?? null) || !empty($meta['_auto']['train_specificity']['value'] ?? null);
+  ?>
+  <?php if ($showArt9_1): ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="pricingBlock" data-art="9(1)">
+    <strong>💶 3) Billetpriser og fleksibilitet (Art. 9 stk. 1)</strong>
+    <?php if ($hasAutoPricing): ?>
+      <div class="small" style="margin-top:6px;">
+        <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
+        Vi har registreret følgende oplysninger om købstype og togbinding – ret venligst, hvis noget ikke stemmer.
+      </div>
+    <?php endif; ?>
+    <div class="mt8 small">1. Købstype (fleksibilitet)</div>
+    <?php $curFft = strtolower($fftVal); ?>
+    <select name="fare_flex_type">
+      <option value="" <?= $curFft===''?'selected':'' ?>>- vælg -</option>
+      <option value="nonflex" <?= $curFft==='nonflex'?'selected':'' ?>>Standard/Non-flex</option>
+      <option value="semiflex" <?= $curFft==='semiflex'?'selected':'' ?>>Semi-flex</option>
+      <option value="flex" <?= $curFft==='flex'?'selected':'' ?>>Flex</option>
+      <option value="pass" <?= $curFft==='pass'?'selected':'' ?>>Abonnement/Periodekort</option>
+      <option value="other" <?= $curFft==='other'?'selected':'' ?>>Andet</option>
+    </select>
+
+    <?php
+      // Season/period pass details (Art. 19(2)) – shown when "Abonnement/Periodekort" is selected
+      $season = (array)($meta['season_pass'] ?? []);
+      $seasonHas = ($curFft === 'pass') || !empty($season['has']);
+      $seasonType = (string)($season['type'] ?? '');
+      $seasonOp = (string)($season['operator'] ?? ($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')));
+      $seasonFrom = (string)($season['valid_from'] ?? '');
+      $seasonTo = (string)($season['valid_to'] ?? '');
+    ?>
+    <div id="seasonPassBlock" class="mt8" style="display:<?= $seasonHas ? 'block' : 'none' ?>;">
+      <div class="small" style="margin-bottom:6px;">
+        💳 Abonnement/Periodekort (Art. 19, stk. 2) – gentagne forsinkelser i gyldighedsperioden kan udløse kompensation efter operatørens ordning.
+      </div>
+      <input type="hidden" name="season_pass_has" value="<?= $seasonHas ? '1' : '' ?>" />
+      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <label>Type
+          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="Pendler / Periode / årskort" />
+        </label>
+        <label>Operatør
+          <input type="text" name="season_pass_operator" value="<?= h($seasonOp) ?>" placeholder="DSB / DB / SNCF …" />
+        </label>
+        <label>Gyldig fra (YYYY-MM-DD)
+          <input type="text" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" placeholder="YYYY-MM-DD" />
+        </label>
+        <label>Gyldig til (YYYY-MM-DD)
+          <input type="text" name="season_pass_valid_to" value="<?= h($seasonTo) ?>" placeholder="YYYY-MM-DD" />
+        </label>
+      </div>
+      <div class="small muted" style="margin-top:6px;">Tip: Små forsinkelser (&lt; 60 min) kan kumuleres i perioden efter operatørens ordning.</div>
+    </div>
+
+    <div id="pricingQ2" class="mt8" style="display:none;">
+      <div class="small">2. Gælder billetten kun for specifikt tog?</div>
+      <?php $curTs = strtolower($tsVal ?: 'unknown'); ?>
+      <label class="small"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
+      <label class="small ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
+      <label class="small ml8"><input type="radio" name="train_specificity" value="unknown" <?= ($curTs===''||$curTs==='unknown')?'checked':'' ?> /> Ved ikke</label>
+    </div>
+  </div>
+  <?php else: ?>
+    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Billetpriser og fleksibilitet (Art. 9 stk. 1) er undtaget for denne rejse og vises ikke.</div>
+  <?php endif; ?>
+
+  <?php
+    // 6) Klasse og reservationer samles i per-leg tabel
+    $classAuto = (array)($meta['_class_detection'] ?? []);
+    $journeyRows = $journeyRows ?? [];
+    $classOptions = [
+      '1st_class' => '1. klasse',
+      '2nd_class' => '2. klasse',
+      'seat_reserved' => 'Reserveret saede',
+      'couchette' => 'Liggevogn',
+      'sleeper' => 'Sovevogn',
+      'free_seat' => 'Fri plads / ingen reservation',
+      'other' => 'Andet',
+    ];
+    $journeyRowsDowng = $journeyRows;
+    if (empty($journeyRowsDowng)) {
+      try {
+        $segSrc = (array)($meta['_segments_auto'] ?? []);
+        $jr = [];
+        foreach ($segSrc as $s) {
+          $from = trim((string)($s['from'] ?? ''));
+          $to = trim((string)($s['to'] ?? ''));
+          $jr[] = [
+            'leg' => $from . ' -> ' . $to,
+            'dep' => (string)($s['schedDep'] ?? ''),
+            'arr' => (string)($s['schedArr'] ?? ''),
+            'train' => (string)($s['train'] ?? ($s['trainNo'] ?? '')),
+            'change' => (string)($s['change'] ?? ''),
+          ];
+        }
+        if (!empty($jr)) { $journeyRowsDowng = $jr; }
+      } catch (\Throwable $e) { /* ignore */ }
+    }
+  ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="classReservationBlock" data-art="9(1)">
+    <strong>6) Klasse og reserverede faciliteter (Art. 9 stk. 1)</strong>
+    <div class="small" style="margin-top:6px;">
+      Vi har aflaest klasse/reservation pr. straekning. Ret venligst hvis noget ikke stemmer.
+    </div>
+    <?php if (!empty($classAuto)): ?>
+      <div class="small muted" style="margin-top:6px;">Auto: klasse <?= h($classAuto["fare_class_purchased"] ?? "") ?> / reservation <?= h($classAuto["berth_seat_type"] ?? "") ?> (kilde: detection)</div>
+    <?php endif; ?>
+    <?php if (!empty($journeyRowsDowng)): ?>
+      <div id="perLegDowngrade" style="margin-top:12px; display:block;">
+        <div class="small"><strong>Per-leg niveau (nedgradering)</strong></div>
+        <div class="small muted" style="margin-top:4px;">LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.</div>
+        <div class="small" style="overflow:auto; margin-top:6px;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Straekning</th>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Afgang</th>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Koebt klasse/reservation</th>
+                <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Leveret klasse/reservation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($journeyRowsDowng as $idx => $r): ?>
+                <?php
+                  $purchasedVal = (string)($form["leg_class_purchased"][$idx] ?? ($classAuto["fare_class_purchased"] ?? ""));
+                  if ($purchasedVal === "" && isset($meta['_auto']['berth_seat_type']['value'])) {
+                    $purchasedVal = (string)$meta['_auto']['berth_seat_type']['value'];
+                  }
+                  // Brug gemt værdi, ellers evt. auto-detektion; fald ikke tilbage til "købt"-valg
+                  $deliveredVal = (string)($form["leg_class_delivered"][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ""));
+                  $downgVal = isset($form["leg_downgraded"][$idx]) && $form["leg_downgraded"][$idx] === "1";
+                ?>
+                <tr>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["leg"]) ?></td>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["dep"]) ?></td>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["arr"]) ?></td>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["train"]) ?></td>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
+                    <select name="leg_class_purchased[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
+                      <option value=""><?= __("Vaelg koebt niveau") ?></option>
+                      <?php foreach ($classOptions as $key => $label): ?>
+                        <option value="<?= h($key) ?>" <?= $purchasedVal===$key?"selected":"" ?>><?= h($label) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </td>
+                  <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
+                    <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
+                      <option value=""><?= __("Vaelg leveret niveau") ?></option>
+                      <?php foreach ($classOptions as $key => $label): ?>
+                        <option value="<?= h($key) ?>" <?= $deliveredVal===$key?"selected":"" ?>><?= h($label) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <script>
+          (function(){
+            const rank = {
+              'sleeper': 5,
+              '1st_class': 4,
+              'seat_reserved': 3,
+              'couchette': 3,
+              '2nd_class': 2,
+              'other': 2,
+              'free_seat': 1
+            };
+            function bindRow(row, idx){
+              const selBuy = row.querySelector('select[name="leg_class_purchased['+idx+']"]');
+              const selDel = row.querySelector('select[name="leg_class_delivered['+idx+']"]');
+              if (!selBuy || !selDel) return;
+              // Hidden downgrade flag to submit
+              let hid = row.querySelector('input[name="leg_downgraded['+idx+']"]');
+              if (!hid) {
+                hid = document.createElement('input');
+                hid.type = 'hidden';
+                hid.name = 'leg_downgraded['+idx+']';
+                row.appendChild(hid);
+              }
+              const auto = () => {
+                const rBuy = rank[selBuy.value] || 0;
+                const rDel = rank[selDel.value] || 0;
+                const downg = rDel > 0 && rBuy > rDel;
+                hid.value = downg ? '1' : '';
+              };
+              selBuy.addEventListener('change', auto);
+              selDel.addEventListener('change', auto);
+              auto();
+            }
+            document.querySelectorAll('#perLegDowngrade table tbody tr').forEach((tr,i)=>bindRow(tr,i));
+          })();
+        </script>
+      </div>
+    <?php endif; ?>
+  </div>
+  <?php
+    // 7) Afbrydelser/forsinkelser før køb (Art. 9(1))
+    // Q1 vises altid; Q2+Q3 vises når Q1=Ja. Q3 kun hvis Art. 10 gælder (realtime information).
+    $art10Applies = $profile['articles']['art10'] ?? true;
+    $pid = (string)($form['preinformed_disruption'] ?? ($art9['hooks']['preinformed_disruption'] ?? ''));
+    $pic = (string)($form['preinfo_channel'] ?? ($art9['hooks']['preinfo_channel'] ?? ''));
+    $ris = (string)($form['realtime_info_seen'] ?? ($art9['hooks']['realtime_info_seen'] ?? ''));
+  ?>
+  <?php if ($showArt9_1): ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="disruptionBlock" data-art="9(1)">
+    <strong>⏱️ 7) Afbrydelser/forsinkelser – oplyst før køb (Art. 9 stk. 1)</strong>
+    <div class="small" style="margin-top:6px;">1. Var der meddelt afbrydelse/forsinkelse før dit køb?</div>
+    <div class="small" style="margin-top:4px;">
+      <label class="mr8"><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
+      <label class="mr8"><input type="radio" name="preinformed_disruption" value="unknown" <?= ($pid===''||$pid==='unknown')?'checked':'' ?> /> Ved ikke</label>
+    </div>
+    <div id="disQ2" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
+      <div>2. Hvis ja: Hvor blev det vist?</div>
+      <select name="preinfo_channel">
+        <option value="" <?= $pic===''?'selected':'' ?>>- vælg -</option>
+        <option value="journey_planner" <?= $pic==='journey_planner'?'selected':'' ?>>Rejseplan</option>
+        <option value="operator_site_app" <?= $pic==='operator_site_app'?'selected':'' ?>>Operatør-site/app</option>
+        <option value="ticket_overview" <?= $pic==='ticket_overview'?'selected':'' ?>>Billetoverblik</option>
+        <option value="other" <?= $pic==='other'?'selected':'' ?>>Andet</option>
+      </select>
+    </div>
+    <?php if ($art10Applies): ?>
+    <div id="disQ3" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
+      <div>3. Så du realtime-opdateringer under rejsen?</div>
+      <label class="mr8"><input type="radio" name="realtime_info_seen" value="app" <?= $ris==='app'?'checked':'' ?> /> Ja, i app</label>
+      <label class="mr8"><input type="radio" name="realtime_info_seen" value="on_train" <?= $ris==='on_train'?'checked':'' ?> /> Ja, i toget</label>
+      <label class="mr8"><input type="radio" name="realtime_info_seen" value="station" <?= $ris==='station'?'checked':'' ?> /> Ja, på station</label>
+      <label class="mr8"><input type="radio" name="realtime_info_seen" value="no" <?= $ris==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <?php endif; ?>
+    <div id="disruptionReqError" class="small" style="margin-top:8px; color:#b33; display:none;">Udfyld venligst punkt 7: marker om der var oplyst forsinkelse før køb<?= $art10Applies ? ' (og besvar opfølgning)' : '' ?>.</div>
+  </div>
+  <?php else: ?>
+    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Oplysningspligt før køb (Art. 9 stk. 1) er undtaget – vi behøver ikke disse svar.</div>
+  <?php endif; ?>
+
+  <?php
+    // Minimal Art. 12 questions inline in TRIN 3 (PGR only)
+    // Show only if evaluator suggests missing basics or if values are unknown
+    $a12hooks = (array)($art12['hooks'] ?? []);
+    $a12missing = (array)($art12['missing'] ?? []);
+    $norm = function($v){ $s=strtolower((string)$v); if(in_array($s,['ja','yes','y','1','true'],true)) return 'yes'; if(in_array($s,['nej','no','n','0','false'],true)) return 'no'; if($s===''||$s==='-'||$s==='unknown'||$s==='ved ikke') return 'unknown'; return $s; };
+    $scnVal = $norm($meta['separate_contract_notice'] ?? ($a12hooks['separate_contract_notice'] ?? 'unknown'));
+    $ttdVal = $norm($meta['through_ticket_disclosure'] ?? ($a12hooks['through_ticket_disclosure'] ?? 'unknown'));
+    // Seller channel inference from meta hooks
+    $sellerInf = 'unknown';
+    $sto = $norm($meta['seller_type_operator'] ?? '');
+    $sta = $norm($meta['seller_type_agency'] ?? '');
+    if ($sto==='yes') $sellerInf = 'operator'; elseif ($sta==='yes') $sellerInf = 'retailer';
+    // Same transaction inference when multiple PNRs
+    $stOp = $norm($meta['single_txn_operator'] ?? '');
+    $stRt = $norm($meta['single_txn_retailer'] ?? '');
+    $sameTxnInf = ($stOp==='yes'||$stRt==='yes') ? 'yes' : (($stOp==='no'&&$stRt==='no') ? 'no' : 'unknown');
+    // Gate visibility: show if evaluator is missing any of these, or if values are unknown
+    $needA12 = in_array('separate_contract_notice', $a12missing, true) || in_array('through_ticket_disclosure', $a12missing, true)
+      || $scnVal==='unknown' || $ttdVal==='unknown' || $sellerInf==='unknown';
+    // Also compute PNR count + shared scope hint for same-transaction prompt
+    $pnrCountInline = 0; try {
+      $pnrSet = [];
+      $br = (string)($journey['bookingRef'] ?? ''); if ($br!=='') { $pnrSet[$br]=true; }
+      foreach ((array)($groupedTickets ?? []) as $g) { $p=(string)($g['pnr'] ?? ''); if ($p!=='') { $pnrSet[$p]=true; } }
+      $pnrCountInline = count($pnrSet);
+    } catch (\Throwable $e) { $pnrCountInline = 0; }
+  ?>
+  <?php if ($needA12): ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
+    <strong>📄 Art. 12 – Kontraktoplysninger (TRIN 3)</strong>
+    <?php
+      $showSeller = ($sellerInf === 'unknown');
+      $showThrough = in_array('through_ticket_disclosure', $a12missing, true) || $ttdVal === 'unknown';
+      $showSeparate = in_array('separate_contract_notice', $a12missing, true) || $scnVal === 'unknown';
+    ?>
+    <?php if (!$showSeller || !$showThrough || !$showSeparate): ?>
+      <div class="small muted" style="margin-top:6px;">
+        <?php if (!$showSeller): ?>
+          <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
+          Sælger: <?= h($sellerInf==='operator' ? 'Operatør (jernbane)' : 'Forhandler/rejsebureau') ?>
+          <button type="button" id="a12EditSellerBtn" class="small" style="margin-left:8px; background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
+        <?php endif; ?>
+        <?php if (!$showThrough): ?>
+          <span class="ml8">• Gennemgående billet: <?= h($ttdVal==='yes'?'Ja':($ttdVal==='no'?'Nej':'Ved ikke')) ?></span>
+        <?php endif; ?>
+        <?php if (!$showSeparate): ?>
+          <span class="ml8">• Separate kontrakter oplyst: <?= h($scnVal==='yes'?'Ja':($scnVal==='no'?'Nej':'Ved ikke')) ?></span>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
+
+    <div id="a12Q1" class="small" style="margin-top:6px; display:<?= $showSeller ? 'block' : 'none' ?>;">
+      Hvem solgte dig hele rejsen?
+      <div class="small" style="margin-top:4px;">
+        <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> Operatør (jernbane)</label>
+        <label class="mr8"><input type="radio" name="seller_channel" value="retailer" <?= $sellerInf==='retailer'?'checked':'' ?> /> Forhandler/rejsebureau</label>
+        <label class="mr8"><input type="radio" name="seller_channel" value="unknown" <?= $sellerInf==='unknown'?'checked':'' ?> /> Ved ikke</label>
+      </div>
+    </div>
+
+    <div id="a12Q2" class="small" style="margin-top:10px; display:<?= $showThrough ? 'block' : 'none' ?>;">
+      Blev det oplyst før køb, at billetten var gennemgående?
+      <div class="small" style="margin-top:4px;">
+        <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="yes" <?= $ttdVal==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="no" <?= $ttdVal==='no'?'checked':'' ?> /> Nej</label>
+        <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="unknown" <?= ($ttdVal===''||$ttdVal==='unknown')?'checked':'' ?> /> Ved ikke</label>
+      </div>
+    </div>
+
+    <div id="a12Q3" class="small" style="margin-top:10px; display:<?= $showSeparate ? 'block' : 'none' ?>;">
+      Blev separate kontrakter oplyst?
+      <div class="small" style="margin-top:4px;">
+        <label class="mr8"><input type="radio" name="separate_contract_notice" value="yes" <?= $scnVal==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="separate_contract_notice" value="no" <?= $scnVal==='no'?'checked':'' ?> /> Nej</label>
+        <label class="mr8"><input type="radio" name="separate_contract_notice" value="unknown" <?= ($scnVal===''||$scnVal==='unknown')?'checked':'' ?> /> Ved ikke</label>
+      </div>
+    </div>
+    <?php $showSameTxn = ($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no'); ?>
+    <?php if ($showSameTxn): ?>
+    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter købt i én transaktion?</div>
+    <div class="small" style="margin-top:4px;">
+      <label class="mr8"><input type="radio" name="same_transaction" value="yes" <?= $sameTxnInf==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="same_transaction" value="no" <?= $sameTxnInf==='no'?'checked':'' ?> /> Nej</label>
+      <label class="mr8"><input type="radio" name="same_transaction" value="unknown" /> Ved ikke</label>
+    </div>
+    <?php endif; ?>
+    <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
+  </div>
+  <?php endif; ?>
+
+  
+
+  <?php if (!empty($meta['_passengers_auto'])): ?>
+  <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+    <strong>👥 Fundne passagerer på billetten</strong>
+    <div class="small" style="margin-top:6px;">Redigér navne og markér hvem der klager:</div>
+    <div class="small" style="margin-top:6px;">
+      <?php $paxList = (array)$meta['_passengers_auto']; ?>
+      <?php foreach ($paxList as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
+        <div style="margin-top:6px;">
+          <label>Navn
+            <input type="text" name="passenger[<?= (int)$i ?>][name]" value="<?= h($nameVal) ?>" placeholder="Passager #<?= (int)($i+1) ?>" />
+          </label>
+          <span class="badge" style="margin-left:6px; background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;"><?= h(ucfirst($age)) ?></span>
+          <label class="ml8"><input type="checkbox" name="passenger[<?= (int)$i ?>][is_claimant]" value="1" <?= $isC?'checked':'' ?> /> Klager</label>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <div class="small" style="margin-top:8px;">
+      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk værge/ansvarlig for andre på billetten</label>
+    </div>
+  </div>
+  </div>
+  <?php endif; ?>
 
   <?php
     // Show SE regional distance toggle to drive exemptions under 150 km
     $scopeNow = (string)($profile['scope'] ?? '');
     $countryNow = strtoupper((string)($journey['country']['value'] ?? ($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
-    $showSE150 = ($countryNow === 'SE' && $scopeNow === 'regional');
+    $productNow = strtoupper((string)($journey['trainCategory']['value'] ?? ($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''))));
+    // Avoid showing SE regional toggle for known long-distance brands (InterCity/Snabbtag etc.)
+    $isSeLongDistanceBrand = preg_match('/\\b(TGV|INTERCITY|IC|SNABBT|SJ)\\b/u', $productNow) === 1;
+    $showSE150 = ($countryNow === 'SE' && $scopeNow === 'regional' && !$isSeLongDistanceBrand);
   ?>
   <?php if ($showSE150): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
@@ -728,12 +936,12 @@ $incident = $incident ?? [];
       $logsDbg = (array)($meta['logs'] ?? []);
       $ocrText = (string)($meta['_ocr_text'] ?? '');
     ?>
-    <div class="small" style="margin-top:10px;"><strong>🔎 Parser/segments</strong></div>
+    <div class="small" style="margin-top:10px;"><strong>🛠️ Parser/segments</strong></div>
     <div class="small" style="margin-top:4px;">Segments auto: <code><?= (int)count($segAutoDbg) ?></code></div>
     <?php if (!empty($segAutoDbg)): ?>
       <ul class="small" style="margin-top:4px; padding-left:16px;">
         <?php foreach (array_slice($segAutoDbg, 0, 5) as $s): $from=(string)($s['from']??''); $to=(string)($s['to']??''); $d=(string)($s['schedDep']??''); $a=(string)($s['schedArr']??''); ?>
-          <li><?= h(trim($from . ' → ' . $to)) ?> <?= h(trim($d . ($a!==''?'–'.$a:''))) ?></li>
+          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'→'.$a:''))) ?></li>
         <?php endforeach; ?>
         <?php if (count($segAutoDbg) > 5): ?><li>…</li><?php endif; ?>
       </ul>
@@ -743,7 +951,7 @@ $incident = $incident ?? [];
       <div class="small" style="margin-top:8px;">LLM forslag til segments: <code><?= (int)count($segLlmSuggestDbg) ?></code></div>
       <ul class="small" style="margin-top:4px; padding-left:16px;">
         <?php foreach (array_slice($segLlmSuggestDbg, 0, 5) as $s): $from=(string)($s['from']??''); $to=(string)($s['to']??''); $d=(string)($s['schedDep']??''); $a=(string)($s['schedArr']??''); ?>
-          <li><?= h(trim($from . ' → ' . $to)) ?> <?= h(trim($d . ($a!==''?'–'.$a:''))) ?></li>
+          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'→'.$a:''))) ?></li>
         <?php endforeach; ?>
         <?php if (count($segLlmSuggestDbg) > 5): ?><li>…</li><?php endif; ?>
       </ul>
@@ -783,11 +991,11 @@ $incident = $incident ?? [];
   </div>
 <?php endif; ?>
 
-  <div class="card" style="position:sticky; top:12px; margin-top:12px; padding:12px; border:1px solid #ddd; background:#f9fbff; border-radius:6px; max-height:80vh; overflow:auto;">
+  <div class="card hooks-card">
   <div id="hooksPanel">
     <?= $this->element('hooks_panel', compact('profile','art12','art9','refund','refusion','form','meta','groupedTickets','euOnlySuggested','euOnlyReason','journey','formDecision') + ['showFormDecision' => true, 'showArt12Section' => false]) ?>
   </div>
-  <div class="small muted" style="margin-top:6px;">Hooks-panel opdateres automatisk ved ændringer.</div>
+  <div class="small muted" style="margin-top:6px;">Sidepanelet opdateres automatisk ved ændringer.</div>
   <div class="small" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
     <a href="<?= $this->Url->build($this->getRequest()->getPath() . '?debug=1') ?>">Vis mere debug</a>
     <label style="margin-left:auto;"><input type="checkbox" id="toggleDebugChk" <?= $this->getRequest()->getQuery('debug') ? 'checked' : '' ?> /> Debug</label>
@@ -847,7 +1055,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     }
     Array.from(dt.files).forEach((f, i)=>{
       const li = document.createElement('li');
-      li.style.display = 'flex'; li.style.alignItems = 'center'; li.style.gap = '8px'; li.style.marginTop = '6px';
+      li.className = 'file-item';
       const name = document.createElement('span');
       name.textContent = f.name + ' (' + Math.round(f.size/1024) + ' KB)';
       const rm = document.createElement('button');
@@ -870,9 +1078,9 @@ if ($a12Applies === false && !empty($contractsView)) {
       form.appendChild(hid);
       sync();
     });
-    drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.style.background='#eef7ff'; });
-    drop.addEventListener('dragleave', ()=>{ drop.style.background='#f7fbff'; });
-    drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.style.background='#f7fbff'; if (e.dataTransfer?.files?.length){ addFiles(e.dataTransfer.files); }});
+    drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', ()=>{ drop.classList.remove('drag'); });
+    drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); if (e.dataTransfer?.files?.length){ addFiles(e.dataTransfer.files); }});
     inputMulti.addEventListener('change', ()=>{ if (inputMulti.files?.length) addFiles(inputMulti.files); });
     renderList();
   }
@@ -929,11 +1137,11 @@ if ($a12Applies === false && !empty($contractsView)) {
     const q3b = document.getElementById('bikeQ3B');
     const q5 = document.getElementById('bikeQ5');
     const q6 = document.getElementById('bikeQ6');
-    const was = val('bike_was_present') || '<?= $w??'' ?>';
-    const cause = val('bike_caused_issue') || '<?= $bikeCause??'' ?>';
-    const resMade = val('bike_reservation_made') || '<?= $bikeResMade??'' ?>';
-    const denied = val('bike_denied_boarding') || '<?= $bikeDenied??'' ?>';
-    const reasonProv = val('bike_refusal_reason_provided') || '<?= $bikeReasonProv??'' ?>';
+    const was = val('bike_was_present') || '';
+    const cause = val('bike_caused_issue') || '';
+    const resMade = val('bike_reservation_made') || '';
+    const denied = val('bike_denied_boarding') || '';
+    const reasonProv = val('bike_refusal_reason_provided') || '';
     show(q2, was==='yes');
     show(block, was==='yes' && cause==='yes');
     show(q3b, resMade==='no');
@@ -950,15 +1158,10 @@ if ($a12Applies === false && !empty($contractsView)) {
 
   // Klasse & reservation: intelligent trinvis visning
   function updateClassUI(){
-    const q2 = document.getElementById('classQ2');
     const q4 = document.getElementById('classQ4');
-    const selClass = form.querySelector('select[name="fare_class_purchased"]');
     const selRes = form.querySelector('select[name="berth_seat_type"]');
-    const classVal = (selClass && selClass.value) ? selClass.value : '<?= $fcp ?>';
-    const resVal = (selRes && selRes.value) ? selRes.value : '<?= $bst ?>';
-    const showQ2 = !!classVal && classVal !== 'unknown';
+    const resVal = (selRes && selRes.value) ? selRes.value : '';
     const needsDelivery = ['seat','couchette','sleeper'].includes(resVal||'');
-    if (q2) q2.style.display = showQ2 ? 'block' : 'none';
     if (q4) q4.style.display = needsDelivery ? 'block' : 'none';
   }
   form.addEventListener('change', (e)=>{
@@ -980,6 +1183,22 @@ if ($a12Applies === false && !empty($contractsView)) {
     hid.value = has ? '1' : '';
   }
   updateSeasonUI();
+
+  // Pricing block: show Q2 only after user changes Q1 (fare_flex_type)
+  (function(){
+    const sel = form.querySelector('select[name="fare_flex_type"]');
+    const q2 = document.getElementById('pricingQ2');
+    if (!sel || !q2) return;
+    const initial = sel.value || '';
+    let shown = false;
+    function maybeShowQ2(){
+      if (!shown && (sel.value||'') !== initial) {
+        q2.style.display = 'block';
+        shown = true;
+      }
+    }
+    sel.addEventListener('change', maybeShowQ2, { passive: true });
+  })();
 
   // Debug checkbox toggles ?debug=1 in the URL for more hooks info
   const dbg = document.getElementById('toggleDebugChk');
@@ -1041,7 +1260,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   updatePMR();
 
   // Disruption client-side visibility + simple required checks for Continue
-  const art10Applies = <?= json_encode((bool)($profile['articles']['art10'] ?? true)) ?>;
+  const art10Applies = true;
   function valRadio2(name){ const els = form.querySelectorAll('input[name="'+name+'"]'); for (const el of els) { if (el.checked) return el.value; } return ''; }
   function updateDisruption(){
     const q2 = document.getElementById('disQ2');
@@ -1052,8 +1271,39 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
   updateDisruption();
 
+  // Art. 12: show only necessary questions, allow edit to reveal radios
+  const a12Init = {
+    sellerInit: '',
+    showSeller: false,
+    showThrough: false,
+    showSeparate: false
+  };
+  function updateA12(){
+    const q1 = document.getElementById('a12Q1');
+    const q2 = document.getElementById('a12Q2');
+    const q3 = document.getElementById('a12Q3');
+    const seller = valRadio2('seller_channel') || a12Init.sellerInit;
+    // Reveal more questions only if initially required OR if user changes seller to a different channel (esp. retailer)
+    const needExtra = (seller && seller !== a12Init.sellerInit) || seller === 'retailer' || seller === 'unknown';
+    if (q2) q2.style.display = (a12Init.showThrough || needExtra) ? 'block' : 'none';
+    if (q3) q3.style.display = (a12Init.showSeparate || needExtra) ? 'block' : 'none';
+  }
+  const a12EditBtn = document.getElementById('a12EditSellerBtn');
+  if (a12EditBtn) {
+    a12EditBtn.addEventListener('click', function(){
+      const q1 = document.getElementById('a12Q1');
+      if (q1) { q1.style.display = 'block'; q1.scrollIntoView({ behavior:'smooth', block:'center' }); }
+      updateA12();
+    });
+  }
+  // React when seller choice changes
+  (function(){
+    const els = document.querySelectorAll('input[name="seller_channel"]');
+    els.forEach(function(el){ el.addEventListener('change', updateA12, { passive:true }); });
+  })();
+
   // Only enforce disruption answers (Art. 9(1)) when that article is actually applicable/visible
-  const art9_1_enforced = <?= json_encode($showArt9_1) ?>;
+  const art9_1_enforced = false;
   const disruptionBlock = document.getElementById('disruptionBlock');
   const contBtn = form.querySelector('button[name="continue"]');
   if (contBtn) {
@@ -1088,3 +1338,4 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
 })();
 </script>
+

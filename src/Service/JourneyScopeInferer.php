@@ -37,6 +37,40 @@ class JourneyScopeInferer
     /** Minimal EU list for classification */
     private const EU = ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'];
 
+    /**
+     * Suburban/local products per country (ASCII tokens, uppercase) â€” these are never handled by the app.
+     * This mirrors the policy shared with the user: suburban services are excluded in all EU countries.
+     */
+    private const SUBURBAN_SERVICES = [
+        'AT' => ['S-BAHN', 'REX', 'REX+', 'REGIONALZUG', ' R '],
+        'BE' => ['S-TRAIN', 'S-TREIN', 'L-TREIN', ' L '],
+        'BG' => ['BDZ REGIONAL', 'PÄTNICHESKI', 'PATNICHESKI', 'REGIONALNI'],
+        'HR' => ['HŽPP SUBURBAN', 'HZPP SUBURBAN', 'LOKALNI VLAK'],
+        'CY' => [],
+        'CZ' => [' OS ', 'OSOBNI', 'OSOBNÍ', ' SP ', 'S-LINE'],
+        'DK' => ['S-TOG', 'STOG', 'LOKALTOG', 'LETBANE', 'ODENSE LETBANE', 'AARHUS LETBANE'],
+        'EE' => ['ELRON LOCAL', 'ELRON COMMUTER'],
+        'FI' => ['HSL ', ' VR COMMUTER', ' VR LAHI', ' VR LÃ„HI', ' VR LÄHI', ' HSL A', ' HSL I', ' HSL P', ' HSL K', ' HSL L', ' HSL E', ' HSL R', ' HSL T'],
+        'FR' => ['RER', 'TRANSILIEN', 'TER', 'NAVETTE', 'ILE-DE-FRANCE'],
+        'DE' => ['S-BAHN', ' RB ', ' RE ', ' IRE '],
+        'GR' => ['PROASTIAKOS'],
+        'HU' => ['HÉV', 'HEV', 'SZEMELY', 'SZEMÉLY', 'INTERRÉGIÓ', 'INTERREGIO', 'IR ', ' GYORSVONAT'],
+        'IE' => ['DART', 'COMMUTER RAIL', 'IARNROD EIREANN COMMUTER', 'IARNRÃ“D Ã‰IREANN COMMUTER'],
+        'IT' => ['TRENO SUBURBANO', 'TRENORD S', ' FL1', ' FL2', ' FL3', ' FL4', ' FL5', ' FL6', ' FL7', ' FL8', 'CIRCUMVESUVIANA'],
+        'LV' => ['PASAZIERU VILCIENS SUBURBAN', 'PASAZIERU VILCIENS'],
+        'LT' => ['LTG LINK COMMUTER', 'LTG COMMUTER'],
+        'LU' => ['CFL SUBURBAN', 'CFL LIGNE SUBURBAINE'],
+        'MT' => [],
+        'NL' => ['SPRINTER', 'R-NET', 'ARRIVA LOCAL', 'KEOLIS REGIONAL'],
+        'PL' => ['SKM', 'POLREGIO', ' PR ', 'KOLEJE MAZOWIECKIE', ' KM ', 'KOLEJE SLASKIE', 'KS ', 'KŚ', 'KD ', 'Koleje Dolnoslaskie', 'ŁKA', 'LKA'],
+        'PT' => ['URBANOS', 'LINHA DE SINTRA', 'LINHA DE CASCAIS', 'LINHA DO PORTO', 'LINHA DE COIMBRA'],
+        'RO' => ['REGIO', 'REGIO EXPRESS', 'SUBURBAN CFR'],
+        'SK' => ['OSOBNY VLAK', 'OS ', ' RYCHLIK', ' R '],
+        'SI' => ['SŽ LOCAL', 'SZ LOCAL', 'LJUBLJANA SUBURBAN'],
+        'ES' => ['CERCANIAS', 'CERCANÃAS', 'RODALIES', 'RODALIAS'],
+        'SE' => ['PENDELTAG', 'PENDELTÃ…G', 'VASTTAGEN', 'VÄSTTÅGEN', 'PAGATAGEN', 'PÅGATÅGEN', 'ORESUNDSTAG', 'ORESUNDSTÃ…G', 'Ã–RESUNDSTÅG'],
+    ];
+
     /** Strip platform abbreviations and brackets */
     private function cleanStation(string $s): string
     {
@@ -47,6 +81,47 @@ class JourneyScopeInferer
         $t = preg_replace('/\b(?:gleis|platform|bin(?:ario)?)\s*\d+(?:[-–]\d+)?\b/iu', ' ', $t) ?? $t;
         $t = preg_replace('/\s*\([^)]*\)\s*/u', ' ', $t) ?? $t;
         return trim(preg_replace('/\s{2,}/u', ' ', $t) ?? $t);
+    }
+
+    /** Uppercase + transliterate for robust token matching (ASCII-friendly) */
+    private function normalize(string $s): string
+    {
+        $norm = $s;
+        try {
+            $conv = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+            if ($conv !== false) { $norm = $conv; }
+        } catch (\Throwable $e) { /* ignore */ }
+        return strtoupper($norm);
+    }
+
+    /** Find a usable country context from journey/meta/operator hints */
+    private function resolveCountryContext(array $journey, array $meta): ?string
+    {
+        // Prefer segment countries
+        foreach ((array)($journey['segments'] ?? []) as $seg) {
+            $c = strtoupper((string)($seg['country'] ?? ''));
+            if ($c !== '') { return $c; }
+        }
+        // Fall back to journey-level country
+        $journeyC = strtoupper((string)($journey['country']['value'] ?? ''));
+        if ($journeyC !== '') { return $journeyC; }
+        // Finally, operator country from OCR/manual input
+        $opC = strtoupper((string)($meta['_auto']['operator_country']['value'] ?? ($meta['operator_country'] ?? '')));
+        return $opC !== '' ? $opC : null;
+    }
+
+    /** Match product against the per-country suburban blocklist */
+    private function isSuburbanProduct(?string $country, string $product): bool
+    {
+        if ($country === null || $country === '') { return false; }
+        $tokens = self::SUBURBAN_SERVICES[$country] ?? [];
+        if (empty($tokens)) { return false; }
+        $p = $this->normalize($product);
+        foreach ($tokens as $t) {
+            if ($t === '') { continue; }
+            if (strpos($p, $t) !== false) { return true; }
+        }
+        return false;
     }
 
     /** Guess country from station string using token map */
@@ -122,21 +197,17 @@ class JourneyScopeInferer
         // Suburban/commuter detection (S-Bahn, S-tog, Pendeltåg, etc.)
         try {
             $prod = (string)($meta['_auto']['operator_product']['value'] ?? '');
-            $p = mb_strtolower($prod, 'UTF-8');
-            $isSuburban = false;
-            if ($p !== '') {
-                $tokens = [ 's-bahn', 's bahn', 's-tog', 'stog', 'pendeltåg', 'pendeltag', 'rer ', ' rer', 'cercanías', 'cercanias' ];
-                foreach ($tokens as $t) { if (strpos($p, $t) !== false) { $isSuburban = true; break; } }
-            }
-            if ($isSuburban) {
+            $countryCtx = $this->resolveCountryContext($journey, $meta);
+            // Suburban detection using extended blocklist per country
+            if ($prod !== '' && $this->isSuburbanProduct($countryCtx, $prod)) {
                 $journey['is_suburban'] = true;
                 $logs[] = 'AUTO: flagged as suburban/commuter based on product=' . $prod;
             }
             // Finland commuter restriction hint
             if ($depC === 'FI' || $arrC === 'FI' || (string)($journey['country']['value'] ?? '') === 'FI') {
-                $fiTokens = [ 'hsl', 'lähijuna', 'lahijuna', 'vr commuter', 'vr lähiliikenne', 'vr lahiliikenne' ];
+                $fiTokens = [ 'hsl', 'lähijuna', 'lahijuna', 'vr commuter', 'vr lähiliikenne', 'vr lahiliikenne', 'vr lahijuna' ];
                 foreach ($fiTokens as $t) {
-                    if ($p !== '' && strpos($p, $t) !== false) { $journey['fi_commuter_route'] = true; $logs[] = 'AUTO: FI commuter route hint from product=' . $prod; break; }
+                    if ($prod !== '' && stripos($prod, $t) !== false) { $journey['fi_commuter_route'] = true; $logs[] = 'AUTO: FI commuter route hint from product=' . $prod; break; }
                 }
             }
         } catch (\Throwable $e) { /* ignore */ }

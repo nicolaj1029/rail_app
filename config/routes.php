@@ -65,6 +65,8 @@ return function (RouteBuilder $routes): void {
         // Project documents routes
         $builder->connect('/project', ['controller' => 'Project', 'action' => 'index']);
         $builder->connect('/project/links', ['controller' => 'Project', 'action' => 'links']);
+        $builder->connect('/project/links-v2', ['controller' => 'Project', 'action' => 'linksV2']);
+        $builder->connect('/project/flow-qa', ['controller' => 'Project', 'action' => 'flowQa']);
         $builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
             ->setPass(['slug']);
         $builder->connect('/project/annotate/{slug}', ['controller' => 'Project', 'action' => 'annotate'])
@@ -150,26 +152,36 @@ return function (RouteBuilder $routes): void {
     // API prefix (JSON)
     $routes->prefix('Api', function (RouteBuilder $builder): void {
         $builder->setRouteClass(DashedRoute::class);
+        // Demo v2 (fixtures/scenarios runner)
+        $builder->scope('/demo/v2', function (RouteBuilder $demo): void {
+            $demo->setRouteClass(DashedRoute::class);
+            $demo->connect('/fixtures', ['prefix' => 'Api/Demo', 'controller' => 'Fixtures', 'action' => 'index']);
+            $demo->connect('/scenarios', ['prefix' => 'Api/Demo', 'controller' => 'Scenarios', 'action' => 'index']);
+            $demo->connect('/run-scenarios', ['prefix' => 'Api/Demo', 'controller' => 'RunScenarios', 'action' => 'index']);
+            $demo->connect('/dump-session', ['prefix' => 'Api/Demo', 'controller' => 'DumpSession', 'action' => 'index']);
+            $demo->fallbacks();
+        });
         // Demo fixtures endpoint
         $builder->connect('/demo/fixtures', ['controller' => 'Demo', 'action' => 'fixtures']);
     $builder->connect('/demo/exemption-fixtures', ['controller' => 'Demo', 'action' => 'exemptionFixtures']);
     $builder->connect('/demo/art12-fixtures', ['controller' => 'Demo', 'action' => 'art12Fixtures']);
     $builder->connect('/demo/scenarios', ['controller' => 'Demo', 'action' => 'scenarios']);
     $builder->connect('/demo/mock-tickets', ['controller' => 'Demo', 'action' => 'mockTickets']);
-    $builder->connect('/demo/run-scenarios', ['controller' => 'Demo', 'action' => 'runScenarios']);
-    $builder->connect('/demo/generate-mocks', ['controller' => 'Demo', 'action' => 'generateMocks']);
+        $builder->connect('/demo/run-scenarios', ['controller' => 'Demo', 'action' => 'runScenarios']);
+        $builder->connect('/demo/generate-mocks', ['controller' => 'Demo', 'action' => 'generateMocks']);
         // Pipeline stubs
         $builder->connect('/ingest/ticket', ['controller' => 'Ingest', 'action' => 'ticket']);
         $builder->connect('/rne/trip', ['controller' => 'Rne', 'action' => 'trip']);
         $builder->connect('/operator/{operatorCode}/trip', ['controller' => 'Operator', 'action' => 'trip'])
             ->setPass(['operatorCode']);
+        // Compute endpoints (Art 12/9/18/refund/claim/compensation)
         $builder->connect('/compute/compensation', ['controller' => 'Compute', 'action' => 'compensation']);
         $builder->connect('/compute/exemptions', ['controller' => 'Compute', 'action' => 'exemptions']);
-    $builder->connect('/compute/art12', ['controller' => 'Compute', 'action' => 'art12']);
-    $builder->connect('/compute/art9', ['controller' => 'Compute', 'action' => 'art9']);
-    $builder->connect('/compute/refund', ['controller' => 'Compute', 'action' => 'refund']);
-    $builder->connect('/compute/refusion', ['controller' => 'Compute', 'action' => 'refusion']);
-    $builder->connect('/compute/claim', ['controller' => 'Compute', 'action' => 'claim']);
+        $builder->connect('/compute/art12', ['controller' => 'Compute', 'action' => 'art12']);
+        $builder->connect('/compute/art9', ['controller' => 'Compute', 'action' => 'art9']);
+        $builder->connect('/compute/refund', ['controller' => 'Compute', 'action' => 'refund']);
+        $builder->connect('/compute/refusion', ['controller' => 'Compute', 'action' => 'refusion']);
+        $builder->connect('/compute/claim', ['controller' => 'Compute', 'action' => 'claim']);
 
     // Unified pipeline (OCR ingest + all evaluators in one)
     $builder->connect('/pipeline/run', ['controller' => 'Pipeline', 'action' => 'run']);
@@ -188,6 +200,17 @@ return function (RouteBuilder $routes): void {
 
         $builder->connect('/providers/rne/realtime', ['controller' => 'Providers', 'action' => 'rneRealtime']);
         $builder->connect('/providers/open/rt', ['controller' => 'Providers', 'action' => 'openRealtime']);
+
+        // Shadow tracker endpoints (mobile app)
+        $builder->connect('/shadow/devices/register', ['controller' => 'ShadowDevices', 'action' => 'register']);
+        $builder->connect('/shadow/pings', ['controller' => 'ShadowPings', 'action' => 'add']);
+        $builder->connect('/shadow/journeys', ['controller' => 'ShadowJourneys', 'action' => 'index']);
+        $builder->connect('/shadow/journeys/{id}/confirm', ['controller' => 'ShadowJourneys', 'action' => 'confirm'])
+            ->setPass(['id']);
+        // Stations endpoint for geofencing
+        $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
+        // Events logging
+        $builder->connect('/events', ['controller' => 'Events', 'action' => 'add']);
         $builder->fallbacks();
     });
 

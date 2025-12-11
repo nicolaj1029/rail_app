@@ -1,0 +1,33 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions SE regional <150km",
+        "journey": {
+            "segments": [
+                {
+                    "from": "A",
+                    "to": "B",
+                    "country": "SE",
+                    "distance_km": 60
+                },
+                {
+                    "from": "B",
+                    "to": "C",
+                    "country": "SE",
+                    "distance_km": 60
+                }
+            ],
+            "distance_km": 120
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "regional",
+            "profile.articles.art8": false,
+            "profile.articles_sub.art9_1": false,
+            "profile.articles.art17": false,
+            "profile.articles.art18_3": false,
+            "profile.articles.art19": false,
+            "profile.articles.art20_2": false
+        }
+    }
+}

@@ -25,9 +25,12 @@ class PmrDetectionService
                 'PRM assistance (requested|reserved|booked)',
                 'Assistance (requested|reserved|booked)',
                 'Help with boarding',
+                'boarding assistance',
                 '(PMR|PRM|handicap)\s*assistance',
                 'assistance bestilt',
                 'hjælp ved ombordstigning',
+                'hjælp til ombordstigning',
+                'kørestolsassistance|rullestolsassistance',
                 'kørestol(?:\n|\r|\s)*assistance',
                 'Serviceauftrag',
                 'Mobilitätshilfe|Einstiegshilfe|Umsteigehilfe',
@@ -65,7 +68,8 @@ class PmrDetectionService
                 'Erm[äa]ßigung:.*Schwerbehindert(e|en|er)',
                 'Schwerbehindert(e|en|er)\s*50%','Carta\s*Blu','Disabilit[aà]',
                 "carte d'handicap|handicap[ée]",
-                'discapacidad|movilidad reducida',
+                'discapacidad|minusv[áa]lido|movilidad reducida',
+                'ledsagerkort',
             ]
         );
         foreach ($discountPatterns as $re) { if (preg_match($re, $text)) { $evidence[] = $re . ''; $discountHits++; } }
@@ -78,7 +82,7 @@ class PmrDetectionService
         $iconPatterns = $this->regex([
             '\\x{267F}', // ♿
             'PMR|PRM',
-            'wheelchair|rullestol|kørestol|rollstuhl|sedia a rotelle|fauteuil roulant|silla de ruedas',
+            'wheel\\s*chair|wheelchair|rullestol|kørestol|körestol|rollstuhl|sedia a rotelle|fauteuil roulant|silla de ruedas',
         ]);
         foreach ($iconPatterns as $re) { if (preg_match($re, $text)) { $evidence[] = $re . ''; $iconHits++; } }
 
@@ -109,14 +113,29 @@ class PmrDetectionService
 
         // Confidence model (heuristic):
         //  - Booked assistance dominates (0.85 baseline once any booked hit)
-        //  - Each discount hit adds 0.35 (higher than before to emphasize fare evidence)
-        //  - Each icon hit adds 0.25 (unchanged)
-        //  - Soft hints contribute small increments only when not already booked (0.08 each, capped) to avoid false positives
+        //  - Each discount hit adds 0.35 (higher weight)
+        //  - Each icon hit adds 0.25
+        //  - Soft hints: 0.08 each (cap at +0.24) and only when not already booked
         $confidence = 0.0;
         if ($pmrBooked) { $confidence += 0.85; }
         $confidence += min(0.35 * $discountHits, 0.35 * 3); // cap discount contribution
         $confidence += min(0.25 * $iconHits, 0.25 * 2);      // cap icon contribution
-        if (!$pmrBooked) { $confidence += min(0.08 * $softHits, 0.08 * 4); }
+        if (!$pmrBooked) { $confidence += min(0.08 * $softHits, 0.24); }
+
+        // Vendor heuristics: gentle bump for DB Serviceauftrag only, and strong for Trenitalia PMR + servizio
+        $seller = (string)($input['seller'] ?? '');
+        if ($seller !== '') {
+            $vendor = $this->normalizeVendor($seller);
+            if ($vendor === 'DB' && preg_match('/serviceauftrag/i', $text) && !$pmrBooked) {
+                $confidence = max($confidence, 0.35);
+                $evidence[] = 'vendor:db-serviceauftrag';
+            }
+            if ($vendor === 'Trenitalia' && preg_match('/pmr/i', $text) && preg_match('/servizio|assistenza/i', $text) && !$pmrBooked) {
+                $confidence = max($confidence, 0.85);
+                $pmrBooked = true; $pmrUser = true;
+                $evidence[] = 'vendor:trenitalia-pmr-servizio';
+            }
+        }
         $confidence = min(1.0, $confidence);
         $discountType = $this->extractDiscountFromText($textLow);
 

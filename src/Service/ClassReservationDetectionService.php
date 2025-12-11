@@ -82,8 +82,9 @@ class ClassReservationDetectionService
 
         if ($this->hitAny($text, $couchette, $ev)) return 'couchette';
         if ($this->hitAny($text, $sleeper, $ev))   return 'sleeper';
-        if ($this->hitAny($text, $seatFx, $ev))    return 'seat';
+        // Fri plads skal vurderes før fast sæde, ellers rammer generiske "seat"/"plads" først.
         if ($this->hitAny($text, $free, $ev))      return 'free';
+        if ($this->hitAny($text, $seatFx, $ev))    return 'seat';
         if ($this->hitAny($text, $none, $ev))      return 'none';
         if (preg_match('/\\b(vogn|coach)\\s*\\d+.*(plads|seat)\\s*\\w+/i', $text, $m, PREG_OFFSET_CAPTURE)) {
             $this->pushContext($text, (int)$m[0][1], strlen($m[0][0]), $ev); return 'seat';

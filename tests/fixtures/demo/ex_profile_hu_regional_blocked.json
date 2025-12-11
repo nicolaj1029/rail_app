@@ -1,0 +1,24 @@
+{
+    "fixture": {
+        "version": 2,
+        "label": "Exemptions HU regional blocked",
+        "journey": {
+            "segments": [
+                {
+                    "from": "X",
+                    "to": "Y",
+                    "country": "HU",
+                    "distance_km": 40
+                }
+            ],
+            "distance_km": 40
+        },
+        "wizard": {},
+        "expected": {
+            "profile.scope": "regional",
+            "profile.blocked": true,
+            "profile.articles.art19": false,
+            "profile.articles.art10": false
+        }
+    }
+}

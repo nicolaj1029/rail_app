@@ -7,6 +7,7 @@
                 "fr"
             ],
             "filenames": [
+                "files/Nationale pdf former/FR_formulaire-g30-en.pdf",
                 "files/fr_g30.pdf",
                 "files/france_g30.pdf"
             ],
@@ -18,6 +19,7 @@
                 "it"
             ],
             "filenames": [
+                "files/Nationale pdf former/IT_Trenitalia_compensation_form.pdf",
                 "files/it_indennizzo.pdf",
                 "files/italy_indennizzo.pdf"
             ],
@@ -51,10 +53,21 @@
                 "dk"
             ],
             "filenames": [
+                "files/Nationale pdf former/DK_rejsetidsgaranti_EN.pdf",
                 "files/dk_refusion.pdf",
                 "files/denmark_refusion.pdf"
             ],
             "notes": "Denmark: national channels preferred"
+        },
+        "DE": {
+            "prefer_national": true,
+            "aliases": [
+                "de"
+            ],
+            "filenames": [
+                "files/Nationale pdf former/DE_Fahrgastrechte-Formular-English.pdf"
+            ],
+            "notes": "Germany: Passenger Rights Claim Form available"
         }
     },
     "defaults": {

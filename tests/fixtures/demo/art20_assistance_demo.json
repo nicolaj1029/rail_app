@@ -1,0 +1,59 @@
+{
+  "fixture": {
+    "id": "art20-assistance-demo",
+    "version": 2,
+    "label": "Art.20 assistance demo (trin 4+5 felter)",
+    "journey": [],
+    "wizard": {
+      "step1": {
+        "travel_state": "ongoing"
+      },
+      "step2": {
+        "incident_main": "cancellation"
+      },
+      "step3_entitlements": {
+        "pmr_user": "Nej",
+        "pmr_booked": "Nej"
+      },
+      "step4_choices": {
+        "art18_expected_delay_60": "yes",
+        "remedyChoice": "reroute_soonest",
+        "reroute_info_within_100min": "unknown",
+        "self_purchased_new_ticket": "no",
+        "reroute_extra_costs": "unknown",
+        "delay_confirmation_info": "yes",
+        "delay_confirmation_received": "unknown"
+      },
+      "step5_assistance": {
+        "art20_expected_delay_60": "yes",
+        "meal_offered": "no",
+        "assistance_meals_unavailable_reason": "closed",
+        "meal_self_paid_amount": "15.00",
+        "meal_self_paid_currency": "EUR",
+        "hotel_offered": "yes",
+        "overnight_needed": "yes",
+        "assistance_hotel_transport_included": "yes",
+        "assistance_hotel_accessible": "unknown",
+        "hotel_self_paid_nights": "1",
+        "hotel_self_paid_amount": "120.00",
+        "hotel_self_paid_currency": "EUR",
+        "blocked_train_alt_transport": "no",
+        "assistance_blocked_transport_possible": "unknown",
+        "alt_transport_provided": "yes",
+        "assistance_alt_transport_offered_by": "operator",
+        "assistance_alt_transport_type": "bus",
+        "assistance_alt_to_destination": "final_destination",
+        "assistance_alt_departure_time": "21:30",
+        "assistance_alt_arrival_time": "23:15",
+        "assistance_pmr_priority_applied": "unknown",
+        "assistance_pmr_companion_supported": "not_applicable",
+        "assistance_pmr_dog_supported": "not_applicable"
+      }
+    },
+    "computeOverrides": {
+      "knownDelayBeforePurchase": false,
+      "delayAtFinalMinutes": 90
+    },
+    "expected": []
+  }
+}

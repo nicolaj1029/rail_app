@@ -1,0 +1,54 @@
+{
+    "fixture": {
+        "id": "downgrade-demo",
+        "version": 1,
+        "label": "Per-leg downgrade demo",
+        "journey": {
+            "operator": "DB",
+            "ticketPrice": {
+                "amount": 60.0,
+                "currency": "EUR",
+                "value": "60.00 EUR"
+            },
+            "segments": [
+                {
+                    "from": "Berlin Hbf",
+                    "to": "Leipzig Hbf",
+                    "fare_class_purchased": "1",
+                    "reserved_amenity_booked": "seat",
+                    "class_delivered_status": "lower",
+                    "reserved_amenity_delivered": "no",
+                    "downgrade_segment_share": 0.5,
+                    "is_reroute_leg": false
+                },
+                {
+                    "from": "Leipzig Hbf",
+                    "to": "Erfurt Hbf",
+                    "fare_class_purchased": "1",
+                    "reserved_amenity_booked": "none",
+                    "class_delivered_status": "same",
+                    "reserved_amenity_delivered": "yes",
+                    "downgrade_segment_share": 0.5,
+                    "is_reroute_leg": true
+                }
+            ]
+        },
+        "meta": {
+            "_operators_catalog": {
+                "DB": {
+                    "downgrade_rules": {
+                        "method": "fixed",
+                        "fixedAmount": 20,
+                        "currency": "EUR"
+                    },
+                    "supplement_map": {
+                        "seat": {
+                            "amount": 4,
+                            "currency": "EUR"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

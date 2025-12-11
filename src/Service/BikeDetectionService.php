@@ -139,7 +139,7 @@ class BikeDetectionService
     // New formula: base (0.10 if no hits, else 0.30) + 0.18*hits (cap 3) + 0.10 if count inferred.
     // Rationale: A ticket with no bike indicators should not sit at mid confidence (0.55);
     // positive evidence still reaches >0.55 quickly (e.g. 2 hits -> 0.30 + 0.36 = 0.66).
-    $base = $hits > 0 ? 0.30 : 0.10;
+    $base = $hits > 0 ? 0.40 : 0.10;
     $confidence = $base + 0.18 * min($hits, 3) + ($count ? 0.10 : 0.0);
     $confidence = min(1.0, $confidence);
 

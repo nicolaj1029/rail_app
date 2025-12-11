@@ -22,11 +22,20 @@ class PipelineController extends AppController
     {
         $this->request->allowMethod(['post']);
         $payload = (array)$this->request->getData();
+        $evalSel = (string)($this->request->getQuery('eval') ?? ($payload['eval'] ?? ''));
+        $compact = (bool)($this->request->getQuery('compact') ?? (bool)($payload['compact'] ?? false));
 
-    // Inline ingest mapping (avoid controller coupling)
+        // Inline ingest mapping (avoid controller coupling)
         $text = (string)($payload['text'] ?? '');
         $journey = (array)($payload['journey'] ?? []);
+        // Merge wizard step data (step3/4/5) into meta so evaluators can see user answers
+        $wizard = (array)($payload['wizard'] ?? []);
+        $wizardStep3 = (array)($wizard['step3_entitlements'] ?? []);
+        $wizardStep4 = (array)($wizard['step4_choices'] ?? []);
+        $wizardStep5 = (array)($wizard['step5_assistance'] ?? []);
         $meta = (array)($payload['meta'] ?? []);
+        // Wizard answers should take precedence over bare meta
+        $meta = array_merge($meta, $wizardStep3, $wizardStep4, $wizardStep5);
         $logs = [];
         if ($text !== '') {
             $map = (new \App\Service\OcrHeuristicsMapper())->mapText($text);
@@ -40,7 +49,42 @@ class PipelineController extends AppController
         // Art. 12 & 9
         $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, (array)($payload['art12_meta'] ?? []));
         $art9Meta = (array)($payload['art9_meta'] ?? []) + $meta; // merge AUTO into art9 meta
+        // Load operators catalog for evaluator policies (downgrade, supplements)
+        try {
+            $opsPath = ROOT . DS . 'config' . DS . 'data' . DS . 'operators_catalog.json';
+            if (file_exists($opsPath)) {
+                $opsJson = (string)file_get_contents($opsPath);
+                $opsData = json_decode($opsJson, true);
+                if (is_array($opsData) && isset($opsData['downgrade_policies'])) {
+                    $meta['_operators_catalog'] = (array)$opsData['downgrade_policies'];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal; evaluators will fall back
+        }
         $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $art9Meta);
+        // Split sub-evaluations for clarity
+        $art9_fastest = (new \App\Service\Art9FastestEvaluator())->evaluate($journey, $art9Meta);
+        $art9_pricing = (new \App\Service\Art9PricingEvaluator())->evaluate($journey, $art9Meta);
+        $art9_preknown = (new \App\Service\Art9PreknownEvaluator())->evaluate($journey, $art9Meta);
+        // Downgrade per-leg (CIV/GCC-CIV/PRR with Art.9(1) evidence; Art.18(2) for reroute)
+        try {
+            $downgrade = (new \App\Service\DowngradeEvaluator())->evaluate($journey, ['operator' => ($journey['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')), 'currency' => ($journey['ticketPrice']['currency'] ?? 'EUR'), '_operators_catalog' => ((array)($meta['_operators_catalog'] ?? []))]);
+        } catch (\Throwable $e) {
+            $downgrade = ['error' => 'downgrade_failed', 'message' => $e->getMessage()];
+        }
+        // Art. 6 (bicycles) — minimal compliance evaluator, additive output
+        try {
+        $art6 = (new \App\Service\Art6BikeEvaluator())->evaluate($journey, $art9Meta);
+        } catch (\Throwable $e) {
+            $art6 = ['error' => 'art6_failed', 'message' => $e->getMessage()];
+        }
+        // Art. 21–24 (PMR assistance)
+        try {
+            $pmr = (new \App\Service\Art21to24PmrEvaluator())->evaluate($journey, $art9Meta);
+        } catch (\Throwable $e) {
+            $pmr = ['error' => 'pmr_failed', 'message' => $e->getMessage()];
+        }
 
         // Compensation preview mirrors ComputeController::compensation
         $compute = (array)($payload['compute'] ?? []);
@@ -89,8 +133,10 @@ class PipelineController extends AppController
         ];
 
         // Refund + Refusion + Claim
-        $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, (array)($payload['refund_meta'] ?? []));
-        $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, (array)($payload['refusion_meta'] ?? []));
+        $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, (array)($payload['refund_meta'] ?? $meta));
+        // Merge refusion_meta overrides on top of merged meta (step4 answers)
+        $refusionMeta = array_merge($meta, (array)($payload['refusion_meta'] ?? []));
+        $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, $refusionMeta);
         $claim = (new \App\Service\ClaimCalculator())->calculate([
             'country_code' => (string)($journey['country']['value'] ?? 'EU'),
             'currency' => $currency,
@@ -102,7 +148,41 @@ class PipelineController extends AppController
             'already_refunded' => 0,
         ]);
 
-        $out = compact('journey','meta','logs','profile','art12','art9','compensation','refund','refusion','claim');
+        // Art. 20 (assistance) evaluation (step 5)
+        try {
+            $art20_assistance = (new \App\Service\Art20AssistanceEvaluator())->evaluate($journey, $meta);
+        } catch (\Throwable $e) {
+            $art20_assistance = ['error' => 'art20_failed', 'message' => $e->getMessage()];
+        }
+
+        $out = compact('journey','meta','logs','profile','art12','art9','art9_fastest','art9_pricing','art9_preknown','downgrade','art6','pmr','art20_assistance','compensation','refund','refusion','claim');
+        // Support selective eval output for demo/testing: eval=art9|art9.fastest|art9.pricing|mct|art30.complaints
+        if ($evalSel !== '') {
+            $keep = [];
+            switch ($evalSel) {
+                case 'art9':
+                    $keep = ['journey','meta','profile','art9','art9_fastest','art9_pricing','art9_preknown','downgrade'];
+                    break;
+                case 'art9.fastest':
+                    $keep = ['journey','meta','profile','art9_fastest'];
+                    break;
+                case 'art9.pricing':
+                    $keep = ['journey','meta','profile','art9_pricing'];
+                    break;
+                case 'art9.preknown':
+                    $keep = ['journey','meta','profile','art9_preknown'];
+                    break;
+                case 'art9.downgrade':
+                    $keep = ['journey','meta','profile','downgrade'];
+                    break;
+                default:
+                    // Unknown eval key → no special filtering
+                    $keep = [];
+            }
+            if ($compact && !empty($keep)) {
+                $out = array_intersect_key($out, array_flip($keep));
+            }
+        }
         $this->set($out);
         $this->viewBuilder()->setOption('serialize', array_keys($out));
     }

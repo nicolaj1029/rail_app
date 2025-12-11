@@ -6,12 +6,6 @@
  * Licensed under The MIT License
  * For full copyright and license information, please see the LICENSE.txt
  * Redistributions of files must retain the above copyright notice.
- *
- * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- * @link          https://cakephp.org CakePHP(tm) Project
- * @since         0.10.0
- * @license       https://opensource.org/licenses/mit-license.php MIT License
- * @var \App\View\AppView $this
  */
 
 $cakeDescription = 'CakePHP: the rapid development php framework';
@@ -40,10 +34,7 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
         </div>
         <div class="top-nav-links">
             <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
-            <a href="<?= $this->Url->build('/upload') ?>">Upload</a>
-            <a href="<?= $this->Url->build('/reimbursement') ?>">Reimbursement</a>
-            <a href="<?= $this->Url->build('/api/demo/generate-mocks') ?>" target="_blank">Genér mocks</a>
-            <a href="<?= $this->Url->build('/api/demo/mock-tickets') ?>" target="_blank">Scan mocks</a>
+            <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
             <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/">Docs</a>
             <a target="_blank" rel="noopener" href="https://api.cakephp.org/">API</a>
         </div>

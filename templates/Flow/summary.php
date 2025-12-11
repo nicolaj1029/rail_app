@@ -2,6 +2,7 @@
 /** @var \App\View\AppView $this */
 ?>
 <h1>Opsummering og PDF</h1>
+<?= $this->element('downgrade_summary', compact('art9','claim')) ?>
 <p>Estimeret kompensation (brutto/netto):</p>
 <ul>
   <li>Brutto: <?= number_format((float)($claim['gross'] ?? 0), 2) ?> <?= h($claim['currency'] ?? 'EUR') ?></li>

@@ -58,47 +58,97 @@ class TicketParseService
                 if (strpos($low, 'detaljer') !== false) { $idxDetaljer = $i; break; }
             }
             if ($idxDetaljer !== null) {
-                $i = $idxDetaljer + 1;
-                $stationLike = function(string $s): bool {
-                    if ($s === '' || mb_strlen($s, 'UTF-8') < 3) return false;
-                    // Must contain letters and not be an obvious label
-                    if (!preg_match('/\p{L}/u', $s)) return false;
-                    $low = mb_strtolower($s, 'UTF-8');
-                    if (in_array($low, ['start/stop','detaljer','fra:','til:'], true)) return false;
-                    // Exclude obvious product/boilerplate lines (e.g., Arriva-tog 5952 til Vejle St., IC-Lyntog 62 ...)
-                    if (str_contains($low, 'arriva') || str_contains($low, 'lyntog') || preg_match('/\bic\b/u', $low)) return false;
-                    if (str_contains($low, ' tog ')) return false;
-                    if (str_contains($low, 'ordrenummer') || str_contains($low, 'cvr-nummer') || str_contains($low, 'læs mere')) return false;
-                    return true;
-                };
-                // Walk station pairs; do not skip too aggressively so we also capture the last leg
-                while ($i + 1 < count($clean)) {
-                    $a = $this->cleanStation($clean[$i]);
-                    $b = $this->cleanStation($clean[$i+1]);
-                    if ($stationLike($a) && $stationLike($b)) {
-                        // Seek Afg and Ank within the next few lines (up to +8)
-                        $dep = '';$arr = '';
-                        for ($k = 2; $k <= 8 && ($i+$k) < count($clean); $k++) {
-                            $probe = $clean[$i+$k];
-                            if ($dep === '' && preg_match('/\b(afg|ab|dep)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m)) {
-                                $dep = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
-                            }
-                            if ($arr === '' && preg_match('/\b(ank|an|arr)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu', $probe, $m2)) {
-                                $arr = str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[2]);
-                            }
-                            if ($dep !== '' && $arr !== '') break;
-                        }
-                        if ($a !== '' && $b !== '' && $a !== $b && !$this->isNonStationLabel($a) && !$this->isNonStationLabel($b)) {
-                            $segments[] = [ 'from' => $a, 'to' => $b, 'schedDep' => $dep, 'schedArr' => $arr, 'trainNo' => '' ];
-                            $debug['events'][] = ['src' => 'dsb-detaljer', 'station' => $a . '→' . $b, 'type' => 'pair', 'time' => $dep . '–' . $arr, 'prod' => '', 'line' => ''];
-                        }
-                        // Move window forward to next pair: advance by 2 (the two station lines) to avoid skipping the last leg
-                        $i += 2;
-                        continue;
-                    }
-                    $i++;
-                }
-            }
+    $stationSeq = [];
+    $i = $idxDetaljer + 1;
+
+    $stationLike = function (string $s): bool {
+        if ($s === '') {
+            return false;
+        }
+        $s = mb_strtolower($s);
+        if (preg_match('/(afg:|ank:|lyntog|intercity|lyntog|arriva|pladsnr|vognnr|tognr|pris|voksen|ung|pensionist|børn|\d+\s*kr|kontrolnummer|bestilling|rejsekort|betingelser|journey|ticket|billetoplysninger|pladsreservation)/u', $s)) {
+            return false;
+        }
+        if (preg_match('/(læs mere|dsb orange)/u', $s)) {
+            return false;
+        }
+        return true;
+    };
+
+    $seenStations = false;
+    while ($i < count($clean)) {
+        $s = $this->cleanStation($clean[$i]);
+        if ($stationLike($s)) {
+            $stationSeq[] = $s;
+            $seenStations = true;
+            $i++;
+            continue;
+        }
+        if ($seenStations && preg_match('/(Billetoplysninger|Pladsreservation|Rejseplan|Kontrolnummer|Bestillingstidspunkt|Billetnummer)/ui', $clean[$i])) {
+            break;
+        }
+        $i++;
+    }
+
+    $i = 0;
+    while ($i + 1 < count($stationSeq)) {
+        $a = $stationSeq[$i];
+        $b = $stationSeq[$i + 1];
+        if ($stationLike($a) && $stationLike($b)) {
+            $dep = $this->findTimeNear($clean, $idxDetaljer + $i + 1, 8, 'dep');
+            $arr = $this->findTimeNear($clean, $idxDetaljer + $i + 2, 8, 'arr');
+            $segments[] = [
+                'from' => $a,
+                'to' => $b,
+                'schedDep' => $dep,
+                'schedArr' => $arr,
+                'trainNo' => '',
+                'depDate' => null,
+                'arrDate' => null,
+                'source' => 'parser',
+                'confidence' => 0.95,
+            ];
+            $debug['events'][] = [
+                'src' => 'dsb-detaljer',
+                'station' => $a . '→' . $b,
+                'time' => $dep . '→' . $arr,
+                'prod' => '',
+                'line' => '',
+            ];
+            $i += 2;
+            continue;
+        }
+        $i++;
+    }
+
+    if (count($stationSeq) >= 2 && count($segments) < count($stationSeq) - 1) {
+        for ($j = 0; $j + 1 < count($stationSeq); $j++) {
+            $from = $stationSeq[$j];
+            $to = $stationSeq[$j + 1];
+            $dep = $this->findTimeNear($clean, $idxDetaljer + $j + 1, 8, 'dep');
+            $arr = $this->findTimeNear($clean, $idxDetaljer + $j + 2, 8, 'arr');
+            $segments[] = [
+                'from' => $from,
+                'to' => $to,
+                'schedDep' => $dep,
+                'schedArr' => $arr,
+                'trainNo' => '',
+                'depDate' => null,
+                'arrDate' => null,
+                'source' => 'dsb-detaljer-repair',
+                'confidence' => 0.9,
+            ];
+            $debug['events'][] = [
+                'src' => 'dsb-detaljer-repair',
+                'station' => $from . '→' . $to,
+                'time' => $dep . '→' . $arr,
+                'prod' => '',
+                'line' => '',
+            ];
+        }
+    }
+}
+
             // Supplement: infer missing final leg from product lines like "IC-Lyntog 62 til København H" if not already captured
             if (!empty($segments)) {
                 $existingTo = array_map(fn($s) => (string)$s['to'], $segments);
@@ -585,6 +635,34 @@ class TicketParseService
     public static function getLastDebug(): array
     {
         return is_array(self::$lastDebug) ? self::$lastDebug : [];
+    }
+
+    /**
+     * Find a time (hh:mm) near a given line index. Looks forward/backward within a window.
+     * $kind = 'dep'|'arr' biases the label match; falls back to first time pattern.
+     */
+    private function findTimeNear(array $lines, int $startIdx, int $window = 6, string $kind = ''): string
+    {
+        $lo = max(0, $startIdx - $window);
+        $hi = min(count($lines) - 1, $startIdx + $window);
+        $patKind = null;
+        if ($kind === 'dep') {
+            $patKind = '/\b(afg|ab|dep)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu';
+        } elseif ($kind === 'arr') {
+            $patKind = '/\b(ank|an|arr)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu';
+        }
+        $patAny = '/\b((?:[01]?\d|2[0-3])[:.h]\s*\d{2})\b/u';
+
+        for ($i = $lo; $i <= $hi; $i++) {
+            $probe = $lines[$i];
+            if ($patKind && preg_match($patKind, $probe, $m)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
+            }
+            if (preg_match($patAny, $probe, $m2)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[1]);
+            }
+        }
+        return '';
     }
 
     /** Heuristic filter for non-station labels commonly found on tickets (e.g., 'Gültigkeit'). */

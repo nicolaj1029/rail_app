@@ -1,0 +1,23 @@
+{
+  "$schema": "https://togforsinkelse/schema/price_profiles-v1.json",
+  "defaultCurrency": "EUR",
+  "countries": {
+    "DK": { "priceLevel": "MID", "currency": "DKK" },
+    "SE": { "priceLevel": "HIGH", "currency": "SEK" },
+    "NO": { "priceLevel": "HIGH", "currency": "NOK" },
+    "DE": { "priceLevel": "MID", "currency": "EUR" },
+    "FR": { "priceLevel": "MID", "currency": "EUR" },
+    "NL": { "priceLevel": "HIGH", "currency": "EUR" },
+    "BE": { "priceLevel": "MID", "currency": "EUR" },
+    "ES": { "priceLevel": "LOW", "currency": "EUR" },
+    "PT": { "priceLevel": "LOW", "currency": "EUR" },
+    "IT": { "priceLevel": "MID", "currency": "EUR" },
+    "PL": { "priceLevel": "LOW", "currency": "PLN" },
+    "CZ": { "priceLevel": "LOW", "currency": "CZK" },
+    "SK": { "priceLevel": "LOW", "currency": "EUR" },
+    "HU": { "priceLevel": "LOW", "currency": "HUF" },
+    "AT": { "priceLevel": "MID", "currency": "EUR" },
+    "CH": { "priceLevel": "HIGH", "currency": "CHF" },
+    "GB": { "priceLevel": "HIGH", "currency": "GBP" }
+  }
+}

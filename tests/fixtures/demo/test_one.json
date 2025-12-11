@@ -1,0 +1,105 @@
+{
+    "fixture": {
+        "id": "session_20251129_182723",
+        "version": 2,
+        "label": "Captured wizard session 2025-11-29T18:27:23+00:00",
+        "journey": [],
+        "wizard": {
+            "step1": {
+                "travel_state": "ongoing"
+            },
+            "step2": {
+                "incident_main": "cancellation"
+            },
+            "step3_entitlements": {
+                "leg_class_purchased": [],
+                "leg_class_delivered": [],
+                "leg_downgraded": [],
+                "pmr_user": "Nej",
+                "pmr_booked": "Nej",
+                "pmrQBooked": null,
+                "pmrQDelivered": null,
+                "pmrQPromised": null,
+                "pmr_facility_details": null,
+                "fare_flex_type": null,
+                "train_specificity": null,
+                "fare_class_purchased": null,
+                "berth_seat_type": null,
+                "reserved_amenity_delivered": null,
+                "class_delivered_status": null,
+                "preinformed_disruption": "Ved ikke",
+                "preinfo_channel": "Ved ikke",
+                "realtime_info_seen": [],
+                "downgrade_occurred": null,
+                "downgrade_comp_basis": null,
+                "downgrade_segment_share": "1",
+                "interest_class": "1",
+                "eligible_under_18_3": "1"
+            },
+            "step4_choices": {
+                "remedyChoice": "reroute_soonest",
+                "self_purchased_new_ticket": "yes",
+                "self_purchase_approved_by_operator": "unknown",
+                "offer_provided": "unknown",
+                "reroute_same_conditions_soonest": "yes",
+                "reroute_later_at_choice": null,
+                "reroute_info_within_100min": "no",
+                "reroute_extra_costs": "yes",
+                "reroute_extra_costs_amount": "100",
+                "reroute_extra_costs_currency": "CZK",
+                "delayAtFinalMinutes": null,
+                "compensationBand": "25",
+                "voucherAccepted": "no"
+            },
+            "step5_assistance": {
+                "meal_offered": "no",
+                "hotel_offered": null,
+                "overnight_needed": null,
+                "blocked_train_alt_transport": null,
+                "alt_transport_provided": null,
+                "expense_meals_amount": null,
+                "expense_hotel_amount": null,
+                "expense_alt_transport_amount": null,
+                "expense_other_amount": null
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": false,
+            "delayAtFinalMinutes": null
+        },
+        "expected": [],
+        "journeyBasic": {
+            "dep_date": "2025-12-10",
+            "dep_time": "17:20",
+            "dep_station": "PARIS GARE LYON",
+            "arr_station": "MONTPELLIER ST-RO",
+            "arr_time": "02:00",
+            "train_no": "TGV 6055",
+            "ticket_no": "QFKDQB",
+            "operator": "SNCF",
+            "operator_country": "FR",
+            "operator_product": "TGV",
+            "price": "25.00"
+        },
+        "segments": [
+            {
+                "from": "PARIS GARE LYON",
+                "to": "MONTPELLIER ST-RO",
+                "schedDep": "17:20",
+                "schedArr": "20:44",
+                "trainNo": "TGV 6055",
+                "depDate": "2023-12-10",
+                "arrDate": "2023-12-10"
+            },
+            {
+                "from": "Paris Gare Lyon",
+                "to": "Montpellier St-Roch",
+                "schedDep": "17:20",
+                "schedArr": "20:44",
+                "trainNo": "TGV 6055",
+                "depDate": "2023-12-10",
+                "arrDate": "2023-12-10"
+            }
+        ]
+    }
+}

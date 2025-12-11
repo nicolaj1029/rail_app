@@ -165,7 +165,7 @@
         },
         "dep_station": {
             "x": 110,
-            "y": 748,
+            "y": 744,
             "w": 460,
             "type": "text",
             "source": "seg1_dep_station"

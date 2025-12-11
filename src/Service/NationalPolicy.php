@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 /**
- * NationalPolicy — provides country/scope-specific compensation policy hints for TRIN 6 UI.
+ * NationalPolicy - provides country/scope-specific compensation policy hints for TRIN 6 UI.
  *
  * Scope: Read-only helper to surface national schemes with more lenient bands than EU Art. 19 baseline.
  * Note: Amount calculation still relies on ClaimCalculator; this service only informs UI defaults/notes.
@@ -15,14 +15,7 @@ class NationalPolicy
      * Decide applicable national policy (if any) for the current journey context.
      *
      * @param array{country?:string, scope?:string, operator?:string, product?:string} $ctx
-     * @return array<string,mixed>|null Example:
-     *   [
-     *     'country' => 'FR',
-     *     'name' => 'SNCF G30',
-     *     'id' => 'fr_g30',
-     *     'thresholds' => ['25' => 30, '50' => 120],
-     *     'notes' => 'Domestic TGV/Intercités, voucher preferences may apply.'
-     *   ]
+     * @return array<string,mixed>|null
      */
     public function decide(array $ctx): ?array
     {
@@ -30,12 +23,11 @@ class NationalPolicy
         $scope = (string)($ctx['scope'] ?? '');
         if ($country === '' || $scope === '') { return null; }
 
-        // Only apply for domestic journeys; international routes should keep EU baseline
-        $isDomestic = ($scope === 'long_domestic' || $scope === 'domestic');
+        // Only apply for indenrigsrejser (inkl. regional); internationalt behold EU-baseline
+        $isDomestic = in_array($scope, ['long_domestic','domestic','regional'], true);
         if (!$isDomestic) { return null; }
 
-        // Minimal curated map — safe defaults: only FR has a clearly earlier threshold (G30 ≥30 min → 25%).
-        // Others point to EU baseline but still prefer national forms via FormResolver.
+        // Curated map baseret på national_overrides (lempeligere bands for udvalgte lande)
         $map = [
             'FR' => [
                 'name' => 'SNCF G30',
@@ -46,26 +38,26 @@ class NationalPolicy
             'IT' => [
                 'name' => 'Trenitalia Indennizzo',
                 'id' => 'it_indennizzo',
-                'thresholds' => ['25' => 60, '50' => 120], // conservative (align EU) until refined
-                'notes' => 'National ordning; tærskler varierer pr. togtype. EU-bands som standard.',
+                'thresholds' => ['25' => 30, '50' => 120],
+                'notes' => 'National ordning; thresholds tilpasset national_overrides (25% ≥30 min).',
             ],
             'NL' => [
-                'name' => 'NS Geld terug bij vertraging',
+                'name' => 'NS Geld tilbage ved forsinkelse',
                 'id' => 'nl_gtbv',
-                'thresholds' => ['25' => 60, '50' => 120], // NS uses fixed amounts/30-min windows; keep EU bands for now
-                'notes' => 'NS har faste beløb fra ~30 min; vises som EU-bands indtil speciallogik tilføjes.',
+                'thresholds' => ['25' => 30, '50' => 60], // proxy: 50% ≥30 min, 100% ≥60 min
+                'notes' => 'NS har faste beløb (50% ≥30 min, 100% ≥60); proxier til 25/50 bands.',
             ],
             'ES' => [
                 'name' => 'Renfe Compensación',
                 'id' => 'es_compensacion',
-                'thresholds' => ['25' => 60, '50' => 120], // conservative default
-                'notes' => 'Renfe har togtype-afhængige tærskler; EU-bands indtil videre.',
+                'thresholds' => ['25' => 60, '50' => 90], // proxy til togtype-afhængige bands
+                'notes' => 'Renfe har togtype-afhængige tærskler; proxier til 25/50 = 60/90 min.',
             ],
             'DK' => [
                 'name' => 'DSB national ordning',
                 'id' => 'dk_dsb',
-                'thresholds' => ['25' => 60, '50' => 120],
-                'notes' => 'National kanal foretrækkes; EU-bands som baseline.',
+                'thresholds' => ['25' => 30, '50' => 60],
+                'notes' => 'DSB rejsetidsgaranti: 25% ≥30 min, 50% ≥60 min.',
             ],
         ];
 

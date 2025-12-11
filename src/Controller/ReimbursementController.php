@@ -57,39 +57,39 @@ class ReimbursementController extends AppController
             }
         };
 
-        // TRIN 1 – Status
-        $renderSection('TRIN 1 · Status', [
+        // TRIN 1 ÔÇô Status
+        $renderSection('TRIN 1 -À Status', [
             'Rejsestatus' => $data['travel_state'] ?? null,
             'EU-forsinkelse (min)' => $data['delay_min_eu'] ?? null,
-            'Kendt forsinkelse før køb' => !empty($data['known_delay']) ? 'ja' : 'nej',
-            'Ekstraordinær hændelse' => !empty($data['extraordinary']) ? 'ja' : 'nej',
+            'Kendt forsinkelse f+©r k+©b' => !empty($data['known_delay']) ? 'ja' : 'nej',
+            'Ekstraordin+ªr h+ªndelse' => !empty($data['extraordinary']) ? 'ja' : 'nej',
         ]);
 
-        // TRIN 2 – Hændelse
-        $renderSection('TRIN 2 · Hændelse', [
+        // TRIN 2 ÔÇô H+ªndelse
+        $renderSection('TRIN 2 -À H+ªndelse', [
             'Type' => $data['incident_main'] ?? null,
             'Missed connection' => !empty($data['missed_connection']) ? 'ja' : 'nej',
             'Missed connection station' => $data['missed_connection_station'] ?? null,
-            'Årsager (afledt)' => implode(', ', array_keys(array_filter([
+            '+àrsager (afledt)' => implode(', ', array_keys(array_filter([
                 'delay' => !empty($data['reason_delay']),
                 'cancellation' => !empty($data['reason_cancellation']),
                 'missed connection' => !empty($data['reason_missed_conn']),
             ]))),
         ]);
 
-        // TRIN 3/5 – CIV screening
-        $renderSection('TRIN 5 · CIV screening', [
+        // TRIN 3/5 ÔÇô CIV screening
+        $renderSection('TRIN 5 -À CIV screening', [
             'Gyldig billet' => $data['hasValidTicket'] ?? null,
-            'Adfærd i toget' => $data['safetyMisconduct'] ?? null,
-            'Håndbagage/dyr/genstande' => $data['forbiddenItemsOrAnimals'] ?? null,
+            'Adf+ªrd i toget' => $data['safetyMisconduct'] ?? null,
+            'H+Ñndbagage/dyr/genstande' => $data['forbiddenItemsOrAnimals'] ?? null,
             'Administrative forskrifter' => $data['customsRulesBreached'] ?? null,
             'Operator-dokumentation' => $data['operatorStampedDisruptionProof'] ?? null,
         ]);
 
-        // TRIN 4 – Rejsedata og operatør
-        $renderSection('TRIN 4 · Rejsedata', [
-            'Operatør' => $data['operator'] ?? null,
-            'Operatør land' => $data['operator_country'] ?? null,
+        // TRIN 4 ÔÇô Rejsedata og operat+©r
+        $renderSection('TRIN 4 -À Rejsedata', [
+            'Operat+©r' => $data['operator'] ?? null,
+            'Operat+©r land' => $data['operator_country'] ?? null,
             'Produkt' => $data['operator_product'] ?? null,
             'Afgangsstation' => $data['dep_station'] ?? null,
             'Ankomststation' => $data['arr_station'] ?? null,
@@ -102,67 +102,67 @@ class ReimbursementController extends AppController
             'Faktisk ankomstdato' => $data['actual_arrival_date'] ?? null,
             'Faktisk afgang' => $data['actual_dep_time'] ?? null,
             'Faktisk ankomst' => $data['actual_arr_time'] ?? null,
-            'Gennemgående billet' => $data['isThroughTicket'] ?? null,
+            'Gennemg+Ñende billet' => $data['isThroughTicket'] ?? null,
             'Separate kontrakter oplyst' => $data['separateContractsDisclosed'] ?? null,
             'Enkelt transaktion' => $data['singleTxn'] ?? null,
-            'Sælger-type' => $data['sellerType'] ?? null,
+            'S+ªlger-type' => $data['sellerType'] ?? null,
         ]);
 
-        // TRIN 6 – Art. 12 input (kun spørgsmål 1–6)
-        $renderSection('TRIN 6 · Art. 12', [
-            'Oplyst gennemgående billet' => $data['through_ticket_disclosure'] ?? null,
-            'Købt i én transaktion hos operatør (AUTO)' => $data['single_txn_operator'] ?? null,
-            'Købt i én transaktion hos forhandler (AUTO)' => $data['single_txn_retailer'] ?? null,
+        // TRIN 6 ÔÇô Art. 12 input (kun sp+©rgsm+Ñl 1ÔÇô6)
+        $renderSection('TRIN 6 -À Art. 12', [
+            'Oplyst gennemg+Ñende billet' => $data['through_ticket_disclosure'] ?? null,
+            'K+©bt i +®n transaktion hos operat+©r (AUTO)' => $data['single_txn_operator'] ?? null,
+            'K+©bt i +®n transaktion hos forhandler (AUTO)' => $data['single_txn_retailer'] ?? null,
             'Separate kontrakter oplyst' => $data['separate_contract_notice'] ?? null,
-            'Fælles booking/PNR (AUTO)' => $data['shared_pnr_scope'] ?? null,
-            'Solgt af operatør (AUTO)' => $data['seller_type_operator'] ?? null,
+            'F+ªlles booking/PNR (AUTO)' => $data['shared_pnr_scope'] ?? null,
+            'Solgt af operat+©r (AUTO)' => $data['seller_type_operator'] ?? null,
         ]);
 
-        // TRIN 7 – Remedies (Art. 18)
-        $renderSection('TRIN 7 · Afhjælpning', [
+        // TRIN 7 ÔÇô Remedies (Art. 18)
+        $renderSection('TRIN 7 -À Afhj+ªlpning', [
             'Valg' => $data['remedyChoice'] ?? null,
             'Refusion anmodet' => $data['refund_requested'] ?? null,
             'Refusionsformular valgt' => $data['refund_form_selected'] ?? null,
-            'Reroute samme vilkår (snarest)' => $data['reroute_same_conditions_soonest'] ?? null,
+            'Reroute samme vilk+Ñr (snarest)' => $data['reroute_same_conditions_soonest'] ?? null,
             'Reroute senere (valg)' => $data['reroute_later_at_choice'] ?? null,
             'Reroute info inden 100 min' => $data['reroute_info_within_100min'] ?? null,
             'Ekstra omkostninger' => $data['reroute_extra_costs'] ?? null,
-            'Ekstra omkostninger beløb' => $data['reroute_extra_costs_amount'] ?? null,
+            'Ekstra omkostninger bel+©b' => $data['reroute_extra_costs_amount'] ?? null,
             'Ekstra omkostninger valuta' => $data['reroute_extra_costs_currency'] ?? null,
             'Nedgradering skete' => $data['downgrade_occurred'] ?? null,
             'Nedgradering komp.basis' => $data['downgrade_comp_basis'] ?? null,
         ]);
 
-        // TRIN 8 – Assistance og udgifter
-        $renderSection('TRIN 8 · Assistance og udgifter', [
-            'Måltid tilbudt' => $data['meal_offered'] ?? null,
+        // TRIN 8 ÔÇô Assistance og udgifter
+        $renderSection('TRIN 8 -À Assistance og udgifter', [
+            'M+Ñltid tilbudt' => $data['meal_offered'] ?? null,
             'Hotel tilbudt' => $data['hotel_offered'] ?? null,
-            'Overnatning nødvendig' => $data['overnight_needed'] ?? null,
+            'Overnatning n+©dvendig' => $data['overnight_needed'] ?? null,
             'Alternativ transport (blokeret tog)' => $data['blocked_train_alt_transport'] ?? null,
             'Alt. transport leveret' => $data['alt_transport_provided'] ?? null,
             'Kvittering upload (udgifter)' => $data['extra_expense_upload'] ?? null,
-            'Udgifter: måltider' => $data['expense_breakdown_meals'] ?? $data['expense_meals'] ?? null,
-            'Udgifter: hotel-nætter' => $data['expense_breakdown_hotel_nights'] ?? null,
+            'Udgifter: m+Ñltider' => $data['expense_breakdown_meals'] ?? $data['expense_meals'] ?? null,
+            'Udgifter: hotel-n+ªtter' => $data['expense_breakdown_hotel_nights'] ?? null,
             'Udgifter: lokal transport' => $data['expense_breakdown_local_transport'] ?? null,
             'Udgifter: andet' => $data['expense_breakdown_other_amounts'] ?? $data['expense_other'] ?? null,
-            'Bekræftet forsinkelse modtaget' => $data['delay_confirmation_received'] ?? null,
-            'Upload (forsinkelsesbekræftelse)' => $data['delay_confirmation_upload'] ?? null,
-            'Ekstraordinært krav' => $data['extraordinary_claimed'] ?? null,
-            'Ekstraordinær type' => $data['extraordinary_type'] ?? null,
+            'Bekr+ªftet forsinkelse modtaget' => $data['delay_confirmation_received'] ?? null,
+            'Upload (forsinkelsesbekr+ªftelse)' => $data['delay_confirmation_upload'] ?? null,
+            'Ekstraordin+ªrt krav' => $data['extraordinary_claimed'] ?? null,
+            'Ekstraordin+ªr type' => $data['extraordinary_type'] ?? null,
         ]);
 
-        // TRIN 9 – Interesser og hooks
-        $renderSection('TRIN 9 · Interesser og hooks', [
+        // TRIN 9 ÔÇô Interesser og hooks
+        $renderSection('TRIN 9 -À Interesser og hooks', [
             'Request: Refusion' => !empty($data['request_refund']) ? 'ja' : 'nej',
             'Request: Kompensation 60+' => !empty($data['request_comp_60']) ? 'ja' : 'nej',
             'Request: Kompensation 120+' => !empty($data['request_comp_120']) ? 'ja' : 'nej',
             'Request: Udgifter' => !empty($data['request_expenses']) ? 'ja' : 'nej',
-            'Info ønsket før køb' => !empty($data['info_requested_pre_purchase']) ? 'ja' : 'nej',
+            'Info +©nsket f+©r k+©b' => !empty($data['info_requested_pre_purchase']) ? 'ja' : 'nej',
             'CoC anerkendt' => $data['coc_acknowledged'] ?? null,
             'CIV-markering' => $data['civ_marking_present'] ?? null,
-            'Hurtigste flag ved køb' => $data['fastest_flag_at_purchase'] ?? null,
+            'Hurtigste flag ved k+©b' => $data['fastest_flag_at_purchase'] ?? null,
             'MCT realistisk' => $data['mct_realistic'] ?? null,
-            'Alternative vist før kontrakt' => $data['alts_shown_precontract'] ?? null,
+            'Alternative vist f+©r kontrakt' => $data['alts_shown_precontract'] ?? null,
             'Fik du vist flere prisvalg for samme afgang?' => $data['multiple_fares_shown'] ?? null,
             "Var 'billigste pris' markeret/anbefalet?" => $data['cheapest_highlighted'] ?? null,
             'Fleks-type' => $data['fare_flex_type'] ?? null,
@@ -172,12 +172,12 @@ class ReimbursementController extends AppController
             'PMR leveret status' => $data['pmr_delivered_status'] ?? null,
             'PMR lovet mangler' => $data['pmr_promised_missing'] ?? null,
             'Cykelreservation type' => $data['bike_reservation_type'] ?? null,
-            'Cykelreservation krævet' => $data['bike_res_required'] ?? null,
-            'Cykel afvist årsag' => $data['bike_denied_reason'] ?? null,
-            'Cykel opfølgende tilbud' => $data['bike_followup_offer'] ?? null,
+            'Cykelreservation kr+ªvet' => $data['bike_res_required'] ?? null,
+            'Cykel afvist +Ñrsag' => $data['bike_denied_reason'] ?? null,
+            'Cykel opf+©lgende tilbud' => $data['bike_followup_offer'] ?? null,
             'Cykel forsinkelse bucket' => $data['bike_delay_bucket'] ?? null,
-            'Købt klasse' => $data['fare_class_purchased'] ?? null,
-            'Køje/sæde-type' => $data['berth_seat_type'] ?? null,
+            'K+©bt klasse' => $data['fare_class_purchased'] ?? null,
+            'K+©je/s+ªde-type' => $data['berth_seat_type'] ?? null,
             'Reserveret faciliteter leveret' => $data['reserved_amenity_delivered'] ?? null,
             'Klasse leveret status' => $data['class_delivered_status'] ?? null,
             'Preinformeret forstyrrelse' => $data['preinformed_disruption'] ?? null,
@@ -186,8 +186,8 @@ class ReimbursementController extends AppController
             'Lovede faciliteter' => $data['promised_facilities'] ?? null,
             'Faktiske faciliteter status' => $data['facilities_delivered_status'] ?? null,
             'Facilitetsnote' => $data['facility_impact_note'] ?? null,
-            'Disclosure: gennemgående billet' => $data['through_ticket_disclosure'] ?? null,
-            'Disclosure: enkelt transaktion operatør' => $data['single_txn_operator'] ?? null,
+            'Disclosure: gennemg+Ñende billet' => $data['through_ticket_disclosure'] ?? null,
+            'Disclosure: enkelt transaktion operat+©r' => $data['single_txn_operator'] ?? null,
             'Disclosure: enkelt transaktion forhandler' => $data['single_txn_retailer'] ?? null,
             'Disclosure: separate kontrakter' => $data['separate_contract_notice'] ?? null,
             'Klagekanal set' => $data['complaint_channel_seen'] ?? null,
@@ -196,10 +196,10 @@ class ReimbursementController extends AppController
             'Indsend via officiel kanal' => $data['submit_via_official_channel'] ?? null,
         ]);
 
-        // TRIN 10 – Kompensation
-        $renderSection('TRIN 10 · Kompensation', [
+        // TRIN 10 ÔÇô Kompensation
+        $renderSection('TRIN 10 -À Kompensation', [
             'Endelig forsinkelse (min)' => $data['delayAtFinalMinutes'] ?? null,
-            'Bånd' => $data['compensationBand'] ?? null,
+            'B+Ñnd' => $data['compensationBand'] ?? null,
             'Voucher accepteret' => !empty($data['voucherAccepted']) ? 'ja' : 'nej',
         ]);
 
@@ -209,8 +209,8 @@ class ReimbursementController extends AppController
             'Email' => $data['email'] ?? null,
         ]);
 
-        // TRIN 11 – GDPR
-        $renderSection('TRIN 11 · GDPR', [
+        // TRIN 11 ÔÇô GDPR
+        $renderSection('TRIN 11 -À GDPR', [
             'Samtykke' => !empty($data['gdprConsent']) ? 'ja' : 'nej',
             'Yderligere oplysninger' => $data['additionalInfo'] ?? $data['additional_info'] ?? null,
         ]);
@@ -279,13 +279,33 @@ class ReimbursementController extends AppController
             $formSess = (array)$session->read('flow.form') ?: [];
             $metaSess = (array)$session->read('flow.meta') ?: [];
             $incidentSess = (array)$session->read('flow.incident') ?: [];
+            $computeSess = (array)$session->read('flow.compute') ?: [];
+            $flagsSess = (array)$session->read('flow.flags') ?: [];
+            [$formSess, $metaSess] = $this->sanitizeFlowSession($formSess, $metaSess);
+            // Persist the cleaned split so legacy debug keys stop leaking into form state
+            $session->write('flow.form', $formSess);
+            $session->write('flow.meta', $metaSess);
         } catch (\Throwable $e) {
-            $formSess = []; $metaSess = []; $incidentSess = [];
+            $formSess = []; $metaSess = []; $incidentSess = []; $computeSess = []; $flagsSess = [];
+        }
+        // Hydrate missing simple flags from compute/flags into $data so official payload reflects flow state
+        if (!isset($data['travel_state'])) {
+            $data['travel_state'] = (string)($computeSess['travel_state'] ?? ($flagsSess['travel_state'] ?? ''));
+        }
+        if (!isset($data['delay_min_eu']) || $data['delay_min_eu'] === '') {
+            if (isset($computeSess['delayMinEU'])) { $data['delay_min_eu'] = (string)$computeSess['delayMinEU']; }
+        }
+        if (!isset($data['known_delay']) && array_key_exists('knownDelayBeforePurchase', $computeSess)) {
+            $data['known_delay'] = $computeSess['knownDelayBeforePurchase'] ? '1' : '';
+        }
+        if (!isset($data['extraordinary']) && array_key_exists('extraordinary', $computeSess)) {
+            $data['extraordinary'] = $computeSess['extraordinary'] ? '1' : '';
         }
 
         // Developer aid: expose a JSON dump of relevant session values for debugging via DevTools
         // Usage: /reimbursement/official?eu=1&session=1
         $peekSess = (string)($this->request->getQuery('session') ?? $this->request->getQuery('peek') ?? '') === '1';
+        $debugPayload = null;
         if ($peekSess) {
             // Ensure core incident fields are surfaced even if only stored nested under metaSess['incident']
             if (empty($data['incident_main'])) {
@@ -316,7 +336,7 @@ class ReimbursementController extends AppController
             }
             $keys = [
                 // Incident / page 1
-                'incident_main','missed_connection','missed_connection_station','delay_min_eu',
+                'incident_main','missed_connection','missed_connection_station','delay_min_eu','travel_state','known_delay','extraordinary',
                 'reason_delay','reason_cancellation','reason_missed_conn',
                 // PMR core
                 'pmr_user','pmr_booked','pmrQBooked','pmrQDelivered','pmrQPromised','pmr_facility_details',
@@ -350,7 +370,7 @@ class ReimbursementController extends AppController
                 }
                 return $out;
             };
-            $payload = [
+            $debugPayload = [
                 'phpSessionId' => method_exists($session, 'id') ? $session->id() : null,
                 'now' => date('c'),
                 'notes' => 'selected shows common keys. data shows GET/POST. flow shows full stored session. flat.* are recursively flattened dot-keys for quick search.',
@@ -391,9 +411,6 @@ class ReimbursementController extends AppController
                     return $snap;
                 })(),
             ];
-            $this->disableAutoRender();
-            $this->response = $this->response->withType('json')->withStringBody((string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-            return;
         }
 
         // Allow overriding template via query parameter for diagnostics, but only within webroot or webroot/files
@@ -408,15 +425,22 @@ class ReimbursementController extends AppController
         if ($source === null) {
             // Respect force=eu to always choose EU official template
             $forceEu = (string)($this->request->getQuery('eu') ?? $this->request->getQuery('force')) === '1' || (string)$this->request->getQuery('force') === 'eu';
-            if ($forceEu) {
-                $source = $this->findOfficialTemplatePath();
-            } else {
-                $countryQuery = (string)($this->request->getQuery('country') ?? ($data['operator_country'] ?? ''));
-                $opName = (string)($data['operator'] ?? '');
-                $opProd = (string)($data['operator_product'] ?? '');
-                $preferNat = (string)($this->request->getQuery('prefer') ?? '') === 'national' || (string)$this->request->getQuery('national') === '1';
+        // Defaults to avoid undefined notices when forcing EU template
+        $countryQuery = (string)($this->request->getQuery('country') ?? ($data['operator_country'] ?? ''));
+        $opName = (string)($data['operator'] ?? '');
+        $opProd = (string)($data['operator_product'] ?? '');
+        $preferNat = (string)($this->request->getQuery('prefer') ?? '') === 'national' || (string)$this->request->getQuery('national') === '1';
+
+        if ($forceEu) {
+            $source = $this->findOfficialTemplatePath();
+        } else {
+            // Hard override: if prefer=national and country=DK, force DK template if found in alt dir
+            if ($preferNat && strtoupper($countryQuery) === 'DK') {
+                $alt = $this->findNationalInAltDir('DK');
+                if ($alt) { $source = $alt; }
+            }
                 try {
-                    // If caller prefers national, try dedicated scan in alt dir first
+                    // Special-case: explicit DK national request -> force DK template if found
                     if ($preferNat && $countryQuery !== '') {
                         $alt = $this->findNationalInAltDir($countryQuery);
                         if ($alt) { $source = $alt; }
@@ -453,12 +477,194 @@ class ReimbursementController extends AppController
         }
 
     // Prefer national mapping if a national template is selected; else fallback to EU mapping
-    $map = $this->loadNationalFieldMap($source) ?: ($this->loadFieldMap() ?: $this->officialFieldMap());
-    $mapMeta = is_array($map) && array_key_exists('_meta', $map) && is_array($map['_meta']) ? (array)$map['_meta'] : [];
+    $natMap = null;
+    // Fast-path: if the selected template name looks like the DK form, load the DK map directly
+    $dkMapPathOriginal = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . 'DK' . DIRECTORY_SEPARATOR . 'map_dk_dsb_basic_rejsetidsgaranti.json';
+    $dkMapPathClean = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . 'DK' . DIRECTORY_SEPARATOR . 'map_dk_dsb_basic_rejsetidsgaranti_clean.json';
+    $dkMapPath = is_file($dkMapPathClean) ? $dkMapPathClean : $dkMapPathOriginal;
+    $isDkTemplate = stripos(basename((string)$source), 'dk_rejsetidsgaranti') !== false;
+    if ($isDkTemplate && is_file($dkMapPath)) {
+        $json = (string)file_get_contents($dkMapPath);
+        $decoded = json_decode($json, true);
+        if (is_array($decoded)) {
+            $natMap = $decoded;
+            $mapUsed = 'national';
+            $mapMeta = (array)($decoded['_meta'] ?? ($decoded['meta'] ?? []));
+        }
+    }
+    if ($natMap === null) {
+        $natMap = $this->loadNationalFieldMap($source);
+    }
+    // If not found, try again using the explicit country parameter (helps when the filename
+    // itself does not contain a strong country token).
+    if ($natMap === null) {
+        $countryQuery = strtoupper((string)($this->request->getQuery('country') ?? ($data['operator_country'] ?? '')));
+        if ($countryQuery !== '') {
+            $natMap = $this->loadNationalFieldMap($countryQuery);
+        }
+    }
+    // Hard fallback: if DK national form is selected or requested, force-load DK map directly
+    // Only force DK map when country is DK or the template name itself is DK
+    $preferDk = strtoupper((string)($countryQuery ?? '')) === 'DK';
+    // If user explicitly prefers national and DK country, force-load DK map even if detection failed
+    if ($preferNat && $preferDk && is_file($dkMapPath)) {
+        $json = (string)file_get_contents($dkMapPath);
+        $decoded = json_decode($json, true);
+        if (is_array($decoded)) {
+            $natMap = $decoded;
+            $mapUsed = 'national';
+            $mapMeta = (array)($decoded['_meta'] ?? []);
+        }
+    }
+    if ($isDkTemplate || $preferDk) {
+        // Try explicit DK loader if the generic matcher failed
+        if ($natMap === null) {
+            $natMap = $this->loadNationalFieldMap($dkMapPath);
+        }
+        if ($natMap === null && is_file($dkMapPath)) {
+            $json = (string)file_get_contents($dkMapPath);
+            $decoded = json_decode($json, true);
+            if (is_array($decoded)) {
+                $natMap = $decoded;
+                $mapMeta = (array)($decoded['_meta'] ?? []);
+            }
+        }
+        // If we have any DK map, force national origin; if not, still fall back to EU below.
+        if ($natMap !== null) {
+            $mapUsed = 'national';
+        }
+    }
+    // Final DK force: if still no map and DK requested, decode DK map directly
+    if ($preferNat && $preferDk && $natMap === null && is_file($dkMapPath)) {
+        $json = (string)file_get_contents($dkMapPath);
+        $decoded = json_decode($json, true);
+        if (is_array($decoded)) {
+            // Ensure national map is properly registered so the branch below
+            // does not fall back to EU default due to $natMap still being null.
+            $natMap = $decoded;
+            $mapUsed = 'national';
+            $mapMeta = (array)($decoded['_meta'] ?? ($decoded['meta'] ?? []));
+        }
+    }
+    if ($natMap === null) {
+        $mapUsed = 'eu_default';
+        $map = $this->loadFieldMap() ?: $this->officialFieldMap();
+        $mapMeta = is_array($map) && array_key_exists('_meta', $map) && is_array($map['_meta']) ? (array)$map['_meta'] : [];
+    } else {
+        // Generic national mapping (FR/DE/IT/…)
+        $mapUsed = $mapUsed ?? 'national';
+        $map = $natMap;
+        $mapMeta = (array)($natMap['_meta'] ?? []);
+        // Some mapping files only expose "meta" (lowercase) instead of "_meta"
+        if (empty($mapMeta) && isset($natMap['meta']) && is_array($natMap['meta'])) {
+            $mapMeta = (array)$natMap['meta'];
+        }
+        // If meta is missing, synthesize minimal info so downstream coordinate conversion works.
+        if (empty($mapMeta)) {
+            $mapMeta = [
+                'file' => basename((string)$source),
+                'units' => 'mm',
+                'origin' => 'top-left',
+            ];
+        }
+    }
     // FR G30 augmentation: enrich travellers/segments/loyalty and contact fields when using the FR G30 template
     $isFR = (stripos($source, 'fr') !== false) || (stripos((string)($mapMeta['file'] ?? ''), 'FR_') !== false) || (stripos((string)($mapMeta['note'] ?? ''), 'G30') !== false) || (stripos($source, 'sncf') !== false) || (stripos($source, 'g30') !== false);
     if ($isFR) {
         $data = $this->augmentG30Data($data, $formSess, $metaSess);
+    }
+
+    // Helper: split ticket/booking reference into digit boxes when the map defines ticket_no_1, ticket_no_2, …
+    $applyTicketSplits = function(array &$payload, array $map) {
+        $targets = [];
+        foreach ($map as $pg => $flds) {
+            if (!is_array($flds)) { continue; }
+            foreach ($flds as $fname => $cfg) {
+                if (is_string($fname) && preg_match('/^ticket_no_(\\d+)/', $fname, $m)) {
+                    $targets[(int)$m[1]] = $fname;
+                }
+            }
+        }
+        if (empty($targets)) { return; }
+        $raw = (string)($payload['ticket_no'] ?? '');
+        if ($raw === '') { return; }
+        // Remove spaces/tabs/newlines; keep other chars so letters are preserved
+        $chars = preg_split('//u', preg_replace('/\\s+/', '', $raw), -1, PREG_SPLIT_NO_EMPTY);
+        ksort($targets);
+        $i = 0;
+        foreach ($targets as $fname) {
+            $payload[$fname] = $chars[$i] ?? '';
+            $i++;
+            if ($i >= count($chars)) { break; }
+        }
+    };
+    // Ensure we have a ticket_no before splitting into boxes: pull from form/meta if missing
+    if (!isset($data['ticket_no']) || trim((string)$data['ticket_no']) === '') {
+        $fallbackTno = $formSess['ticket_no'] ?? null;
+        if ($fallbackTno === null || $fallbackTno === '') {
+            $fallbackTno = $metaSess['_auto']['ticket_no']['value'] ?? ($metaSess['_identifiers']['pnr'] ?? null);
+        }
+        if ($fallbackTno !== null && $fallbackTno !== '') {
+            $data['ticket_no'] = (string)$fallbackTno;
+        }
+    }
+    $mapArray = is_array($map) ? $map : [];
+    // Split dep_date into dd/mm/yyyy boxes if mapping defines them
+    $applyDateSplits = function(array &$payload, array $map, string $field = 'dep_date') use ($formSess, $metaSess) {
+        $targets = [];
+        foreach ($map as $pg => $flds) {
+            if (!is_array($flds)) { continue; }
+            foreach ($flds as $fname => $_cfg) {
+                if (is_string($fname) && preg_match('/^' . preg_quote($field, '/') . '_(d1|d2|m1|m2|y1|y2|y3|y4)$/', $fname, $m)) {
+                    $order = ['d1'=>1,'d2'=>2,'m1'=>3,'m2'=>4,'y1'=>5,'y2'=>6,'y3'=>7,'y4'=>8];
+                    $targets[$order[$m[1]]] = $fname;
+                }
+            }
+        }
+        if (empty($targets)) { return; }
+        $raw = (string)($payload[$field] ?? '');
+        if ($raw === '') {
+            $raw = (string)($formSess[$field] ?? ($metaSess['_auto'][$field]['value'] ?? ''));
+        }
+        if ($raw === '') { return; }
+        // Normalize to digits only
+        if (preg_match('/(\\d{4})[-\\/](\\d{1,2})[-\\/](\\d{1,2})/', $raw, $m)) {
+            $digits = sprintf('%02d%02d%04d', (int)$m[3], (int)$m[2], (int)$m[1]);
+        } elseif (preg_match('/(\\d{1,2})[-\\/](\\d{1,2})[-\\/](\\d{2,4})/', $raw, $m)) {
+            $y = (int)$m[3]; if ($y < 100) { $y += 2000; }
+            $digits = sprintf('%02d%02d%04d', (int)$m[1], (int)$m[2], $y);
+        } else {
+            $digits = preg_replace('/\\D+/', '', $raw);
+            if (strlen($digits) === 8) {
+                $digits = substr($digits, 6, 2) . substr($digits, 4, 2) . substr($digits, 0, 4); // assume yyyymmdd
+            }
+        }
+        if (strlen($digits) < 8) { return; }
+        ksort($targets);
+        $chars = str_split($digits);
+        $i = 0;
+        foreach ($targets as $fname) {
+            $payload[$fname] = $chars[$i] ?? '';
+            $i++;
+            if ($i >= count($chars)) { break; }
+        }
+    };
+    $applyDateSplits($data, $mapArray, 'dep_date');
+    $applyTicketSplits($data, $mapArray);
+
+    // If developer asked for session debug, include template and map details now that they are resolved
+    if ($peekSess && is_array($debugPayload)) {
+        $debugPayload['template'] = [
+            'source' => $source,
+            'source_basename' => basename((string)$source),
+            'map_origin' => $mapUsed,
+            'map_meta' => $mapMeta,
+        ];
+        $this->disableAutoRender();
+        $this->response = $this->response->withType('json')->withStringBody(
+            (string)json_encode($debugPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+        );
+        return;
     }
     // If we have a field map, collect all referenced source keys and backfill from session
     if (is_array($map) && !empty($map)) {
@@ -810,7 +1016,7 @@ class ReimbursementController extends AppController
     // Buffer for Section 6 content that we'll render on a dedicated blank page
     $pendingSection6 = [];
 
-    // If incident_main is missing (user opened official PDF direkte / refresh uden session merge), forsøg at inferere den
+    // If incident_main is missing (user opened official PDF direkte / refresh uden session merge), fors+©g at inferere den
     if (empty($data['incident_main'])) {
         $guess = '';
         if (!empty($data['reason_delay'])) { $guess = 'delay'; }
@@ -838,6 +1044,8 @@ class ReimbursementController extends AppController
         $dataSnap['remedy_reroute_soonest'] = ($choicePre === 'reroute_soonest');
         $dataSnap['remedy_reroute_later'] = ($choicePre === 'reroute_later');
     }
+    // Propagate ticket_no digit splits into snapshot as well (uses the same helper as main data)
+    $applyTicketSplits($dataSnap, $mapArray);
 
     for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             $tpl = $fpdi->importPage($pageNo);
@@ -905,7 +1113,7 @@ class ReimbursementController extends AppController
 
             // No extrapolation: reasons are driven by explicit incident_main / reason_* only
 
-            // TRIN 7: Exclusive remedies (Option A) – only one checkbox can be marked based on remedyChoice
+            // TRIN 7: Exclusive remedies (Option A) ÔÇô only one checkbox can be marked based on remedyChoice
             // If remedyChoice absent, infer a single choice from boolean hints with fixed priority
             $choice = (string)($data['remedyChoice'] ?? '');
             if ($choice === '') {
@@ -921,19 +1129,19 @@ class ReimbursementController extends AppController
             // Prepare label map for checkbox fields where we prefer textual rendering
             $fieldLabels = [
                 'hasValidTicket' => 'Gyldig billet',
-                'safetyMisconduct' => 'Adfærd i toget',
-                'forbiddenItemsOrAnimals' => 'Håndbagage/dyr/genstande',
+                'safetyMisconduct' => 'Adf+ªrd i toget',
+                'forbiddenItemsOrAnimals' => 'H+Ñndbagage/dyr/genstande',
                 'customsRulesBreached' => 'Administrative forskrifter',
                 'operatorStampedDisruptionProof' => 'Operator-dokumentation',
-                'through_ticket_disclosure' => 'Disclosure: gennemgående billet',
-                'single_txn_operator' => 'Disclosure: enkelt transaktion (operatør)',
+                'through_ticket_disclosure' => 'Disclosure: gennemg+Ñende billet',
+                'single_txn_operator' => 'Disclosure: enkelt transaktion (operat+©r)',
                 'single_txn_retailer' => 'Disclosure: enkelt transaktion (forhandler)',
                 'separate_contract_notice' => 'Disclosure: separate kontrakter',
                 'mct_realistic' => 'MCT realistisk',
                 'remedy_cancel_return' => 'Refusion (valgt)',
                 'remedy_reroute_soonest' => 'Reroute (snarest)',
                 'remedy_reroute_later' => 'Reroute (senere)',
-                'meal_offered' => 'Måltid tilbudt',
+                'meal_offered' => 'M+Ñltid tilbudt',
                 'hotel_offered' => 'Hotel tilbudt',
                 'request_refund' => 'Request: Refusion',
                 'request_comp_60' => 'Request: Kompensation 60+',
@@ -942,7 +1150,7 @@ class ReimbursementController extends AppController
                 'pmr_user' => 'PMR bruger',
                 'complaint_already_filed' => 'Klage tidligere indsendt',
                 'submit_via_official_channel' => 'Indsend via officiel kanal',
-                'bike_res_required' => 'Cykelreservation krævet',
+                'bike_res_required' => 'Cykelreservation kr+ªvet',
             ];
 
             // Derive top-level EU Section 4 selections
@@ -1009,97 +1217,97 @@ class ReimbursementController extends AppController
 
             // Question text map and TRIN grouping for page 5 (show question + answer grouped by TRIN)
             $questionText = [
-                // TRIN 1/2 (Status/Hændelse) — not shown on consolidated page (filtered), but kept for completeness
+                // TRIN 1/2 (Status/H+ªndelse) ÔÇö not shown on consolidated page (filtered), but kept for completeness
                 'hasValidTicket' => 'Havde du en gyldig billet?',
-                'safetyMisconduct' => 'Var der adfærd i toget, som påvirkede situationen?',
+                'safetyMisconduct' => 'Var der adf+ªrd i toget, som p+Ñvirkede situationen?',
                 'forbiddenItemsOrAnimals' => 'Var der forbudte genstande eller dyr med?',
-                'customsRulesBreached' => 'Var told-/administrative regler overtrådt?',
-                'operatorStampedDisruptionProof' => 'Har operatøren stemplet dokumentation for forstyrrelsen?',
+                'customsRulesBreached' => 'Var told-/administrative regler overtr+Ñdt?',
+                'operatorStampedDisruptionProof' => 'Har operat+©ren stemplet dokumentation for forstyrrelsen?',
                 // TRIN 3 (Art. 12 + Art. 9)
-                'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemgående?',
-                'single_txn_operator' => 'Var købet en enkelt transaktion med operatøren?',
-                'single_txn_retailer' => 'Var købet en enkelt transaktion med forhandleren?',
+                'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemg+Ñende?',
+                'single_txn_operator' => 'Var k+©bet en enkelt transaktion med operat+©ren?',
+                'single_txn_retailer' => 'Var k+©bet en enkelt transaktion med forhandleren?',
                 'separate_contract_notice' => 'Blev separate kontrakter oplyst?',
                 'shared_pnr_scope' => 'Var alle billetter udstedt under samme bookingnummer/PNR?',
                 'seller_type_operator' => 'Var det en jernbanevirksomhed der solgte dig hele rejsen?',
                 // MCT wording consolidated to a single phrasing below
-                'one_contract_schedule' => 'Var hele rejseplanen under én kontrakt?',
-                'contact_info_provided' => 'Blev kontaktinfo oplyst før køb?',
+                'one_contract_schedule' => 'Var hele rejseplanen under +®n kontrakt?',
+                'contact_info_provided' => 'Blev kontaktinfo oplyst f+©r k+©b?',
                 'responsibility_explained' => 'Blev ansvar/ansvarsfordeling forklaret?',
-                'continue_national_rules' => 'Fortsætter sagen under nationale regler?',
-                'info_requested_pre_purchase' => 'Ønskede du info før køb?',
+                'continue_national_rules' => 'Forts+ªtter sagen under nationale regler?',
+                'info_requested_pre_purchase' => '+ÿnskede du info f+©r k+©b?',
                 'coc_acknowledged' => 'Er CoC (conditions of carriage) anerkendt?',
                 'civ_marking_present' => 'Er CIV-markering til stede?',
-                'fastest_flag_at_purchase' => 'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                'fastest_flag_at_purchase' => 'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                 'mct_realistic' => 'Var minimumsskiftetiden realistisk (missed station)?',
-                'alts_shown_precontract' => 'Så du alternative forbindelser ved købet?',
+                'alts_shown_precontract' => 'S+Ñ du alternative forbindelser ved k+©bet?',
                 'multiple_fares_shown' => 'Fik du vist flere prisvalg for samme afgang?',
                 'cheapest_highlighted' => "Var 'billigste pris' markeret/anbefalet?",
                 // TRIN 5 (Assistance og udgifter)
-                'meal_offered' => 'Blev der tilbudt måltid?',
+                'meal_offered' => 'Blev der tilbudt m+Ñltid?',
                 'hotel_offered' => 'Blev der tilbudt hotelovernatning?',
-                'overnight_needed' => 'Var overnatning nødvendig?',
+                'overnight_needed' => 'Var overnatning n+©dvendig?',
                 'blocked_train_alt_transport' => 'Blev der tilbudt alternativ transport pga. blokeret tog?',
                 'alt_transport_provided' => 'Blev alternativ transport leveret?',
                 'extra_expense_upload' => 'Har du uploadet kvitteringer for udgifter?',
-                'delay_confirmation_received' => 'Modtog du bekræftelse på forsinkelsen?',
-                'delay_confirmation_upload' => 'Har du uploadet bekræftelse på forsinkelsen?',
-                'extraordinary_claimed' => 'Har du angivet ekstraordinært krav?',
-                // TRIN 3 (Afhjælpning og krav)
-                'request_refund' => 'Ønsker du refusion?',
-                'request_comp_60' => 'Ønsker du kompensation for 60+ min?',
-                'request_comp_120' => 'Ønsker du kompensation for 120+ min?',
-                'request_expenses' => 'Ønsker du dækning af udgifter?',
-                // TRIN 4 (Afhjælpning) – Refusion / Omlægning
-                'trip_cancelled_return_to_origin' => 'Ønsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
+                'delay_confirmation_received' => 'Modtog du bekr+ªftelse p+Ñ forsinkelsen?',
+                'delay_confirmation_upload' => 'Har du uploadet bekr+ªftelse p+Ñ forsinkelsen?',
+                'extraordinary_claimed' => 'Har du angivet ekstraordin+ªrt krav?',
+                // TRIN 3 (Afhj+ªlpning og krav)
+                'request_refund' => '+ÿnsker du refusion?',
+                'request_comp_60' => '+ÿnsker du kompensation for 60+ min?',
+                'request_comp_120' => '+ÿnsker du kompensation for 120+ min?',
+                'request_expenses' => '+ÿnsker du d+ªkning af udgifter?',
+                // TRIN 4 (Afhj+ªlpning) ÔÇô Refusion / Oml+ªgning
+                'trip_cancelled_return_to_origin' => '+ÿnsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
                 'refund_requested' => 'Har du allerede anmodet om refusion?',
                 'refund_form_selected' => 'Hvis ja, hvilken form for refusion?',
-                'reroute_same_conditions_soonest' => 'Ønsker du omlægning på tilsvarende vilkår ved først givne lejlighed?',
-                'reroute_later_at_choice' => 'Ønsker du omlægning til et senere tidspunkt efter eget valg?',
-                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                'self_purchased_new_ticket' => 'Køber du selv en ny billet for at komme videre?',
-                'reroute_extra_costs' => 'Kommer omlægningen til at medføre ekstra udgifter for dig? (højere klasse/andet transportmiddel)?',
-                'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. omlægningen?',
-                'pmr_user' => 'Har du et handicap eller nedsat mobilitet, som krævede assistance?',
+                'reroute_same_conditions_soonest' => '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
+                'reroute_later_at_choice' => '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
+                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                'self_purchased_new_ticket' => 'K+©ber du selv en ny billet for at komme videre?',
+                'reroute_extra_costs' => 'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
+                'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?',
+                'pmr_user' => 'Har du et handicap eller nedsat mobilitet, som kr+ªvede assistance?',
                 'pmr_booked' => 'Var PMR-booking foretaget?',
-                'pmr_delivered_status' => 'Er PMR-levering bekræftet?',
+                'pmr_delivered_status' => 'Er PMR-levering bekr+ªftet?',
                 'pmr_promised_missing' => 'Manglede lovede PMR-faciliteter?',
-                'complaint_channel_seen' => 'Så du klagekanalen?',
+                'complaint_channel_seen' => 'S+Ñ du klagekanalen?',
                 'complaint_already_filed' => 'Er der tidligere indsendt klage?',
                 'submit_via_official_channel' => 'Sendes ind via officiel kanal?',
-                'bike_res_required' => 'Var cykelreservation påkrævet?',
-                'bike_followup_offer' => 'Fik du opfølgende tilbud for cykel?',
+                'bike_res_required' => 'Var cykelreservation p+Ñkr+ªvet?',
+                'bike_followup_offer' => 'Fik du opf+©lgende tilbud for cykel?',
                 // TRIN 3 (PMR/handicap)
-                'pmrQBooked' => 'Bestilte du assistance før rejsen?',
+                'pmrQBooked' => 'Bestilte du assistance f+©r rejsen?',
                 'pmrQDelivered' => 'Blev den bestilte assistance leveret?',
-                'pmrQPromised' => 'Manglede der PMR-faciliteter, som var lovet før købet?',
-                'pmr_facility_details' => 'Hvilke faciliteter manglede? (rampe, skiltning, lift …)',
+                'pmrQPromised' => 'Manglede der PMR-faciliteter, som var lovet f+©r k+©bet?',
+                'pmr_facility_details' => 'Hvilke faciliteter manglede? (rampe, skiltning, lift ÔÇª)',
                 // TRIN 3 (Cykel)
-                'bike_was_present' => 'Havde du en cykel med på rejsen?',
-                'bike_caused_issue' => 'Var det cyklen eller håndteringen af cyklen, der har forsinket dig?',
+                'bike_was_present' => 'Havde du en cykel med p+Ñ rejsen?',
+                'bike_caused_issue' => 'Var det cyklen eller h+Ñndteringen af cyklen, der har forsinket dig?',
                 'bike_reservation_made' => 'Havde du reserveret plads til en cykel?',
-                'bike_reservation_required' => 'Var det et tog, hvor der ikke krævedes cykelreservation?',
-                'bike_denied_boarding' => 'Blev du nægtet at tage cyklen med?',
-                'bike_refusal_reason_provided' => 'Blev du informeret om, hvorfor du ikke måtte tage cyklen med?',
+                'bike_reservation_required' => 'Var det et tog, hvor der ikke kr+ªvedes cykelreservation?',
+                'bike_denied_boarding' => 'Blev du n+ªgtet at tage cyklen med?',
+                'bike_refusal_reason_provided' => 'Blev du informeret om, hvorfor du ikke m+Ñtte tage cyklen med?',
                 'bike_refusal_reason_type' => 'Hvad var begrundelsen for afvisningen?',
                 // TRIN 3 (Billetpriser og fleksibilitet)
-                'fare_flex_type' => 'Købstype (fleksibilitet)',
-                'train_specificity' => 'Gælder billetten kun for specifikt tog?',
+                'fare_flex_type' => 'K+©bstype (fleksibilitet)',
+                'train_specificity' => 'G+ªlder billetten kun for specifikt tog?',
                 // TRIN 3 (Klasse og reserverede billetter)
-                'fare_class_purchased' => 'Hvilken klasse var købt?',
+                'fare_class_purchased' => 'Hvilken klasse var k+©bt?',
                 'class_delivered_status' => 'Fik du den klasse, du betalte for?',
                 'berth_seat_type' => 'Var der reserveret plads/kupe/ligge/sove?',
                 'reserved_amenity_delivered' => 'Blev reserveret plads/ligge/sove leveret?',
-                // TRIN 3 (Afbrydelser oplyst før køb)
-                'preinformed_disruption' => 'Var der meddelt afbrydelse/forsinkelse før dit køb?',
+                // TRIN 3 (Afbrydelser oplyst f+©r k+©b)
+                'preinformed_disruption' => 'Var der meddelt afbrydelse/forsinkelse f+©r dit k+©b?',
                 'preinfo_channel' => 'Hvis ja: Hvor blev det vist?',
-                'realtime_info_seen' => 'Så du realtime-opdateringer under rejsen?',
+                'realtime_info_seen' => 'S+Ñ du realtime-opdateringer under rejsen?',
             ];
 
             // Optional: field-to-article/subsection mapping for subheaders inside each TRIN on the consolidated page
             // Keep labels concise; prefer article numbers where applicable, else use a short domain label
             $fieldArticle = [
-                // TRIN 3 · Art. 12 — through tickets, responsibility, contract scope
+                // TRIN 3 -À Art. 12 ÔÇö through tickets, responsibility, contract scope
                 'through_ticket_disclosure' => 'Art. 12',
                 'single_txn_operator' => 'Art. 12',
                 'single_txn_retailer' => 'Art. 12',
@@ -1109,23 +1317,23 @@ class ReimbursementController extends AppController
                 'one_contract_schedule' => 'Art. 12',
                 'responsibility_explained' => 'Art. 12',
                 'contact_info_provided' => 'Art. 12',
-                // TRIN 3 · Art. 9(1) — precontract info, options, fares
+                // TRIN 3 -À Art. 9(1) ÔÇö precontract info, options, fares
                 'info_requested_pre_purchase' => 'Art. 9(1)',
                 'coc_acknowledged' => 'Art. 9(1)',
                 'civ_marking_present' => 'Art. 9(1)',
                 'fastest_flag_at_purchase' => 'Art. 9 (1) Hurtigste rejse',
                 'mct_realistic' => 'Art. 9 (1) Hurtigste rejse',
                 'alts_shown_precontract' => 'Art. 9 (1) Hurtigste rejse',
-                'multiple_fares_shown' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                'cheapest_highlighted' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                // TRIN 3 · PMR (Art. 21-24)
+                'multiple_fares_shown' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                'cheapest_highlighted' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                // TRIN 3 -À PMR (Art. 21-24)
                 'pmr_user' => 'PMR (Art. 21-24)',
                 'pmr_booked' => 'PMR (Art. 21-24)',
                 'pmrQBooked' => 'PMR (Art. 21-24)',
                 'pmrQDelivered' => 'PMR (Art. 21-24)',
                 'pmrQPromised' => 'PMR (Art. 21-24)',
                 'pmr_facility_details' => 'PMR (Art. 21-24)',
-                // TRIN 3 · Cykel (Art. 6)
+                // TRIN 3 -À Cykel (Art. 6)
                 'bike_res_required' => 'Cykel (Art. 6)',
                 'bike_followup_offer' => 'Cykel (Art. 6)',
                 'bike_was_present' => 'Cykel (Art. 6)',
@@ -1135,31 +1343,31 @@ class ReimbursementController extends AppController
                 'bike_denied_boarding' => 'Cykel (Art. 6)',
                 'bike_refusal_reason_provided' => 'Cykel (Art. 6)',
                 'bike_refusal_reason_type' => 'Cykel (Art. 6)',
-                // TRIN 3 · Billetpriser og fleksibilitet (under Art. 9 (1))
-                'fare_flex_type' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                'train_specificity' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                // TRIN 3 · Klasse og reserverede billetter (under Art. 9 (1))
-                'fare_class_purchased' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'class_delivered_status' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'berth_seat_type' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'reserved_amenity_delivered' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                // TRIN 3 · Information (under Art. 9 (1))
-                'preinformed_disruption' => 'Art. 9 (1) · Information',
-                'preinfo_channel' => 'Art. 9 (1) · Information',
-                'realtime_info_seen' => 'Art. 9 (1) · Information',
-                // TRIN 4 · Afhjælpning (Refusion / Omlægning)
+                // TRIN 3 -À Billetpriser og fleksibilitet (under Art. 9 (1))
+                'fare_flex_type' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                'train_specificity' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                // TRIN 3 -À Klasse og reserverede billetter (under Art. 9 (1))
+                'fare_class_purchased' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'class_delivered_status' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'berth_seat_type' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'reserved_amenity_delivered' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                // TRIN 3 -À Information (under Art. 9 (1))
+                'preinformed_disruption' => 'Art. 9 (1) -À Information',
+                'preinfo_channel' => 'Art. 9 (1) -À Information',
+                'realtime_info_seen' => 'Art. 9 (1) -À Information',
+                // TRIN 4 -À Afhj+ªlpning (Refusion / Oml+ªgning)
                 // Refusion
                 'trip_cancelled_return_to_origin' => 'Refusion',
                 'refund_requested' => 'Refusion',
                 'refund_form_selected' => 'Refusion',
-                // Omlægning
-                'reroute_same_conditions_soonest' => 'Omlægning',
-                'reroute_later_at_choice' => 'Omlægning',
-                'reroute_info_within_100min' => 'Omlægning',
-                'self_purchased_new_ticket' => 'Omlægning',
-                'reroute_extra_costs' => 'Omlægning',
-                'downgrade_occurred' => 'Omlægning',
-                // TRIN 5 · Assistance og udgifter (Art. 20)
+                // Oml+ªgning
+                'reroute_same_conditions_soonest' => 'Oml+ªgning',
+                'reroute_later_at_choice' => 'Oml+ªgning',
+                'reroute_info_within_100min' => 'Oml+ªgning',
+                'self_purchased_new_ticket' => 'Oml+ªgning',
+                'reroute_extra_costs' => 'Oml+ªgning',
+                'downgrade_occurred' => 'Oml+ªgning',
+                // TRIN 5 -À Assistance og udgifter (Art. 20)
                 'meal_offered' => 'Assistance (Art. 20)',
                 'hotel_offered' => 'Assistance (Art. 20)',
                 'overnight_needed' => 'Assistance (Art. 20)',
@@ -1169,7 +1377,7 @@ class ReimbursementController extends AppController
                 'delay_confirmation_upload' => 'Dokumentation',
                 'extra_expense_upload' => 'Udgifter (Art. 20)',
                 'extraordinary_claimed' => 'Udgifter (Art. 20)',
-                // Requests hooks — keep under a generic entitlement label
+                // Requests hooks ÔÇö keep under a generic entitlement label
                 'request_refund' => 'Entitlement',
                 'request_comp_60' => 'Entitlement',
                 'request_comp_120' => 'Entitlement',
@@ -1177,9 +1385,9 @@ class ReimbursementController extends AppController
             ];
 
             $trinForField = [
-                // TRIN 1 (Status) — excluded by [4,5,6] filter
+                // TRIN 1 (Status) ÔÇö excluded by [4,5,6] filter
                 'hasValidTicket' => 1,'safetyMisconduct' => 1,'forbiddenItemsOrAnimals' => 1,'customsRulesBreached' => 1,'operatorStampedDisruptionProof' => 1,
-                // TRIN 4 (Afhjælpning og krav)
+                // TRIN 4 (Afhj+ªlpning og krav)
                 'trip_cancelled_return_to_origin' => 4,
                 'refund_requested' => 4,
                 'refund_form_selected' => 4,
@@ -1262,21 +1470,21 @@ class ReimbursementController extends AppController
                 $trinBlock[] = sprintf('%s: %s', $label, $s);
             };
 
-            // TRIN 5 (CIV screening) — omit from Section 6 per request
+            // TRIN 5 (CIV screening) ÔÇö omit from Section 6 per request
 
-            // TRIN 7 (Remedies) — handled as its own TRIN group on the summary page now
+            // TRIN 7 (Remedies) ÔÇö handled as its own TRIN group on the summary page now
             // (We don't inject TRIN 7 items into additional_info to avoid duplicates)
 
             // TRIN 8 (Assistance & expenses)
-            $addBool('Måltid tilbudt', 'meal_offered');
+            $addBool('M+Ñltid tilbudt', 'meal_offered');
             $addBool('Hotel tilbudt', 'hotel_offered');
-            $addAny('Udgifter: måltider', 'expense_breakdown_meals');
-            $addAny('Udgifter: hotel-nætter', 'expense_breakdown_hotel_nights');
+            $addAny('Udgifter: m+Ñltider', 'expense_breakdown_meals');
+            $addAny('Udgifter: hotel-n+ªtter', 'expense_breakdown_hotel_nights');
             $addAny('Kvittering upload (udgifter)', 'extra_expense_upload');
             $addAny('Udgifter: lokal transport', 'expense_breakdown_local_transport');
             $addAny('Udgifter: andet', 'expense_breakdown_other_amounts');
 
-            // TRIN 9 (Interests & hooks) — user request: remove entitlement flags from additional_info summary
+            // TRIN 9 (Interests & hooks) ÔÇö user request: remove entitlement flags from additional_info summary
             // (request_refund, request_comp_60, request_comp_120, request_expenses excluded)
 
             if (!empty($trinBlock)) {
@@ -1305,8 +1513,8 @@ class ReimbursementController extends AppController
                     }
                     // Add derived expense breakdown lines to TRIN 5, if present
                     $expenseLines = [
-                        ['label' => 'Udgifter: måltider', 'key' => 'expense_breakdown_meals'],
-                        ['label' => 'Udgifter: hotel-nætter', 'key' => 'expense_breakdown_hotel_nights'],
+                        ['label' => 'Udgifter: m+Ñltider', 'key' => 'expense_breakdown_meals'],
+                        ['label' => 'Udgifter: hotel-n+ªtter', 'key' => 'expense_breakdown_hotel_nights'],
                         ['label' => 'Udgifter: lokal transport', 'key' => 'expense_breakdown_local_transport'],
                         ['label' => 'Udgifter: andet', 'key' => 'expense_breakdown_other_amounts'],
                     ];
@@ -1314,7 +1522,7 @@ class ReimbursementController extends AppController
                         $val = $answerToText($dataForPdf[$el['key']] ?? null);
                         if ($val !== '') { $groups[5][] = ['q' => $el['label'], 'a' => $val, 'art' => 'Udgifter (Art. 20)', 'field' => $el['key']]; }
                     }
-                    // Ensure TRIN 4 (afhjælpning/krav) items are present even if not mapped on page 5
+                    // Ensure TRIN 4 (afhj+ªlpning/krav) items are present even if not mapped on page 5
                     $trin6Fields = [
                         'trip_cancelled_return_to_origin',
                         'refund_requested',
@@ -1398,26 +1606,26 @@ class ReimbursementController extends AppController
                     $uploadVal = $answerToText($dataForPdf['extra_expense_upload'] ?? null);
                     $groups[5] = [];
                     // A) Tilbudt assistance
-                    $groups[5][] = ['q' => 'Får du måltider/forfriskninger under ventetiden? (Art. 20(2)(a))', 'a' => $answerToText($dataForPdf['meal_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'meal_offered'];
-                    $groups[5][] = ['q' => 'Måltider – beløb', 'a' => $mealAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_meals'];
+                    $groups[5][] = ['q' => 'F+Ñr du m+Ñltider/forfriskninger under ventetiden? (Art. 20(2)(a))', 'a' => $answerToText($dataForPdf['meal_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'meal_offered'];
+                    $groups[5][] = ['q' => 'M+Ñltider ÔÇô bel+©b', 'a' => $mealAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_meals'];
                     $groups[5][] = ['q' => 'Valuta', 'a' => $currencyMeals, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_meals'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
-                    $groups[5][] = ['q' => 'Får du hotel/indkvartering + transport dertil? (Art. 20(2)(b))', 'a' => $answerToText($dataForPdf['hotel_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'hotel_offered'];
-                    $groups[5][] = ['q' => 'Hotel – beløb (samlet)', 'a' => $hotelAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_hotel'];
+                    $groups[5][] = ['q' => 'F+Ñr du hotel/indkvartering + transport dertil? (Art. 20(2)(b))', 'a' => $answerToText($dataForPdf['hotel_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'hotel_offered'];
+                    $groups[5][] = ['q' => 'Hotel ÔÇô bel+©b (samlet)', 'a' => $hotelAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_hotel'];
                     $groups[5][] = ['q' => 'Valuta', 'a' => $currencyHotel, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_hotel'];
-                    $groups[5][] = ['q' => 'Antal nætter', 'a' => $hotelNights, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_hotel_nights'];
+                    $groups[5][] = ['q' => 'Antal n+ªtter', 'a' => $hotelNights, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_hotel_nights'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
                     // Extra spacer BEFORE blocked train question to push this cluster downward
                     $groups[5][] = ['q' => '', 'a' => '', 'art' => 'A) Tilbudt assistance', 'field' => '_spacer_blocked_transport_before'];
-                    $groups[5][] = ['q' => 'Er toget blokeret på sporet — får du transport væk? (Art. 20(2)(c))', 'a' => $answerToText($dataForPdf['blocked_train_alt_transport'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'blocked_train_alt_transport'];
+                    $groups[5][] = ['q' => 'Er toget blokeret p+Ñ sporet ÔÇö f+Ñr du transport v+ªk? (Art. 20(2)(c))', 'a' => $answerToText($dataForPdf['blocked_train_alt_transport'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'blocked_train_alt_transport'];
                     // Spacer AFTER question before amount/currency lines
                     $groups[5][] = ['q' => '', 'a' => '', 'art' => 'A) Tilbudt assistance', 'field' => '_spacer_blocked_transport_after'];
-                    $groups[5][] = ['q' => 'Transport væk – beløb', 'a' => $blockedAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_local_transport'];
+                    $groups[5][] = ['q' => 'Transport v+ªk ÔÇô bel+©b', 'a' => $blockedAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_local_transport'];
                     $groups[5][] = ['q' => 'Valuta', 'a' => $currencyBlocked, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_blocked'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
                     // B) Alternative transporttjenester
-                    $groups[5][] = ['q' => 'Får du alternative transporttjenester, hvis forbindelsen er afbrudt? (Art. 20(3))', 'a' => $answerToText($dataForPdf['alt_transport_provided'] ?? null), 'art' => 'B) Alternative transporttjenester', 'field' => 'alt_transport_provided'];
-                    $groups[5][] = ['q' => 'Alternativ transport til destination – beløb', 'a' => $altTransAmt, 'art' => 'B) Alternative transporttjenester', 'field' => 'expense_alt_transport'];
+                    $groups[5][] = ['q' => 'F+Ñr du alternative transporttjenester, hvis forbindelsen er afbrudt? (Art. 20(3))', 'a' => $answerToText($dataForPdf['alt_transport_provided'] ?? null), 'art' => 'B) Alternative transporttjenester', 'field' => 'alt_transport_provided'];
+                    $groups[5][] = ['q' => 'Alternativ transport til destination ÔÇô bel+©b', 'a' => $altTransAmt, 'art' => 'B) Alternative transporttjenester', 'field' => 'expense_alt_transport'];
                     $groups[5][] = ['q' => 'Valuta', 'a' => $currencyAlt, 'art' => 'B) Alternative transporttjenester', 'field' => '_currency_alt'];
                     $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'B) Alternative transporttjenester', 'field' => 'extra_expense_upload'];
                     // Ensure TRIN 3 (Art.12 + Art.9) items are present even if not mapped on page 5
@@ -1475,15 +1683,15 @@ class ReimbursementController extends AppController
 
                     // Build a list of lines with TRIN headers and article subheaders
                     $groupTitles = [
-                        3 => 'TRIN 3 · Art. 6, Art. 9, Art. 12 og Art. 21-24',
-                        4 => 'TRIN 4 · Afhjælpning og krav',
-                        5 => 'TRIN 5 · Assistance og udgifter',
-                        6 => 'TRIN 6 · Kompensation (Art. 19)'
+                        3 => 'TRIN 3 -À Art. 6, Art. 9, Art. 12 og Art. 21-24',
+                        4 => 'TRIN 4 -À Afhj+ªlpning og krav',
+                        5 => 'TRIN 5 -À Assistance og udgifter',
+                        6 => 'TRIN 6 -À Kompensation (Art. 19)'
                     ];
                     $allLines = [];
                     ksort($groups);
                     // Exclude selected complaint/national/entitlement flags from TRIN 3 only
-                    $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer'];
+                    $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer','fare_class_purchased','class_delivered_status','berth_seat_type','reserved_amenity_delivered'];
                     foreach ($groups as $trin => $items) {
                         $title = $groupTitles[$trin] ?? sprintf('TRIN %d', $trin);
                         $allLines[] = $toPdf($title);
@@ -1515,7 +1723,7 @@ class ReimbursementController extends AppController
                             }
                         }
                         if ($trin === 3) {
-                            // Custom TRIN 3 subheader order: Art. 6 → Art. 9 → Art. 12 → Art. 21-24 → rest
+                            // Custom TRIN 3 subheader order: Art. 6 ÔåÆ Art. 9 ÔåÆ Art. 12 ÔåÆ Art. 21-24 ÔåÆ rest
                             $art6 = [];$art9 = [];$art12 = [];$art2124 = [];$rest = [];
                             foreach ($order as $artKey) {
                                 if ($artKey === '_') { continue; }
@@ -1531,9 +1739,9 @@ class ReimbursementController extends AppController
                                 $itemsForArt = $byArt[$artKey];
                                 if (stripos($artKey, 'Hurtigste rejse') !== false) {
                                     $pref = [
-                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                                         'Var minimumsskiftetiden realistisk (missed station)?',
-                                        'Så du alternative forbindelser ved købet?'
+                                        'S+Ñ du alternative forbindelser ved k+©bet?'
                                     ];
                                     $rank = function($q) use ($pref) { $i = array_search($q, $pref, true); return $i === false ? 999 : $i; };
                                     usort($itemsForArt, function($a, $b) use ($rank) { return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? ''); });
@@ -1556,9 +1764,9 @@ class ReimbursementController extends AppController
                                 $itemsForArt = $byArt[$artKey];
                                 if (stripos($artKey, 'Hurtigste rejse') !== false) {
                                     $pref = [
-                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                                         'Var minimumsskiftetiden realistisk (missed station)?',
-                                        'Så du alternative forbindelser ved købet?'
+                                        'S+Ñ du alternative forbindelser ved k+©bet?'
                                     ];
                                     $rank = function($q) use ($pref) {
                                         $i = array_search($q, $pref, true);
@@ -1569,7 +1777,7 @@ class ReimbursementController extends AppController
                                     });
                                 } elseif (trim($artKey) === 'Refusion') {
                                     $pref = [
-                                        'Ønsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
+                                        '+ÿnsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
                                         'Har du allerede anmodet om refusion?',
                                         'Hvis ja, hvilken form for refusion?'
                                     ];
@@ -1580,14 +1788,14 @@ class ReimbursementController extends AppController
                                     usort($itemsForArt, function($a, $b) use ($rank) {
                                         return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? '');
                                     });
-                                } elseif (trim($artKey) === 'Omlægning') {
+                                } elseif (trim($artKey) === 'Oml+ªgning') {
                                     $pref = [
-                                        'Ønsker du omlægning på tilsvarende vilkår ved først givne lejlighed?',
-                                        'Ønsker du omlægning til et senere tidspunkt efter eget valg?',
-                                        'Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                                        'Køber du selv en ny billet for at komme videre?',
-                                        'Kommer omlægningen til at medføre ekstra udgifter for dig? (højere klasse/andet transportmiddel)?',
-                                        'Er du blevet nedklassificeret eller regner med at blive det pga. omlægningen?'
+                                        '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
+                                        '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
+                                        'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                                        'K+©ber du selv en ny billet for at komme videre?',
+                                        'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
+                                        'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?'
                                     ];
                                     $rank = function($q) use ($pref) {
                                         $i = array_search($q, $pref, true);
@@ -1625,9 +1833,9 @@ class ReimbursementController extends AppController
                                 $itemsForArt = $byArt[$artKey];
                                 if (stripos($artKey, 'Hurtigste rejse') !== false) {
                                     $pref = [
-                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                                        'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                                         'Var minimumsskiftetiden realistisk (missed station)?',
-                                        'Så du alternative forbindelser ved købet?'
+                                        'S+Ñ du alternative forbindelser ved k+©bet?'
                                     ];
                                     $rank = function($q) use ($pref) {
                                         $i = array_search($q, $pref, true);
@@ -1659,7 +1867,7 @@ class ReimbursementController extends AppController
                     if ($extra !== '') {
                         $allLines[] = $toPdf('');
                         // keep paragraphs as-is, split by newlines
-                        $paras = preg_split('/\r\n|\r|\n/', $extra);
+                        $paras = preg_split('/`r`n|\r|\n/', $extra);
                         foreach ($paras as $p) { $p = trim($p); if ($p !== '') { $allLines[] = $toPdf($p); } }
                     }
 
@@ -1760,91 +1968,91 @@ class ReimbursementController extends AppController
     if (empty($pendingSection6) && !empty($map[5]) && is_array($map[5])) {
             $groups = [];
             $questionText = [
-                // TRIN 4 (Afhjælpning og krav)
-                'trip_cancelled_return_to_origin' => 'Ønsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
+                // TRIN 4 (Afhj+ªlpning og krav)
+                'trip_cancelled_return_to_origin' => '+ÿnsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
                 'refund_requested' => 'Har du allerede anmodet om refusion?',
                 'refund_form_selected' => 'Hvis ja, hvilken form for refusion?',
-                'reroute_same_conditions_soonest' => 'Ønsker du omlægning på tilsvarende vilkår ved først givne lejlighed?',
-                'reroute_later_at_choice' => 'Ønsker du omlægning til et senere tidspunkt efter eget valg?',
-                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                'self_purchased_new_ticket' => 'Køber du selv en ny billet for at komme videre?',
-                'reroute_extra_costs' => 'Kommer omlægningen til at medføre ekstra udgifter for dig? (højere klasse/andet transportmiddel)?',
-                'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. omlægningen?',
-                'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemgående?',
-                'single_txn_operator' => 'Var købet en enkelt transaktion med operatøren?',
-                'single_txn_retailer' => 'Var købet en enkelt transaktion med forhandleren?',
+                'reroute_same_conditions_soonest' => '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
+                'reroute_later_at_choice' => '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
+                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                'self_purchased_new_ticket' => 'K+©ber du selv en ny billet for at komme videre?',
+                'reroute_extra_costs' => 'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
+                'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?',
+                'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemg+Ñende?',
+                'single_txn_operator' => 'Var k+©bet en enkelt transaktion med operat+©ren?',
+                'single_txn_retailer' => 'Var k+©bet en enkelt transaktion med forhandleren?',
                 'separate_contract_notice' => 'Blev separate kontrakter oplyst?',
                 'shared_pnr_scope' => 'Var alle billetter udstedt under samme bookingnummer/PNR?',
                 'seller_type_operator' => 'Var det en jernbanevirksomhed der solgte dig hele rejsen?',
                 // MCT wording consolidated to a single phrasing below
-                'one_contract_schedule' => 'Var hele rejseplanen under én kontrakt?',
-                'contact_info_provided' => 'Blev kontaktinfo oplyst før køb?',
+                'one_contract_schedule' => 'Var hele rejseplanen under +®n kontrakt?',
+                'contact_info_provided' => 'Blev kontaktinfo oplyst f+©r k+©b?',
                 'responsibility_explained' => 'Blev ansvar/ansvarsfordeling forklaret?',
-                'continue_national_rules' => 'Fortsætter sagen under nationale regler?',
-                'meal_offered' => 'Blev der tilbudt måltid?',
+                'continue_national_rules' => 'Forts+ªtter sagen under nationale regler?',
+                'meal_offered' => 'Blev der tilbudt m+Ñltid?',
                 'hotel_offered' => 'Blev der tilbudt hotelovernatning?',
-                'overnight_needed' => 'Var overnatning nødvendig?',
+                'overnight_needed' => 'Var overnatning n+©dvendig?',
                 'blocked_train_alt_transport' => 'Blev der tilbudt alternativ transport pga. blokeret tog?',
                 'alt_transport_provided' => 'Blev alternativ transport leveret?',
                 'extra_expense_upload' => 'Har du uploadet kvitteringer for udgifter?',
-                'delay_confirmation_received' => 'Modtog du bekræftelse på forsinkelsen?',
-                'delay_confirmation_upload' => 'Har du uploadet bekræftelse på forsinkelsen?',
-                'extraordinary_claimed' => 'Har du angivet ekstraordinært krav?',
-                'request_refund' => 'Ønsker du refusion?',
-                'request_comp_60' => 'Ønsker du kompensation for 60+ min?',
-                'request_comp_120' => 'Ønsker du kompensation for 120+ min?',
-                'request_expenses' => 'Ønsker du dækning af udgifter?',
-                'info_requested_pre_purchase' => 'Ønskede du info før køb?',
+                'delay_confirmation_received' => 'Modtog du bekr+ªftelse p+Ñ forsinkelsen?',
+                'delay_confirmation_upload' => 'Har du uploadet bekr+ªftelse p+Ñ forsinkelsen?',
+                'extraordinary_claimed' => 'Har du angivet ekstraordin+ªrt krav?',
+                'request_refund' => '+ÿnsker du refusion?',
+                'request_comp_60' => '+ÿnsker du kompensation for 60+ min?',
+                'request_comp_120' => '+ÿnsker du kompensation for 120+ min?',
+                'request_expenses' => '+ÿnsker du d+ªkning af udgifter?',
+                'info_requested_pre_purchase' => '+ÿnskede du info f+©r k+©b?',
                 'coc_acknowledged' => 'Er CoC (conditions of carriage) anerkendt?',
                 'civ_marking_present' => 'Er CIV-markering til stede?',
-                'fastest_flag_at_purchase' => 'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                'fastest_flag_at_purchase' => 'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                 'mct_realistic' => 'Var minimumsskiftetiden realistisk (missed station)?',
-                'alts_shown_precontract' => 'Så du alternative forbindelser ved købet?',
+                'alts_shown_precontract' => 'S+Ñ du alternative forbindelser ved k+©bet?',
                 'multiple_fares_shown' => 'Fik du vist flere prisvalg for samme afgang?',
                 'cheapest_highlighted' => "Var 'billigste pris' markeret/anbefalet?",
-                'pmr_user' => 'Har du et handicap eller nedsat mobilitet, som krævede assistance?',
+                'pmr_user' => 'Har du et handicap eller nedsat mobilitet, som kr+ªvede assistance?',
                 'pmr_booked' => 'Var PMR-booking foretaget?',
                 'submit_via_official_channel' => 'Sendes ind via officiel kanal?',
-                'bike_res_required' => 'Var cykelreservation påkrævet?',
-                'bike_followup_offer' => 'Fik du opfølgende tilbud for cykel?',
+                'bike_res_required' => 'Var cykelreservation p+Ñkr+ªvet?',
+                'bike_followup_offer' => 'Fik du opf+©lgende tilbud for cykel?',
                 // TRIN 3 (PMR/handicap)
-                'pmrQBooked' => 'Bestilte du assistance før rejsen?',
+                'pmrQBooked' => 'Bestilte du assistance f+©r rejsen?',
                 'pmrQDelivered' => 'Blev den bestilte assistance leveret?',
-                'pmrQPromised' => 'Manglede der PMR-faciliteter, som var lovet før købet?',
-                'pmr_facility_details' => 'Hvilke faciliteter manglede? (rampe, skiltning, lift …)',
+                'pmrQPromised' => 'Manglede der PMR-faciliteter, som var lovet f+©r k+©bet?',
+                'pmr_facility_details' => 'Hvilke faciliteter manglede? (rampe, skiltning, lift ÔÇª)',
                 // TRIN 3 (Cykel)
-                'bike_was_present' => 'Havde du en cykel med på rejsen?',
-                'bike_caused_issue' => 'Var det cyklen eller håndteringen af cyklen, der har forsinket dig?',
+                'bike_was_present' => 'Havde du en cykel med p+Ñ rejsen?',
+                'bike_caused_issue' => 'Var det cyklen eller h+Ñndteringen af cyklen, der har forsinket dig?',
                 'bike_reservation_made' => 'Havde du reserveret plads til en cykel?',
-                'bike_reservation_required' => 'Var det et tog, hvor der ikke krævedes cykelreservation?',
-                'bike_denied_boarding' => 'Blev du nægtet at tage cyklen med?',
-                'bike_refusal_reason_provided' => 'Blev du informeret om, hvorfor du ikke måtte tage cyklen med?',
+                'bike_reservation_required' => 'Var det et tog, hvor der ikke kr+ªvedes cykelreservation?',
+                'bike_denied_boarding' => 'Blev du n+ªgtet at tage cyklen med?',
+                'bike_refusal_reason_provided' => 'Blev du informeret om, hvorfor du ikke m+Ñtte tage cyklen med?',
                 'bike_refusal_reason_type' => 'Hvad var begrundelsen for afvisningen?',
                 // TRIN 3 (Billetpriser og fleksibilitet)
-                'fare_flex_type' => 'Købstype (fleksibilitet)',
-                'train_specificity' => 'Gælder billetten kun for specifikt tog?',
+                'fare_flex_type' => 'K+©bstype (fleksibilitet)',
+                'train_specificity' => 'G+ªlder billetten kun for specifikt tog?',
                 // TRIN 3 (Klasse og reserverede billetter)
-                'fare_class_purchased' => 'Hvilken klasse var købt?',
+                'fare_class_purchased' => 'Hvilken klasse var k+©bt?',
                 'class_delivered_status' => 'Fik du den klasse, du betalte for?',
                 'berth_seat_type' => 'Var der reserveret plads/kupe/ligge/sove?',
                 'reserved_amenity_delivered' => 'Blev reserveret plads/ligge/sove leveret?',
-                // TRIN 3 (Afbrydelser oplyst før køb)
-                'preinformed_disruption' => 'Var der meddelt afbrydelse/forsinkelse før dit køb?',
+                // TRIN 3 (Afbrydelser oplyst f+©r k+©b)
+                'preinformed_disruption' => 'Var der meddelt afbrydelse/forsinkelse f+©r dit k+©b?',
                 'preinfo_channel' => 'Hvis ja: Hvor blev det vist?',
-                'realtime_info_seen' => 'Så du realtime-opdateringer under rejsen?'
+                'realtime_info_seen' => 'S+Ñ du realtime-opdateringer under rejsen?'
             ];
             // Augment question text with alias fields so they appear with readable Danish labels
             $questionText += [
                 'pmr_delivered_status' => 'Leveringsstatus for assistance (fuld/delvis/ingen)',
                 'pmr_promised_missing' => 'Manglede lovede PMR-faciliteter? (synonym)',
                 'pmr_booked_detail' => 'Detalje om bestilt assistance (afvist/andet)',
-                'single_booking_reference' => 'Var hele rejsen på ét bookingnummer?',
+                'single_booking_reference' => 'Var hele rejsen p+Ñ +®t bookingnummer?',
                 'seller_type_agency' => 'Var det et rejsebureau der solgte rejsen (synonym)?',
-                'pm_bike_involved' => 'Var cykel involveret i hændelsen? (synonym)'
+                'pm_bike_involved' => 'Var cykel involveret i h+ªndelsen? (synonym)'
             ];
             // Fallback: field-to-article/subsection mapping (duplicate minimal set for local scope)
             $fieldArticle = [
-                // TRIN 3 · Art. 12
+                // TRIN 3 -À Art. 12
                 'through_ticket_disclosure' => 'Art. 12',
                 'single_txn_operator' => 'Art. 12',
                 'single_txn_retailer' => 'Art. 12',
@@ -1854,16 +2062,16 @@ class ReimbursementController extends AppController
                 'one_contract_schedule' => 'Art. 12',
                 'responsibility_explained' => 'Art. 12',
                 'contact_info_provided' => 'Art. 12',
-                // TRIN 3 · Art. 9(1)
+                // TRIN 3 -À Art. 9(1)
                 'info_requested_pre_purchase' => 'Art. 9(1)',
                 'coc_acknowledged' => 'Art. 9(1)',
                 'civ_marking_present' => 'Art. 9(1)',
                 'fastest_flag_at_purchase' => 'Art. 9 (1) Hurtigste rejse',
                 'mct_realistic' => 'Art. 9 (1) Hurtigste rejse',
                 'alts_shown_precontract' => 'Art. 9 (1) Hurtigste rejse',
-                'multiple_fares_shown' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                'cheapest_highlighted' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                // TRIN 3 · PMR (Art. 21-24)
+                'multiple_fares_shown' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                'cheapest_highlighted' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                // TRIN 3 -À PMR (Art. 21-24)
                 'pmr_user' => 'PMR (Art. 21-24)',
                 'pmr_booked' => 'PMR (Art. 21-24)',
                 'pmrQBooked' => 'PMR (Art. 21-24)',
@@ -1877,7 +2085,7 @@ class ReimbursementController extends AppController
                 'single_booking_reference' => 'Art. 12',
                 'seller_type_agency' => 'Art. 12',
                 'pm_bike_involved' => 'Cykel (Art. 6)',
-                // TRIN 3 · Cykel (Art. 6)
+                // TRIN 3 -À Cykel (Art. 6)
                 'bike_res_required' => 'Cykel (Art. 6)',
                 'bike_followup_offer' => 'Cykel (Art. 6)',
                 'bike_was_present' => 'Cykel (Art. 6)',
@@ -1887,29 +2095,29 @@ class ReimbursementController extends AppController
                 'bike_denied_boarding' => 'Cykel (Art. 6)',
                 'bike_refusal_reason_provided' => 'Cykel (Art. 6)',
                 'bike_refusal_reason_type' => 'Cykel (Art. 6)',
-                // TRIN 3 · Billetpriser og fleksibilitet (under Art. 9 (1))
-                'fare_flex_type' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                'train_specificity' => 'Art. 9 (1) · Billetpriser og fleksibilitet',
-                // TRIN 3 · Klasse og reserverede billetter (under Art. 9 (1))
-                'fare_class_purchased' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'class_delivered_status' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'berth_seat_type' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                'reserved_amenity_delivered' => 'Art. 9 (1) · Klasse og reserverede billetter',
-                // TRIN 3 · Information (under Art. 9 (1))
-                'preinformed_disruption' => 'Art. 9 (1) · Information',
-                'preinfo_channel' => 'Art. 9 (1) · Information',
-                'realtime_info_seen' => 'Art. 9 (1) · Information',
-                // TRIN 4 · Afhjælpning (Refusion / Omlægning)
+                // TRIN 3 -À Billetpriser og fleksibilitet (under Art. 9 (1))
+                'fare_flex_type' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                'train_specificity' => 'Art. 9 (1) -À Billetpriser og fleksibilitet',
+                // TRIN 3 -À Klasse og reserverede billetter (under Art. 9 (1))
+                'fare_class_purchased' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'class_delivered_status' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'berth_seat_type' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                'reserved_amenity_delivered' => 'Art. 9 (1) -À Klasse og reserverede billetter',
+                // TRIN 3 -À Information (under Art. 9 (1))
+                'preinformed_disruption' => 'Art. 9 (1) -À Information',
+                'preinfo_channel' => 'Art. 9 (1) -À Information',
+                'realtime_info_seen' => 'Art. 9 (1) -À Information',
+                // TRIN 4 -À Afhj+ªlpning (Refusion / Oml+ªgning)
                 'trip_cancelled_return_to_origin' => 'Refusion',
                 'refund_requested' => 'Refusion',
                 'refund_form_selected' => 'Refusion',
-                'reroute_same_conditions_soonest' => 'Omlægning',
-                'reroute_later_at_choice' => 'Omlægning',
-                'reroute_info_within_100min' => 'Omlægning',
-                'self_purchased_new_ticket' => 'Omlægning',
-                'reroute_extra_costs' => 'Omlægning',
-                'downgrade_occurred' => 'Omlægning',
-                // TRIN 5 · Art. 20
+                'reroute_same_conditions_soonest' => 'Oml+ªgning',
+                'reroute_later_at_choice' => 'Oml+ªgning',
+                'reroute_info_within_100min' => 'Oml+ªgning',
+                'self_purchased_new_ticket' => 'Oml+ªgning',
+                'reroute_extra_costs' => 'Oml+ªgning',
+                'downgrade_occurred' => 'Oml+ªgning',
+                // TRIN 5 -À Art. 20
                 'meal_offered' => 'Assistance (Art. 20)',
                 'hotel_offered' => 'Assistance (Art. 20)',
                 'overnight_needed' => 'Assistance (Art. 20)',
@@ -1926,7 +2134,7 @@ class ReimbursementController extends AppController
                 'request_expenses' => 'Entitlement',
             ];
             $trinForField = [
-                // TRIN 4 (Afhjælpning/krav)
+                // TRIN 4 (Afhj+ªlpning/krav)
                 'trip_cancelled_return_to_origin' => 4,
                 'refund_requested' => 4,
                 'refund_form_selected' => 4,
@@ -2002,33 +2210,33 @@ class ReimbursementController extends AppController
             $altTransAmt = $answerToText($dataSnap['expense_alt_transport'] ?? ($dataSnap['expense_breakdown_local_transport'] ?? null));
             $uploadVal = $answerToText($dataSnap['extra_expense_upload'] ?? null);
             $groups[5] = [];
-            $groups[5][] = ['q' => 'Får du måltider/forfriskninger under ventetiden? (Art. 20(2)(a))', 'a' => $answerToText($dataSnap['meal_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'meal_offered'];
-            $groups[5][] = ['q' => 'Måltider – beløb', 'a' => $mealAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_meals'];
+            $groups[5][] = ['q' => 'F+Ñr du m+Ñltider/forfriskninger under ventetiden? (Art. 20(2)(a))', 'a' => $answerToText($dataSnap['meal_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'meal_offered'];
+            $groups[5][] = ['q' => 'M+Ñltider ÔÇô bel+©b', 'a' => $mealAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_meals'];
             $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_meals'];
             $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
-            $groups[5][] = ['q' => 'Får du hotel/indkvartering + transport dertil? (Art. 20(2)(b))', 'a' => $answerToText($dataSnap['hotel_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'hotel_offered'];
-            $groups[5][] = ['q' => 'Hotel – beløb (samlet)', 'a' => $hotelAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_hotel'];
+            $groups[5][] = ['q' => 'F+Ñr du hotel/indkvartering + transport dertil? (Art. 20(2)(b))', 'a' => $answerToText($dataSnap['hotel_offered'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'hotel_offered'];
+            $groups[5][] = ['q' => 'Hotel ÔÇô bel+©b (samlet)', 'a' => $hotelAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_hotel'];
             $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_hotel'];
-            $groups[5][] = ['q' => 'Antal nætter', 'a' => $hotelNights, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_hotel_nights'];
+            $groups[5][] = ['q' => 'Antal n+ªtter', 'a' => $hotelNights, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_hotel_nights'];
             $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
-            $groups[5][] = ['q' => 'Er toget blokeret på sporet — får du transport væk? (Art. 20(2)(c))', 'a' => $answerToText($dataSnap['blocked_train_alt_transport'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'blocked_train_alt_transport'];
-            $groups[5][] = ['q' => 'Transport væk – beløb', 'a' => $blockedAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_local_transport'];
+            $groups[5][] = ['q' => 'Er toget blokeret p+Ñ sporet ÔÇö f+Ñr du transport v+ªk? (Art. 20(2)(c))', 'a' => $answerToText($dataSnap['blocked_train_alt_transport'] ?? null), 'art' => 'A) Tilbudt assistance', 'field' => 'blocked_train_alt_transport'];
+            $groups[5][] = ['q' => 'Transport v+ªk ÔÇô bel+©b', 'a' => $blockedAmt, 'art' => 'A) Tilbudt assistance', 'field' => 'expense_breakdown_local_transport'];
             $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'A) Tilbudt assistance', 'field' => '_currency_blocked'];
             $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'A) Tilbudt assistance', 'field' => 'extra_expense_upload'];
-            $groups[5][] = ['q' => 'Får du alternative transporttjenester, hvis forbindelsen er afbrudt? (Art. 20(3))', 'a' => $answerToText($dataSnap['alt_transport_provided'] ?? null), 'art' => 'B) Alternative transporttjenester', 'field' => 'alt_transport_provided'];
-            $groups[5][] = ['q' => 'Alternativ transport til destination – beløb', 'a' => $altTransAmt, 'art' => 'B) Alternative transporttjenester', 'field' => 'expense_alt_transport'];
+            $groups[5][] = ['q' => 'F+Ñr du alternative transporttjenester, hvis forbindelsen er afbrudt? (Art. 20(3))', 'a' => $answerToText($dataSnap['alt_transport_provided'] ?? null), 'art' => 'B) Alternative transporttjenester', 'field' => 'alt_transport_provided'];
+            $groups[5][] = ['q' => 'Alternativ transport til destination ÔÇô bel+©b', 'a' => $altTransAmt, 'art' => 'B) Alternative transporttjenester', 'field' => 'expense_alt_transport'];
             $groups[5][] = ['q' => 'Valuta', 'a' => $currency, 'art' => 'B) Alternative transporttjenester', 'field' => '_currency_alt'];
             $groups[5][] = ['q' => 'Upload kvittering (PDF/JPG/PNG)', 'a' => $uploadVal, 'art' => 'B) Alternative transporttjenester', 'field' => 'extra_expense_upload'];
             $groupTitles = [
-                3 => 'TRIN 3 · Art. 6, Art. 9, Art. 12 og Art. 21-24',
-                4 => 'TRIN 4 · Afhjælpning og krav',
-                5 => 'TRIN 5 · Assistance og udgifter',
-                6 => 'TRIN 6 · Kompensation (Art. 19)'
+                3 => 'TRIN 3 -À Art. 6, Art. 9, Art. 12 og Art. 21-24',
+                4 => 'TRIN 4 -À Afhj+ªlpning og krav',
+                5 => 'TRIN 5 -À Assistance og udgifter',
+                6 => 'TRIN 6 -À Kompensation (Art. 19)'
             ];
             $allLines = [];
             ksort($groups);
             // Exclude selected complaint/national/entitlement flags from TRIN 3 only
-            $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer'];
+            $excludeTrin3Fields = ['continue_national_rules','complaint_channel_seen','complaint_already_filed','submit_via_official_channel','request_refund','request_comp_60','request_comp_120','request_expenses','bike_res_required','bike_followup_offer','fare_class_purchased','class_delivered_status','berth_seat_type','reserved_amenity_delivered'];
             foreach ($groups as $trin => $items) {
                 $title = $groupTitles[$trin] ?? sprintf('TRIN %d', $trin);
                 $allLines[] = $toPdf($title);
@@ -2060,28 +2268,28 @@ class ReimbursementController extends AppController
                     $itemsForArt = $byArt[$artKey];
                     if (stripos($artKey, 'Hurtigste rejse') !== false) {
                         $pref = [
-                            'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                            'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                             'Var minimumsskiftetiden realistisk (missed station)?',
-                            'Så du alternative forbindelser ved købet?'
+                            'S+Ñ du alternative forbindelser ved k+©bet?'
                         ];
                         $rank = function($q) use ($pref) { $i = array_search($q, $pref, true); return $i === false ? 999 : $i; };
                         usort($itemsForArt, function($a, $b) use ($rank) { return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? ''); });
                     } elseif (trim($artKey) === 'Refusion') {
                         $pref = [
-                            'Ønsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
+                            '+ÿnsker du at aflyse hele rejsen og vende tilbage til udgangspunktet?',
                             'Har du allerede anmodet om refusion?',
                             'Hvis ja, hvilken form for refusion?'
                         ];
                         $rank = function($q) use ($pref) { $i = array_search($q, $pref, true); return $i === false ? 999 : $i; };
                         usort($itemsForArt, function($a, $b) use ($rank) { return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? ''); });
-                    } elseif (trim($artKey) === 'Omlægning') {
+                    } elseif (trim($artKey) === 'Oml+ªgning') {
                         $pref = [
-                            'Ønsker du omlægning på tilsvarende vilkår ved først givne lejlighed?',
-                            'Ønsker du omlægning til et senere tidspunkt efter eget valg?',
-                            'Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                            'Køber du selv en ny billet for at komme videre?',
-                            'Kommer omlægningen til at medføre ekstra udgifter for dig? (højere klasse/andet transportmiddel)?',
-                            'Er du blevet nedklassificeret eller regner med at blive det pga. omlægningen?'
+                            '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
+                            '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
+                            'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                            'K+©ber du selv en ny billet for at komme videre?',
+                            'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
+                            'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?'
                         ];
                         $rank = function($q) use ($pref) { $i = array_search($q, $pref, true); return $i === false ? 999 : $i; };
                         usort($itemsForArt, function($a, $b) use ($rank) { return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? ''); });
@@ -2103,9 +2311,9 @@ class ReimbursementController extends AppController
                     $itemsForArt = $byArt[$artKey];
                     if (stripos($artKey, 'Hurtigste rejse') !== false) {
                         $pref = [
-                            'Var rejsen markeret som "hurtigste" eller "anbefalet" ved købet?',
+                            'Var rejsen markeret som "hurtigste" eller "anbefalet" ved k+©bet?',
                             'Var minimumsskiftetiden realistisk (missed station)?',
-                            'Så du alternative forbindelser ved købet?'
+                            'S+Ñ du alternative forbindelser ved k+©bet?'
                         ];
                         $rank = function($q) use ($pref) { $i = array_search($q, $pref, true); return $i === false ? 999 : $i; };
                         usort($itemsForArt, function($a, $b) use ($rank) { return $rank($a['q'] ?? '') <=> $rank($b['q'] ?? ''); });
@@ -2127,7 +2335,7 @@ class ReimbursementController extends AppController
             $extra = trim($stringify($dataSnap['additional_info'] ?? $data['additional_info'] ?? ''));
             if ($extra !== '') {
                 $allLines[] = $toPdf('');
-                $paras = preg_split('/\r\n|\r|\n/', $extra);
+                $paras = preg_split('/`r`n|\r|\n/', $extra);
                 foreach ($paras as $p) { $p = trim($p); if ($p !== '') { $allLines[] = $toPdf($p); } }
             }
             $pendingSection6 = array_values(array_filter($allLines, function($l){ return !preg_match('/^\s*TRIN\s*1\b/i', (string)$l); }));
@@ -2190,7 +2398,7 @@ class ReimbursementController extends AppController
                 'price' => ['x' => 30, 'y' => 115, 'w' => 40, 'type' => 'text'],
                 'actual_arrival_date' => ['x' => 30, 'y' => 130, 'w' => 40, 'type' => 'text'],
                 'missed_connection_station' => ['x' => 30, 'y' => 145, 'w' => 160, 'multiline' => true, 'type' => 'text'],
-                // Section 6: Additional information (arguments/evidence) – wide multiline area
+                // Section 6: Additional information (arguments/evidence) ÔÇô wide multiline area
                 'additional_info' => ['x' => 30, 'y' => 200, 'w' => 160, 'multiline' => true, 'type' => 'text'],
             ],
         ];
@@ -2279,20 +2487,33 @@ class ReimbursementController extends AppController
     {
         $cc = null;
         // Recognize FR not only by explicit tokens but also by G30 variants like g_30 / g-30
-        if (preg_match('/\b(fr|france|sncf)\b/i', $source) || preg_match('/g[\s_\-]?30/i', $source)) { $cc = 'FR'; }
-        elseif (preg_match('/\b(de|germany|deutsch|db|fahrgastrechte)\b/i', $source)) { $cc = 'DE'; }
-        elseif (preg_match('/\b(it|italy|italia|trenitalia)\b/i', $source)) { $cc = 'IT'; }
-        elseif (preg_match('/\b(dk|denmark|danmark|dsb)\b/i', $source)) { $cc = 'DK'; }
-        elseif (preg_match('/\b(nl|netherlands|nederland|ns)\b/i', $source)) { $cc = 'NL'; }
-        elseif (preg_match('/\b(es|spain|espa|renfe)\b/i', $source)) { $cc = 'ES'; }
+        if (preg_match('/(fr|france|sncf)/i', $source) || preg_match('/g[\s_\-]?30/i', $source)) { $cc = 'FR'; }
+        elseif (preg_match('/(de|germany|deutsch|db|fahrgastrechte)/i', $source)) { $cc = 'DE'; }
+        elseif (preg_match('/(it|italy|italia|trenitalia)/i', $source)) { $cc = 'IT'; }
+        elseif (preg_match('/(dk|denmark|danmark|dsb)/i', $source)) { $cc = 'DK'; }
+        elseif (preg_match('/(nl|netherlands|nederland|ns)/i', $source)) { $cc = 'NL'; }
+        elseif (preg_match('/(es|spain|espa|renfe)/i', $source)) { $cc = 'ES'; }
         if ($cc === null) { return null; }
-        $dir = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . $cc . DIRECTORY_SEPARATOR;
+        // Support both uppercase and lowercase country folders (we have "fr" on disk)
+        $dirUpper = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . $cc . DIRECTORY_SEPARATOR;
+        $dirLower = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . strtolower($cc) . DIRECTORY_SEPARATOR;
+        $dir = is_dir($dirUpper) ? $dirUpper : $dirLower;
         // Prefer specific known mappings first, then generic names
         $candidates = [
-            $dir . 'map_fr_sncf_g30.json', // specific FR naming
+            // Clean DK mapping (preferred if present)
+            $dir . 'map_dk_dsb_basic_rejsetidsgaranti_clean.json',
+            // Country-specific known files
+            $dir . 'map_fr_sncf_g30.json',
+            $dir . 'map_de_db_fahrgastrechte.json',
+            $dir . 'map_it_trenitalia_compensation.json',
+            $dir . 'map_dk_dsb_basic_rejsetidsgaranti.json',
+            // Generic fallbacks
             $dir . 'mapping_g30.json',
+            $dir . 'mapping_' . strtolower($cc) . '.json',
+            $dir . 'map_' . strtolower($cc) . '.json',
             $dir . 'mapping.json',
         ];
+        $candidates = array_values(array_unique($candidates));
         foreach ($candidates as $p) {
             if (!is_file($p)) { continue; }
             $json = (string)file_get_contents($p);
@@ -2411,38 +2632,99 @@ class ReimbursementController extends AppController
         }
         // Segments
         $segs = (array)($metaSess['_segments_auto'] ?? []);
-        $fillSeg = function(int $idx, array $seg) use (&$data) {
+        // Helper: classify French product into mapping slugs
+        $classify = function(string $raw): string {
+            $s = trim(strtolower($raw));
+            if ($s === '') { return 'other'; }
+            // remove diacritics (basic)
+            $s = strtr($s, [
+                'é' => 'e','ê' => 'e','è' => 'e','É' => 'e','ï' => 'i','î' => 'i','à' => 'a','ô' => 'o','ö' => 'o','â' => 'a'
+            ]);
+            // collapse whitespace
+            $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+            // Normalization synonyms
+            if (strpos($s, 'lyria') !== false) { return 'tgv_lyria'; }
+            if (strpos($s, 'ouigo') !== false) { return 'ouigo'; }
+            if (preg_match('/\bter\b/', $s)) { return 'ter'; }
+            if (preg_match('/intercites?|\bic\b/', $s)) { return 'intercites'; }
+            // Treat generic TGV as INOUI unless clearly LYRIA (handled above)
+            if (strpos($s, 'inoui') !== false || strpos($s, 'tgv') !== false) { return 'tgv_inoui'; }
+            return 'other';
+        };
+        $fillSeg = function(int $idx, array $seg) use (&$data, $classify) {
             $k = 'seg' . $idx . '_';
             $data[$k . 'train_no'] = (string)($seg['trainNo'] ?? ($seg['train'] ?? ($seg['train_no'] ?? '')));
             $data[$k . 'dep_station'] = (string)($seg['from'] ?? ($seg['depStation'] ?? ''));
             $data[$k . 'arr_station'] = (string)($seg['to'] ?? ($seg['arrStation'] ?? ''));
             $data[$k . 'dep_time'] = (string)($seg['schedDep'] ?? '');
             $data[$k . 'arr_time'] = (string)($seg['schedArr'] ?? '');
-            $prod = strtolower((string)($seg['product'] ?? ''));
-            $flags = [
-                'tgv inoui' => 'tgv_inoui',
-                'intercites' => 'intercites',
-                'ouigo' => 'ouigo',
-                'ter' => 'ter',
-                'tgv lyria' => 'tgv_lyria',
-            ];
-            $matched = false;
-            foreach ($flags as $needle => $slug) {
-                $is = strpos($prod, $needle) !== false;
-                if ($is) { $matched = true; }
-                $data[$k . 'prod_' . $slug] = $is ? '1' : '';
+            $rawProd = (string)($seg['product'] ?? ($seg['trainCategory'] ?? ($seg['category'] ?? '')));
+            $slug = $classify($rawProd);
+            $all = ['tgv_inoui','intercites','ouigo','ter','tgv_lyria','other'];
+            foreach ($all as $pSlug) {
+                $data[$k . 'prod_' . $pSlug] = ($pSlug === $slug) ? '1' : '';
             }
-            if (!$matched) { $data[$k.'prod_other'] = '1'; }
         };
         if (!empty($segs)) {
             for ($i = 0; $i < min(3, count($segs)); $i++) {
                 $fillSeg($i + 1, (array)$segs[$i]);
             }
         }
+        // If no segments auto-detected, attempt to populate first segment from high-level operator_product & journey fields
+        if (empty($segs)) {
+            $fallbackSeg = [
+                'trainNo' => (string)($formSess['train_no'] ?? ($metaSess['_auto']['train_no']['value'] ?? '')),
+                'from' => (string)($formSess['dep_station'] ?? ($metaSess['_auto']['dep_station']['value'] ?? '')),
+                'to' => (string)($formSess['arr_station'] ?? ($metaSess['_auto']['arr_station']['value'] ?? '')),
+                'schedDep' => (string)($formSess['dep_time'] ?? ($metaSess['_auto']['dep_time']['value'] ?? '')),
+                'schedArr' => (string)($formSess['arr_time'] ?? ($metaSess['_auto']['arr_time']['value'] ?? '')),
+                'product' => (string)($formSess['operator_product'] ?? ($metaSess['_auto']['operator_product']['value'] ?? '')),
+            ];
+            $fillSeg(1, $fallbackSeg);
+        }
         if (!isset($data['loyalty_gv'])) {
             $data['loyalty_gv'] = (string)($formSess['loyalty_sncf_gv'] ?? '');
         }
         return $data;
+    }
+
+    /**
+     * Remove noisy debug/auto-detected keys from flow.form and relocate them to flow.meta.
+     * Keeps form lean for TRIN 6 while preserving diagnostics in meta.
+     */
+    private function sanitizeFlowSession(array $form, array $meta): array
+    {
+        $prefixes = [
+            '_auto','_segments','_ocr','_pmr_detection','_bike_detection','_ticket_type_detection','_class_detection',
+            '_identifiers','_multi_tickets','_passengers_auto','_barcode','_mct_eval',
+        ];
+        $debugKeys = [
+            'logs','extraction_provider','extraction_confidence',
+            'saved_leg_class_purchased','saved_leg_class_delivered','saved_leg_downgraded','saved_leg_by_file',
+            'single_txn_operator','single_booking_reference','shared_pnr_scope',
+            'pmr_promised_missing','pmr_delivered_status','mct_realistic','pm_bike_involved',
+        ];
+
+        foreach ($form as $k => $v) {
+            $move = in_array($k, $debugKeys, true);
+            if (!$move) {
+                foreach ($prefixes as $p) {
+                    if (strpos($k, $p) === 0) { $move = true; break; }
+                }
+            }
+            if (!$move) { continue; }
+            if ($k === 'logs') {
+                $meta['logs'] = array_merge($meta['logs'] ?? [], (array)$v);
+            } elseif (isset($meta[$k]) && is_array($meta[$k]) && is_array($v)) {
+                // prefer the more recent form value but keep older meta keys
+                $meta[$k] = $v + $meta[$k];
+            } elseif (!array_key_exists($k, $meta)) {
+                $meta[$k] = $v;
+            }
+            unset($form[$k]);
+        }
+
+        return [$form, $meta];
     }
         
 
@@ -2452,8 +2734,10 @@ class ReimbursementController extends AppController
     private function findNationalInAltDir(string $country): ?string
     {
         $country = strtoupper($country);
-        $altDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'Nationale PDF former';
-        if (!is_dir($altDir)) { return null; }
+        $altDirs = [
+            WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'Nationale PDF former',
+            WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'Nationale pdf former',
+        ];
         $syn = [
             'FR' => ['fr', 'france', 'sncf'],
             'DE' => ['de', 'germany', 'deutsch', 'fahrgastrechte', 'db'],
@@ -2463,12 +2747,23 @@ class ReimbursementController extends AppController
             'ES' => ['es', 'spain', 'espa', 'renfe'],
         ];
         $keys = $syn[$country] ?? [strtolower($country)];
-        foreach ($keys as $k) {
-            $hits = glob($altDir . DIRECTORY_SEPARATOR . '*' . $k . '*.pdf') ?: [];
-            if (!empty($hits)) { return $hits[0]; }
-            $hits = glob($altDir . DIRECTORY_SEPARATOR . '*' . strtoupper($k) . '*.pdf') ?: [];
-            if (!empty($hits)) { return $hits[0]; }
+        foreach ($altDirs as $altDir) {
+            if (!is_dir($altDir)) { continue; }
+            foreach ($keys as $k) {
+                $hits = glob($altDir . DIRECTORY_SEPARATOR . '*' . $k . '*.pdf') ?: [];
+                if (!empty($hits)) { return $hits[0]; }
+                $hits = glob($altDir . DIRECTORY_SEPARATOR . '*' . strtoupper($k) . '*.pdf') ?: [];
+                if (!empty($hits)) { return $hits[0]; }
+            }
         }
         return null;
     }
 }
+
+
+
+
+
+
+
+

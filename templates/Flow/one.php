@@ -1,20 +1,5 @@
 
-<?php
-/** @var \App\View\AppView $this */
-?>
-<style>
-  .flow-grid { display:grid; grid-template-columns: 220px 1fr 1fr; gap:16px; align-items:start; }
-  .toc { position:sticky; top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; }
-  .toc h3 { margin:0 0 8px; font-size:14px; }
-  .toc a { display:block; color:#0366d6; text-decoration:none; padding:4px 0; font-size:13px; }
-  .card { padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; }
-  .sticky-actions { position:sticky; top:12px; z-index:5; background:#fff; padding:8px; border:1px solid #eee; border-radius:6px; margin-bottom:12px; }
-  .fieldset { margin-top:12px; border:1px solid #ccc; border-radius:6px; padding:12px; }
-  .fieldset legend { font-weight:bold; }
-  @media (max-width: 1000px) { .flow-grid { grid-template-columns: 1fr; } .toc { position:static; } }
-  .muted { color:#666; font-size:12px; }
-  .warn { color:#b00; }
-  .preview { position:sticky; top:12px; }
+<?php /* Klasse/reservation spm 6 tilbage i TRIN 3: fjernet fra TRIN 4 */ ?>
   .hooks-panel { position:sticky; top:12px; padding:12px; border:1px solid #ddd; background:#f9fbff; border-radius:6px; max-height:80vh; overflow-y:auto; }
   .hooks-panel h3 { margin:0 0 8px; font-size:14px; }
   .hooks-panel .kv { font-size:12px; display:flex; justify-content:space-between; gap:8px; }
@@ -758,6 +743,7 @@
         })();
         </script>
   <div id="s6Skip" class="small muted <?= $showArt12? ($autoOK? '' : 'hidden') : '' ?>"><?php if ($autoOK): ?>TRIN 6 springes over (AUTO).<?php else: ?>TRIN 6 springes over (ingen missed connection) – gå videre til næste trin.<?php endif; ?></div>
+  <?= $this->element('downgrade_summary', compact('art9','claim')) ?>
       </fieldset>
 
   <fieldset id="s7" class="fieldset mt12 <?= ($isCompleted || !empty($reason_cancellation) || !empty($reason_missed_conn) || !empty($reason_delay)) ? '' : 'hidden' ?>">
@@ -793,10 +779,17 @@
               <label class="ml8"><input type="radio" name="refund_form_selected" value="other" <?= $rf==='other'?'checked':'' ?> /> Andet</label>
             </div>
 
-            <div id="rerouteSectionPast" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
-              <div class="mt0"><strong>Omlægning</strong></div>
-              <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
-              <div id="ri100PastWrap">
+              <div id="rerouteSectionPast" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
+                <div class="mt0"><strong>Omlægning</strong></div>
+                <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
+                <?php $infoProvidedPast = (string)($form['assistance_info_provided'] ?? ''); ?>
+                <div class="mt8"><strong>Underretning (Art. 20(1))</strong></div>
+                <div>Blev du informeret om forsinkelsen/aflysningen og forventede af-/ankomsttider så snart oplysninger forelå?</div>
+                <label><input type="radio" name="assistance_info_provided" value="yes" <?= $infoProvidedPast==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="assistance_info_provided" value="no" <?= $infoProvidedPast==='no'?'checked':'' ?> /> Nej</label>
+                <label class="ml8"><input type="radio" name="assistance_info_provided" value="unknown" <?= ($infoProvidedPast===''||$infoProvidedPast==='unknown')?'checked':'' ?> /> Ved ikke</label>
+                <div class="mt8 small muted">Jeg bruger planlagt afgang og første besked fra selskabet til at vurdere, hvornår underretningen burde have været givet.</div>
+                <div id="ri100PastWrap">
                 <div class="mt8">Fik du besked om mulighederne for omlægning inden for 100 minutter? (Art. 18(3))
                   <span class="small muted">Vi bruger planlagt afgang + første omlægnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
@@ -816,7 +809,16 @@
                   <input type="number" step="0.01" name="reroute_extra_costs_amount" value="<?= h($form['reroute_extra_costs_amount'] ?? '') ?>" />
                 </label>
                 <label>Valuta
-                  <input type="text" name="reroute_extra_costs_currency" value="<?= h($form['reroute_extra_costs_currency'] ?? '') ?>" placeholder="EUR" />
+                  <?php $curCur = strtoupper(trim((string)($form['reroute_extra_costs_currency'] ?? ''))); ?>
+                  <select name="reroute_extra_costs_currency">
+                    <option value="">Auto</option>
+                    <?php foreach (['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+                      <option value="<?= $cc ?>" <?= $curCur===$cc?'selected':'' ?>><?= $cc ?></option>
+                    <?php endforeach; ?>
+                    <?php if ($curCur !== '' && !in_array($curCur, ['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'], true)): ?>
+                      <option value="<?= h($curCur) ?>" selected><?= h($curCur) ?></option>
+                    <?php endif; ?>
+                  </select>
                 </label>
               </div>
 
@@ -873,6 +875,13 @@
             <div id="rerouteSectionNow" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
               <div class="mt0"><strong>Omlægning</strong></div>
               <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
+              <?php $infoProvidedNow = (string)($form['assistance_info_provided'] ?? ''); ?>
+              <div class="mt8"><strong>Underretning (Art. 20(1))</strong></div>
+              <div>Blev du informeret om forsinkelsen/aflysningen og forventede af-/ankomsttider så snart oplysninger forelå?</div>
+              <label><input type="radio" name="assistance_info_provided" value="yes" <?= $infoProvidedNow==='yes'?'checked':'' ?> /> Ja</label>
+              <label class="ml8"><input type="radio" name="assistance_info_provided" value="no" <?= $infoProvidedNow==='no'?'checked':'' ?> /> Nej</label>
+              <label class="ml8"><input type="radio" name="assistance_info_provided" value="unknown" <?= ($infoProvidedNow===''||$infoProvidedNow==='unknown')?'checked':'' ?> /> Ved ikke</label>
+              <div class="mt8 small muted">Jeg bruger planlagt afgang og første besked fra selskabet til at vurdere, hvornår underretningen burde have været givet.</div>
               <div id="ri100NowWrap">
                 <div class="mt8">Er du blevet informeret om mulighederne for omlægning inden for 100 minutter efter planlagt afgang? (Art. 18(3))
                   <span class="small muted">Vi bruger planlagt afgang + første omlægnings-besked til at vurdere 100-min-reglen.</span>
@@ -893,7 +902,16 @@
                   <input type="number" step="0.01" name="reroute_extra_costs_amount" value="<?= h($form['reroute_extra_costs_amount'] ?? '') ?>" />
                 </label>
                 <label>Valuta
-                  <input type="text" name="reroute_extra_costs_currency" value="<?= h($form['reroute_extra_costs_currency'] ?? '') ?>" placeholder="EUR" />
+                  <?php $curCur = strtoupper(trim((string)($form['reroute_extra_costs_currency'] ?? ''))); ?>
+                  <select name="reroute_extra_costs_currency">
+                    <option value="">Auto</option>
+                    <?php foreach (['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+                      <option value="<?= $cc ?>" <?= $curCur===$cc?'selected':'' ?>><?= $cc ?></option>
+                    <?php endforeach; ?>
+                    <?php if ($curCur !== '' && !in_array($curCur, ['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'], true)): ?>
+                      <option value="<?= h($curCur) ?>" selected><?= h($curCur) ?></option>
+                    <?php endif; ?>
+                  </select>
                 </label>
               </div>
 
@@ -947,7 +965,10 @@
                 if (rlc) rlc.value = (val === 'reroute_later') ? 'yes' : '';
               });
 
-              if (typeof queueRecalc === 'function') { try { queueRecalc(); } catch(e){} }
+                // Dynamic toggles for moved class/reservation fields
+                // (Class/reservation toggles removed – handled solely in TRIN 3)
+
+                if (typeof queueRecalc === 'function') { try { queueRecalc(); } catch(e){} }
             }
 
             document.addEventListener('DOMContentLoaded', function(){
@@ -955,6 +976,8 @@
               document.querySelectorAll('input[name="remedyChoice"]').forEach(function(el){
                 ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
               });
+              // Wire selects for moved class/reservation fields so UI updates live
+              // (No class/reservation selects in TRIN 4 now)
             });
           })();
         </script>
@@ -1191,6 +1214,10 @@
           foreach ($hookList as $hk) {
             if (in_array($hk, $art9Ask, true)) { $autoInterest[$key] = true; break; }
           }
+        }
+        // If OCR/PMR detection exists, force-open PMR card just like bike/class, even if evaluator didn't ask yet
+        if (!empty($meta['_pmr_detection']) || !empty($meta['_auto']['pmr_user']) || !empty($meta['_auto']['pmr_booked'])) {
+          $autoInterest['pmr'] = true;
         }
       ?>
       <fieldset id="s9" class="fieldset mt12">

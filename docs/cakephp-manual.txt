@@ -1,0 +1,14 @@
+CakePHP dokumentation
+=====================
+
+Primær manual: https://book.cakephp.org/
+- Seneste stabile (v5): https://book.cakephp.org/5/en/
+- Ældre versioner: https://book.cakephp.org/4/en/ (m.fl.)
+
+Nyttige direkte sektioner:
+- Routing: https://book.cakephp.org/5/en/development/routing.html
+- Controllers: https://book.cakephp.org/5/en/controllers.html
+- Templates/views: https://book.cakephp.org/5/en/views.html
+- ORM/Models: https://book.cakephp.org/5/en/orm.html
+
+Tip: Brug den online manual for søgning og opdateringer; denne fil er blot et indeks/link.***

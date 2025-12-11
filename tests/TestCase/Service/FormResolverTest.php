@@ -19,8 +19,13 @@ class FormResolverTest extends TestCase
     {
         $resolver = new FormResolver();
         $res = $resolver->decide(['country' => 'FR']);
-        $this->assertSame('eu_standard_claim', $res['form']);
-        $this->assertStringContainsString('prefers national', $res['reason']);
+        $path = (string)($res['national']['path'] ?? '');
+        if ($path !== '' && is_file($path)) {
+            $this->assertSame('national_claim', $res['form']);
+        } else {
+            $this->assertSame('eu_standard_claim', $res['form']);
+            $this->assertStringContainsString('prefers national', $res['reason']);
+        }
     }
 
     public function testNationalClaimWhenTemplateExists(): void

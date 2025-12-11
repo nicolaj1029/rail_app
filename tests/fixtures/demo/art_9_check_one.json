@@ -1,0 +1,167 @@
+{
+    "fixture": {
+        "id": "art-9-check-one",
+        "version": 2,
+        "label": "Captured wizard session 2025-12-01T10:32:12+00:00",
+        "journey": [],
+        "wizard": {
+            "step1": {
+                "travel_state": "ongoing"
+            },
+            "step2": {
+                "incident_main": "cancellation"
+            },
+            "step3_entitlements": {
+                "leg_class_purchased": [
+                    "couchette",
+                    "couchette",
+                    "couchette",
+                    "couchette"
+                ],
+                "leg_class_delivered": [],
+                "leg_downgraded": [],
+                "pmr_user": "Nej",
+                "pmr_booked": "Nej",
+                "pmrQBooked": null,
+                "pmrQDelivered": null,
+                "pmrQPromised": null,
+                "pmr_facility_details": null,
+                "fare_flex_type": null,
+                "train_specificity": null,
+                "fare_class_purchased": null,
+                "berth_seat_type": null,
+                "reserved_amenity_delivered": null,
+                "class_delivered_status": null,
+                "preinformed_disruption": "Ved ikke",
+                "preinfo_channel": "Ved ikke",
+                "realtime_info_seen": [],
+                "downgrade_occurred": null,
+                "downgrade_comp_basis": null,
+                "downgrade_segment_share": "1",
+                "eligible_under_18_3": "0"
+            },
+            "step4_choices": {
+                "remedyChoice": "reroute_soonest",
+                "self_purchased_new_ticket": "no",
+                "self_purchase_approved_by_operator": "unknown",
+                "offer_provided": "unknown",
+                "reroute_same_conditions_soonest": "yes",
+                "reroute_later_at_choice": null,
+                "reroute_info_within_100min": "unknown",
+                "reroute_extra_costs": "yes",
+                "reroute_extra_costs_amount": "100",
+                "reroute_extra_costs_currency": "DKK",
+                "delayAtFinalMinutes": null,
+                "compensationBand": null,
+                "voucherAccepted": "no"
+            },
+            "step5_assistance": {
+                "meal_offered": null,
+                "hotel_offered": null,
+                "overnight_needed": null,
+                "blocked_train_alt_transport": null,
+                "alt_transport_provided": null,
+                "expense_meals_amount": null,
+                "expense_hotel_amount": null,
+                "expense_alt_transport_amount": null,
+                "expense_other_amount": null
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": false,
+            "delayAtFinalMinutes": null
+        },
+        "expected": [],
+        "meta": {
+            "enriched": true
+        },
+        "journeyBasic": {
+            "dep_date": "2017-03-18",
+            "dep_time": "17:51",
+            "dep_station": "Til rejsen Herning Messecenter St.",
+            "arr_station": "K\u00f8benhavn H",
+            "arr_time": "21:02",
+            "train_no": "DSB 1",
+            "ticket_no": "05",
+            "operator": "DSB",
+            "operator_country": "DK",
+            "operator_product": "IC",
+            "price": "155 kr."
+        },
+        "segments": [
+            {
+                "from": "Herning Messecenter",
+                "to": "Herning St.",
+                "schedDep": "17:51",
+                "schedArr": "17:51",
+                "trainNo": "",
+                "depDate": "2024-03-05",
+                "arrDate": "2024-03-05",
+                "pnr": "05",
+                "carrier": "DSB"
+            },
+            {
+                "from": "Herning St.",
+                "to": "Vejle St.",
+                "schedDep": "17:51",
+                "schedArr": "17:51",
+                "trainNo": "",
+                "depDate": "2024-03-05",
+                "arrDate": "2024-03-05",
+                "pnr": "05",
+                "carrier": "DSB"
+            }
+        ],
+        "art12_meta": {
+            "seller_type_operator": "Ja",
+            "seller_type_agency": "Nej",
+            "single_booking_reference": "Ja",
+            "shared_pnr_scope": "Ja",
+            "multi_operator_trip": "Nej",
+            "separate_contract_notice": "Ved ikke",
+            "through_ticket_disclosure": "Ved ikke"
+        },
+        "art9_meta": {
+            "preinformed_disruption": "unknown",
+            "language_accessible": "unknown",
+            "accessibility_format": "unknown",
+            "multi_channel_information": "unknown",
+            "accessible_formats_offered": "unknown",
+            "pmr_user": "unknown",
+            "pmr_booked": "unknown",
+            "pmr_promised_missing": "unknown",
+            "bike_reservation_type": "separate",
+            "bike_res_required": "Ja",
+            "fare_flex_type": "nonflex",
+            "train_specificity": "specific",
+            "fare_class_purchased": "unknown",
+            "berth_seat_type": "unknown",
+            "promised_facilities": "unknown",
+            "through_ticket_disclosure": "unknown",
+            "single_txn_operator": "Ja",
+            "single_txn_retailer": "unknown",
+            "separate_contract_notice": "unknown",
+            "info_on_rights": "unknown",
+            "rights_notice_displayed": "unknown",
+            "rights_contact_provided": "unknown",
+            "complaint_channel_seen": "unknown",
+            "complaint_already_filed": "unknown",
+            "complaint_receipt_upload": "unknown",
+            "submit_via_official_channel": "unknown",
+            "realtime_info_seen": "unknown",
+            "info_during_disruption": "unknown",
+            "station_board_updates": "unknown",
+            "onboard_announcements": "unknown",
+            "disruption_updates_frequency": "unknown",
+            "assistance_contact_visible": "unknown",
+            "pmr_delivered_status": "unknown",
+            "bike_denied_reason": "unknown",
+            "bike_followup_offer": "unknown",
+            "bike_delay_bucket": "unknown",
+            "facilities_delivered_status": "unknown",
+            "facility_impact_note": "unknown",
+            "class_delivered_status": "unknown",
+            "reserved_amenity_delivered": "unknown"
+        }
+    }
+}

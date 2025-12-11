@@ -34,6 +34,7 @@ class FormResolver
 
         $entry = $countries[$country] ?? null;
         $preferNat = (bool)($entry['prefer_national'] ?? $def['prefer_national'] ?? false);
+        $fileList = (array)($entry['filenames'] ?? $def['filenames'] ?? []);
         // If matrix says use EU (not preferred national), return EU
         if (!$preferNat) {
             return [
@@ -43,37 +44,11 @@ class FormResolver
         }
 
         // If prefer national, ensure we actually have a template present
-        $files = (array)($entry['filenames'] ?? []);
+        $files = $fileList;
         $found = null;
         foreach ($files as $rel) {
             $p = WWW_ROOT . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel);
             if (is_file($p)) { $found = $p; break; }
-        }
-        // If not found via explicit filenames, attempt fallback scan in 'files/Nationale PDF former'
-        if (!$found) {
-            $altDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'Nationale PDF former';
-            if (is_dir($altDir)) {
-                $code = strtolower($country);
-                $syn = [
-                    'FR' => ['fr', 'france', 'sncf'],
-                    'DE' => ['de', 'germany', 'deutsch', 'fahrgastrechte', 'db'],
-                    'IT' => ['it', 'italy', 'italia', 'trenitalia'],
-                    'DK' => ['dk', 'denmark', 'danmark', 'dsb'],
-                    'NL' => ['nl', 'netherlands', 'nederland', 'ns'],
-                    'ES' => ['es', 'spain', 'espa', 'renfe'],
-                ];
-                $keys = $syn[$country] ?? [$code];
-                // Normalize glob for Windows with spaces in folder name
-                $candidates = [];
-                foreach ($keys as $k) {
-                    $candidates[] = $altDir . DIRECTORY_SEPARATOR . '*' . $k . '*.pdf';
-                    $candidates[] = $altDir . DIRECTORY_SEPARATOR . '*'. strtoupper($k) . '*.pdf';
-                }
-                foreach ($candidates as $glob) {
-                    $hits = glob($glob) ?: [];
-                    if (!empty($hits)) { $found = $hits[0]; break; }
-                }
-            }
         }
         if ($found) {
             return [
