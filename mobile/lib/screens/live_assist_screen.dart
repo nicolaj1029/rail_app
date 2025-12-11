@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../services/device_service.dart';
 import '../services/events_service.dart';
 import '../services/journeys_service.dart';
+import '../services/notifications_service.dart';
 import '../services/shadow_tracker.dart';
 import '../services/stations_service.dart';
 import 'case_close_screen.dart';
@@ -33,11 +34,14 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   final List<Timer> _nudgeTimers = [];
   List<Map<String, dynamic>> backendEvents = [];
   bool loadingEvents = false;
+  NotificationsService? noti;
 
   @override
   void initState() {
     super.initState();
     api = ApiClient(baseUrl: apiBaseUrl);
+    noti = NotificationsService();
+    noti?.init();
     _bootstrap();
   }
 
@@ -253,6 +257,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     setState(() {
       _nudgeMessages.add(msg);
     });
+    noti?.showNow('Live Assist', msg);
   }
 
   @override
@@ -305,6 +310,26 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                     ),
                   )),
             ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SOS (stub)')));
+                  },
+                  icon: const Icon(Icons.warning),
+                  label: const Text('SOS'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat/support (stub)')));
+                  },
+                  icon: const Icon(Icons.chat),
+                  label: const Text('Support'),
+                ),
+              ],
+            ),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(
