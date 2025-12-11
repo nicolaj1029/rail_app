@@ -192,6 +192,16 @@ class ProjectController extends AppController
     }
 
     /**
+     * Mobile QA: quick overview for Flutter app + shadow tracker endpoints.
+     */
+    public function mobileQa(): void
+    {
+        $baseUrl = $this->request->getUri()->getScheme() . '://' . $this->request->getUri()->getHost() . ($this->request->getUri()->getPort() ? ':' . $this->request->getUri()->getPort() : '') . $this->request->getAttribute('webroot');
+        $this->set(compact('baseUrl'));
+        $this->viewBuilder()->setTemplate('mobile_qa');
+    }
+
+    /**
      * View a single asset by slug. If an embeddable type is found, render a template;
      * otherwise, offer a safe file download.
      */

@@ -66,6 +66,7 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/project', ['controller' => 'Project', 'action' => 'index']);
         $builder->connect('/project/links', ['controller' => 'Project', 'action' => 'links']);
         $builder->connect('/project/links-v2', ['controller' => 'Project', 'action' => 'linksV2']);
+        $builder->connect('/project/mobile-qa', ['controller' => 'Project', 'action' => 'mobileQa']);
         $builder->connect('/project/flow-qa', ['controller' => 'Project', 'action' => 'flowQa']);
         $builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
             ->setPass(['slug']);

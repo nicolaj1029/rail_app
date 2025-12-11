@@ -6,6 +6,7 @@ import '../services/device_service.dart';
 import '../services/journeys_service.dart';
 import '../services/shadow_tracker.dart';
 import '../services/stations_service.dart';
+import 'journeys_list_screen.dart';
 
 class LiveAssistScreen extends StatefulWidget {
   const LiveAssistScreen({super.key});
@@ -55,7 +56,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     } catch (e) {
       // Keep UI alive even if backend is unreachable.
       setState(() {
-        error = 'Kunne ikke nå backend: $e';
+        error = 'Kunne ikke naa backend: $e';
       });
     }
   }
@@ -178,6 +179,19 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               onPressed: deviceId == null ? null : _toggleTracking,
               child: Text(tracking ? 'Stop tracking' : 'Start tracking'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: deviceId == null
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => JourneysListScreen(deviceId: deviceId!),
+                        ),
+                      );
+                    },
+              child: const Text('Se rejser / Case Close'),
+            ),
             const SizedBox(height: 24),
             const Text('Offers'),
             Wrap(
@@ -228,7 +242,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               return Card(
                 child: ListTile(
                   title: Text('Journey $id'),
-                  subtitle: Text('$start → $end  • points: ${j['count'] ?? ''}'),
+                  subtitle: Text('$start -> $end (${j['count'] ?? ''} pings)'),
                   trailing: TextButton(
                     onPressed: deviceId == null ? null : () => _confirmJourney(id),
                     child: const Text('Confirm'),
