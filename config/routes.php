@@ -211,7 +211,8 @@ return function (RouteBuilder $routes): void {
         // Stations endpoint for geofencing
         $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
         // Events logging
-        $builder->connect('/events', ['controller' => 'Events', 'action' => 'add']);
+        $builder->connect('/events', ['controller' => 'Events', 'action' => 'index']);
+        $builder->connect('/events/add', ['controller' => 'Events', 'action' => 'add']);
         $builder->fallbacks();
     });
 

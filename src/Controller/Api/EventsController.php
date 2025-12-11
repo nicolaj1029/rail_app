@@ -12,7 +12,7 @@ class EventsController extends AppController
         parent::initialize();
         $this->viewBuilder()->setOption('serialize', true);
         $this->viewBuilder()->setClassName('Json');
-        $this->request->allowMethod(['post', 'options']);
+        $this->request->allowMethod(['get', 'post', 'options']);
     }
 
     /**
@@ -47,6 +47,37 @@ class EventsController extends AppController
             'data' => [
                 'device_id' => $deviceId,
                 'type' => $type,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/events?device_id=...&limit=...
+     * Returns events from tmp/shadow_events device log (if any).
+     */
+    public function index()
+    {
+        $deviceId = (string)($this->request->getQuery('device_id') ?? '');
+        $limit = (int)($this->request->getQuery('limit') ?? 50);
+        $events = [];
+        $dir = ROOT . DS . 'tmp' . DS . 'shadow_events';
+        if ($deviceId !== '') {
+            $file = $dir . DS . preg_replace('/[^a-zA-Z0-9_-]/', '_', $deviceId) . '.jsonl';
+            if (is_file($file)) {
+                $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+                $lines = array_slice(array_reverse($lines), 0, $limit);
+                foreach ($lines as $line) {
+                    $decoded = json_decode($line, true);
+                    if ($decoded) {
+                        $events[] = $decoded;
+                    }
+                }
+            }
+        }
+        $this->set([
+            'success' => true,
+            'data' => [
+                'events' => $events,
             ],
         ]);
     }

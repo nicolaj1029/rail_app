@@ -31,9 +31,10 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
       loading = true;
       error = null;
     });
-    final id = (widget.journey['id'] ?? '').toString();
+    // Prefer device_id if present; else empty
+    final deviceId = (widget.journey['device_id'] ?? '').toString();
     try {
-      final list = await eventsService.list(id);
+      final list = await eventsService.list(deviceId: deviceId.isEmpty ? null : deviceId, limit: 50);
       setState(() {
         events = list;
       });

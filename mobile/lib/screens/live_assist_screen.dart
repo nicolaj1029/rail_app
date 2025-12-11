@@ -28,6 +28,8 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   String modeLabel = 'ukendt';
   bool _autoNavigated = false;
   final List<Map<String, dynamic>> localEvents = [];
+  final List<String> _nudgeMessages = [];
+  final List<Timer> _nudgeTimers = [];
 
   @override
   void initState() {
@@ -70,8 +72,10 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     if (tracker == null) return;
     if (tracking) {
       await tracker!.stop();
+      _cancelNudges();
     } else {
       await tracker!.start();
+      _scheduleNudges();
     }
     setState(() {
       tracking = !tracking;
@@ -199,6 +203,34 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     });
   }
 
+  void _scheduleNudges() {
+    _cancelNudges();
+    // Dev-friendly short delays (in minutes -> here using seconds for demo)
+    final entries = [
+      const Duration(minutes: 1),
+      const Duration(minutes: 2),
+      const Duration(minutes: 3),
+    ];
+    for (final d in entries) {
+      _nudgeTimers.add(Timer(d, () {
+        _addNudge('Reminder efter ${d.inMinutes} min: tjek forsinkelse/assistance.');
+      }));
+    }
+  }
+
+  void _cancelNudges() {
+    for (final t in _nudgeTimers) {
+      t.cancel();
+    }
+    _nudgeTimers.clear();
+  }
+
+  void _addNudge(String msg) {
+    setState(() {
+      _nudgeMessages.add(msg);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<String> nudges = [];
@@ -208,6 +240,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     if (modeLabel == 'ended') {
       nudges.add('Rejsen er afsluttet - udfyld Case Close.');
     }
+    nudges.addAll(_nudgeMessages.take(3));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Live Assist')),
