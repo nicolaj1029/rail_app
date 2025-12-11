@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../services/journeys_service.dart';
+import '../services/receipt_service.dart';
 
 class CaseCloseScreen extends StatefulWidget {
   final Map<String, dynamic> journey;
@@ -16,6 +17,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
   bool submitting = false;
   String? submitError;
   String? submitSuccess;
+  final ReceiptService receiptService = ReceiptService();
 
   // Step 1
   late TextEditingController depCtrl;
@@ -234,6 +236,22 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                     }
                   },
                   child: const Text('Scan (stub) - autofyld demo'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    _addReceipt();
+                    if (receipts.isEmpty) return;
+                    final parsed = await receiptService.scanDemo();
+                    final r = receipts.last;
+                    r.typeCtrl.text = (parsed['type'] ?? '').toString();
+                    r.amountCtrl.text = (parsed['amount'] ?? '').toString();
+                    r.currencyCtrl.text = (parsed['currency'] ?? '').toString();
+                    r.dateCtrl.text = (parsed['date'] ?? '').toString();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('OCR/LLM demo udfyldt')),
+                    );
+                  },
+                  child: const Text('Scan (LLM stub)'),
                 ),
                 if (receipts.isEmpty) const Text('Ingen bilag tilføjet endnu.'),
                 for (int i = 0; i < receipts.length; i++)

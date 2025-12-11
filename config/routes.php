@@ -210,6 +210,7 @@ return function (RouteBuilder $routes): void {
             ->setPass(['id']);
         $builder->connect('/shadow/journeys/{id}/submit', ['controller' => 'ShadowJourneys', 'action' => 'submit'])
             ->setPass(['id']);
+        $builder->connect('/shadow/cases', ['controller' => 'ShadowCases', 'action' => 'index']);
         // Stations endpoint for geofencing
         $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
         // Events logging

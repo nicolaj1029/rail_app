@@ -73,6 +73,11 @@
       <div class="note">Gemmer payload i tmp/shadow_cases (debug).</div>
     </div>
     <div class="card">
+      <h3>Cases (liste)</h3>
+      <a href="<?= h($this->Url->build('/api/shadow/cases', ['fullBase' => true])) ?>" target="_blank">/api/shadow/cases</a>
+      <div class="note">Lister gemte case-filer fra submit.</div>
+    </div>
+    <div class="card">
       <h3>Events log</h3>
       <a href="<?= h($this->Url->build('/api/events', ['fullBase' => true])) ?>" target="_blank">/api/events</a>
       <div class="note">GET med <code>?device_id=</code> for log; POST via app-knapper.</div>
