@@ -4,16 +4,19 @@ import 'package:geolocator/geolocator.dart';
 
 import 'api_client.dart';
 import 'geofence_manager.dart';
+import 'offline_queue.dart';
 import 'stations_service.dart';
 
 class ShadowTracker {
   final ApiClient api;
   final String deviceId;
+  final OfflineQueue _queue;
   final List<Map<String, dynamic>> _buffer = [];
   StreamSubscription<Position>? _sub;
   GeofenceManager? _geofence;
 
-  ShadowTracker({required this.api, required this.deviceId});
+  ShadowTracker({required this.api, required this.deviceId, OfflineQueue? queue})
+      : _queue = queue ?? OfflineQueue();
 
   Future<void> start() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -61,6 +64,7 @@ class ShadowTracker {
             _flush();
           }
         });
+    await _flushOfflinePings();
   }
 
   Future<void> stop() async {
@@ -72,17 +76,41 @@ class ShadowTracker {
     if (_buffer.isEmpty) return;
     final batch = List<Map<String, dynamic>>.from(_buffer);
     _buffer.clear();
-    await api.post('/api/shadow/pings', {
+    final payload = {
       'device_id': deviceId,
       'pings': batch,
-    });
+    };
+    try {
+      await api.post('/api/shadow/pings', payload);
+    } catch (_) {
+      await _queue.addPingBatch(payload);
+    }
   }
 
   Future<void> _postEvent(String type, Map<String, dynamic> payload) async {
-    await api.post('/api/events', {
-      'device_id': deviceId,
-      'type': type,
-      'payload': payload,
-    });
+    try {
+      await api.post('/api/events', {
+        'device_id': deviceId,
+        'type': type,
+        'payload': payload,
+      });
+    } catch (_) {
+      await _queue.addEvent({
+        'device_id': deviceId,
+        'type': type,
+        'payload': payload,
+      });
+    }
+  }
+
+  Future<void> _flushOfflinePings() async {
+    final batches = await _queue.takePingBatches();
+    for (final payload in batches) {
+      try {
+        await api.post('/api/shadow/pings', payload);
+      } catch (_) {
+        await _queue.addPingBatch(payload);
+      }
+    }
   }
 }
