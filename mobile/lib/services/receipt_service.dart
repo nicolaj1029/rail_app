@@ -17,7 +17,7 @@ class ReceiptService {
     if (file == null) return _stub();
 
     final inputImage = InputImage.fromFilePath(file.path);
-    final result = await _recognizer.recognizeText(inputImage);
+    final result = await _recognizer.processImage(inputImage);
     final text = result.text;
     if (text.isEmpty) return _stub();
 
