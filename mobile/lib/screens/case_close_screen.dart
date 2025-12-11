@@ -18,6 +18,8 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
   String? submitError;
   String? submitSuccess;
   final ReceiptService receiptService = ReceiptService();
+  bool skipReceipts = false;
+  bool skipAssistance = false;
 
   // Step 1
   late TextEditingController depCtrl;
@@ -218,6 +220,12 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                SwitchListTile(
+                  title: const Text('Spring over bilag (ingen udlæg)'),
+                  value: skipReceipts,
+                  onChanged: (v) => setState(() => skipReceipts = v),
+                ),
+                if (!skipReceipts) ...[
                 TextButton.icon(
                   onPressed: _addReceipt,
                   icon: const Icon(Icons.upload),
@@ -262,6 +270,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                     item: receipts[i],
                     onRemove: () => _removeReceipt(i),
                   ),
+                ],
               ],
             ),
           ),
@@ -271,6 +280,12 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
             isActive: currentStep >= 3,
             content: Column(
               children: [
+                SwitchListTile(
+                  title: const Text('Spring over assistance (intet at indtaste)'),
+                  value: skipAssistance,
+                  onChanged: (v) => setState(() => skipAssistance = v),
+                ),
+                if (!skipAssistance) ...[
                 SwitchListTile(
                   title: const Text('Fik du mad/forfriskninger?'),
                   value: gotMeals,
@@ -302,6 +317,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   value: selfPaidTransport,
                   onChanged: (v) => setState(() => selfPaidTransport = v ?? false),
                 ),
+                ],
               ],
             ),
           ),
@@ -407,22 +423,26 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
         'type': eventType,
         'delay_minutes': delayCtrl.text,
       },
-      'receipts': receipts
-          .map((r) => {
-                'type': r.typeCtrl.text,
-                'amount': r.amountCtrl.text,
-                'currency': r.currencyCtrl.text,
-                'date': r.dateCtrl.text,
-              })
-          .toList(),
-      'assistance': {
-        'got_meals': gotMeals,
-        'got_hotel': gotHotel,
-        'got_transport': gotTransport,
-        'self_paid_meals': selfPaidMeals,
-        'self_paid_hotel': selfPaidHotel,
-        'self_paid_transport': selfPaidTransport,
-      },
+      'receipts': skipReceipts
+          ? []
+          : receipts
+              .map((r) => {
+                    'type': r.typeCtrl.text,
+                    'amount': r.amountCtrl.text,
+                    'currency': r.currencyCtrl.text,
+                    'date': r.dateCtrl.text,
+                  })
+              .toList(),
+      'assistance': skipAssistance
+          ? {'skipped': true}
+          : {
+              'got_meals': gotMeals,
+              'got_hotel': gotHotel,
+              'got_transport': gotTransport,
+              'self_paid_meals': selfPaidMeals,
+              'self_paid_hotel': selfPaidHotel,
+              'self_paid_transport': selfPaidTransport,
+            },
       'compensation': {
         'choice': compensationChoice,
         'price': refundAmountCtrl.text,
