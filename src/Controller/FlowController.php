@@ -86,7 +86,7 @@ class FlowController extends AppController
             $this->request->getSession()->write('flow.meta', $meta);
             $this->request->getSession()->write('flow.compute', $compute);
             $this->request->getSession()->write('flow.flags', $flags);
-            return $this->redirect(['action' => 'journey']);
+            return $this->redirect(['action' => 'entitlements']);
         }
         $compute = (array)$this->request->getSession()->read('flow.compute') ?: ['euOnly' => true];
         $this->set('isAdmin', $this->isAdmin());
@@ -108,21 +108,38 @@ class FlowController extends AppController
         $form = (array)$sess->read('flow.form') ?: [];
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
+                // Default PMR/bike based on OCR/LLM (only for initial GET)
+        if ($this->request->is('get')) {
+            // Default to "no" unless the user already set a value (OCR/LLM only informs later)
+            if (!isset($form['bike_was_present'])) { $form['bike_was_present'] = 'no'; }
+            if (!isset($form['pmr_user'])) { $form['pmr_user'] = 'no'; }
+            // Nye defaults (Trin 3): downgrade/disruption/missed connection
+            $form['downgrade_occurred'] = $form['downgrade_occurred'] ?? 'no';
+            $form['disruption_flag'] = $form['disruption_flag'] ?? 'no';
+            if (!isset($incident['missed'])) { $incident['missed'] = ''; }
+            $sess->write('flow.form', $form);
+            $sess->write('flow.incident', $incident);
+        }
         if ($this->request->is('post')) {
+            $data = (array)$this->request->getData();
+            $form = array_merge($form, $data);
             // Drop early numeric delay; use final delay later.
             // NOTE: 'known_delay' moved to TRIN 3 (entitlements) and 'extraordinary' moved to TRIN 6.
-            // UI checkbox delayLikely60 removed – rely on live data (delay minutes) and TRIN 6 band selection
-            // TRIN 2: Incident selection (missed-connection moved to TRIN 3)
-            $main = (string)($this->request->getData('incident_main') ?? '');
+            // UI checkbox delayLikely60 removed ? rely on live data (delay minutes) and TRIN 6 band selection
+            // TRIN 3: Incident selection (missed-connection now in TRIN 3)
+            $main = (string)($data['incident_main'] ?? '');
             if (!in_array($main, ['delay','cancellation',''], true)) { $main = ''; }
             $incident['main'] = $main;
-            // No direct question in TRIN 2 anymore; 'missed' is inferred/set in TRIN 3 when a station is chosen
+            $incident['missed'] = $this->truthy($data['incident_missed'] ?? false) ? 'yes' : '';
+            if (isset($data['expected_delay_60'])) {
+                $form['expected_delay_60'] = (string)$data['expected_delay_60'];
+            }
             $this->request->getSession()->write('flow.compute', $compute);
             $this->request->getSession()->write('flow.form', $form);
             $this->request->getSession()->write('flow.incident', $incident);
-            return $this->redirect(['action' => 'entitlements']);
+            return $this->redirect(['action' => 'choices']);
         }
-        // Recompute hooks/evaluators for live preview in TRIN 3 like one()/entitlements
+// Recompute hooks/evaluators for live preview in TRIN 3 like one()/entitlements
         // Fallbacks to improve scope inference when extractor missed stations
         try {
             if (empty($journey['segments']) && !empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) {
@@ -1568,7 +1585,7 @@ class FlowController extends AppController
             $session->write('flow.form', $form);
 
             if ($this->truthy($this->request->getData('continue'))) {
-                return $this->redirect(['action' => 'choices']);
+                return $this->redirect(['action' => 'journey']);
             }
         }
 
