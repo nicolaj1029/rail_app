@@ -553,7 +553,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 </div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-  <?= $this->Html->link(__('← Tilbage'), ['action' => 'assistance'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Html->link(__('← Tilbage'), ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
   <?= $this->Form->button(__('Næste →'), ['class' => 'button']) ?>
 </div>
 

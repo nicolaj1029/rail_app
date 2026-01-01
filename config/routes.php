@@ -74,6 +74,10 @@ return function (RouteBuilder $routes): void {
             ->setPass(['slug']);
         $builder->connect('/project/text/{slug}', ['controller' => 'Project', 'action' => 'text'])
             ->setPass(['slug']);
+            // Map /project/<slug> to WebrootController::project to serve static QA pages
+            $builder->connect('/project/:slug', ['controller' => 'Webroot', 'action' => 'project'], ['pass' => ['slug']]);
+            // Optional: allow legacy /webroot/project/<slug> to work
+            $builder->connect('/webroot/project/:slug', ['controller' => 'Webroot', 'action' => 'project'], ['pass' => ['slug']]);
 
         // Claims wizard routes
         $builder->connect('/claims', ['controller' => 'Claims', 'action' => 'start']);
@@ -160,6 +164,7 @@ return function (RouteBuilder $routes): void {
             $demo->connect('/scenarios', ['prefix' => 'Api/Demo', 'controller' => 'Scenarios', 'action' => 'index']);
             $demo->connect('/run-scenarios', ['prefix' => 'Api/Demo', 'controller' => 'RunScenarios', 'action' => 'index']);
             $demo->connect('/dump-session', ['prefix' => 'Api/Demo', 'controller' => 'DumpSession', 'action' => 'index']);
+            $demo->connect('/evaluate-app', ['prefix' => 'Api/Demo', 'controller' => 'EvaluateApp', 'action' => 'index']);
             $demo->fallbacks();
         });
         // Demo fixtures endpoint

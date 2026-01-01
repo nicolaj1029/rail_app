@@ -74,6 +74,7 @@
     <?php endforeach; ?>
   </ul>
 <?php endif; ?>
+<?php if (empty($hidePmrBike)): ?>
 <hr/>
 <div class="small"><strong>TRIN 3</strong> · Cykel på billetten</div>
 <?php 
@@ -380,6 +381,8 @@ if (!empty($art9Pricing)) {
   <button type="submit" class="small" style="margin-top:4px;">Gem</button>
 </form>
 <hr/>
+<?php endif; ?>
+<?php $incMiss = $incMiss ?? false; ?>
 <?php if ($incMiss): ?>
   <div class="small"><strong>TRIN 3</strong> · Art. 9(1) – Køreplaner og hurtigste rejse</div>
   <?php 

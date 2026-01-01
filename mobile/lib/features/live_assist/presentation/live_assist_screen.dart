@@ -1,17 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
-import '../config.dart';
-import '../services/api_client.dart';
-import '../services/device_service.dart';
-import '../services/events_service.dart';
-import '../services/journeys_service.dart';
-import '../services/notifications_service.dart';
-import '../services/shadow_tracker.dart';
-import '../services/stations_service.dart';
-import 'case_close_screen.dart';
-import 'journeys_list_screen.dart';
+import 'package:mobile/config.dart';
+import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
+import 'package:mobile/features/journeys/data/journeys_service.dart';
+import 'package:mobile/features/journeys/presentation/journeys_list_screen.dart';
+import 'package:mobile/services/api_client.dart';
+import 'package:mobile/services/device_service.dart';
+import 'package:mobile/services/events_service.dart';
+import 'package:mobile/services/notifications_service.dart';
+import 'package:mobile/services/shadow_tracker.dart';
+import 'package:mobile/services/stations_service.dart';
 
 class LiveAssistScreen extends StatefulWidget {
   const LiveAssistScreen({super.key});
@@ -38,6 +42,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   bool loadingEvents = false;
   NotificationsService? noti;
   DateTime? trackingStartedAt;
+  bool uploadingTicket = false;
 
   @override
   void initState() {
@@ -113,6 +118,49 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     } catch (e) {
       setState(() {
         error = 'Event error: $e';
+      });
+    }
+  }
+
+  Future<void> _uploadTicket(ImageSource source) async {
+    if (deviceId == null || uploadingTicket) return;
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: source, imageQuality: 85);
+    if (file == null) return;
+    setState(() {
+      uploadingTicket = true;
+      info = 'Uploader billet...';
+      error = null;
+    });
+    try {
+      final uri = Uri.parse('${api.baseUrl}/api/tickets/match');
+      final req = http.MultipartRequest('POST', uri);
+      req.fields['device_id'] = deviceId!;
+      final bytes = await file.readAsBytes();
+      final filename = file.name.isNotEmpty ? file.name : 'ticket.jpg';
+      req.files.add(http.MultipartFile.fromBytes(
+        'image',
+        bytes,
+        filename: filename,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+      final streamed = await req.send();
+      final res = await http.Response.fromStream(streamed);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception('API ${res.statusCode}: ${res.body}');
+      }
+      final json = jsonDecode(res.body);
+      setState(() {
+        info = 'Billet uploadet: ${json['status'] ?? 'ok'}';
+      });
+      await _refreshJourneys();
+    } catch (e) {
+      setState(() {
+        error = 'Billet-upload fejlede: $e';
+      });
+    } finally {
+      setState(() {
+        uploadingTicket = false;
       });
     }
   }
@@ -415,6 +463,21 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                 ActionChip(label: const Text('Bus'), onPressed: deviceId == null ? null : () => _promptExpense('bus')),
                 ActionChip(label: const Text('Hotel'), onPressed: deviceId == null ? null : () => _promptExpense('hotel')),
                 ActionChip(label: const Text('Meals'), onPressed: deviceId == null ? null : () => _promptExpense('meals')),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text('Billet'),
+            Wrap(
+              spacing: 8,
+              children: [
+                ActionChip(
+                  label: const Text('Foto billet'),
+                  onPressed: (deviceId == null || uploadingTicket) ? null : () => _uploadTicket(ImageSource.camera),
+                ),
+                ActionChip(
+                  label: const Text('Galleri/fil'),
+                  onPressed: (deviceId == null || uploadingTicket) ? null : () => _uploadTicket(ImageSource.gallery),
+                ),
               ],
             ),
             const SizedBox(height: 16),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/live_assist_screen.dart';
+import 'package:mobile/features/live_assist/presentation/live_assist_screen.dart';
 
 void main() {
   runApp(const RailApp());

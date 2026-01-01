@@ -1,389 +1,617 @@
 <?php
+
 /** @var \App\View\AppView $this */
-$form = $form ?? [];
-$flags = $flags ?? [];
+
+$form     = $form ?? [];
+
+$flags    = $flags ?? [];
+
 $incident = $incident ?? [];
-$pmrUser = strtolower((string)($form['pmr_user'] ?? $flags['pmr_user'] ?? '')) === 'yes';
-$travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
-$art20Active = $art20Active ?? false;
-$art20FallbackValue = (string)($form['art20_expected_delay_60'] ?? '');
+
+$profile  = $profile ?? ['articles' => []];
+
+
+
+$pmrUser      = strtolower((string)($form['pmr_user'] ?? $flags['pmr_user'] ?? '')) === 'yes';
+
+$travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
+
+$assistOff    = isset($profile['articles']['art20_2']) && $profile['articles']['art20_2'] === false;
+
+
+
 $currencyOptions = [
+
     'EUR' => 'EUR - Euro',
+
     'DKK' => 'DKK - Dansk krone',
+
     'SEK' => 'SEK - Svensk krona',
+
     'PLN' => 'PLN - Polsk zloty',
+
     'CZK' => 'CZK - Tjekkisk koruna',
+
     'HUF' => 'HUF - Ungarsk forint',
+
     'BGN' => 'BGN - Bulgarsk lev',
-    'RON' => 'RON - Rum√¶nsk leu',
+
+    'RON' => 'RON - RumÊnsk leu',
+
 ];
+
+
+
 $v = fn(string $k): string => (string)($form[$k] ?? '');
+
 $priceHints = $priceHints ?? ($meta['price_hints'] ?? $form['price_hints'] ?? []);
-$hintText = function(string $key) use ($priceHints): string {
+
+$hintText = function (string $key) use ($priceHints): string {
+
     if (!is_array($priceHints)) { return ''; }
+
     $h = $priceHints[$key] ?? null;
-    if (!is_array($h) || !isset($h['min'],$h['max'],$h['currency'])) { return ''; }
+
+    if (!is_array($h) || !isset($h['min'], $h['max'], $h['currency'])) { return ''; }
+
     $min = number_format((float)$h['min'], 0, ',', '.');
+
     $max = number_format((float)$h['max'], 0, ',', '.');
-    return "Typisk interval: {$min}‚Äì{$max} {$h['currency']}";
+
+    return "Typisk interval: {$min}ñ{$max} {$h['currency']}";
+
 };
+
 ?>
+
+
 
 <style>
+
   .hidden { display:none; }
-  .card { padding: 16px; border: 1px solid #ddd; border-radius: 6px; background:#fff; }
+
   .small { font-size:12px; }
+
   .muted { color:#666; }
+
+  .hl { background:#fff3cd; padding:6px; border-radius:6px; }
+
   .mt4 { margin-top:4px; }
+
   .mt8 { margin-top:8px; }
+
   .mt12 { margin-top:12px; }
+
   .ml8 { margin-left:8px; }
-  .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+
+  .card { padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; }
+
   .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-  .hl { background:#fff4e5; border-color:#f4c17a; }
+
   [data-show-if] { display:none; }
+
 </style>
 
+
+
 <h1>TRIN 5 - Assistance og udgifter (Art. 20)</h1>
-<?php
-    if ($travelState === 'completed') {
-        echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
-    } elseif ($travelState === 'ongoing') {
-        echo '<p class="small muted">Status: Rejsen er i gang. Vi samler dine oplevelser og udgifter under forstyrrelsen.</p>';
-    } elseif ($travelState === 'not_started') {
-        echo '<p class="small muted">Status: Rejsen er endnu ikke p√•begyndt. Besvar ud fra, hvad du forventer at f√• brug for ved en forstyrrelse.</p>';
-    }
-?>
+
 <?= $this->Form->create(null, ['type' => 'file', 'novalidate' => true]) ?>
 
-  <div class="card <?= $art20Active ? 'hidden' : 'hl' ?>" id="art20Fallback">
-    <strong>Aktiv√©r Art. 20 Assistance</strong>
-    <p class="small muted mt4">Assistance (m√•ltider, hotel, alternativ transport og PMR-hensyn) g√¶lder ved forsinkelse ‚â•60 min, aflysning eller afbrudt forbindelse.</p>
-    <div class="mt8">
-      <p>Da vi mangler oplysninger, forventede du selv, at forsinkelsen ville blive mindst 60 minutter?</p>
-      <label><input type="radio" name="art20_expected_delay_60" value="yes" <?= $art20FallbackValue === 'yes' ? 'checked' : '' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="art20_expected_delay_60" value="no" <?= $art20FallbackValue === 'no' ? 'checked' : '' ?> /> Nej</label>
-      <label class="ml8"><input type="radio" name="art20_expected_delay_60" value="unknown" <?= $art20FallbackValue === 'unknown' ? 'checked' : '' ?> /> Ved ikke</label>
-    </div>
-    <p class="small muted mt8">Svar ‚ÄúJa‚Äù for at aktivere assistance-sp√∏rgsm√•lene. Ved ‚ÄúNej/Ved ikke‚Äù skjules resten.</p>
-  </div>
 
-  <div id="art20Main" style="<?= $art20Active ? '' : 'display:none;' ?>">
 
-    <!-- A) Tilbudt assistance -->
-    <div class="card mt12">
-      <strong>A) Hvad selskabet tilb√∏d (Art. 20(2))</strong>
+<p class="small muted">
 
-      <!-- M√•ltider -->
-      <div class="mt8">
-        <p>1. Fik du m√•ltider eller forfriskninger under ventetiden?</p>
-        <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="ml8"><input type="radio" name="meal_offered" value="no" <?= $v('meal_offered')==='no'?'checked':'' ?> /> Nej</label>
-      </div>
-      <div class="mt4" data-show-if="meal_offered:no">
-        <label>M√•ltider blev ikke tilbudt ‚Äì hvorfor?
-          <select name="assistance_meals_unavailable_reason">
-            <option value="">V√¶lg</option>
-            <?php foreach (['not_available'=>'Ikke til r√•dighed','unreasonable_terms'=>'Urimelige vilk√•r','closed'=>'Lukket','other'=>'Andet','unknown'=>'Ved ikke'] as $val => $label): ?>
-              <option value="<?= $val ?>" <?= $v('assistance_meals_unavailable_reason')===$val?'selected':'' ?>><?= $label ?></option>
-            <?php endforeach; ?>
-          </select>
-        </label>
-        <div class="small muted mt4">Evt. udgifter/kvittering for mad angives i sektion B.</div>
-      </div>
+  Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. EkstraordinÊre forhold pÂvirker kun hotel-loft (max 3 nÊtter).
 
-      <!-- Hotel -->
-      <div class="mt12">
-        <p>2. Fik du hotel/indkvartering plus transport hertil?</p>
-        <label><input type="radio" name="hotel_offered" value="yes" <?= $v('hotel_offered')==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="ml8"><input type="radio" name="hotel_offered" value="no" <?= $v('hotel_offered')==='no'?'checked':'' ?> /> Nej</label>
-        <label class="ml8"><input type="radio" name="hotel_offered" value="irrelevant" <?= $v('hotel_offered')==='irrelevant'?'checked':'' ?> /> Ikke relevant</label>
-      </div>
-      <div class="mt4" data-show-if="hotel_offered:yes">
-        <div class="small muted">Detaljer om n√¶tter/bel√∏b/kvittering angives i sektion B.</div>
-        <div class="mt4">
-          <span>Indgik transport til hotellet?</span>
-          <label><input type="radio" name="assistance_hotel_transport_included" value="yes" <?= $v('assistance_hotel_transport_included')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="assistance_hotel_transport_included" value="no" <?= $v('assistance_hotel_transport_included')==='no'?'checked':'' ?> /> Nej</label>
-        </div>
-      </div>
-      <div class="mt4" data-show-if="hotel_offered:no">
-        <label>Var overnatning n√∏dvendig selvom hotel ikke blev tilbudt?
-          <select name="overnight_needed">
-            <option value="">V√¶lg</option>
-            <?php foreach (['yes'=>'Ja','no'=>'Nej','unknown'=>'Ved ikke'] as $val => $label): ?>
-              <option value="<?= $val ?>" <?= $v('overnight_needed')===$val?'selected':'' ?>><?= $label ?></option>
-            <?php endforeach; ?>
-          </select>
-        </label>
-      </div>
+</p>
 
-      <!-- Strandet/alternativ transport fusion 20(2)(c)+20(3) -->
-      <div class="mt12">
-        <p>3. Hvis din forbindelse ikke kunne forts√¶tte:</p>
-        <div class="mt4">
-          <div class="small muted">Hvor var du, da det skete? (flere kan markeres)</div>
-          <label><input type="checkbox" name="blocked_on_track" value="yes" <?= $v('blocked_on_track')==='yes'?'checked':'' ?> /> Jeg sad fast i toget p√• sporet</label>
-          <label class="ml8"><input type="checkbox" name="stranded_at_station" value="yes" <?= $v('stranded_at_station')==='yes'?'checked':'' ?> /> Jeg var p√• en station uden videre tog</label>
-          <label class="ml8"><input type="checkbox" name="stranded_unknown" value="yes" <?= $v('stranded_unknown')==='yes'?'checked':'' ?> /> Ved ikke / andet</label>
-        </div>
-        <div class="mt4">
-          <span>Blev der stillet transport til r√•dighed for at komme v√¶k/videre?</span>
-          <?php $bt = $v('blocked_train_alt_transport'); ?>
-          <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja, af operat√∏r/station</label>
-          <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg m√•tte selv arrangere</label>
-          <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ved ikke</label>
-        </div>
-      </div>
-      <div class="mt4" data-show-if="blocked_train_alt_transport:yes">
-        <div class="grid-3">
-          <label>Tilbudt af
-            <select name="assistance_alt_transport_offered_by">
-              <?php foreach (['operator'=>'Operat√∏r','station'=>'Station','retailer'=>'Retailer','other'=>'Andet'] as $val => $label): ?>
-                <option value="<?= $val ?>" <?= $v('assistance_alt_transport_offered_by')===$val?'selected':'' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label>Transporttype
-            <select name="assistance_alt_transport_type">
-              <?php foreach (['rail'=>'Tog','bus'=>'Bus','taxi'=>'Taxi','other'=>'Andet'] as $val => $label): ?>
-                <option value="<?= $val ?>" <?= $v('assistance_alt_transport_type')===$val?'selected':'' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label>Destination
-            <?php $to = $v('assistance_alt_to_destination'); ?>
-            <select name="assistance_alt_to_destination">
-              <option value="">V√¶lg</option>
-              <option value="station" <?= $to==='station'?'selected':'' ?>>Station</option>
-              <option value="other_departure" <?= $to==='other_departure'?'selected':'' ?>>Andet afgangssted</option>
-              <option value="final_destination" <?= $to==='final_destination'?'selected':'' ?>>Endelige bestemmelsessted</option>
-            </select>
-          </label>
-        </div>
-        <div class="grid-3">
-          <label>Afgangstid
-            <input type="time" name="assistance_alt_departure_time" value="<?= h($v('assistance_alt_departure_time')) ?>" />
-          </label>
-          <label>Ankomsttid
-            <input type="time" name="assistance_alt_arrival_time" value="<?= h($v('assistance_alt_arrival_time')) ?>" />
-          </label>
-        </div>
-      </div>
-      <div class="mt4" data-show-if="blocked_train_alt_transport:no">
-        <div class="small muted">Egne udgifter/kvittering for selv arrangeret transport angives i sektion B.</div>
-      </div>
-    </div>
+<?php
 
-    <!-- B) Dine udgifter -->
-    <div class="card mt12">
-      <strong>B) Dine udgifter (selv betalt)</strong>
-      <p class="small muted mt4">Angiv bel√∏b/valuta og upload kvittering per kategori.</p>
+    if ($travelState === 'completed') {
 
-      <div class="mt8">
-        <div class="grid-3">
-          <label>Mad/forfriskninger - bel√∏b
-            <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($v('meal_self_paid_amount')) ?>" />
-          </label>
-          <label>Valuta
-            <select name="meal_self_paid_currency">
-              <option value="">V√¶lg</option>
-              <?php foreach ($currencyOptions as $code => $label): ?>
-                <option value="<?= $code ?>" <?= strtoupper($v('meal_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="small">Kvittering
-            <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-          </label>
-        </div>
-        <?php if ($f = $v('meal_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-        <?php if ($ht = $hintText('meals')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-      </div>
+        echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
 
-      <div class="mt8">
-        <div class="grid-3">
-          <label>Hotel/overnatning - bel√∏b
-            <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($v('hotel_self_paid_amount')) ?>" />
-          </label>
-          <label>Valuta
-            <select name="hotel_self_paid_currency">
-              <option value="">V√¶lg</option>
-              <?php foreach ($currencyOptions as $code => $label): ?>
-                <option value="<?= $code ?>" <?= strtoupper($v('hotel_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label>Antal n√¶tter
-            <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($v('hotel_self_paid_nights')) ?>" />
-          </label>
-        </div>
-        <div class="mt4">
-          <span>Indgik transport til/fra hotellet i udgiften?</span>
-          <label><input type="radio" name="assistance_hotel_transport_included" value="yes" <?= $v('assistance_hotel_transport_included')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="assistance_hotel_transport_included" value="no" <?= $v('assistance_hotel_transport_included')==='no'?'checked':'' ?> /> Nej</label>
-        </div>
-        <?php if ($f = $v('hotel_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-        <?php if ($ht = $hintText('hotelPerNight')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-      </div>
+    } elseif ($travelState === 'ongoing') {
 
-      <div class="mt8">
-        <div class="grid-3">
-          <label>Transport/bus/taxi/strandings-transport - bel√∏b
-            <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
-          </label>
-          <label>Valuta
-            <select name="blocked_self_paid_currency">
-              <option value="">V√¶lg</option>
-              <?php foreach ($currencyOptions as $code => $label): ?>
-                <option value="<?= $code ?>" <?= strtoupper($v('blocked_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="small">Kvittering
-            <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-          </label>
-        </div>
-        <?php if ($f = $v('blocked_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-        <?php if ($ht = $hintText('taxi')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-      </div>
+        echo '<p class="small muted">Status: Rejsen er i gang. Besvar ud fra hvad du oplever nu.</p>';
 
-      <div class="mt8">
-        <div class="grid-3">
-          <label>Alternativ billet/transport (selv arrangeret) - bel√∏b
-            <input type="number" step="0.01" name="alt_self_paid_amount" value="<?= h($v('alt_self_paid_amount')) ?>" />
-          </label>
-          <label>Valuta
-            <select name="alt_self_paid_currency">
-              <option value="">V√¶lg</option>
-              <?php foreach ($currencyOptions as $code => $label): ?>
-                <option value="<?= $code ?>" <?= strtoupper($v('alt_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="small">Kvittering
-            <input type="file" name="alt_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-          </label>
-        </div>
-        <?php if ($f = $v('alt_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-        <?php if ($ht = $hintText('altTransport')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-      </div>
+    }
 
-      <div class="mt8">
-        <label>Samlet udgift-upload (valgfrit)
-          <input type="file" name="extra_expense_upload" accept=".pdf,.jpg,.jpeg,.png" />
-        </label>
-        <?php if ($f = $v('extra_expense_upload')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-      </div>
-    </div>
+?>
 
-    <!-- C) Dokumentation -->
-    <div class="card mt12">
-      <strong>C) Dokumentation</strong>
-      <div class="mt8"><strong>Fik du besked om, hvordan du kunne bede om en skriftlig bekr√¶ftelse? (Art. 20 stk. 4)</strong></div>
-      <?php $dInfo = $v('delay_confirmation_info'); ?>
-      <label><input type="radio" name="delay_confirmation_info" value="yes" <?= $dInfo==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_info" value="no" <?= $dInfo==='no'?'checked':'' ?> /> Nej</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_info" value="unknown" <?= ($dInfo===''||$dInfo==='unknown')?'checked':'' ?> /> Ved ikke</label>
 
-      <div class="mt8"><strong>Modtog du en skriftlig bekr√¶ftelse?</strong></div>
-      <?php $dRecv = $v('delay_confirmation_received'); ?>
-      <label><input type="radio" name="delay_confirmation_received" value="yes" <?= $dRecv==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_received" value="no" <?= $dRecv==='no'?'checked':'' ?> /> Nej</label>
-      <label class="ml8"><input type="radio" name="delay_confirmation_received" value="unknown" <?= ($dRecv===''||$dRecv==='unknown')?'checked':'' ?> /> Ved ikke</label>
 
-      <div id="delayConfUpload" class="mt8" style="display:none;">
-        <div>Upload bekr√¶ftelsen (PDF/JPG/PNG)</div>
-        <input type="file" name="delay_confirmation_upload" accept="application/pdf,image/jpeg,image/png" />
-        <?php if ($f = $v('delay_confirmation_upload')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-      </div>
-    </div>
+<?php if ($assistOff): ?>
 
-    <?php if ($pmrUser): ?>
-      <div class="card mt12">
-        <strong>PMR-hensyn (Art. 20(5))</strong>
-        <div class="mt8">
-          <span>Blev PMR-prioritet anvendt?</span>
-          <label><input type="radio" name="assistance_pmr_priority_applied" value="yes" <?= $v('assistance_pmr_priority_applied')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="no" <?= $v('assistance_pmr_priority_applied')==='no'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="unknown" <?= $v('assistance_pmr_priority_applied')==='unknown'?'checked':'' ?> /> Ved ikke</label>
-        </div>
-        <div class="mt8">
-          <span>Blev ledsager/servicehund underst√∏ttet?</span>
-          <label><input type="radio" name="assistance_pmr_companion_supported" value="yes" <?= $v('assistance_pmr_companion_supported')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="assistance_pmr_companion_supported" value="no" <?= $v('assistance_pmr_companion_supported')==='no'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="assistance_pmr_companion_supported" value="not_applicable" <?= $v('assistance_pmr_companion_supported')==='not_applicable'?'checked':'' ?> /> Ikke relevant</label>
-        </div>
-      </div>
-    <?php endif; ?>
+  <div class="card hl mt8">
+
+    ?? Assistance efter Art. 20(2) kan vÊre undtaget for denne rejse. Udfyld alligevel udgifterne, sÂ behandler vi dem som refusion efter de gÊldende regler.
 
   </div>
 
-<?php if (!$art20Active && empty($art20Blocked)): ?>
-  <div class="card mt12 hl" id="art20Pending">
-    <strong>Assistance kr√¶ver vurdering</strong>
-    <p class="small muted mt4">Vi mangler n√∏dvendigt input (forsinkelse ‚â•60 min, aflysning eller mistet forbindelse), indtil du svarer ‚ÄúJa‚Äù p√• sp√∏rgsm√•let ovenfor.</p>
-  </div>
-<?php endif; ?>
-<?php if (!empty($art20Blocked)): ?>
-  <div class="card mt12" id="art20BlockedCard" style="border:1px solid #f5c6cb; background:#fff5f5;">
-    <strong>Art. 20 springes over</strong>
-    <p class="small muted mt4">Du har svaret ‚ÄúNej‚Äù til ‚â•60 minutter, og der er ikke registreret aflysning. Derfor indsamler vi ikke assistance-oplysninger.</p>
-  </div>
 <?php endif; ?>
 
-<div class="flex mt12">
-  <?= $this->Html->link('‚Üê Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-  <?= $this->Form->button('Forts√¶t ‚Üí', ['id' => 'assistanceSubmitBtn', 'class' => 'button']) ?>
+
+
+<!-- MÂltider / drikke -->
+
+<div class="card mt12">
+
+  <strong>??? MÂltider og drikke (Art.20)</strong>
+
+  <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller =60 min. forsinkelse.</p>
+
+  <div class="mt8">
+
+    <div>1. Fik du mÂltider eller forfriskninger?</div>
+
+    <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
+
+    <label class="ml8"><input type="radio" name="meal_offered" value="no" <?= $v('meal_offered')==='no'?'checked':'' ?> /> Nej</label>
+
+  </div>
+
+  <div class="mt4" data-show-if="meal_offered:no">
+
+    <label>MÂltider blev ikke tilbudt ñ hvorfor?
+
+      <select name="assistance_meals_unavailable_reason">
+
+        <option value="">VÊlg</option>
+
+        <?php foreach (['not_available'=>'Ikke til rÂdighed','unreasonable_terms'=>'Urimelige vilkÂr','closed'=>'Lukket','other'=>'Andet','unknown'=>'Ved ikke'] as $val => $label): ?>
+
+          <option value="<?= $val ?>" <?= $v('assistance_meals_unavailable_reason')===$val?'selected':'' ?>><?= $label ?></option>
+
+        <?php endforeach; ?>
+
+      </select>
+
+    </label>
+
+  </div>
+
+  <div class="mt8" data-show-if="meal_offered:no">
+
+    <div class="grid-3">
+
+      <label>Bel¯b
+
+        <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($v('meal_self_paid_amount')) ?>" />
+
+      </label>
+
+      <label>Valuta
+
+        <select name="meal_self_paid_currency">
+
+          <option value="">VÊlg</option>
+
+          <?php foreach ($currencyOptions as $code => $label): ?>
+
+            <option value="<?= $code ?>" <?= strtoupper($v('meal_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label class="small">Kvittering
+
+        <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+
+      </label>
+
+    </div>
+
+    <?php if ($f = $v('meal_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+
+    <?php if ($ht = $hintText('meals')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
+
+  </div>
+
 </div>
+
+
+
+<!-- Hotel / overnatning -->
+
+<div class="card mt12">
+
+  <strong>??? Hotel og indkvartering (Art.20)</strong>
+
+  <p class="small muted">Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis n¯dvendigt.</p>
+
+  <div class="mt8">
+
+    <div>2. Fik du hotel/indkvartering plus transport hertil?</div>
+
+    <label><input type="radio" name="hotel_offered" value="yes" <?= $v('hotel_offered')==='yes'?'checked':'' ?> /> Ja</label>
+
+    <label class="ml8"><input type="radio" name="hotel_offered" value="no" <?= $v('hotel_offered')==='no'?'checked':'' ?> /> Nej</label>
+
+    <label class="ml8"><input type="radio" name="hotel_offered" value="irrelevant" <?= $v('hotel_offered')==='irrelevant'?'checked':'' ?> /> Ikke relevant</label>
+
+  </div>
+
+  <div class="mt4" data-show-if="hotel_offered:yes">
+
+    <span>Indgik transport til hotellet?</span>
+
+    <label class="ml8"><input type="radio" name="assistance_hotel_transport_included" value="yes" <?= $v('assistance_hotel_transport_included')==='yes'?'checked':'' ?> /> Ja</label>
+
+    <label class="ml8"><input type="radio" name="assistance_hotel_transport_included" value="no" <?= $v('assistance_hotel_transport_included')==='no'?'checked':'' ?> /> Nej</label>
+
+  </div>
+
+  <div class="mt8" data-show-if="assistance_hotel_transport_included:no">
+
+    <div class="small muted">Angiv evt. egne udgifter til transport mellem station og hotel.</div>
+
+    <div class="grid-3 mt4">
+
+      <label>Transport til/fra hotel - bel¯b
+
+        <input type="number" step="0.01" name="hotel_transport_self_paid_amount" value="<?= h($v('hotel_transport_self_paid_amount')) ?>" />
+
+      </label>
+
+      <label>Valuta
+
+        <select name="hotel_transport_self_paid_currency">
+
+          <option value="">VÊlg</option>
+
+          <?php foreach ($currencyOptions as $code => $label): ?>
+
+            <option value="<?= $code ?>" <?= strtoupper($v('hotel_transport_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label class="small">Kvittering
+
+        <input type="file" name="hotel_transport_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+
+      </label>
+
+    </div>
+
+    <?php if ($f = $v('hotel_transport_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+
+    <?php if ($ht = $hintText('taxi')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
+
+  </div>
+
+  <div class="mt4" data-show-if="hotel_offered:no">
+
+    <label>Var overnatning n¯dvendig selvom hotel ikke blev tilbudt?
+
+      <select name="overnight_needed">
+
+        <option value="">VÊlg</option>
+
+        <?php foreach (['yes'=>'Ja','no'=>'Nej','unknown'=>'Ved ikke'] as $val => $label): ?>
+
+          <option value="<?= $val ?>" <?= $v('overnight_needed')===$val?'selected':'' ?>><?= $label ?></option>
+
+        <?php endforeach; ?>
+
+      </select>
+
+    </label>
+
+  </div>
+
+  <div class="mt8" data-show-if="hotel_offered:no">
+
+    <div class="grid-3">
+
+      <label>Hotel/overnatning - bel¯b
+
+        <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($v('hotel_self_paid_amount')) ?>" />
+
+      </label>
+
+      <label>Valuta
+
+        <select name="hotel_self_paid_currency">
+
+          <option value="">VÊlg</option>
+
+          <?php foreach ($currencyOptions as $code => $label): ?>
+
+            <option value="<?= $code ?>" <?= strtoupper($v('hotel_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label>Antal nÊtter
+
+        <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($v('hotel_self_paid_nights')) ?>" />
+
+      </label>
+
+    </div>
+
+    <?php if ($f = $v('hotel_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+
+    <?php if ($ht = $hintText('hotelPerNight')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
+
+  </div>
+
+</div>
+
+
+
+<!-- Transport / taxa / bus -->
+
+<div class="card mt12">
+
+  <strong>?? Transport til/fra (Art.20)</strong>
+
+  <p class="small muted">Alternativ transport skal tilbydes, hvis du er strandet pga. aflysning/forsinkelse.</p>
+
+  <?php
+
+    $strandedLocation = $v('stranded_location');
+
+    if (!$strandedLocation) {
+
+        if ($v('blocked_on_track') === 'yes') { $strandedLocation = 'track'; }
+
+        elseif ($v('stranded_at_station') === 'yes') { $strandedLocation = 'station'; }
+
+    }
+
+  ?>
+
+  <div class="mt4">
+
+    <div class="small muted">Hvor var du, da det skete? (vÊlg Èn)</div>
+
+    <label><input type="radio" name="stranded_location" value="track" <?= $strandedLocation==='track'?'checked':'' ?> /> Jeg sad fast i toget pÂ sporet</label>
+
+    <label class="ml8"><input type="radio" name="stranded_location" value="station" <?= $strandedLocation==='station'?'checked':'' ?> /> Jeg var pÂ en station uden videre tog</label>
+
+    <label class="ml8"><input type="radio" name="stranded_location" value="irrelevant" <?= $strandedLocation==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
+
+  </div>
+
+
+
+  <div class="mt4" data-show-if="stranded_location:track,station">
+
+    <span>Blev der stillet transport til rÂdighed for at komme vÊk/videre?</span>
+
+    <?php $bt = $v('blocked_train_alt_transport'); ?>
+
+    <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja, af operat¯r/station</label>
+
+    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg mÂtte selv arrangere</label>
+
+    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ved ikke</label>
+
+  </div>
+
+
+
+  <div class="mt4" data-show-if="blocked_train_alt_transport:yes">
+
+    <div class="grid-3">
+
+      <label>Tilbudt af
+
+        <select name="assistance_alt_transport_offered_by">
+
+          <?php foreach (['operator'=>'Operat¯r','station'=>'Station','retailer'=>'Retailer','other'=>'Andet'] as $val => $label): ?>
+
+            <option value="<?= $val ?>" <?= $v('assistance_alt_transport_offered_by')===$val?'selected':'' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label>Transporttype
+
+        <select name="assistance_alt_transport_type">
+
+          <?php foreach (['rail'=>'Tog','bus'=>'Bus','taxi'=>'Taxi','other'=>'Andet'] as $val => $label): ?>
+
+            <option value="<?= $val ?>" <?= $v('assistance_alt_transport_type')===$val?'selected':'' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label>Destination
+
+        <?php $to = $v('assistance_alt_to_destination'); ?>
+
+        <select name="assistance_alt_to_destination">
+
+          <option value="">VÊlg</option>
+
+          <option value="station" <?= $to==='station'?'selected':'' ?>>Station</option>
+
+          <option value="other_departure" <?= $to==='other_departure'?'selected':'' ?>>Andet afgangssted</option>
+
+          <option value="final_destination" <?= $to==='final_destination'?'selected':'' ?>>Endelige bestemmelsessted</option>
+
+        </select>
+
+      </label>
+
+    </div>
+
+    <div class="grid-3">
+
+      <label>Afgangstid
+
+        <input type="time" name="assistance_alt_departure_time" value="<?= h($v('assistance_alt_departure_time')) ?>" />
+
+      </label>
+
+      <label>Ankomsttid
+
+        <input type="time" name="assistance_alt_arrival_time" value="<?= h($v('assistance_alt_arrival_time')) ?>" />
+
+      </label>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="mt4" data-show-if="blocked_train_alt_transport:no">
+
+    <div class="small muted">Egne udgifter/kvittering for selv arrangeret transport kan angives herunder.</div>
+
+  </div>
+
+
+
+  <div class="mt8" data-show-if="blocked_train_alt_transport:no">
+
+    <div class="grid-3">
+
+      <label>Transport/bus/taxi eller alternativ billet - bel¯b
+
+        <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
+
+      </label>
+
+      <label>Valuta
+
+        <select name="blocked_self_paid_currency">
+
+          <option value="">VÊlg</option>
+
+          <?php foreach ($currencyOptions as $code => $label): ?>
+
+            <option value="<?= $code ?>" <?= strtoupper($v('blocked_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
+
+          <?php endforeach; ?>
+
+        </select>
+
+      </label>
+
+      <label class="small">Kvittering
+
+        <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+
+      </label>
+
+    </div>
+
+    <?php if ($f = $v('blocked_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+
+    <?php if ($ht = $hintText('taxi')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
+
+  </div>
+
+</div>
+
+
+
+<?php if ($pmrUser): ?>
+
+  <div class="card mt12">
+
+    <strong>PMR-hensyn (Art. 20(5))</strong>
+
+    <div class="mt8">
+
+      <span>Blev PMR-prioritet anvendt?</span>
+
+      <label><input type="radio" name="assistance_pmr_priority_applied" value="yes" <?= $v('assistance_pmr_priority_applied')==='yes'?'checked':'' ?> /> Ja</label>
+
+      <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="no" <?= $v('assistance_pmr_priority_applied')==='no'?'checked':'' ?> /> Nej</label>
+
+      <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="unknown" <?= $v('assistance_pmr_priority_applied')==='unknown'?'checked':'' ?> /> Ved ikke</label>
+
+    </div>
+
+    <div class="mt8">
+
+      <span>Blev ledsager/servicehund underst¯ttet?</span>
+
+      <label><input type="radio" name="assistance_pmr_companion_supported" value="yes" <?= $v('assistance_pmr_companion_supported')==='yes'?'checked':'' ?> /> Ja</label>
+
+      <label class="ml8"><input type="radio" name="assistance_pmr_companion_supported" value="no" <?= $v('assistance_pmr_companion_supported')==='no'?'checked':'' ?> /> Nej</label>
+
+      <label class="ml8"><input type="radio" name="assistance_pmr_companion_supported" value="not_applicable" <?= $v('assistance_pmr_companion_supported')==='not_applicable'?'checked':'' ?> /> Ikke relevant</label>
+
+    </div>
+
+  </div>
+
+<?php endif; ?>
+
+
+
+<div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
+
+  <?= $this->Html->link('Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+
+  <?= $this->Form->button('NÊste ?', ['class' => 'button']) ?>
+
+</div>
+
+
 
 <?= $this->Form->end() ?>
 
+
+
 <script>
+
 function updateReveal() {
+
   document.querySelectorAll('[data-show-if]').forEach(function(el) {
+
     var spec = el.getAttribute('data-show-if'); if (!spec) return;
+
     var parts = spec.split(':'); if (parts.length !== 2) return;
+
     var name = parts[0]; var valid = parts[1].split(',');
+
     var checked = document.querySelector('input[name="' + name + '"]:checked');
+
     var show = checked && valid.includes(checked.value);
+
     el.style.display = show ? 'block' : 'none';
+
     el.hidden = !show;
+
   });
-  var dc = document.querySelector('input[name="delay_confirmation_received"]:checked');
-  var up = document.getElementById('delayConfUpload');
-  if (up) { up.style.display = (dc && dc.value === 'yes') ? '' : 'none'; }
+
 }
-function toggleArt20Activation(value) {
-  var main = document.getElementById('art20Main');
-  var fallback = document.getElementById('art20Fallback');
-  var pending = document.getElementById('art20Pending');
-  var blocked = document.getElementById('art20BlockedCard');
-  var active = (value === 'yes') || <?= $art20Active ? 'true' : 'false'; ?>;
-  var submit = document.getElementById('assistanceSubmitBtn');
-  if (main) main.style.display = active ? '' : 'none';
-  if (fallback) fallback.classList.toggle('hidden', active);
-  if (pending) pending.classList.toggle('hidden', active);
-  if (blocked) blocked.style.display = (!active && value === 'no') ? '' : 'none';
-  if (submit) {
-    var disable = (!active && value === 'no');
-    submit.disabled = disable;
-    if (disable) submit.setAttribute('aria-disabled','true'); else submit.removeAttribute('aria-disabled');
-  }
-  updateReveal();
-}
-function onArt20Change() {
-  var v = (document.querySelector('input[name="art20_expected_delay_60"]:checked')||{}).value || '';
-  toggleArt20Activation(v);
-}
+
 document.addEventListener('change', function(e) {
-  if (e.target && e.target.name === 'art20_expected_delay_60') { onArt20Change(); }
-  updateReveal();
+
+  if (['meal_offered','hotel_offered','assistance_hotel_transport_included','stranded_location','blocked_train_alt_transport'].includes(e.target.name)) {
+
+    updateReveal();
+
+  }
+
 });
-document.addEventListener('input', updateReveal);
-document.addEventListener('DOMContentLoaded', function() {
-  updateReveal();
-  var sel = document.querySelector('input[name="art20_expected_delay_60"]:checked');
-  if (sel) toggleArt20Activation(sel.value); else toggleArt20Activation(<?= $art20Active ? "'yes'" : "''"; ?>);
-});
+
+document.addEventListener('DOMContentLoaded', updateReveal);
+
 </script>

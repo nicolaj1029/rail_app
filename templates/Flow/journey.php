@@ -25,6 +25,11 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
 </style>
 
 <h1>TRIN 3 – Bekræft rejse og forsinkelse</h1>
+<?php if (!empty($contractWarning ?? '')): ?>
+  <div class="card hl" style="border:1px solid #f5c2c7; background:#fff5f5; margin-bottom:8px;">
+    <div class="small" style="color:#a71d2a;"><?= h($contractWarning) ?></div>
+  </div>
+<?php endif; ?>
 <?= $this->Form->create(null, ['novalidate' => true]) ?>
 
 <!-- TRIN 3a – Cykel -->

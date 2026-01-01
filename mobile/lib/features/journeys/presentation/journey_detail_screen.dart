@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../config.dart';
-import '../services/events_service.dart';
-import 'case_close_screen.dart';
-import 'reroute_screen.dart';
+import 'package:mobile/config.dart';
+import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
+import 'package:mobile/features/live_assist/presentation/reroute_screen.dart';
+import 'package:mobile/services/events_service.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
   final Map<String, dynamic> journey;

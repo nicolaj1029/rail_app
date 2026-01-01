@@ -42,16 +42,16 @@
   </div>
 
     <h2>Trin 4+5 / Multi-ticket regressions</h2>
-  <div class=\"cards\">
-    <div class=\"card\">
+  <div class="cards">
+    <div class="card">
       <h3>Art.20 assistance (trin 4+5)</h3>
-      <a href=\"<?= h(->Url->build('/api/demo/v2/scenarios?id=art20-assistance-demo&withEval=1', ['fullBase' => true])) ?>\" target=\"_blank\">art20-assistance-demo</a>
-      <div class=\"note\">Nye art18/art20 felter i trin 4+5 (fallback, bekræftelse, assistance).</div>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=art20-assistance-demo&withEval=1', ['fullBase' => true])) ?>" target="_blank">art20-assistance-demo</a>
+      <div class="note">Nye art18/art20 felter i trin 4+5 (fallback, bekræftelse, assistance).</div>
     </div>
-    <div class=\"card\">
+    <div class="card">
       <h3>Multi-ticket / guardian</h3>
-      <a href=\"<?= h(->Url->build('/api/demo/v2/scenarios?id=multiticket-demo&withEval=1', ['fullBase' => true])) ?>\" target=\"_blank\">multiticket-demo</a>
-      <div class=\"note\">Viser ticket_upload_count, ticket_multi_passenger og værge-flag (trin 3).</div>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=multiticket-demo&withEval=1', ['fullBase' => true])) ?>" target="_blank">multiticket-demo</a>
+      <div class="note">Viser ticket_upload_count, ticket_multi_passenger og værge-flag (trin 3).</div>
     </div>
   </div>
 <h2>Testværktøjer</h2>

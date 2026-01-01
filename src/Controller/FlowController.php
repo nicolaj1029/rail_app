@@ -108,6 +108,27 @@ class FlowController extends AppController
         $form = (array)$sess->read('flow.form') ?: [];
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
+        $contractOptions = (array)($meta['contract_options'] ?? []);
+        $contractWarning = '';
+
+        // Apply contract filtering (separate model) or warn if missing selection
+        $cm = (string)($form['contract_model'] ?? '');
+        $pcid = (string)($form['problem_contract_id'] ?? '');
+        if ($cm === 'separate') {
+            if ($pcid !== '' && isset($contractOptions[$pcid]) && !empty($contractOptions[$pcid]['segments'])) {
+                if (empty($meta['_segments_all'])) { $meta['_segments_all'] = $meta['_segments_auto'] ?? []; }
+                $meta['_segments_auto'] = (array)$contractOptions[$pcid]['segments'];
+                $journey['segments'] = (array)$contractOptions[$pcid]['segments'];
+            } elseif ($pcid === '') {
+                $contractWarning = 'Vælg den kontrakt, der havde problemet (Art. 12 i Trin 2).';
+            }
+        } else {
+            // Restore original segments if previously filtered
+            if (!empty($meta['_segments_all'])) {
+                $meta['_segments_auto'] = (array)$meta['_segments_all'];
+                $journey['segments'] = (array)$meta['_segments_all'];
+            }
+        }
                 // Default PMR/bike based on OCR/LLM (only for initial GET)
         if ($this->request->is('get')) {
             // Default to "no" unless the user already set a value (OCR/LLM only informs later)
@@ -207,7 +228,7 @@ class FlowController extends AppController
             ]);
         } catch (\Throwable $e) { $formDecision = ['form'=>'eu_standard_claim','reason'=>'Fallback','notes'=>['err:'.$e->getMessage()]]; }
 
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','art6','pmr','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','art6','pmr','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings','contractOptions','contractWarning'));
         return null;
     }
 
@@ -379,8 +400,9 @@ class FlowController extends AppController
             // Remove ticket action
             $removeFile = (string)($this->request->getData('remove_ticket') ?? '');
             if ($removeFile !== '') {
+                $removeBase = basename($removeFile);
                 $currentFile = (string)($form['_ticketFilename'] ?? '');
-                if ($currentFile !== '' && $removeFile === $currentFile) {
+                if ($currentFile !== '' && ($removeFile === $currentFile || basename($currentFile) === $removeBase)) {
                     unset($form['_ticketUploaded'], $form['_ticketFilename'], $form['_ticketOriginalName']);
                     foreach ([
                         'operator','operator_country','operator_product',
@@ -391,12 +413,19 @@ class FlowController extends AppController
                     ] as $rk) { unset($form[$rk]); }
                     unset($meta['_auto'], $meta['_segments_auto'], $meta['_passengers_auto'], $meta['_identifiers'], $meta['_barcode']);
                     unset($meta['extraction_provider'], $meta['extraction_confidence']);
+                    unset($meta['_multi_tickets']);
+                    unset($journey['bookingRef']);
                     $meta['logs'][] = 'Removed primary ticket: ' . $removeFile;
                 } else {
                     if (!empty($meta['_multi_tickets']) && is_array($meta['_multi_tickets'])) {
-                        $meta['_multi_tickets'] = array_values(array_filter((array)$meta['_multi_tickets'], function($t) use ($removeFile){
-                            return (string)($t['file'] ?? '') !== $removeFile;
+                        $meta['_multi_tickets'] = array_values(array_filter((array)$meta['_multi_tickets'], function($t) use ($removeFile, $removeBase){
+                            $f = (string)($t['file'] ?? '');
+                            return !($f === $removeFile || basename($f) === $removeBase);
                         }));
+                        if (empty($meta['_multi_tickets'])) {
+                            unset($meta['_multi_tickets']);
+                            unset($journey['bookingRef']);
+                        }
                         $meta['logs'][] = 'Removed extra ticket: ' . $removeFile;
                     }
                 }
@@ -675,9 +704,6 @@ class FlowController extends AppController
                 $journey['seller_type'] = 'agency';
                 $meta['seller_type_operator'] = 'Nej';
                 $meta['seller_type_agency'] = 'Ja';
-            } elseif ($sellerChannel === 'unknown') {
-                $meta['seller_type_operator'] = 'Ved ikke';
-                $meta['seller_type_agency'] = 'Ved ikke';
             }
             // If bookingRef already present, infer single transaction by seller role
             if (!empty($journey['bookingRef'])) {
@@ -704,11 +730,9 @@ class FlowController extends AppController
             $sepRaw = (string)($this->request->getData('separate_contract_notice') ?? '');
             if ($sepRaw === 'yes') { $meta['separate_contract_notice'] = 'Ja'; }
             elseif ($sepRaw === 'no') { $meta['separate_contract_notice'] = 'Nej'; }
-            elseif ($sepRaw === 'unknown') { $meta['separate_contract_notice'] = 'unknown'; }
             $ttdRaw = (string)($this->request->getData('through_ticket_disclosure') ?? '');
             if ($ttdRaw === 'yes') { $meta['through_ticket_disclosure'] = 'Ja'; }
             elseif ($ttdRaw === 'no') { $meta['through_ticket_disclosure'] = 'Nej'; }
-            elseif ($ttdRaw === 'unknown') { $meta['through_ticket_disclosure'] = 'unknown'; }
             // Passenger edits per extra ticket
             $paxMulti = $this->request->getData('passenger_multi');
             if (is_array($paxMulti) && !empty($meta['_multi_tickets']) && is_array($meta['_multi_tickets'])) {
@@ -1658,6 +1682,21 @@ class FlowController extends AppController
         $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
         $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
 
+        // If der ikke er nogen filer tilbage, ryd visningsfelter og grupper
+        $hasTickets = !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
+        if (!$hasTickets) {
+            foreach ([
+                'operator','operator_country','operator_product',
+                'dep_date','dep_time','dep_station','arr_station','arr_time',
+                'train_no','ticket_no','price',
+                'actual_arrival_date','actual_dep_time','actual_arr_time',
+                'missed_connection_station'
+            ] as $rk) { unset($form[$rk]); }
+            unset($meta['_auto'], $meta['_segments_auto'], $meta['_passengers_auto'], $meta['_identifiers'], $meta['_barcode'], $meta['_multi_tickets']);
+            unset($meta['extraction_provider'], $meta['extraction_confidence']);
+            unset($journey['bookingRef']);
+        }
+
         // Build grouped tickets from current + multi for display
         $currSummary = [
             'file' => (string)($form['_ticketFilename'] ?? ''),
@@ -1713,6 +1752,37 @@ class FlowController extends AppController
         $groupedTickets = [];
         if (!empty($allForGrouping)) { $groupedTickets = (new \App\Service\TicketJoinService())->groupTickets($allForGrouping); }
 
+        // Build simple contract options from grouped tickets (PNR + dato + operatør/produkt)
+        $contractOptions = [];
+        if (!empty($groupedTickets)) {
+            foreach ((array)$groupedTickets as $idx => $grp) {
+                $key = 'GROUP:' . (string)$idx;
+                $pnr = (string)($grp['pnr'] ?? '');
+                if ($pnr !== '') { $key = 'PNR:' . $pnr; }
+                $depDate = (string)($grp['dep_date'] ?? '');
+                $segs = (array)($grp['segments'] ?? []);
+                $firstSeg = $segs[0] ?? [];
+                $ops = [];
+                foreach ($segs as $s) {
+                    $op = trim((string)($s['operator'] ?? ''));
+                    if ($op !== '' && !in_array($op, $ops, true)) { $ops[] = $op; }
+                }
+                $labelParts = [];
+                if ($pnr !== '') { $labelParts[] = 'PNR ' . $pnr; }
+                if ($depDate !== '') { $labelParts[] = $depDate; }
+                if (!empty($ops)) { $labelParts[] = implode('/', $ops); }
+                $prod = (string)($firstSeg['product'] ?? '');
+                if ($prod !== '') { $labelParts[] = $prod; }
+                $label = !empty($labelParts) ? implode(' · ', $labelParts) : $key;
+                $contractOptions[$key] = [
+                    'key' => $key,
+                    'label' => $label,
+                    'segments' => $segs,
+                ];
+            }
+        }
+        $meta['contract_options'] = $contractOptions;
+
         // Art. 12 hint: shared PNR scope when there is exactly one unique PNR across all uploaded tickets
         try {
             $pnrSet = [];
@@ -1733,6 +1803,34 @@ class FlowController extends AppController
             foreach ((array)($meta['_multi_tickets'] ?? []) as $mt) { if (count((array)($mt['passengers'] ?? [])) > 1) { $multiPax = true; break; } }
             $meta['ticket_multi_passenger'] = $multiPax ? 'yes' : 'no';
         } catch (\Throwable $e) { /* ignore */ }
+
+        // Art. 12 simple model: through vs separate + problem contract selection
+        if ($this->request->is('post')) {
+            $cm = (string)($this->request->getData('contract_model') ?? '');
+            if (!in_array($cm, ['through','separate'], true)) { $cm = ''; }
+            if ($cm !== '') { $form['contract_model'] = $cm; }
+            $prob = (string)($this->request->getData('problem_contract_id') ?? '');
+            if ($prob !== '') { $form['problem_contract_id'] = $prob; }
+        }
+        // Apply segment filtering if separate contract is chosen and exists
+        if ((string)($form['contract_model'] ?? '') === 'separate' && !empty($form['problem_contract_id'])) {
+            $pcid = (string)$form['problem_contract_id'];
+            $opts = (array)($meta['contract_options'] ?? []);
+            if (isset($opts[$pcid]) && !empty($opts[$pcid]['segments'])) {
+                // Backup original segments once
+                if (empty($meta['_segments_all'])) {
+                    $meta['_segments_all'] = $meta['_segments_auto'] ?? [];
+                }
+                $meta['_segments_auto'] = (array)$opts[$pcid]['segments'];
+                $journey['segments'] = (array)$opts[$pcid]['segments'];
+            }
+        } else {
+            // Restore original segments if previously filtered
+            if (!empty($meta['_segments_all'])) {
+                $meta['_segments_auto'] = (array)$meta['_segments_all'];
+                $journey['segments'] = (array)$meta['_segments_all'];
+            }
+        }
 
         // Art. 12 TRIN 2/3.1/4/5 flow (slim): compute next-hook guidance for TRIN 3 hooks panel AFTER ticket counts and PNR scope are set
         try {

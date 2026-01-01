@@ -266,7 +266,13 @@ class ExemptionProfileBuilder
 
     private function classifyScope(array $journey): string
     {
-        // Simple classifier; can be replaced with distance/time based share outside EU
+        // 1) Respect an explicitly provided scope (e.g. from hooks preview or upstream UI)
+        $explicit = (string)($journey['scope'] ?? '');
+        if (in_array($explicit, ['regional', 'long_domestic', 'intl_inside_eu', 'intl_beyond_eu', 'suburban'], true)) {
+            return $explicit;
+        }
+
+        // 2) Fallback: derive from boolean hints
         if (!empty($journey['is_suburban'])) return 'suburban';
         if (!empty($journey['is_international_beyond_eu'])) return 'intl_beyond_eu';
         if (!empty($journey['is_international_inside_eu'])) return 'intl_inside_eu';

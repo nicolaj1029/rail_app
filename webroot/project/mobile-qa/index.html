@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="da">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Mobile QA – Rail App</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            margin: 24px
+        }
+
+        h1,
+        h2 {
+            color: #111;
+            margin-bottom: 6px
+        }
+
+        p {
+            color: #333
+        }
+
+        ul {
+            margin: 8px 0 16px 18px
+        }
+
+        li {
+            margin: 4px 0
+        }
+
+        code,
+        pre {
+            background: #f4f4f5;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 2px 6px
+        }
+
+        pre {
+            padding: 12px;
+            overflow: auto
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 12px
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .04)
+        }
+
+        .card h3 {
+            margin: 0 0 8px;
+            font-size: 16px;
+            color: #111
+        }
+
+        .card a {
+            color: #0a6fd8;
+            text-decoration: none
+        }
+
+        .card a:hover {
+            text-decoration: underline
+        }
+
+        .note {
+            color: #555;
+            font-size: 13px
+        }
+
+        .ok {
+            color: #0a7f2e
+        }
+
+        .warn {
+            color: #b36b00
+        }
+
+        .err {
+            color: #b00020
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Mobile QA</h1>
+    <p>Hurtig tjekliste til at verificere Flutter-klienten mod backend.</p>
+
+    <h2>Start appen</h2>
+    <pre><code>cd C:\wamp64\www\rail_app\mobile
+flutter devices
+flutter run -d &lt;device-id&gt; --dart-define=API_BASE_URL=https://unusual-vella-tiresomely.ngrok-free.dev/rail_app</code></pre>
+    <ul>
+        <li>Hvis forbindelsen falder ud, prøv: <code>--device-timeout=60</code> eller genstart ADB.</li>
+    </ul>
+
+    <h2>Sådan ser du de seneste ændringer</h2>
+    <ul>
+        <li>Brug hot reload: tryk <code>r</code> i terminalen; hot restart: <code>R</code>.</li>
+        <li>På skærmen <strong>Live Assist</strong>: rul ned – se sektionen <em>Detected journeys</em> med
+            <em>Confirm</em>-knapper.
+        </li>
+        <li>På <strong>Case Close</strong>: trin 3 har <em>Upload billet</em> (kamera/galleri) og auto-udfyld af
+            PNR/pris/valuta; trin 5 har assistance-valg; trin 6 viser opsummering og <em>Indsend</em>.</li>
+    </ul>
+
+    <h2>Direkte QA‑links</h2>
+    <div class="cards">
+        <div class="card">
+            <h3>Live Assist</h3><a href="/rail_app/project/links" target="_blank">Project links</a>
+            <div class="note">Find Live Assist skærmen; bekræft journeys og events.</div>
+        </div>
+        <div class="card">
+            <h3>Journeys API</h3><a href="/rail_app/api/shadow/journeys" target="_blank">/api/shadow/journeys</a>
+            <div class="note">Grupperede rejser fra pings (deviceId kræves som query eller body).</div>
+        </div>
+        <div class="card">
+            <h3>Confirm journey</h3><a href="/rail_app/api/shadow/journeys/1/confirm"
+                target="_blank">/api/shadow/journeys/{id}/confirm</a>
+            <div class="note">Stub bekræftelse; returnerer case id / status.</div>
+        </div>
+        <div class="card">
+            <h3>Stations</h3><a href="/rail_app/api/stations" target="_blank">/api/stations</a>
+            <div class="note">Stationsliste for geofence (bbox understøttet).</div>
+        </div>
+        <div class="card">
+            <h3>Events</h3><a href="/rail_app/api/events" target="_blank">/api/events</a>
+            <div class="note">POST app‑hændelser (status/assistance/udlæg/geofence).</div>
+        </div>
+        <div class="card">
+            <h3>Ticket match</h3><a href="/rail_app/api/tickets/match" target="_blank">/api/tickets/match</a>
+            <div class="note">Multipart (stub) fra upload i Case Close trin 3.</div>
+        </div>
+        <div class="card">
+            <h3>Evaluation (pipeline)</h3><a href="/rail_app/api/pipeline/run" target="_blank">/api/pipeline/run</a>
+            <div class="note">Bruges af knappen <em>Evaluer (server)</em> i Case Close trin 6.</div>
+        </div>
+    </div>
+
+    <h2>Fixtures & evaluering</h2>
+    <div class="cards">
+        <div class="card">
+            <h3>Scenarier</h3><a href="/rail_app/api/demo/v2/scenarios" target="_blank">/api/demo/v2/scenarios</a>
+            <div class="note">Samling af demo‑scenarier til hurtig evaluering (Flow QA parity).</div>
+        </div>
+        <div class="card">
+            <h3>Kør scenarier</h3><a href="/rail_app/api/demo/v2/run-scenarios"
+                target="_blank">/api/demo/v2/run-scenarios</a>
+            <div class="note">Batch‑kørsel af eksempelsager med samme evaluatorer.</div>
+        </div>
+        <div class="card">
+            <h3>Mock billetter</h3><a href="/rail_app/api/demo/mock-tickets" target="_blank">/api/demo/mock-tickets</a>
+            <div class="note">Generér/scan mocks og se fuld analyse.</div>
+        </div>
+    </div>
+    </div>
+
+    <h2>Fejlsøgning</h2>
+    <ul>
+        <li class="warn">Kan ikke nå backend: brug ngrok URL i <code>API_BASE_URL</code> og test i telefonens browser.
+        </li>
+        <li class="warn">Ingen rejser: start tracking og gå en tur; tryk refresh under <em>Detected journeys</em>.</li>
+        <li class="err">Build-fejl: kør <code>flutter clean</code> efter store ændringer, og prøv igen.</li>
+    </ul>
+
+    <p class="note">Side: opdateret d. 13‑12‑2025. Design matcher Flow QA‑kortlayout for hurtig visuel QA.</p>
+</body>
+
+</html>

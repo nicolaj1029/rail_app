@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../config.dart';
-import '../services/api_client.dart';
-import '../services/reroute_service.dart';
+import 'package:mobile/config.dart';
+import 'package:mobile/features/live_assist/data/reroute_service.dart';
+import 'package:mobile/services/api_client.dart';
 
 class RerouteScreen extends StatefulWidget {
   final String destination;
