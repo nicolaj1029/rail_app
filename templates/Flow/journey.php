@@ -214,38 +214,9 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
   </div>
 </div>
 
-<!-- TRIN 3c – Hændelse -->
-<div class="card mt12">
-  <strong>⚡ TRIN 3c – Hændelse (Art.18/20 standard gating)</strong>
-  <p class="small muted">Brug hændelsen til at aktivere den normale art.18/20-vurdering.</p>
-
-  <div class="mt8">
-    <div>Hændelsestype (vælg én)</div>
-    <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
-    <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
-  </div>
-
-  <div class="mt4" data-show-if="incident_main:delay">
-    <div>Har du modtaget besked om ≥60 minutters forsinkelse?</div>
-    <label><input type="radio" name="expected_delay_60" value="yes" <?= $v('expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="expected_delay_60" value="no" <?= $v('expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
-  </div>
-
-  <div class="mt4">
-    <label><input type="checkbox" name="incident_missed" value="yes" <?= $v('incident_missed')==='yes'?'checked':'' ?> /> Mistet forbindelse (kan kombineres)</label>
-  </div>
-
-
-  <div class="mt4" data-show-if="incident_missed:yes">
-    <div class="card" style="margin-top:8px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-      <?= $this->element('missed_connection_block', compact('meta','form')) ?>
-    </div>
-  </div>
-</div>
-
 <div class="mt12" style="display:flex; gap:8px; align-items:center;">
   <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-  <?= $this->Form->button('Næste trin →', ['class' => 'button']) ?>
+  <?= $this->Html->link('Næste trin →', ['action' => 'incident'], ['class' => 'button']) ?>
 </div>
 
 <?= $this->Form->end() ?>

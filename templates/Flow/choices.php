@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /** @var \App\View\AppView $this */
 $form = $form ?? [];
 $flags = $flags ?? [];
@@ -20,14 +20,14 @@ $isCompleted = ($travelState === 'completed');
     .flow-wide { width: 100%; }
 </style>
 <div class="flow-wrapper">
-<h1>TRIN 4 - Dine valg (Art. 18)</h1>
+<h1>TRIN 5 - Dine valg (Art. 18)</h1>
 <?php
     if ($travelState === 'completed') {
         echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
     } elseif ($travelState === 'ongoing') {
-        echo '<p class="small muted">Status: Rejsen er i gang. Vi samler dine valg for resten af forløbet.</p>';
+        echo '<p class="small muted">Status: Rejsen er i gang. Vi samler dine valg for resten af forl├©bet.</p>';
     } elseif ($travelState === 'not_started') {
-        echo '<p class="small muted">Status: Rejsen er endnu ikke påbegyndt. Besvar ud fra, hvad du forventer at gøre ved forsinkelse/aflysning.</p>';
+        echo '<p class="small muted">Status: Rejsen er endnu ikke p├Ñbegyndt. Besvar ud fra, hvad du forventer at g├©re ved forsinkelse/aflysning.</p>';
     }
 ?>
 <?php
@@ -52,13 +52,13 @@ $preview = round($tp * $rate * $share, 2);
 
 <?php if ($isCompleted): ?>
     <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-        <strong>Rejsen er afsluttet — hvad skete der?</strong>
-        <div class="small muted" style="margin-top:6px;">Ved afgang, missed connection eller aflysning — ved ≥60 min. forsinkelse tilbydes nedenstående muligheder.</div>
+        <strong>Rejsen er afsluttet ÔÇö hvad skete der?</strong>
+        <div class="small muted" style="margin-top:6px;">Ved afgang, missed connection eller aflysning ÔÇö ved ÔëÑ60 min. forsinkelse tilbydes nedenst├Ñende muligheder.</div>
         <?php $remedy = (string)($form['remedyChoice'] ?? ''); if ($remedy==='') { if (($form['trip_cancelled_return_to_origin'] ?? '')==='yes') { $remedy='refund_return'; } elseif (($form['reroute_same_conditions_soonest'] ?? '')==='yes') { $remedy='reroute_soonest'; } elseif (($form['reroute_later_at_choice'] ?? '')==='yes') { $remedy='reroute_later'; } } ?>
-        <div class="mt8"><strong>Vælg præcis én mulighed</strong></div>
+        <div class="mt8"><strong>V├ªlg pr├ªcis ├®n mulighed</strong></div>
         <label><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> Blev hele rejsen aflyst, og vendte du tilbage til udgangspunktet?</label><br/>
-        <label><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Fik du tilbudt omlægning på tilsvarende vilkår ved først givne lejlighed?</label><br/>
-        <label><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> Ønskede du i stedet omlægning på et senere tidspunkt efter eget valg?</label>
+        <label><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Fik du tilbudt oml├ªgning p├Ñ tilsvarende vilk├Ñr ved f├©rst givne lejlighed?</label><br/>
+        <label><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> ├ÿnskede du i stedet oml├ªgning p├Ñ et senere tidspunkt efter eget valg?</label>
 
         <!-- Hidden sync to legacy hooks -->
         <input type="hidden" id="tcr_sync_past" name="trip_cancelled_return_to_origin" value="<?= ($form['trip_cancelled_return_to_origin'] ?? '') ?>" />
@@ -72,7 +72,7 @@ $preview = round($tp * $rate * $share, 2);
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
             <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
             <div class="grid-2 mt8" id="returnExpenseFieldsPast" style="<?= $rtFlag==='yes' ? '' : 'display:none;' ?>">
-                <label>Beløb
+                <label>Bel├©b
                     <input type="number" step="0.01" name="return_to_origin_amount" value="<?= h($form['return_to_origin_amount'] ?? '') ?>" />
                 </label>
                 <label>Valuta
@@ -82,11 +82,11 @@ $preview = round($tp * $rate * $share, 2);
         </div>
 
         <div id="rerouteSectionPast" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
-            <div class="mt0"><strong>Omlægning</strong></div>
+            <div class="mt0"><strong>Oml├ªgning</strong></div>
             <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); $show100Past = $showArt183 && $remedy==='reroute_soonest'; ?>
             <div id="ri100PastWrap" style="<?= $show100Past ? '' : 'display:none;' ?>" data-art="18(3)">
-                <div class="mt8">Fik du besked om mulighederne for omlægning inden for 100 minutter? (Art. 18(3))
-                    <span class="small muted">Vi bruger planlagt afgang + første omlægnings-besked til at vurdere 100-min-reglen.</span>
+                <div class="mt8">Fik du besked om mulighederne for oml├ªgning inden for 100 minutter? (Art. 18(3))
+                    <span class="small muted">Vi bruger planlagt afgang + f├©rste oml├ªgnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
                 <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
@@ -95,7 +95,7 @@ $preview = round($tp * $rate * $share, 2);
 
             <!-- OFF-variant additions: always simple branch without 100-min dependency -->
             <fieldset id="offerProvidedWrapPast" class="mt8" <?= $showArt183 ? 'hidden' : '' ?> >
-              <legend>Fik du et konkret omlægningstilbud fra operatøren?</legend>
+              <legend>Fik du et konkret oml├ªgningstilbud fra operat├©ren?</legend>
               <?php $offProv = (string)($form['offer_provided'] ?? ''); ?>
               <label><input type="radio" name="offer_provided" value="yes" <?= $offProv==='yes'?'checked':'' ?> /> Ja</label>
               <label class="ml8"><input type="radio" name="offer_provided" value="no" <?= $offProv==='no'?'checked':'' ?> /> Nej</label>
@@ -104,33 +104,33 @@ $preview = round($tp * $rate * $share, 2);
 
             <?php $spt = (string)($form['self_purchased_new_ticket'] ?? ''); ?>
                         <div id="step2Past" style="display:none">
-                <div class="mt8">Købte du selv en ny billet for at komme videre?</div>
+                <div class="mt8">K├©bte du selv en ny billet for at komme videre?</div>
                 <label><input type="radio" name="self_purchased_new_ticket" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="self_purchased_new_ticket" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
-                <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du købte selv ny billet, selvom omlægning blev tilbudt inden for 100 min — udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig være mulig.</div>
+                <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du k├©bte selv ny billet, selvom oml├ªgning blev tilbudt inden for 100 min ÔÇö udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig v├ªre mulig.</div>
             </div>
 
                         <fieldset id="opApprovalWrapPast" class="mt8" hidden>
-                            <legend>Var selvkøbet godkendt af operatøren?</legend>
+                            <legend>Var selvk├©bet godkendt af operat├©ren?</legend>
                             <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
                             <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
                             <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
                             <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="unknown" <?= ($opOK===''||$opOK==='unknown')?'checked':'' ?> /> Ved ikke</label>
                         </fieldset>
                         <div id="notesAreaPast" class="notes small">
-                            <p id="noteApprovedPast" class="note success" style="display:none;">✓ Selvkøb er oplyst som godkendt af operatøren.</p>
-                            <p id="noteNotRefundablePast" class="note warn" style="display:none;">⚠️ Selvkøb uden operatørens godkendelse refunderes normalt ikke.</p>
+                            <p id="noteApprovedPast" class="note success" style="display:none;">Ô£ô Selvk├©b er oplyst som godkendt af operat├©ren.</p>
+                            <p id="noteNotRefundablePast" class="note warn" style="display:none;">ÔÜá´©Å Selvk├©b uden operat├©rens godkendelse refunderes normalt ikke.</p>
                         </div>
 
 
                         <div id="recBlockPast">
                                 <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
-                                <div class="mt8">Medførte omlægningen ekstra udgifter for dig? (højere klasse/andet transportmiddel)</div>
+                                <div class="mt8">Medf├©rte oml├ªgningen ekstra udgifter for dig? (h├©jere klasse/andet transportmiddel)</div>
                                 <label><input type="radio" name="reroute_extra_costs" value="yes" <?= $rec==='yes'?'checked':'' ?> /> Ja</label>
                                 <label class="ml8"><input type="radio" name="reroute_extra_costs" value="no" <?= $rec==='no'?'checked':'' ?> /> Nej</label>
                                 <label class="ml8"><input type="radio" name="reroute_extra_costs" value="unknown" <?= ($rec===''||$rec==='unknown')?'checked':'' ?> /> Ved ikke</label>
                                 <div class="grid-2 mt8 <?= $rec==='yes' ? '' : 'hidden' ?>" id="recWrapPast">
-                                        <label>Beløb
+                                        <label>Bel├©b
                                             <input type="number" step="0.01" name="reroute_extra_costs_amount" value="<?= h($form['reroute_extra_costs_amount'] ?? '') ?>" />
                                         </label>
                                         <label>Valuta
@@ -157,7 +157,7 @@ $preview = round($tp * $rate * $share, 2);
                             <input type="hidden" name="downgrade_comp_basis" value="<?= h($basisCur) ?>" />
                             <input type="hidden" name="downgrade_segment_share" value="<?= h($shareCur) ?>" />
                             <div class="small"><strong>Nedgradering</strong> (opsummering fra Trin 3; rediger i Trin 3)</div>
-                            <div class="small">Status: <?= $dgc!=='' ? h($dgc) : '—' ?> · Basis: <?= $basisCur!=='' ? h($basisCur) : '—' ?> · Andel: <?= number_format((float)$shareCur, 3) ?> (basis <?= h($form['downgrade_segment_share_basis'] ?? 'time') ?>)</div>
+                            <div class="small">Status: <?= $dgc!=='' ? h($dgc) : 'ÔÇö' ?> ┬À Basis: <?= $basisCur!=='' ? h($basisCur) : 'ÔÇö' ?> ┬À Andel: <?= number_format((float)$shareCur, 3) ?> (basis <?= h($form['downgrade_segment_share_basis'] ?? 'time') ?>)</div>
                             <div class="mt4 small">Billetpris (fra TRIN 2): <strong><?= number_format($tp, 2) ?></strong></div>
                             <div class="mt4 small">Forventet delvis tilbagebetaling (Bilag II): <strong id="downgrade-preview-past"><?= number_format($preview, 2) ?></strong></div>
                         </div>
@@ -165,7 +165,7 @@ $preview = round($tp * $rate * $share, 2);
             </div>
 
             <?php if (!$showArt183): ?>
-                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler spørgsmålet og anvender alternative vurderinger.</div>
+                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">ÔÜá´©Å 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler sp├©rgsm├Ñlet og anvender alternative vurderinger.</div>
             <?php endif; ?>
         </div>
     </div>
@@ -177,14 +177,14 @@ $preview = round($tp * $rate * $share, 2);
 
 
                         <div id="dgcBlockNow" style="display:none;">
-                            <!-- Nedgradering håndteres i Trin 3; behold hidden felter for dataflow -->
+                            <!-- Nedgradering h├Ñndteres i Trin 3; behold hidden felter for dataflow -->
                             <input type="hidden" name="downgrade_occurred" value="<?= h((string)($form['downgrade_occurred'] ?? '')) ?>" />
                             <input type="hidden" name="downgrade_comp_basis" value="<?= h((string)($form['downgrade_comp_basis'] ?? '')) ?>" />
                             <input type="hidden" name="downgrade_segment_share" value="<?= h((string)($form['downgrade_segment_share'] ?? $share)) ?>" />
                         </div>
 
             <?php if (!$showArt183): ?>
-                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">⚠️ 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler spørgsmålet og anvender alternative vurderinger.</div>
+                <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">ÔÜá´©Å 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler sp├©rgsm├Ñlet og anvender alternative vurderinger.</div>
             <?php endif; ?>
         </div>
     </div>
@@ -192,7 +192,7 @@ $preview = round($tp * $rate * $share, 2);
 
 
 <script>
-// TRIN 4 (Art. 18): klientlogik for valg og sektioner
+// TRIN 5 (Art. 18): klientlogik for valg og sektioner
 (function(){
     function s7Update() {
         var remEl = document.querySelector('input[name="remedyChoice"]:checked');
@@ -212,7 +212,7 @@ $preview = round($tp * $rate * $share, 2);
             var riWrap = document.getElementById('ri100' + suf + 'Wrap');
             if (riWrap) { riWrap.style.display = (val === 'reroute_soonest') ? '' : 'none'; }
         });
-        // Vis Art.20(4) når en gren er valgt
+        // Vis Art.20(4) n├Ñr en gren er valgt
         var art20 = document.getElementById('art20Wrapper');
         if (art20) { art20.style.display = (val !== '') ? '' : 'none'; }
         // Detail toggles
@@ -274,7 +274,7 @@ var live = document.getElementById('rerouteLive');
         var a183On = !(artFlags.hasOwnProperty('art18_3') && artFlags['art18_3'] === false);
 
         // Progressive visibility
-        // Step 1 (only when 18(3) is ON) → Step 2: show Step 2 only when answered OR 18(3) OFF
+        // Step 1 (only when 18(3) is ON) ÔåÆ Step 2: show Step 2 only when answered OR 18(3) OFF
         var step1Answered = a183On ? !!ri100 : true;
         var step2Past = document.getElementById('step2Past');
         var step2Now = document.getElementById('step2Now');
@@ -283,7 +283,7 @@ var live = document.getElementById('rerouteLive');
     if (step2Past) step2Past.style.display = (step1Answered || (advPast && advPast.open) || advOn) ? '' : 'none';
     if (step2Now) step2Now.style.display = (step1Answered || (advNow && advNow.open) || advOn) ? '' : 'none';
 
-        // Step 2 → Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
+        // Step 2 ÔåÆ Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
         var step2Answered = (selfBuy === 'yes' || selfBuy === 'no');
         if ((advPast && advPast.open) || advOn) {
             if (recBlockPast) recBlockPast.style.display = '';
@@ -299,7 +299,7 @@ var live = document.getElementById('rerouteLive');
             if (recBlockNow) recBlockNow.style.display = step2Answered ? '' : 'none';
             if (dgcBlockNow) dgcBlockNow.style.display = 'none';
         }
-        if (live) { live.textContent = step2Answered ? 'Trin 2 besvaret – gren valgt' : (step1Answered ? 'Trin 1 besvaret – vis trin 2' : 'Trin 1 endnu ikke besvaret'); }
+        if (live) { live.textContent = step2Answered ? 'Trin 2 besvaret ÔÇô gren valgt' : (step1Answered ? 'Trin 1 besvaret ÔÇô vis trin 2' : 'Trin 1 endnu ikke besvaret'); }
 
         // Reset any prior locks (ensures toggling between scenarios clears stale states)
         disableGroup('reroute_extra_costs', false);
@@ -459,7 +459,7 @@ var live = document.getElementById('rerouteLive');
     if (dgcNow) dgcNow.style.display = 'none';
 
         // Class/reservation dynamic toggles (moved fields)
-        // (Class/reservation UI now only i TRIN 2 — no toggles needed here)
+        // (Class/reservation UI now only i TRIN 2 ÔÇö no toggles needed here)
 
         // Exemptions gating: hide 100-min question blocks when Art. 18(3) doesn't apply
         try {
@@ -507,7 +507,7 @@ var live = document.getElementById('rerouteLive');
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
-    // (No class/reservation fields in TRIN 4 now)
+    // (No class/reservation fields in TRIN 5 now)
         var advPast = document.getElementById('advPast');
         var advNow = document.getElementById('advNow');
         if (advPast) advPast.addEventListener('toggle', s7Update);
@@ -530,18 +530,20 @@ var live = document.getElementById('rerouteLive');
 <!-- Progressive reveal: Advanced toggle (checkbox) + optional details -->
 <div class="mt8">
     <label><input type="checkbox" id="advToggle" /> Vis alt (avanceret)</label>
-    <span class="small muted ml8">For power users: viser alle felter; låste værdier forbliver låst.</span>
+    <span class="small muted ml8">For power users: viser alle felter; l├Ñste v├ªrdier forbliver l├Ñst.</span>
 </div>
 <details id="advPast" class="mt8"><summary>Avanceret (afsluttet rejse)</summary><div class="small muted">Supplerende overblik, valgfrit.</div></details>
-<details id="advNow" class="mt8"><summary>Avanceret (igangværende rejse)</summary><div class="small muted">Supplerende overblik, valgfrit.</div></details>
+<details id="advNow" class="mt8"><summary>Avanceret (igangv├ªrende rejse)</summary><div class="small muted">Supplerende overblik, valgfrit.</div></details>
 <div id="rerouteLive" aria-live="polite" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Init</div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-    <?= $this->Html->link('← Tilbage', ['action' => 'journey'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-    <?= $this->Form->button('Fortsæt →', ['id' => 'choicesSubmitBtn', 'class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsæt til næste trin', 'formnovalidate' => true]) ?>
-    <?= $this->Html->link('Spring over →', ['controller' => 'Flow', 'action' => 'assistance'], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'Gå til næste trin uden at gemme ændringer']) ?>
+    <?= $this->Html->link('ÔåÉ Tilbage', ['action' => 'incident'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+    <?= $this->Form->button('Forts├ªt ÔåÆ', ['id' => 'choicesSubmitBtn', 'class' => 'button', 'type' => 'submit', 'aria-label' => 'Forts├ªt til n├ªste trin', 'formnovalidate' => true]) ?>
+    <?= $this->Html->link('Spring over ÔåÆ', ['controller' => 'Flow', 'action' => 'assistance'], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'G├Ñ til n├ªste trin uden at gemme ├ªndringer']) ?>
     <input type="hidden" name="_choices_submitted" value="1" />
 </div>
 
 <?= $this->Form->end() ?>
 </div>
+
+

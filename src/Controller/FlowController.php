@@ -94,6 +94,98 @@ class FlowController extends AppController
         return null;
     }
 
+    public function incident(): \Cake\Http\Response|null
+    {
+        $sess = $this->request->getSession();
+        $journey = (array)$sess->read('flow.journey') ?: [];
+        $meta = (array)$sess->read('flow.meta') ?: [];
+        $compute = (array)$sess->read('flow.compute') ?: [];
+        $form = (array)$sess->read('flow.form') ?: [];
+        $incident = (array)$sess->read('flow.incident') ?: [];
+        $flags = (array)$sess->read('flow.flags') ?: [];
+
+        if ($this->request->is('post')) {
+            $data = (array)$this->request->getData();
+            $form = array_merge($form, $data);
+            $main = (string)($data['incident_main'] ?? '');
+            if (!in_array($main, ['delay','cancellation',''], true)) { $main = ''; }
+            $incident['main'] = $main;
+            $incident['missed'] = $this->truthy($data['incident_missed'] ?? false) ? 'yes' : '';
+            if (isset($data['expected_delay_60'])) {
+                $form['expected_delay_60'] = (string)$data['expected_delay_60'];
+            }
+            $sess->write('flow.compute', $compute);
+            $sess->write('flow.form', $form);
+            $sess->write('flow.incident', $incident);
+            return $this->redirect(['action' => 'choices']);
+        }
+
+        // Fallbacks to improve scope inference when extractor missed stations
+        try {
+            if (empty($journey['segments']) && !empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) {
+                $journey['segments'] = (array)$meta['_segments_auto'];
+            }
+            if (empty($meta['_auto']['dep_station']['value'] ?? '') && !empty($form['dep_station'])) {
+                $meta['_auto']['dep_station'] = ['value' => (string)$form['dep_station'], 'source' => 'form'];
+            }
+            if (empty($meta['_auto']['arr_station']['value'] ?? '') && !empty($form['arr_station'])) {
+                $meta['_auto']['arr_station'] = ['value' => (string)$form['arr_station'], 'source' => 'form'];
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+            $journey = $inferRes['journey'];
+            if (!empty($inferRes['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $inferRes['logs']); }
+        } catch (\Throwable $e) { $meta['logs'][] = 'WARN: scope infer failed: ' . $e->getMessage(); }
+        try {
+            $hasCountry = false; foreach ((array)($journey['segments'] ?? []) as $s) { if (!empty($s['country'])) { $hasCountry = true; break; } }
+            $opC = (string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''));
+            if (!$hasCountry && $opC !== '') {
+                $journey['country']['value'] = $opC;
+                if (!empty($journey['segments']) && is_array($journey['segments'])) {
+                    $journey['segments'][0]['country'] = $opC;
+                }
+                $meta['logs'][] = 'Fallback: set country from operator_country=' . $opC;
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+        $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        try {
+            $auto12 = (new \App\Service\Art12AutoDeriver())->apply($journey, $meta);
+            $meta = $auto12['meta'];
+            if (!empty($auto12['logs'])) { $meta['logs'] = array_merge($meta['logs'] ?? [], $auto12['logs']); }
+        } catch (\Throwable $e) { $meta['logs'][] = 'WARN: Art12AutoDeriver failed: ' . $e->getMessage(); }
+        try { $art12 = (new \App\Service\Art12Evaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art12 = ['hooks'=>[]]; $meta['logs'][] = 'WARN: Art12Evaluator failed: ' . $e->getMessage(); }
+        try { $art9 = (new \App\Service\Art9Evaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art9 = null; $meta['logs'][] = 'WARN: Art9Evaluator failed: ' . $e->getMessage(); }
+        try { $art6 = (new \App\Service\Art6BikeEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art6 = null; $meta['logs'][] = 'WARN: Art6BikeEvaluator failed: ' . $e->getMessage(); }
+        try { $pmr = (new \App\Service\Art21to24PmrEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $pmr = null; $meta['logs'][] = 'WARN: Art21to24PmrEvaluator failed: ' . $e->getMessage(); }
+        try { $art20 = (new \App\Service\Art20AssistanceEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art20 = null; $meta['logs'][] = 'WARN: Art20AssistanceEvaluator failed: ' . $e->getMessage(); }
+        $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
+        $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
+        [$euOnlySuggested, $euOnlyReason] = $this->suggestEuOnly($journey, $meta);
+        $serviceWarnings = [];
+        if (!empty($journey['is_suburban'])) {
+            $serviceWarnings[] = 'Suburban/lokaltog er ikke understøttet i denne app (national håndtering påkrævet).';
+        } elseif (!empty($profile['blocked']) && (string)($profile['scope'] ?? '') === 'regional') {
+            $serviceWarnings[] = 'Regional trafik i dette land er undtaget fra EU-flowet her (følg operatørens nationale procedure).';
+        }
+        try {
+            $countryCtx = (string)($journey['country']['value'] ?? ($form['operator_country'] ?? ''));
+            $scopeCtx = (string)($profile['scope'] ?? '');
+            $opCtx = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
+            $prodCtx = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
+            $delayCtx = (int)($compute['delayMinEU'] ?? 0);
+            $selector = new \App\Service\ClaimFormSelector();
+            $formDecision = $selector->select([
+                'country' => $countryCtx,'scope' => $scopeCtx,'operator' => $opCtx,'product' => $prodCtx,'delayMin' => $delayCtx,'profile' => $profile,
+            ]);
+        } catch (\Throwable $e) { $formDecision = ['form'=>'eu_standard_claim','reason'=>'Fallback','notes'=>['err:'.$e->getMessage()]]; }
+
+        $sess->write('flow.journey', $journey);
+        $sess->write('flow.meta', $meta);
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','art6','pmr','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
+        return null;
+    }
+
     public function journey(): \Cake\Http\Response|null
     {
         $sess = $this->request->getSession();
