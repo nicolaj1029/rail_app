@@ -1,4 +1,4 @@
-<?php
+Ôªø<?php
 
 /** @var \App\View\AppView $this */
 
@@ -36,7 +36,7 @@ $currencyOptions = [
 
     'BGN' => 'BGN - Bulgarsk lev',
 
-    'RON' => 'RON - RumÊnsk leu',
+    'RON' => 'RON - Rum√¶nsk leu',
 
 ];
 
@@ -58,7 +58,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     $max = number_format((float)$h['max'], 0, ',', '.');
 
-    return "Typisk interval: {$min}ñ{$max} {$h['currency']}";
+    return "Typisk interval: {$min}‚Äì{$max} {$h['currency']}";
 
 };
 
@@ -102,7 +102,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <p class="small muted">
 
-  Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. EkstraordinÊre forhold pÂvirker kun hotel-loft (max 3 nÊtter).
+  Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordin√¶re forhold p√•virker kun hotel-loft (max 3 n√¶tter).
 
 </p>
 
@@ -126,7 +126,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <div class="card hl mt8">
 
-    ?? Assistance efter Art. 20(2) kan vÊre undtaget for denne rejse. Udfyld alligevel udgifterne, sÂ behandler vi dem som refusion efter de gÊldende regler.
+    ?? Assistance efter Art. 20(2) kan v√¶re undtaget for denne rejse. Udfyld alligevel udgifterne, s√• behandler vi dem som refusion efter de g√¶ldende regler.
 
   </div>
 
@@ -134,95 +134,53 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
-<!-- MÂltider / drikke -->
-
+<!-- M√•ltider / drikke -->
 <div class="card mt12">
-
-  <strong>??? MÂltider og drikke (Art.20)</strong>
-
-  <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller =60 min. forsinkelse.</p>
-
+  <strong>üçΩÔ∏è M√•ltider og drikke (Art.20)</strong>
+  <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller ‚â•60 min. forsinkelse.</p>
   <div class="mt8">
-
-    <div>1. Fik du mÂltider eller forfriskninger?</div>
-
+    <div>1. Fik du m√•ltider eller forfriskninger?</div>
     <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
-
     <label class="ml8"><input type="radio" name="meal_offered" value="no" <?= $v('meal_offered')==='no'?'checked':'' ?> /> Nej</label>
-
   </div>
-
   <div class="mt4" data-show-if="meal_offered:no">
-
-    <label>MÂltider blev ikke tilbudt ñ hvorfor?
-
+    <label>M√•ltider blev ikke tilbudt ‚Äì hvorfor?
       <select name="assistance_meals_unavailable_reason">
-
-        <option value="">VÊlg</option>
-
-        <?php foreach (['not_available'=>'Ikke til rÂdighed','unreasonable_terms'=>'Urimelige vilkÂr','closed'=>'Lukket','other'=>'Andet','unknown'=>'Ved ikke'] as $val => $label): ?>
-
+        <option value="">V√¶lg</option>
+        <?php foreach (['not_available'=>'Ikke til r√•dighed','unreasonable_terms'=>'Urimelige vilk√•r','closed'=>'Lukket','other'=>'Andet','unknown'=>'Ved ikke'] as $val => $label): ?>
           <option value="<?= $val ?>" <?= $v('assistance_meals_unavailable_reason')===$val?'selected':'' ?>><?= $label ?></option>
-
         <?php endforeach; ?>
-
       </select>
-
     </label>
-
   </div>
-
   <div class="mt8" data-show-if="meal_offered:no">
-
     <div class="grid-3">
-
-      <label>Bel¯b
-
+      <label>Bel√∏b
         <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($v('meal_self_paid_amount')) ?>" />
-
       </label>
-
       <label>Valuta
-
         <select name="meal_self_paid_currency">
-
-          <option value="">VÊlg</option>
-
+          <option value="">V√¶lg</option>
           <?php foreach ($currencyOptions as $code => $label): ?>
-
             <option value="<?= $code ?>" <?= strtoupper($v('meal_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-
           <?php endforeach; ?>
-
         </select>
-
       </label>
-
       <label class="small">Kvittering
-
         <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-
       </label>
-
     </div>
-
     <?php if ($f = $v('meal_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-
     <?php if ($ht = $hintText('meals')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-
   </div>
-
 </div>
-
-
-
 <!-- Hotel / overnatning -->
 
 <div class="card mt12">
 
   <strong>??? Hotel og indkvartering (Art.20)</strong>
 
-  <p class="small muted">Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis n¯dvendigt.</p>
+  <p class="small muted">Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis n√∏dvendigt.</p>
 
   <div class="mt8">
 
@@ -252,7 +210,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <div class="grid-3 mt4">
 
-      <label>Transport til/fra hotel - bel¯b
+      <label>Transport til/fra hotel - bel√∏b
 
         <input type="number" step="0.01" name="hotel_transport_self_paid_amount" value="<?= h($v('hotel_transport_self_paid_amount')) ?>" />
 
@@ -262,7 +220,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <select name="hotel_transport_self_paid_currency">
 
-          <option value="">VÊlg</option>
+          <option value="">V√¶lg</option>
 
           <?php foreach ($currencyOptions as $code => $label): ?>
 
@@ -290,11 +248,11 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <div class="mt4" data-show-if="hotel_offered:no">
 
-    <label>Var overnatning n¯dvendig selvom hotel ikke blev tilbudt?
+    <label>Var overnatning n√∏dvendig selvom hotel ikke blev tilbudt?
 
       <select name="overnight_needed">
 
-        <option value="">VÊlg</option>
+        <option value="">V√¶lg</option>
 
         <?php foreach (['yes'=>'Ja','no'=>'Nej','unknown'=>'Ved ikke'] as $val => $label): ?>
 
@@ -312,7 +270,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <div class="grid-3">
 
-      <label>Hotel/overnatning - bel¯b
+      <label>Hotel/overnatning - bel√∏b
 
         <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($v('hotel_self_paid_amount')) ?>" />
 
@@ -322,7 +280,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <select name="hotel_self_paid_currency">
 
-          <option value="">VÊlg</option>
+          <option value="">V√¶lg</option>
 
           <?php foreach ($currencyOptions as $code => $label): ?>
 
@@ -334,7 +292,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
       </label>
 
-      <label>Antal nÊtter
+      <label>Antal n√¶tter
 
         <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($v('hotel_self_paid_nights')) ?>" />
 
@@ -352,9 +310,8 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
-<!-- Transport / taxa / bus -->
-
-<div class="card mt12">
+<!-- Transport / taxa / bus (flyttet til trin 4 / incident) -->
+<div class="card mt12" style="display:none;">
 
   <strong>?? Transport til/fra (Art.20)</strong>
 
@@ -376,11 +333,11 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <div class="mt4">
 
-    <div class="small muted">Hvor var du, da det skete? (vÊlg Èn)</div>
+    <div class="small muted">Hvor var du, da det skete? (v√¶lg √©n)</div>
 
-    <label><input type="radio" name="stranded_location" value="track" <?= $strandedLocation==='track'?'checked':'' ?> /> Jeg sad fast i toget pÂ sporet</label>
+    <label><input type="radio" name="stranded_location" value="track" <?= $strandedLocation==='track'?'checked':'' ?> /> Jeg sad fast i toget p√• sporet</label>
 
-    <label class="ml8"><input type="radio" name="stranded_location" value="station" <?= $strandedLocation==='station'?'checked':'' ?> /> Jeg var pÂ en station uden videre tog</label>
+    <label class="ml8"><input type="radio" name="stranded_location" value="station" <?= $strandedLocation==='station'?'checked':'' ?> /> Jeg var p√• en station uden videre tog</label>
 
     <label class="ml8"><input type="radio" name="stranded_location" value="irrelevant" <?= $strandedLocation==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
 
@@ -390,13 +347,13 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <div class="mt4" data-show-if="stranded_location:track,station">
 
-    <span>Blev der stillet transport til rÂdighed for at komme vÊk/videre?</span>
+    <span>Blev der stillet transport til r√•dighed for at komme v√¶k/videre?</span>
 
     <?php $bt = $v('blocked_train_alt_transport'); ?>
 
-    <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja, af operat¯r/station</label>
+    <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja, af operat√∏r/station</label>
 
-    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg mÂtte selv arrangere</label>
+    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg m√•tte selv arrangere</label>
 
     <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ved ikke</label>
 
@@ -412,7 +369,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <select name="assistance_alt_transport_offered_by">
 
-          <?php foreach (['operator'=>'Operat¯r','station'=>'Station','retailer'=>'Retailer','other'=>'Andet'] as $val => $label): ?>
+          <?php foreach (['operator'=>'Operat√∏r','station'=>'Station','retailer'=>'Retailer','other'=>'Andet'] as $val => $label): ?>
 
             <option value="<?= $val ?>" <?= $v('assistance_alt_transport_offered_by')===$val?'selected':'' ?>><?= $label ?></option>
 
@@ -442,7 +399,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <select name="assistance_alt_to_destination">
 
-          <option value="">VÊlg</option>
+          <option value="">V√¶lg</option>
 
           <option value="station" <?= $to==='station'?'selected':'' ?>>Station</option>
 
@@ -488,7 +445,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <div class="grid-3">
 
-      <label>Transport/bus/taxi eller alternativ billet - bel¯b
+      <label>Transport/bus/taxi eller alternativ billet - bel√∏b
 
         <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
 
@@ -498,7 +455,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <select name="blocked_self_paid_currency">
 
-          <option value="">VÊlg</option>
+          <option value="">V√¶lg</option>
 
           <?php foreach ($currencyOptions as $code => $label): ?>
 
@@ -548,7 +505,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <div class="mt8">
 
-      <span>Blev ledsager/servicehund underst¯ttet?</span>
+      <span>Blev ledsager/servicehund underst√∏ttet?</span>
 
       <label><input type="radio" name="assistance_pmr_companion_supported" value="yes" <?= $v('assistance_pmr_companion_supported')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -568,7 +525,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <?= $this->Html->link('Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 
-  <?= $this->Form->button('NÊste ?', ['class' => 'button']) ?>
+  <?= $this->Form->button('N√¶ste ?', ['class' => 'button']) ?>
 
 </div>
 
@@ -615,3 +572,7 @@ document.addEventListener('change', function(e) {
 document.addEventListener('DOMContentLoaded', updateReveal);
 
 </script>
+
+
+
+
