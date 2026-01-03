@@ -28,9 +28,16 @@ class ExemptionProfileBuilder
                 'art8' => true,
                 'art12' => true,
                 'art17' => true,
+                'art18' => true,
+                'art18_1' => true,
+                'art18_2' => true,
                 'art18_3' => true,
                 'art19' => true,
                 'art20_2' => true,
+                'art20_2a' => true,
+                'art20_2b' => true,
+                'art20_2c' => true,
+                'art20_3' => true,
                 'art29' => true,
                 'art30_1' => true,
                 'art30_2' => true,
@@ -59,6 +66,9 @@ class ExemptionProfileBuilder
                     // Country-specific: for PL regional, also disable Art.20(2)
                     if ($country === 'PL' && $scope === 'regional') {
                         $profile['articles']['art20_2'] = false;
+                        $profile['articles']['art20_2a'] = false;
+                        $profile['articles']['art20_2b'] = false;
+                        $profile['articles']['art20_2c'] = false;
                     }
                     // Carry reason and add a standardized country+scope note for tests/UX
                     if (!empty($entry['reason'])) { $profile['notes'][] = (string)$entry['reason']; $profile['ui_banners'][] = (string)$entry['reason']; }
@@ -72,9 +82,19 @@ class ExemptionProfileBuilder
                     'Art.8' => 'art8',
                     'Art.12' => 'art12',
                     'Art.17' => 'art17',
+                    'Art.18' => 'art18',
+                    'Art.18(1)' => 'art18_1',
+                    'Art.18(2)' => 'art18_2',
                     'Art.18(3)' => 'art18_3',
                     'Art.19' => 'art19',
                     'Art.20(2)' => 'art20_2',
+                    'Art.20(2a)' => 'art20_2a',
+                    'Art.20(2b)' => 'art20_2b',
+                    'Art.20(2c)' => 'art20_2c',
+                    'Art.20(2)(a)' => 'art20_2a',
+                    'Art.20(2)(b)' => 'art20_2b',
+                    'Art.20(2)(c)' => 'art20_2c',
+                    'Art.20(3)' => 'art20_3',
                     'Art.29' => 'art29',
                     'Art.30(1)' => 'art30_1',
                     'Art.30(2)' => 'art30_2',
@@ -84,7 +104,21 @@ class ExemptionProfileBuilder
                 foreach ($exArr as $ex) {
                     $exStr = (string)$ex;
                     $artKey = $map[$exStr] ?? null;
-                    if ($artKey) { $profile['articles'][$artKey] = false; }
+                    if ($artKey) {
+                        $profile['articles'][$artKey] = false;
+                        // If the generic Art.20(2) is disabled, mirror to sub-parts
+                        if ($artKey === 'art20_2') {
+                            $profile['articles']['art20_2a'] = false;
+                            $profile['articles']['art20_2b'] = false;
+                            $profile['articles']['art20_2c'] = false;
+                        }
+                        // If the generic Art.18 is disabled, mirror to sub-parts
+                        if ($artKey === 'art18') {
+                            $profile['articles']['art18_1'] = false;
+                            $profile['articles']['art18_2'] = false;
+                            $profile['articles']['art18_3'] = false;
+                        }
+                    }
                     // Partial Art.9 handling
                     if ($exStr === 'Art.9') {
                         $profile['articles_sub']['art9_1'] = false;
@@ -118,6 +152,18 @@ class ExemptionProfileBuilder
             }
         }
 
+        // If the generic Art.20(2) is off, align subparts
+        if ($profile['articles']['art20_2'] === false) {
+            $profile['articles']['art20_2a'] = false;
+            $profile['articles']['art20_2b'] = false;
+            $profile['articles']['art20_2c'] = false;
+        }
+        if ($profile['articles']['art18'] === false) {
+            $profile['articles']['art18_1'] = false;
+            $profile['articles']['art18_2'] = false;
+            $profile['articles']['art18_3'] = false;
+        }
+
     // Apply country-specific and scope conditional gates not directly expressible in the matrix
         $this->applyConditionalGates($journey, $profile);
 
@@ -128,20 +174,41 @@ class ExemptionProfileBuilder
         if (!$profile['articles']['art12']) {
             $profile['ui_banners'][] = 'Gennemgående billet (Art. 12) undtaget — krav splittes pr. billet/kontrakt.';
         }
+        if (isset($profile['articles']['art18']) && !$profile['articles']['art18']) {
+            $profile['ui_banners'][] = 'Art. 18 (valg/omlægning/refusion) kan være undtaget for denne rejse.';
+        }
+        if (isset($profile['articles']['art18_1']) && !$profile['articles']['art18_1']) {
+            $profile['ui_banners'][] = 'Art. 18(1) (valg mellem refusion/omlægning) kan være undtaget.';
+        }
+        if (isset($profile['articles']['art18_2']) && !$profile['articles']['art18_2']) {
+            $profile['ui_banners'][] = 'Art. 18(2) (udgifter ved omlægning) kan være undtaget.';
+        }
         if (!$profile['articles']['art18_3']) {
             $profile['ui_banners'][] = '100-minutters-reglen (Art. 18(3)) kan være undtaget.';
         }
         if (!$profile['articles']['art19']) {
-            $profile['ui_banners'][] = 'EU-kompensation (Art. 19) undtaget — anvend national/operatør-ordning hvor relevant.';
+            $profile['ui_banners'][] = 'EU-kompensation (Art. 19) undtaget - anvend national/operatør-ordning hvor relevant.';
         }
         if (!$profile['articles']['art20_2']) {
             $profile['ui_banners'][] = 'Assistance (Art. 20(2)) kan være undtaget; upload udgiftsbilag.';
         }
+        if (isset($profile['articles']['art20_2a']) && !$profile['articles']['art20_2a']) {
+            $profile['ui_banners'][] = 'Assistance (Art. 20(2)(a)) - måltider/forfriskninger - kan være undtaget.';
+        }
+        if (isset($profile['articles']['art20_2b']) && !$profile['articles']['art20_2b']) {
+            $profile['ui_banners'][] = 'Assistance (Art. 20(2)(b)) - hotel/overnatning - kan være undtaget.';
+        }
+        if (isset($profile['articles']['art20_2c']) && !$profile['articles']['art20_2c']) {
+            $profile['ui_banners'][] = 'Assistance (Art. 20(2)(c)) - alternativ transport fra sporet - kan være undtaget.';
+        }
+        if (isset($profile['articles']['art20_3']) && !$profile['articles']['art20_3']) {
+            $profile['ui_banners'][] = 'Assistance (Art. 20(3)) - transport fra station uden videre tog - kan være undtaget.';
+        }
         if (!$profile['articles']['art9']) {
-            $profile['ui_banners'][] = 'Informationspligter (Art. 9) kan være undtaget — vis basisoplysninger og fallback-links.';
+            $profile['ui_banners'][] = 'Informationspligter (Art. 9) kan være undtaget - vis basisoplysninger og fallback-links.';
         }
         if (isset($profile['articles']['art29']) && !$profile['articles']['art29']) {
-            $profile['ui_banners'][] = 'National undtagelse (Art. 29) gælder for denne rejse — vis nationale procedurer hvor relevant.';
+            $profile['ui_banners'][] = 'National undtagelse (Art. 29) gælder for denne rejse - vis nationale procedurer hvor relevant.';
         }
         if (isset($profile['articles']['art30_1']) && !$profile['articles']['art30_1']) {
             $profile['ui_banners'][] = 'Særordning (Art. 30(1)) kan påvirke rettigheder — tilpas vejledning.';
@@ -167,6 +234,10 @@ class ExemptionProfileBuilder
         if ($scope === 'suburban') {
             $profile['articles']['art19'] = false;
             $profile['articles']['art20_2'] = false;
+            $profile['articles']['art20_2a'] = false;
+            $profile['articles']['art20_2b'] = false;
+            $profile['articles']['art20_2c'] = false;
+            $profile['articles']['art20_3'] = false;
             $profile['articles']['art17'] = false;
             $profile['articles']['art8'] = false;
             $profile['articles']['art9'] = false;
@@ -192,9 +263,13 @@ class ExemptionProfileBuilder
                 $profile['articles']['art18_3'] = true;
                 $profile['articles']['art19'] = true;
                 $profile['articles']['art20_2'] = true;
+                $profile['articles']['art20_2a'] = true;
+                $profile['articles']['art20_2b'] = true;
+                $profile['articles']['art20_2c'] = true;
+                $profile['articles']['art20_3'] = true;
                 // Re-enable Art.9(1) subpart
                 if (isset($profile['articles_sub']['art9_1'])) { $profile['articles_sub']['art9_1'] = true; }
-                $profile['notes'][] = 'SE: <150 km-betingelsen ikke opfyldt — regionale undtagelser (8, 9(1), 17–20) anvendes ikke.';
+                $profile['notes'][] = 'SE: <150 km-betingelsen ikke opfyldt - regionale undtagelser (8, 9(1), 17-20) anvendes ikke.';
             }
         }
 
@@ -215,7 +290,11 @@ class ExemptionProfileBuilder
                 // Re-enable compensation and assistance unless explicitly blocked elsewhere
                 $profile['articles']['art19'] = true;
                 $profile['articles']['art20_2'] = true;
-                $profile['notes'][] = 'FI: Ikke markeret som pendler-/lähijuna — nationale regional-undtagelser anvendes ikke.';
+                $profile['articles']['art20_2a'] = true;
+                $profile['articles']['art20_2b'] = true;
+                $profile['articles']['art20_2c'] = true;
+                $profile['articles']['art20_3'] = true;
+                $profile['notes'][] = 'FI: Ikke markeret som pendler-/lähijuna - nationale regional-undtagelser anvendes ikke.';
             }
         }
 

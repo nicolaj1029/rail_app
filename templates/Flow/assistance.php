@@ -9,14 +9,15 @@ $flags    = $flags ?? [];
 $incident = $incident ?? [];
 
 $profile  = $profile ?? ['articles' => []];
-
-
+$articles = (array)($profile['articles'] ?? []);
 
 $pmrUser      = strtolower((string)($form['pmr_user'] ?? $flags['pmr_user'] ?? '')) === 'yes';
-
 $travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
-
-$assistOff    = isset($profile['articles']['art20_2']) && $profile['articles']['art20_2'] === false;
+$assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
+$assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
+$assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
+$assistStationOff = ($articles['art20_3'] ?? true) === false;
+$assistOff    = ($articles['art20_2'] ?? true) === false || ($assistMealsOff && $assistHotelOff && $assistTrackOff && $assistStationOff);
 
 
 
@@ -135,7 +136,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 <!-- Måltider / drikke -->
-<div class="card mt12" data-art="20(2a),20(2)">
+<div class="card mt12 <?= $assistMealsOff ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
   <strong>🍽️ Måltider og drikke (Art.20)</strong>
   <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.</p>
   <div class="mt8">
@@ -176,7 +177,7 @@ $hintText = function (string $key) use ($priceHints): string {
 </div>
 <!-- Hotel / overnatning -->
 
-<div class="card mt12" data-art="20(2b),20(2)">
+<div class="card mt12 <?= $assistHotelOff ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
 
   <strong>??? Hotel og indkvartering (Art.20)</strong>
 
@@ -572,6 +573,4 @@ document.addEventListener('change', function(e) {
 document.addEventListener('DOMContentLoaded', updateReveal);
 
 </script>
-
-
 

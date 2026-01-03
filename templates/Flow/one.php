@@ -1840,7 +1840,7 @@
         if (riPast) riPast.classList.toggle('hidden', !a183);
         if (riNow) riNow.classList.toggle('hidden', !a183);
         // Art. 20(2): hide assistance A blocks if exempt
-        var a202 = !!(art['art20_2']);
+        var a202 = (art['art20_2'] !== false) || !!(art['art20_2a']) || !!(art['art20_2b']) || !!(art['art20_2c']) || !!(art['art20_3']);
         var aPast = document.getElementById('assistA_past');
         var aNow = document.getElementById('assistA_now');
         if (aPast) aPast.classList.toggle('hidden', !a202);

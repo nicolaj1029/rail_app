@@ -32,11 +32,14 @@ $isCompleted = ($travelState === 'completed');
 ?>
 <?php
     $articles = (array)($profile['articles'] ?? []);
+    $showArt18  = !isset($articles['art18'])   || $articles['art18']   !== false;
+    $showArt181 = !isset($articles['art18_1']) || $articles['art18_1'] !== false;
+    $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     $showArt183 = !isset($articles['art18_3']) || $articles['art18_3'] !== false;
 ?>
 <?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'choices'], 'type' => 'file', 'novalidate' => true]) ?>
 
-<div id="coreAfterArt18">
+<div id="coreAfterArt18" class="<?= $showArt18 ? '' : 'hidden' ?>">
 <?php
 // Downgrade preview context (server-side): ticket price from controller or fallback
 $tp = isset($ticketPrice) ? (float)$ticketPrice : (float)preg_replace('/[^0-9.]/','', (string)($form['price'] ?? '0'));
@@ -60,7 +63,7 @@ $preview = round($tp * $rate * $share, 2);
     }
     $ri100 = (string)($form['reroute_info_within_100min'] ?? '');
 ?>
-    <div class="card" data-art="18(1)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+    <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
         <strong>Rejsen er afsluttet - hvad skete der?</strong>
         <div class="small muted" style="margin-top:6px;">Ved afgang, missed connection eller aflysning - ved forsinkelse p&aring; 60+ min. tilbydes nedenst&aring;ende muligheder.</div>
         <div class="mt8" data-art="18(1)"><strong>V&aelig;lg pr&aelig;cis en mulighed</strong></div>
@@ -76,7 +79,7 @@ $preview = round($tp * $rate * $share, 2);
 
     <div id="remedyFollowupPast" class="mt12">
         <?php $rtFlag = (string)($form['return_to_origin_expense'] ?? ''); ?>
-        <div id="returnExpensePast" class="card <?= $remedy==='refund_return' ? '' : 'hidden' ?>" data-art="18(1a)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+        <div id="returnExpensePast" class="card <?= ($showArt18 && $showArt181 && $remedy==='refund_return') ? '' : 'hidden' ?>" data-art="18(1a)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
             <div class="mt0"><strong>Returtransport (Art. 18 stk. 1)</strong></div>
             <div class="mt4">Havde du udgifter til at komme tilbage til udgangspunktet?</div>
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
@@ -91,10 +94,11 @@ $preview = round($tp * $rate * $share, 2);
             </div>
         </div>
 
-        <div id="rerouteSectionPast" class="card mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>" data-art="18" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+        <?php $showReroutePast = $showArt18 && ($showArt182 || $showArt183) && in_array($remedy, ['reroute_soonest','reroute_later'], true); ?>
+        <div id="rerouteSectionPast" class="card mt12 <?= $showReroutePast ? '' : 'hidden' ?>" data-art="18" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
             <div class="mt0"><strong>Oml&aelig;gning</strong></div>
 
-            <div id="ri100PastWrap" class="mt8" data-art="18(3)">
+            <div id="ri100PastWrap" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)">
                 <div>Fik du besked om mulighederne for oml&aelig;gning inden for 100 minutter? (Art. 18(3))
                     <span class="small muted">Vi bruger planlagt afgang + f&oslash;rste oml&aelig;gnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
@@ -113,14 +117,14 @@ $preview = round($tp * $rate * $share, 2);
             </fieldset>
 
             <?php $spt = (string)($form['self_purchased_new_ticket'] ?? ''); ?>
-            <div id="step2Past" class="mt8" data-art="18(3)">
+            <div id="step2Past" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)">
                 <div class="mt4">K&oslash;bte du selv en ny billet for at komme videre?</div>
                 <label><input type="radio" name="self_purchased_new_ticket" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="self_purchased_new_ticket" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
                 <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du k&oslash;bte selv ny billet, selvom oml&aelig;gning blev tilbudt inden for 100 min - udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig v&aelig;re mulig.</div>
             </div>
 
-            <fieldset id="opApprovalWrapPast" class="mt8" data-art="18(3)" <?= $spt==='yes' ? '' : 'hidden' ?> >
+            <fieldset id="opApprovalWrapPast" class="mt8 <?= $showArt183 && $spt==='yes' ? '' : 'hidden' ?>" data-art="18(3)" <?= $spt==='yes' ? '' : 'hidden' ?> >
                 <legend>Var selvk&oslash;bet godkendt af operat&oslash;ren?</legend>
                 <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
                 <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
@@ -133,7 +137,7 @@ $preview = round($tp * $rate * $share, 2);
                 <p id="noteNotRefundablePast" class="note warn" style="display:none;">&#9888;&#65039; Selvk&oslash;b uden operat&oslash;rens godkendelse refunderes normalt ikke.</p>
             </div>
 
-            <div id="recBlockPast" class="mt8" data-art="18(2)">
+            <div id="recBlockPast" class="mt8 <?= $showArt182 ? '' : 'hidden' ?>" data-art="18(2)">
                 <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
                 <div class="mt4">Medf&oslash;rte oml&aelig;gningen ekstra udgifter for dig? (h&oslash;jere klasse/andet transportmiddel)</div>
                 <label><input type="radio" name="reroute_extra_costs" value="yes" <?= $rec==='yes'?'checked':'' ?> /> Ja</label>
@@ -191,18 +195,18 @@ $preview = round($tp * $rate * $share, 2);
         var val = remEl ? remEl.value : '';
         ['Past','Now'].forEach(function(suf){
             var returnExp = document.getElementById('returnExpense' + suf);
-        var reroute = document.getElementById('rerouteSection' + suf);
-        if (returnExp) returnExp.classList.toggle('hidden', val !== 'refund_return');
-        if (reroute) reroute.classList.toggle('hidden', !(val === 'reroute_soonest' || val === 'reroute_later'));
-        var tcr = document.getElementById('tcr_sync_' + suf.toLowerCase());
-        var rsc = document.getElementById('rsc_sync_' + suf.toLowerCase());
+            var reroute = document.getElementById('rerouteSection' + suf);
+            if (returnExp) returnExp.classList.toggle('hidden', !a18On || !a181On || val !== 'refund_return');
+            if (reroute) reroute.classList.toggle('hidden', !a18On || (!(a182On || a183On)) || !(val === 'reroute_soonest' || val === 'reroute_later'));
+            var tcr = document.getElementById('tcr_sync_' + suf.toLowerCase());
+            var rsc = document.getElementById('rsc_sync_' + suf.toLowerCase());
             var rlc = document.getElementById('rlc_sync_' + suf.toLowerCase());
             if (tcr) tcr.value = (val === 'refund_return') ? 'yes' : '';
             if (rsc) rsc.value = (val === 'reroute_soonest') ? 'yes' : '';
             if (rlc) rlc.value = (val === 'reroute_later') ? 'yes' : '';
             // 100-min kun for reroute_soonest
             var riWrap = document.getElementById('ri100' + suf + 'Wrap');
-            if (riWrap) { riWrap.style.display = (val === 'reroute_soonest') ? '' : 'none'; }
+            if (riWrap) { riWrap.style.display = (a183On && val === 'reroute_soonest') ? '' : 'none'; }
         });
         // Vis Art.20(4) n├Ñr en gren er valgt
         var art20 = document.getElementById('art20Wrapper');
@@ -221,6 +225,10 @@ $preview = round($tp * $rate * $share, 2);
     var dgcBlockPast = document.getElementById('dgcBlockPast');
     var dgcBlockNow = document.getElementById('dgcBlockNow');
     // (deferred toggles moved after scenario adjustments)
+        if (!a182On) {
+            if (recBlockPast) recBlockPast.style.display = 'none';
+            if (recBlockNow) recBlockNow.style.display = 'none';
+        }
 
         // Art. 18(3) conditional: distinguish who rerouted vs self-purchase
         var ri100El = document.querySelector('input[name="reroute_info_within_100min"]:checked');
@@ -263,7 +271,12 @@ var live = document.getElementById('rerouteLive');
 
         // Feature flag for Art. 18(3) (true = ON). When OFF we collapse logic to simple self-purchase approval gating.
         var artFlags = (window.__artFlags && window.__artFlags.art) || {};
+        var a18On  = !(artFlags.hasOwnProperty('art18') && artFlags['art18'] === false);
+        var a181On = !(artFlags.hasOwnProperty('art18_1') && artFlags['art18_1'] === false);
+        var a182On = !(artFlags.hasOwnProperty('art18_2') && artFlags['art18_2'] === false);
         var a183On = !(artFlags.hasOwnProperty('art18_3') && artFlags['art18_3'] === false);
+        var core = document.getElementById('coreAfterArt18');
+        if (core) core.classList.toggle('hidden', !a18On);
 
         // Progressive visibility
         // Step 1 (only when 18(3) is ON) ÔåÆ Step 2: show Step 2 only when answered OR 18(3) OFF
@@ -278,17 +291,17 @@ var live = document.getElementById('rerouteLive');
         // Step 2 ÔåÆ Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
         var step2Answered = (selfBuy === 'yes' || selfBuy === 'no');
         if ((advPast && advPast.open) || advOn) {
-            if (recBlockPast) recBlockPast.style.display = '';
+            if (recBlockPast && a182On) recBlockPast.style.display = '';
             if (dgcBlockPast) dgcBlockPast.style.display = '';
         } else {
-            if (recBlockPast) recBlockPast.style.display = step2Answered ? '' : 'none';
+            if (recBlockPast && a182On) recBlockPast.style.display = step2Answered ? '' : 'none';
             if (dgcBlockPast) dgcBlockPast.style.display = step2Answered ? '' : 'none';
         }
         if ((advNow && advNow.open) || advOn) {
-            if (recBlockNow) recBlockNow.style.display = '';
+            if (recBlockNow && a182On) recBlockNow.style.display = '';
             if (dgcBlockNow) dgcBlockNow.style.display = 'none';
         } else {
-            if (recBlockNow) recBlockNow.style.display = step2Answered ? '' : 'none';
+            if (recBlockNow && a182On) recBlockNow.style.display = step2Answered ? '' : 'none';
             if (dgcBlockNow) dgcBlockNow.style.display = 'none';
         }
         if (live) { live.textContent = step2Answered ? 'Trin 2 besvaret ÔÇô gren valgt' : (step1Answered ? 'Trin 1 besvaret ÔÇô vis trin 2' : 'Trin 1 endnu ikke besvaret'); }
@@ -537,4 +550,3 @@ var live = document.getElementById('rerouteLive');
 
 <?= $this->Form->end() ?>
 </div>
-

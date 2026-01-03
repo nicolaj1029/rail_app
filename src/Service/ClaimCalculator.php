@@ -45,7 +45,12 @@ class ClaimCalculator
         $exemptionsApplied = array_values(array_unique($exemptionsApplied));
         $art19Allowed = ($profile['articles']['art19'] ?? true) === true;
         $compAllowed = $art19Allowed;
-        $assistAllowed = ($profile['articles']['art20_2'] ?? true) === true;
+        $arts = (array)($profile['articles'] ?? []);
+        $assistAllowed = (($arts['art20_2'] ?? true) === true)
+            || ($arts['art20_2a'] ?? false)
+            || ($arts['art20_2b'] ?? false)
+            || ($arts['art20_2c'] ?? false)
+            || ($arts['art20_3'] ?? false);
 
         // Gatekeepers
         $selfInflicted = (bool)($disruption['self_inflicted'] ?? false);

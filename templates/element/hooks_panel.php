@@ -43,14 +43,21 @@
 <?php
   // Explicit exemptions section: list only the articles that are OFF (exempt)
   $labels = [
-    'art12' => 'Art. 12 – Gennemgående billet',
-    'art17' => 'Art. 17 – Forsinkelsesinformation',
-    'art18_3' => 'Art. 18(3) – 100-minutters-reglen',
-    'art19' => 'Art. 19 – Kompensation',
-    'art20_2' => 'Art. 20(2) – Assistance',
-    'art30_2' => 'Art. 30(2) – Tvistbilæggelse',
-    'art10' => 'Art. 10 – Realtidsdata',
-    'art9' => 'Art. 9 – Informationspligter',
+    'art18' => 'Art. 18 — Valg/omlægning',
+    'art18_1' => 'Art. 18(1) — valg mellem refund/omlægning',
+    'art18_2' => 'Art. 18(2) — udgifter ved omlægning',
+    'art12' => 'Art. 12 — Gennemgående billet',
+    'art17' => 'Art. 17 — Forsinkelsesinformation',
+    'art18_3' => 'Art. 18(3) — 100-minutters-reglen',
+    'art19' => 'Art. 19 — Kompensation',
+    'art20_2' => 'Art. 20(2) — Assistance',
+    'art20_2a' => 'Art. 20(2)(a) — Måltider/forfriskninger',
+    'art20_2b' => 'Art. 20(2)(b) — Hotel/overnatning',
+    'art20_2c' => 'Art. 20(2)(c) — Alternativ transport fra sporet',
+    'art20_3' => 'Art. 20(3) — Transport fra station uden videre tog',
+    'art30_2' => 'Art. 30(2) — Tvistbilæggelse',
+    'art10' => 'Art. 10 — Realtidsdata',
+    'art9' => 'Art. 9 — Informationspligter',
   ];
   $exList = [];
   foreach ($arts as $k=>$v) {
