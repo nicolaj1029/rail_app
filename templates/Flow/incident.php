@@ -65,18 +65,18 @@ $segCount = is_array($journey['segments'] ?? null) ? count($journey['segments'])
   </div>
 
   <!-- Transport til/fra (Art.20) -->
-  <div class="card mt12">
+  <div class="card mt12" data-art="20">
     <strong>🚐 Transport til/fra (Art.20)</strong>
     <p class="small muted">Alternativ transport skal tilbydes, hvis du er strandet pga. aflysning/forsinkelse.</p>
 
     <div class="mt8">
       <div>Hvor var du, da det skete? (vaelg en)</div>
-      <label><input type="radio" name="stranded_location" value="track" <?= $v('stranded_location')==='track'?'checked':'' ?> /> Jeg sad fast i toget paa sporet</label>
-      <label class="ml8"><input type="radio" name="stranded_location" value="station" <?= $v('stranded_location')==='station'?'checked':'' ?> /> Jeg var paa en station uden videre tog</label>
+      <label data-art="20(2c)"><input type="radio" name="stranded_location" value="track" <?= $v('stranded_location')==='track'?'checked':'' ?> /> Jeg sad fast i toget paa sporet</label>
+      <label class="ml8" data-art="20(3)"><input type="radio" name="stranded_location" value="station" <?= $v('stranded_location')==='station'?'checked':'' ?> /> Jeg var paa en station uden videre tog</label>
       <label class="ml8"><input type="radio" name="stranded_location" value="irrelevant" <?= $v('stranded_location')==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
     </div>
 
-    <div class="mt4" data-show-if="stranded_location:track,station">
+    <div class="mt4" data-show-if="stranded_location:track" data-art="20(2c)">
       <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
       <?php $bt = $v('blocked_train_alt_transport'); ?>
       <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
@@ -84,7 +84,7 @@ $segCount = is_array($journey['segments'] ?? null) ? count($journey['segments'])
       <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ved ikke</label>
     </div>
 
-    <div class="mt4" data-show-if="blocked_train_alt_transport:yes">
+    <div class="mt4" data-show-if="blocked_train_alt_transport:yes" data-art="20(2c)">
       <div class="grid-3">
         <label>Tilbudt af
           <select name="assistance_alt_transport_offered_by">
@@ -112,7 +112,7 @@ $segCount = is_array($journey['segments'] ?? null) ? count($journey['segments'])
       </div>
     </div>
 
-    <div class="mt4" data-show-if="blocked_train_alt_transport:no">
+    <div class="mt4" data-show-if="blocked_train_alt_transport:no" data-art="20(2c),20(3)">
       <div class="small muted">Angiv egne udgifter hvis du selv ordnede transport.</div>
       <div class="grid-3 mt4">
         <label>Beløb

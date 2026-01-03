@@ -135,7 +135,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 <!-- Måltider / drikke -->
-<div class="card mt12">
+<div class="card mt12" data-art="20(2a),20(2)">
   <strong>🍽️ Måltider og drikke (Art.20)</strong>
   <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.</p>
   <div class="mt8">
@@ -176,7 +176,7 @@ $hintText = function (string $key) use ($priceHints): string {
 </div>
 <!-- Hotel / overnatning -->
 
-<div class="card mt12">
+<div class="card mt12" data-art="20(2b),20(2)">
 
   <strong>??? Hotel og indkvartering (Art.20)</strong>
 
@@ -572,7 +572,6 @@ document.addEventListener('change', function(e) {
 document.addEventListener('DOMContentLoaded', updateReveal);
 
 </script>
-
 
 
 

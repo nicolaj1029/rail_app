@@ -51,28 +51,28 @@ $preview = round($tp * $rate * $share, 2);
 ?>
 
 <?php if ($isCompleted): ?>
-    <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-        <strong>Rejsen er afsluttet ÔÇö hvad skete der?</strong>
-        <div class="small muted" style="margin-top:6px;">Ved afgang, missed connection eller aflysning ÔÇö ved ÔëÑ60 min. forsinkelse tilbydes nedenst├Ñende muligheder.</div>
+    <div class="card" data-art="18(1)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+        <strong>Rejsen er afsluttet ? hvad skete der?</strong>
+        <div class="small muted" style="margin-top:6px;">Ved afgang, missed connection eller aflysning ? ved ?60 min. forsinkelse tilbydes nedenst?ende muligheder.</div>
         <?php $remedy = (string)($form['remedyChoice'] ?? ''); if ($remedy==='') { if (($form['trip_cancelled_return_to_origin'] ?? '')==='yes') { $remedy='refund_return'; } elseif (($form['reroute_same_conditions_soonest'] ?? '')==='yes') { $remedy='reroute_soonest'; } elseif (($form['reroute_later_at_choice'] ?? '')==='yes') { $remedy='reroute_later'; } } ?>
-        <div class="mt8"><strong>V├ªlg pr├ªcis ├®n mulighed</strong></div>
-        <label><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> Blev hele rejsen aflyst, og vendte du tilbage til udgangspunktet?</label><br/>
-        <label><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Fik du tilbudt oml├ªgning p├Ñ tilsvarende vilk├Ñr ved f├©rst givne lejlighed?</label><br/>
-        <label><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> ├ÿnskede du i stedet oml├ªgning p├Ñ et senere tidspunkt efter eget valg?</label>
+        <div class="mt8" data-art="18(1)"><strong>V?lg pr?cis ?n mulighed</strong></div>
+        <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> Blev hele rejsen aflyst, og vendte du tilbage til udgangspunktet?</label><br/>
+        <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Fik du tilbudt oml?gning p? tilsvarende vilk?r ved f?rst givne lejlighed?</label><br/>
+        <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> ?nskede du i stedet oml?gning p? et senere tidspunkt efter eget valg?</label>
 
         <!-- Hidden sync to legacy hooks -->
         <input type="hidden" id="tcr_sync_past" name="trip_cancelled_return_to_origin" value="<?= ($form['trip_cancelled_return_to_origin'] ?? '') ?>" />
         <input type="hidden" id="rsc_sync_past" name="reroute_same_conditions_soonest" value="<?= ($form['reroute_same_conditions_soonest'] ?? '') ?>" />
         <input type="hidden" id="rlc_sync_past" name="reroute_later_at_choice" value="<?= ($form['reroute_later_at_choice'] ?? '') ?>" />
 
-        <div id="returnExpensePast" class="mt8 <?= $remedy==='refund_return' ? '' : 'hidden' ?>">
-            <div class="mt8"><strong>Returtransport (Art. 18 stk. 1)</strong></div>
+        <div id="returnExpensePast" class="card mt12 <?= $remedy==='refund_return' ? '' : 'hidden' ?>" data-art="18(1a)" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
             <?php $rtFlag = (string)($form['return_to_origin_expense'] ?? ''); ?>
+            <div class="mt0"><strong>Returtransport (Art. 18 stk. 1)</strong></div>
             <div class="mt4">Havde du udgifter til at komme tilbage til udgangspunktet?</div>
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
             <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
             <div class="grid-2 mt8" id="returnExpenseFieldsPast" style="<?= $rtFlag==='yes' ? '' : 'display:none;' ?>">
-                <label>Bel├©b
+                <label>Bel?b
                     <input type="number" step="0.01" name="return_to_origin_amount" value="<?= h($form['return_to_origin_amount'] ?? '') ?>" />
                 </label>
                 <label>Valuta
@@ -81,10 +81,8 @@ $preview = round($tp * $rate * $share, 2);
             </div>
         </div>
 
-        <div id="rerouteSectionPast" class="mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>">
-            <div class="mt0"><strong>Oml├ªgning</strong></div>
-            <?php $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); $show100Past = $showArt183 && $remedy==='reroute_soonest'; ?>
-            <div id="ri100PastWrap" style="<?= $show100Past ? '' : 'display:none;' ?>" data-art="18(3)">
+        <div id="rerouteSectionPast" class="card mt12 <?= in_array($remedy, ['reroute_soonest','reroute_later'], true) ? '' : 'hidden' ?>" data-art="18" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+            <div class="mt0"><strong>Oml?gning</strong></div>
                 <div class="mt8">Fik du besked om mulighederne for oml├ªgning inden for 100 minutter? (Art. 18(3))
                     <span class="small muted">Vi bruger planlagt afgang + f├©rste oml├ªgnings-besked til at vurdere 100-min-reglen.</span>
                 </div>
@@ -545,5 +543,4 @@ var live = document.getElementById('rerouteLive');
 
 <?= $this->Form->end() ?>
 </div>
-
 

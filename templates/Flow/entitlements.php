@@ -276,10 +276,13 @@ $incident = $incident ?? [];
           }
         }
       ?>
-      <?= $this->element('missed_connection_block', compact('meta','form','journeyRowsInline','mcChoicesInline','changeBullets')) ?>
+      <div class="missed-connection-section" style="display:none;">
+        <?= $this->element('missed_connection_block', compact('meta','form','journeyRowsInline','mcChoicesInline','changeBullets')) ?>
+      </div>
       </div>
     </div>
-    <?php if (!empty($journeyRowsInline)): ?>
+      <?php if (!empty($journeyRowsInline)): ?>
+      <div class="missed-connection-section" style="display:none;">
       <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflæst fra billetten)</strong></div>
       <div class="small" style="overflow:auto;">
         <style>
@@ -348,6 +351,7 @@ $incident = $incident ?? [];
       <?php if (empty($mcChoicesInline)): ?>
         <div class="small muted" style="margin-top:8px;">Ingen skift fundet – punkt 3.5 vises kun, når der er et skift i rejsen.</div>
       <?php endif; ?>
+      </div>
     <?php endif; ?>
   </div>
   </div><!-- /journeyFields -->
