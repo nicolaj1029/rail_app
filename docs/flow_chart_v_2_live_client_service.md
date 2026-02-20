@@ -26,7 +26,7 @@ Denne side beskriver den operative flow/“trin for trin” der matcher filen `w
   - Base URL normaliseres til `https://api.groq.com/openai/v1` (når provider=groq).
   - JSON-mode håndhæves: `response_format = { type: "json_object" }` og `temperature=0`.
   - Robust fallback-parse hvis model returnerer ekstra tekst.
-  - Model (eksempel): `llama-3.1-8b-instant`.
+  - Model (eksempel): `openai/gpt-oss-120b`.
 
 ### 5) Broker/merge → Endelige felter
 - Orkestrering: `src/Service/TicketExtraction/ExtractorBroker.php`
@@ -51,7 +51,7 @@ Rediger `config/.env`:
 
 - `LLM_PROVIDER=groq`
 - `OPENAI_BASE_URL=https://api.groq.com`  (normaliseres til `/openai/v1`)
-- `OPENAI_MODEL=llama-3.1-8b-instant` (tekst/JSON)
+- `OPENAI_MODEL=openai/gpt-oss-120b` (tekst/JSON)
 - `VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct` (vision)
 - `OPENAI_API_KEY=...` (Groq API nøgle)
 - `LLM_VISION_ENABLED=1`

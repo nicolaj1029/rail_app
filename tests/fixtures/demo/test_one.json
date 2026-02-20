@@ -1,105 +1,347 @@
 {
     "fixture": {
-        "id": "session_20251129_182723",
+        "id": "session_20260220_135642",
         "version": 2,
-        "label": "Captured wizard session 2025-11-29T18:27:23+00:00",
-        "journey": [],
+        "label": "Captured wizard session 2026-02-20T13:56:42+00:00",
+        "journey": {
+            "seller_type": "operator",
+            "bookingRef": "PLATZE",
+            "segments": [
+                {
+                    "from": "WIEN PRATERSTERN",
+                    "to": "PRAHA HL N",
+                    "schedDep": "06:50",
+                    "schedArr": "11:24",
+                    "depDate": "2026-03-21",
+                    "arrDate": "2026-03-21",
+                    "trainNo": "EC 78",
+                    "confidence": 0.8,
+                    "source": "pdf_text",
+                    "notes": "Extracted from pdf text",
+                    "country": "Czech Republic"
+                }
+            ],
+            "country": {
+                "value": "Czech Republic"
+            }
+        },
+        "journeyBasic": {
+            "dep_date": "2021-03-21",
+            "dep_time": "06:50",
+            "dep_station": "WIEN PRATERSTERN",
+            "arr_station": "PRAHA HL N",
+            "arr_time": "11:24",
+            "train_no": "EC 1154",
+            "ticket_no": "PLATZE",
+            "operator": "Czech transport",
+            "operator_country": "Czech Republic",
+            "operator_product": "EC",
+            "price": "155.00"
+        },
+        "segments": [
+            {
+                "from": "WIEN PRATERSTERN",
+                "to": "PRAHA HL N",
+                "schedDep": "06:50",
+                "schedArr": "11:24",
+                "trainNo": "EC 78",
+                "depDate": "2026-03-21",
+                "arrDate": "2026-03-21",
+                "pnr": "PLATZE",
+                "carrier": "Czech transport"
+            }
+        ],
+        "meta": {
+            "_multi_tickets": [
+                {
+                    "file": "czech_1_model.png",
+                    "pnr": "PLATZE",
+                    "dep_date": "2013-04-20",
+                    "passengers": [],
+                    "segments": [
+                        {
+                            "from": "Eurocity",
+                            "to": "Non fumeurs Numéro du train Numero du wagon czech-transport.com",
+                            "schedDep": "",
+                            "schedArr": "",
+                            "trainNo": "",
+                            "depDate": "2013-04-20",
+                            "arrDate": "2013-04-20"
+                        }
+                    ]
+                }
+            ]
+        },
         "wizard": {
-            "step1": {
-                "travel_state": "ongoing"
+            "step1_start": {
+                "travel_state": "ongoing",
+                "eu_only": true
             },
-            "step2": {
-                "incident_main": "cancellation"
+            "step2_entitlements": {
+                "operator": "Czech transport",
+                "operator_country": "Czech Republic",
+                "operator_product": "EC",
+                "ticket_no": "PLATZE",
+                "dep_date": "2021-03-21",
+                "dep_time": "06:50",
+                "dep_station": "WIEN PRATERSTERN",
+                "arr_station": "PRAHA HL N",
+                "arr_time": "11:24",
+                "train_no": "EC 1154",
+                "price": "155.00",
+                "seller_channel": null,
+                "through_ticket_disclosure": null,
+                "separate_contract_notice": null,
+                "single_txn_operator": null,
+                "single_txn_retailer": null
             },
-            "step3_entitlements": {
-                "leg_class_purchased": [],
-                "leg_class_delivered": [],
-                "leg_downgraded": [],
+            "step3_journey": {
                 "pmr_user": "Nej",
-                "pmr_booked": "Nej",
+                "pmr_booked": "unknown",
                 "pmrQBooked": null,
                 "pmrQDelivered": null,
                 "pmrQPromised": null,
-                "pmr_facility_details": null,
+                "pmr_facility_details": "",
                 "fare_flex_type": null,
                 "train_specificity": null,
                 "fare_class_purchased": null,
                 "berth_seat_type": null,
-                "reserved_amenity_delivered": null,
-                "class_delivered_status": null,
-                "preinformed_disruption": "Ved ikke",
-                "preinfo_channel": "Ved ikke",
-                "realtime_info_seen": [],
-                "downgrade_occurred": null,
+                "interest_class": "1",
+                "eligible_under_18_3": "1",
+                "bike_was_present": "Nej",
+                "bike_refusal_reason_type": "",
+                "bike_refusal_reason_other_text": ""
+            },
+            "step4_incident": {
+                "incident_main": "delay",
+                "incident_missed": "",
+                "expected_delay_60": "yes",
+                "preinformed_disruption": "no",
+                "preinfo_channel": "",
+                "realtime_info_seen": null,
+                "missed_connection_station": "",
+                "missed_connection_pick": null,
+                "voucherAccepted": "no",
+                "operatorExceptionalCircumstances": "unknown",
+                "operatorExceptionalType": "",
+                "minThresholdApplies": null
+            },
+            "step5_choices": {
+                "stranded_location": "irrelevant",
+                "blocked_train_alt_transport": null,
+                "blocked_no_transport_action": null,
+                "assistance_alt_transport_offered_by": "operator",
+                "assistance_alt_transport_type": "rail",
+                "assistance_alt_to_destination": "nearest_station",
+                "assistance_alt_departure_time": null,
+                "assistance_alt_arrival_time": null,
+                "blocked_self_paid_transport_type": null,
+                "blocked_self_paid_amount": null,
+                "blocked_self_paid_currency": null,
+                "blocked_self_paid_receipt": null,
+                "a20_3_solution_offered": null,
+                "a20_3_solution_type": null,
+                "a20_3_solution_offered_by": null,
+                "a20_3_no_solution_action": null,
+                "a20_3_outcome": null,
+                "a20_3_self_arranged_type": null,
+                "a20_3_self_paid_amount": null,
+                "a20_3_self_paid_currency": null,
+                "a20_3_self_paid_receipt": null,
+                "journey_outcome": null,
+                "assistance_alt_to_destination_assumed": "0",
+                "assistance_alt_to_destination_station": null,
+                "assistance_alt_to_destination_station_other": null
+            },
+            "step6_remedies": {
+                "art18_expected_delay_60": "yes",
+                "remedyChoice": "reroute_later",
+                "reroute_same_conditions_soonest": null,
+                "reroute_later_at_choice": "yes",
+                "reroute_info_within_100min": null,
+                "self_purchased_new_ticket": "yes",
+                "self_purchase_approved_by_operator": null,
+                "reroute_extra_costs": "yes",
+                "reroute_extra_costs_amount": "20",
+                "reroute_extra_costs_currency": "EUR",
+                "reroute_later_ticket_upload": null,
+                "trip_cancelled_return_to_origin": null,
+                "return_to_origin_expense": null,
+                "return_to_origin_amount": null,
+                "return_to_origin_currency": null,
+                "return_to_origin_receipt": null,
+                "delay_confirmation_info": null,
+                "delay_confirmation_received": null,
+                "delay_confirmation_upload": null,
+                "delay_confirmation_type": null
+            },
+            "step7_assistance": {
+                "art20_expected_delay_60": "yes",
+                "meal_offered": "no",
+                "assistance_meals_unavailable_reason": "not_available",
+                "hotel_offered": "no",
+                "overnight_needed": "yes",
+                "assistance_hotel_transport_included": null,
+                "assistance_hotel_accessible": null,
+                "blocked_train_alt_transport": null,
+                "blocked_on_track": null,
+                "stranded_at_station": null,
+                "stranded_unknown": null,
+                "assistance_blocked_transport_to": null,
+                "assistance_blocked_transport_time": null,
+                "assistance_blocked_transport_possible": null,
+                "alt_transport_provided": null,
+                "assistance_alt_transport_offered_by": "operator",
+                "assistance_alt_transport_type": "rail",
+                "assistance_alt_to_destination": "nearest_station",
+                "assistance_alt_departure_time": null,
+                "assistance_alt_arrival_time": null,
+                "assistance_pmr_priority_applied": null,
+                "assistance_pmr_companion_supported": null,
+                "assistance_pmr_dog_supported": null,
+                "meal_self_paid_amount": "20.00",
+                "meal_self_paid_currency": "EUR",
+                "meal_self_paid_receipt": null,
+                "hotel_self_paid_nights": "1",
+                "hotel_self_paid_amount": "100.00",
+                "hotel_self_paid_currency": "EUR",
+                "hotel_self_paid_receipt": null,
+                "blocked_self_paid_amount": null,
+                "blocked_self_paid_currency": null,
+                "blocked_self_paid_receipt": null,
+                "alt_self_paid_amount": null,
+                "alt_self_paid_currency": null,
+                "alt_self_paid_receipt": null,
+                "price_hints": {
+                    "meals": {
+                        "min": 8,
+                        "max": 15,
+                        "currency": "EUR"
+                    },
+                    "hotelPerNight": null,
+                    "taxi": {
+                        "min": 10,
+                        "max": 18,
+                        "currency": "EUR"
+                    },
+                    "altTransport": {
+                        "min": 10,
+                        "max": 25,
+                        "currency": "EUR"
+                    },
+                    "upgradeFirstClass": {
+                        "min": 15,
+                        "max": 35,
+                        "currency": "EUR"
+                    }
+                }
+            },
+            "step8_downgrade": {
+                "downgrade_occurred": "yes",
                 "downgrade_comp_basis": null,
                 "downgrade_segment_share": "1",
-                "interest_class": "1",
-                "eligible_under_18_3": "1"
+                "leg_class_purchased": [
+                    "1st"
+                ],
+                "leg_class_delivered": [
+                    "2nd"
+                ],
+                "leg_reservation_purchased": [
+                    "reserved"
+                ],
+                "leg_reservation_delivered": [
+                    "missing"
+                ],
+                "leg_downgraded": [
+                    "1"
+                ]
             },
-            "step4_choices": {
-                "remedyChoice": "reroute_soonest",
-                "self_purchased_new_ticket": "yes",
-                "self_purchase_approved_by_operator": "unknown",
-                "offer_provided": "unknown",
-                "reroute_same_conditions_soonest": "yes",
-                "reroute_later_at_choice": null,
-                "reroute_info_within_100min": "no",
-                "reroute_extra_costs": "yes",
-                "reroute_extra_costs_amount": "100",
-                "reroute_extra_costs_currency": "CZK",
+            "step9_compensation": {
                 "delayAtFinalMinutes": null,
-                "compensationBand": "25",
-                "voucherAccepted": "no"
-            },
-            "step5_assistance": {
-                "meal_offered": "no",
-                "hotel_offered": null,
-                "overnight_needed": null,
-                "blocked_train_alt_transport": null,
-                "alt_transport_provided": null,
-                "expense_meals_amount": null,
-                "expense_hotel_amount": null,
-                "expense_alt_transport_amount": null,
-                "expense_other_amount": null
+                "compensationBand": null,
+                "voucherAccepted": "no",
+                "operatorExceptionalCircumstances": "unknown",
+                "operatorExceptionalType": "",
+                "minThresholdApplies": null,
+                "delayMinEU": null,
+                "knownDelayBeforePurchase": false
             }
+        },
+        "art9_meta": {
+            "_groups": {
+                "bike": {
+                    "art9_1": {
+                        "bike_reservation_made": "unknown",
+                        "bike_reservation_required": "Ja"
+                    },
+                    "art9_2": {
+                        "bike_denied_boarding": "unknown",
+                        "bike_refusal_reason_provided": "unknown",
+                        "bike_refusal_reason_type": "",
+                        "bike_refusal_reason_other_text": ""
+                    },
+                    "art9_3": []
+                },
+                "pmr": {
+                    "art9_1": {
+                        "pmr_booked": "Nej"
+                    },
+                    "art9_2": {
+                        "pmr_delivered_status": "unknown",
+                        "pmr_promised_missing": "unknown"
+                    },
+                    "art9_3": []
+                },
+                "preinfo": {
+                    "art9_1": {
+                        "preinformed_disruption": "Nej",
+                        "preinfo_channel": ""
+                    },
+                    "art9_2": {
+                        "realtime_info_seen": "unknown"
+                    },
+                    "art9_3": {
+                        "preinfo_channel": "",
+                        "realtime_info_seen": "unknown"
+                    }
+                }
+            },
+            "preinformed_disruption": "Nej",
+            "preinfo_channel": "",
+            "realtime_info_seen": "unknown",
+            "pmr_user": "Nej",
+            "pmr_booked": "Nej",
+            "pmr_promised_missing": "unknown",
+            "pmr_delivered_status": "unknown",
+            "bike_reservation_made": "unknown",
+            "bike_reservation_required": "Ja",
+            "bike_denied_boarding": "unknown",
+            "bike_refusal_reason_provided": "unknown",
+            "bike_refusal_reason_type": "",
+            "bike_refusal_reason_other_text": ""
+        },
+        "art12_meta": {
+            "seller_type_operator": "Ja",
+            "seller_type_agency": "Nej",
+            "single_booking_reference": "Ja",
+            "shared_pnr_scope": "Ja",
+            "multi_operator_trip": "Nej",
+            "separate_contract_notice": "Ved ikke",
+            "through_ticket_disclosure": "Ved ikke"
         },
         "computeOverrides": {
+            "euOnly": true,
+            "delayMinEU": null,
             "knownDelayBeforePurchase": false,
-            "delayAtFinalMinutes": null
+            "delayAtFinalMinutes": null,
+            "refundAlready": null,
+            "throughTicket": null,
+            "returnTicket": null,
+            "legPrice": null,
+            "extraordinary": null,
+            "selfInflicted": null,
+            "art18Option": null
         },
-        "expected": [],
-        "journeyBasic": {
-            "dep_date": "2025-12-10",
-            "dep_time": "17:20",
-            "dep_station": "PARIS GARE LYON",
-            "arr_station": "MONTPELLIER ST-RO",
-            "arr_time": "02:00",
-            "train_no": "TGV 6055",
-            "ticket_no": "QFKDQB",
-            "operator": "SNCF",
-            "operator_country": "FR",
-            "operator_product": "TGV",
-            "price": "25.00"
-        },
-        "segments": [
-            {
-                "from": "PARIS GARE LYON",
-                "to": "MONTPELLIER ST-RO",
-                "schedDep": "17:20",
-                "schedArr": "20:44",
-                "trainNo": "TGV 6055",
-                "depDate": "2023-12-10",
-                "arrDate": "2023-12-10"
-            },
-            {
-                "from": "Paris Gare Lyon",
-                "to": "Montpellier St-Roch",
-                "schedDep": "17:20",
-                "schedArr": "20:44",
-                "trainNo": "TGV 6055",
-                "depDate": "2023-12-10",
-                "arrDate": "2023-12-10"
-            }
-        ]
+        "expected": []
     }
 }

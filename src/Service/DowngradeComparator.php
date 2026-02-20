@@ -43,7 +43,7 @@ class DowngradeComparator
         if ($downgradeFlag === 'Ja' && ($basisOverride === 'class' || $basisOverride === '')) {
             $classHit = true;
             $reasons[] = 'Bruger angiver downgrade i klasse (overstyring).';
-        } elseif ($deliveredStatus === 'lower' || $deliveredStatus === 'nedgraderet') {
+        } elseif (in_array($deliveredStatus, ['lower','nedgraderet','downgrade','downgraded'], true)) {
             $classHit = true;
             $reasons[] = 'Leveret klasse er lavere end købt.';
         }

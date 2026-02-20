@@ -28,11 +28,14 @@ Environment variables
 - OPENAI_MODEL:
   - OpenAI: e.g., gpt-4o-mini
   - Azure OpenAI: the Deployment name you created (not the base model name)
-  - Groq: e.g., llama-3.1-70b-versatile, mixtral-8x7b-32768
+  - Groq: e.g., openai/gpt-oss-120b, llama-3.1-70b-versatile, mixtral-8x7b-32768
 - OPENAI_API_VERSION (Azure only): e.g., 2024-08-01-preview
 - LLM_TIMEOUT_SECONDS (optional): default 15
+- LLM_EXTRACTOR_ORDER (optional): `heuristics_first` (default) or `llm_first`
+- LLM_REASONING_EFFORT (optional): low|medium|high (for GPT OSS models; low recommended for extraction)
  - USE_LLM_STRUCTURING (optional): set to 1 to let an LLM structure journey segments when the parser finds none.
  - LLM_VERIFY_SEGMENTS (optional): set to 1 to also verify/augment segments even when some were found (or pass ?segments_verify=1 in the URL for a one-off run on TRIN 3).
+ - LLM_SEGMENTS_PRIMARY (optional): set to 1 to prefer LLM-verified segments as the primary list (used in TRIN 3c downgrade rows).
 
 Windows PowerShell examples
 ```powershell
@@ -53,10 +56,13 @@ $env:OPENAI_API_VERSION = "2024-08-01-preview"
 $env:LLM_PROVIDER = "groq"
 $env:OPENAI_API_KEY = "gsk-..."
 $env:OPENAI_BASE_URL = "https://api.groq.com"  # app normalizes to /openai/v1
-$env:OPENAI_MODEL = "llama-3.1-70b-versatile"  # or "mixtral-8x7b-32768"
+$env:OPENAI_MODEL = "openai/gpt-oss-120b"  # or "llama-3.1-70b-versatile"
+$env:LLM_EXTRACTOR_ORDER = "llm_first"
+$env:LLM_REASONING_EFFORT = "low"
 $env:USE_LLM_STRUCTURING = "1"
 # Optional: also verify/augment even when segments exist
 $env:LLM_VERIFY_SEGMENTS = "1"
+$env:LLM_SEGMENTS_PRIMARY = "1"
 ```
 
 ## Suggested field schema

@@ -69,9 +69,9 @@ final class LlmSegmentsExtractor
                 'temperature' => 0,
                 'top_p' => 0,
                 'messages' => $messages,
-                'max_tokens' => 500,
             ];
-            if ($forceJson) { $body['response_format'] = ['type' => 'json_object']; }
+            $body = $this->applyReasoningParams($body, $model, 500);
+            if ($forceJson && !$this->isReasoningModel($model)) { $body['response_format'] = ['type' => 'json_object']; }
 
             $resp = $client->post($url, json_encode($body), ['headers' => $headers]);
             if ($resp->isOk()) {
@@ -98,7 +98,17 @@ final class LlmSegmentsExtractor
     {
         $schema = [
             'segments' => [
-                ['from' => 'string', 'to' => 'string', 'schedDep' => 'HH:MM or ""', 'schedArr' => 'HH:MM or ""', 'trainNo' => 'string or ""', 'depDate' => 'YYYY-MM-DD or ""', 'arrDate' => 'YYYY-MM-DD or ""'],
+                [
+                    'from' => 'string',
+                    'to' => 'string',
+                    'schedDep' => 'HH:MM or ""',
+                    'schedArr' => 'HH:MM or ""',
+                    'trainNo' => 'string or ""',
+                    'depDate' => 'YYYY-MM-DD or ""',
+                    'arrDate' => 'YYYY-MM-DD or ""',
+                    'classPurchased' => '1st|2nd|couchette|sleeper|""',
+                    'reservationPurchased' => 'reserved|free_seat|missing|""',
+                ],
             ],
         ];
         $schemaText = json_encode($schema, JSON_UNESCAPED_SLASHES);
@@ -111,6 +121,7 @@ Rules:
 - A segment is from one station to the next change/destination.
 - Use 24h HH:MM for times when present, else empty string.
 - Use ISO YYYY-MM-DD for dates when present, else empty string.
+- Only fill classPurchased/reservationPurchased if clearly stated on the ticket for that leg; otherwise return empty string.
 - Do not add extra keys.
 
 OCR TEXT:
@@ -123,6 +134,7 @@ EOT;
     private function tryParseJson(string $content): ?array
     {
         $content = trim($content);
+        $content = $this->normalizeJsonWhitespace($content);
         if (str_starts_with($content, '```')) {
             $content = preg_replace('/^```(?:json)?/i', '', $content);
             $content = preg_replace('/```$/', '', (string)$content);
@@ -137,12 +149,31 @@ EOT;
     {
         if (!is_array($arr)) { return []; }
         $out = [];
+        $mapClass = function($v): string {
+            $v = strtolower(trim((string)$v));
+            if ($v === '') { return ''; }
+            if (in_array($v, ['1st','1st_class','first','1','business','comfort','premiere','premium'], true)) { return '1st'; }
+            if (in_array($v, ['2nd','2nd_class','second','2','standard','economy'], true)) { return '2nd'; }
+            if (in_array($v, ['couchette','berth','liegewagen','liggevogn'], true)) { return 'couchette'; }
+            if (in_array($v, ['sleeper','sleeping','sovevogn'], true)) { return 'sleeper'; }
+            return '';
+        };
+        $mapRes = function($v): string {
+            $v = strtolower(trim((string)$v));
+            if ($v === '') { return ''; }
+            if (in_array($v, ['reserved','seat','seat_reserved','reservation','reserveret','platzreservierung'], true)) { return 'reserved'; }
+            if (in_array($v, ['free','free_seat','unreserved','open_seat','no_reservation','ingen reservation'], true)) { return 'free_seat'; }
+            if (in_array($v, ['missing','none','not_included'], true)) { return 'missing'; }
+            return '';
+        };
         foreach ($arr as $s) {
             if (!is_array($s)) { continue; }
             $from = trim((string)($s['from'] ?? ''));
             $to = trim((string)($s['to'] ?? ''));
             if ($from === '' || $to === '' || $from === $to) { continue; }
             if (!$this->isValidStationName($from) || !$this->isValidStationName($to)) { continue; }
+            $classPurchased = $mapClass($s['classPurchased'] ?? $s['class_purchased'] ?? '');
+            $resPurchased = $mapRes($s['reservationPurchased'] ?? $s['reservation_purchased'] ?? '');
             $out[] = [
                 'from' => $from,
                 'to' => $to,
@@ -151,6 +182,8 @@ EOT;
                 'trainNo' => trim((string)($s['trainNo'] ?? '')),
                 'depDate' => trim((string)($s['depDate'] ?? '')),
                 'arrDate' => trim((string)($s['arrDate'] ?? '')),
+                'classPurchased' => $classPurchased,
+                'reservationPurchased' => $resPurchased,
             ];
         }
         // Prefer anchor legs (with a time or a train number) to avoid listing every via stop
@@ -175,6 +208,8 @@ EOT;
                         'trainNo' => $last['trainNo'],
                         'depDate' => $last['depDate'] ?: $seg['depDate'],
                         'arrDate' => $seg['arrDate'] ?: $last['arrDate'],
+                        'classPurchased' => $last['classPurchased'] ?: $seg['classPurchased'],
+                        'reservationPurchased' => $last['reservationPurchased'] ?: $seg['reservationPurchased'],
                     ];
                 } else {
                     $collapsed[] = $seg;
@@ -248,6 +283,29 @@ EOT;
         if (function_exists('env')) { $v = env($key); return $v !== null ? (string)$v : null; }
         $v = getenv($key);
         return $v !== false ? (string)$v : null;
+    }
+
+    private function normalizeJsonWhitespace(string $s): string
+    {
+        return preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', $s) ?? $s;
+    }
+
+    private function applyReasoningParams(array $body, string $model, int $maxTokens): array
+    {
+        if ($this->isReasoningModel($model)) {
+            $effort = strtolower((string)($this->env('LLM_REASONING_EFFORT') ?? 'low'));
+            if (!in_array($effort, ['low','medium','high'], true)) { $effort = 'low'; }
+            $body['max_completion_tokens'] = $maxTokens;
+            $body['reasoning_effort'] = $effort;
+        } else {
+            $body['max_tokens'] = $maxTokens;
+        }
+        return $body;
+    }
+
+    private function isReasoningModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'gpt-oss');
     }
 }
 

@@ -13,6 +13,7 @@ class RunScenariosController extends AppController
     {
         parent::initialize();
         $this->viewBuilder()->setClassName('Json');
+        $this->viewBuilder()->setOption('jsonOptions', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**

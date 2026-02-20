@@ -16,20 +16,22 @@ class Art21to24PmrEvaluator
         $isYes = function($v): bool { $s = strtolower(trim((string)$v)); return in_array($s, ['ja','yes','y','1','true'], true); };
         $pmrUser = $isYes($meta['pmr_user'] ?? null);
         $bookedRaw = strtolower(trim((string)($meta['pmr_booked'] ?? 'unknown')));
-        $booked = $bookedRaw === 'ja' || $bookedRaw === 'yes';
-        $attemptedRefused = ($bookedRaw === 'attempted_refused');
-        $delivered = strtolower((string)($meta['pmr_delivered_status'] ?? 'unknown'));
+        $booked = in_array($bookedRaw, ['ja','yes','y','1','true'], true);
+        $attemptedRefused = in_array($bookedRaw, ['attempted_refused','refused'], true);
+        $deliveredRaw = strtolower((string)($meta['pmr_delivered_status'] ?? 'unknown'));
+        if (in_array($deliveredRaw, ['yes_full','yes'], true)) { $delivered = 'yes'; }
+        elseif (in_array($deliveredRaw, ['partial','no'], true)) { $delivered = 'no'; }
+        else { $delivered = 'unknown'; }
         $promMiss = strtolower((string)($meta['pmr_promised_missing'] ?? 'unknown'));
 
         $assistanceExpected = $pmrUser && $booked;
-        $assistanceBreach = $assistanceExpected && in_array($delivered, ['no','partial'], true);
+        $assistanceBreach = $assistanceExpected && ($delivered === 'no');
         $precontractMissing = in_array($promMiss, ['ja','yes'], true);
 
         $compliance = 'unknown';
         if ($assistanceExpected) {
             if ($delivered === 'no') { $compliance = 'non_compliant'; }
-            elseif ($delivered === 'partial') { $compliance = 'partial'; }
-            elseif ($delivered === 'yes_full') { $compliance = 'compliant'; }
+            elseif ($delivered === 'yes') { $compliance = 'compliant'; }
         } elseif ($attemptedRefused) {
             $compliance = 'non_compliant';
         }
@@ -38,7 +40,7 @@ class Art21to24PmrEvaluator
 
         $reasoning = [];
         if ($pmrUser) { $reasoning[] = 'PMR bruger: ja'; } else { $reasoning[] = 'PMR bruger: nej'; }
-        $reasoning[] = 'Assistance bestilt: ' . ($booked ? 'ja' : ($attemptedRefused ? 'forsøgt – afvist' : 'nej')); 
+        $reasoning[] = 'Assistance bestilt: ' . ($booked ? 'ja' : ($attemptedRefused ? 'forsogt - afvist' : 'nej'));
         $reasoning[] = 'Leveret status: ' . $delivered;
         if ($precontractMissing) { $reasoning[] = 'Lovede PMR-faciliteter manglede før køb.'; }
 

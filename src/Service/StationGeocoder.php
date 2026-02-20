@@ -20,9 +20,22 @@ class StationGeocoder
             $json = (string)file_get_contents($path);
             $data = json_decode($json, true);
             if (is_array($data)) {
-                foreach ($data as $k => $v) {
-                    if (isset($v['lat'], $v['lon'])) {
-                        $this->db[$this->norm($k)] = ['lat' => (float)$v['lat'], 'lon' => (float)$v['lon']];
+                // Support both shapes:
+                // 1) Map: { "København H": {"lat":..,"lon":..}, ... }
+                // 2) List: [ {"name":"København H","lat":..,"lon":..}, ... ] (current stations_coords.json)
+                $isList = function_exists('array_is_list') ? array_is_list($data) : (array_keys($data) === range(0, count($data) - 1));
+                if ($isList) {
+                    foreach ($data as $row) {
+                        if (!is_array($row)) { continue; }
+                        $name = (string)($row['name'] ?? ($row['station'] ?? ''));
+                        if ($name === '' || !isset($row['lat'], $row['lon'])) { continue; }
+                        $this->db[$this->norm($name)] = ['lat' => (float)$row['lat'], 'lon' => (float)$row['lon']];
+                    }
+                } else {
+                    foreach ($data as $k => $v) {
+                        if (is_array($v) && isset($v['lat'], $v['lon'])) {
+                            $this->db[$this->norm((string)$k)] = ['lat' => (float)$v['lat'], 'lon' => (float)$v['lon']];
+                        }
                     }
                 }
             }

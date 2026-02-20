@@ -138,6 +138,11 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/admin/claims/mark-paid/{id}', ['prefix' => 'Admin', 'controller' => 'Claims', 'action' => 'markPaid'])
             ->setPass(['id']);
 
+        // Admin: Audit viewer (latest reports)
+        $builder->connect('/admin/audit', ['prefix' => 'Admin', 'controller' => 'Audit', 'action' => 'index']);
+        $builder->connect('/admin/audit/latest', ['prefix' => 'Admin', 'controller' => 'Audit', 'action' => 'latest']);
+        $builder->connect('/admin/audit/view', ['prefix' => 'Admin', 'controller' => 'Audit', 'action' => 'view']);
+
         /*
          * Connect catchall routes for all controllers.
          *
@@ -157,6 +162,9 @@ return function (RouteBuilder $routes): void {
     // API prefix (JSON)
     $routes->prefix('Api', function (RouteBuilder $builder): void {
         $builder->setRouteClass(DashedRoute::class);
+        // Regulation RAG helper (local index built from CELEX PDF)
+        $builder->connect('/regulation/search', ['controller' => 'Regulation', 'action' => 'search']);
+        $builder->connect('/regulation/quote', ['controller' => 'Regulation', 'action' => 'quote']);
         // Demo v2 (fixtures/scenarios runner)
         $builder->scope('/demo/v2', function (RouteBuilder $demo): void {
             $demo->setRouteClass(DashedRoute::class);

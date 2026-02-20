@@ -16,10 +16,34 @@ foreach ($mctEvalRaw as $ev) {
     $mctByStation[$normStation($ev['station'] ?? '')] = $ev;
 }
 $toMin = function(string $t){ if(!preg_match('/^(\\d{1,2}):(\\d{2})$/', trim($t), $m)) return null; return (int)$m[1]*60 + (int)$m[2]; };
+$segLlm = (array)($meta['_segments_llm_suggest'] ?? []);
+$segAuto = (array)($meta['_segments_auto'] ?? []);
+$normChain = function(string $s): string {
+    $s = mb_strtolower(trim($s), 'UTF-8');
+    $s = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s) ?? $s;
+    $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+    return trim($s);
+};
+$isChainable = function($segs) use ($normChain): bool {
+    if (!is_array($segs) || count($segs) < 2) { return false; }
+    $prevTo = '';
+    foreach ($segs as $idx => $seg) {
+        $from = trim((string)($seg['from'] ?? ''));
+        $to = trim((string)($seg['to'] ?? ''));
+        if ($from === '' || $to === '' || $from === $to) { return false; }
+        if ($idx > 0 && $normChain($from) !== $normChain($prevTo)) { return false; }
+        $prevTo = $to;
+    }
+    return true;
+};
+$segSrc = $segLlm;
+if (empty($segLlm) || !$isChainable($segLlm)) {
+    $segSrc = $segAuto;
+    if (empty($segAuto) && !empty($segLlm)) { $segSrc = $segLlm; }
+}
 
-// Fallback build of journey rows from auto segments
+// Fallback build of journey rows from detected segments
 if (empty($journeyRowsInline)) {
-    $segSrc = (array)($meta['_segments_auto'] ?? []);
     foreach ($segSrc as $s) {
         $from = trim((string)($s['from'] ?? ''));
         $to = trim((string)($s['to'] ?? ''));
@@ -33,14 +57,13 @@ if (empty($journeyRowsInline)) {
     }
 }
 
-// Fallback MC choices: use auto segments (with MCT info) or simple choices from form
+// Fallback MC choices: prefer LLM segments, then auto segments, then simple choices from form
 if (empty($mcChoicesInline)) {
-    $segAuto = (array)($meta['_segments_auto'] ?? []);
-    if (!empty($segAuto)) {
-        $last = count($segAuto) - 1;
+    if (!empty($segSrc)) {
+        $last = count($segSrc) - 1;
         for ($i = 0; $i < $last; $i++) {
-            $seg = (array)$segAuto[$i];
-            $next = (array)($segAuto[$i+1] ?? []);
+            $seg = (array)$segSrc[$i];
+            $next = (array)($segSrc[$i+1] ?? []);
             $toName = trim((string)($seg['to'] ?? ''));
             if ($toName === '') { continue; }
             $arr = trim((string)($seg['schedArr'] ?? ''));
@@ -67,7 +90,7 @@ if (empty($mcChoicesInline)) {
 
 // Fallback change bullets
 if (empty($changeBullets)) {
-    foreach ((array)($meta['_segments_auto'] ?? []) as $s) {
+    foreach ($segSrc as $s) {
         $chg = trim((string)($s['change'] ?? ''));
         if ($chg === '') continue;
         $arr = (string)($s['schedArr'] ?? '');
@@ -158,12 +181,10 @@ $currentMissInline = (string)($form['missed_connection_station'] ?? '');
             <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
               <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
                 <option value=""><?= __('Vælg leveret niveau') ?></option>
-                <option value="1st_class" <?= $deliveredVal==='1st_class'?'selected':'' ?>>1. klasse</option>
-                <option value="2nd_class" <?= $deliveredVal==='2nd_class'?'selected':'' ?>>2. klasse</option>
-                <option value="seat_reserved" <?= $deliveredVal==='seat_reserved'?'selected':'' ?>>Reserveret sæde</option>
-                <option value="couchette" <?= $deliveredVal==='couchette'?'selected':'' ?>>Ligge (couchette)</option>
+                <option value="1st" <?= $deliveredVal==='1st'?'selected':'' ?>>1. klasse</option>
+                <option value="2nd" <?= $deliveredVal==='2nd'?'selected':'' ?>>2. klasse</option>
+                <option value="couchette" <?= $deliveredVal==='couchette'?'selected':'' ?>>Liggevogn</option>
                 <option value="sleeper" <?= $deliveredVal==='sleeper'?'selected':'' ?>>Sovevogn</option>
-                <option value="free_seat" <?= $deliveredVal==='free_seat'?'selected':'' ?>>Fri plads / ingen reservation</option>
               </select>
             </td>
             <td style="padding:4px; border-bottom:1px solid #f3f3f3;">

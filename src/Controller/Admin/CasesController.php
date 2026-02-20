@@ -59,7 +59,10 @@ class CasesController extends AppController
         $flags = (array)($sess['flags'] ?? []);
         $incident = (array)($sess['incident'] ?? []);
         $meta = (array)($sess['meta'] ?? []);
-        $delay = (int)($compute['delayMinEU'] ?? ($form['delayAtFinalMinutes'] ?? 0));
+        $euOnly = (bool)($compute['euOnly'] ?? true);
+        $delayWhole = isset($form['delayAtFinalMinutes']) ? (int)$form['delayAtFinalMinutes'] : 0;
+        $delayEu = isset($compute['delayMinEU']) ? (int)$compute['delayMinEU'] : null;
+        $delay = ($euOnly && $delayEu !== null && $delayEu >= 0) ? $delayEu : $delayWhole;
         $remedy = (string)($form['remedyChoice'] ?? '');
         $expensesTotal = 0.0;
         foreach (['meal_self_paid_amount','hotel_self_paid_amount','blocked_self_paid_amount','alt_self_paid_amount'] as $ek) {
@@ -87,7 +90,7 @@ class CasesController extends AppController
             'comp_band' => $compBand,
             'comp_amount' => $compAmount,
             'currency' => $currency,
-            'eu_only' => (bool)($compute['euOnly'] ?? true),
+            'eu_only' => $euOnly,
             'extraordinary' => (bool)($form['operatorExceptionalCircumstances'] ?? false),
             'duplicate_flag' => false,
             'attachments_count' => 0,

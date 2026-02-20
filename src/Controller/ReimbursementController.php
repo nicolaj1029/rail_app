@@ -2700,7 +2700,7 @@ class ReimbursementController extends AppController
         ];
         $debugKeys = [
             'logs','extraction_provider','extraction_confidence',
-            'saved_leg_class_purchased','saved_leg_class_delivered','saved_leg_downgraded','saved_leg_by_file',
+            'saved_leg_class_purchased','saved_leg_class_delivered','saved_leg_reservation_purchased','saved_leg_reservation_delivered','saved_leg_downgraded','saved_leg_by_file',
             'single_txn_operator','single_booking_reference','shared_pnr_scope',
             'pmr_promised_missing','pmr_delivered_status','mct_realistic','pm_bike_involved',
         ];

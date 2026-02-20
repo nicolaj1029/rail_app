@@ -120,7 +120,7 @@
   $fftAuto = (string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? ''));
   $tsAuto = (string)($meta['train_specificity'] ?? ($meta['_auto']['train_specificity']['value'] ?? 'unknown'));
 ?>
-<div class="small">fare_flex_type (auto): <code><?= h($fftAuto ?: 'other') ?></code> · train_specificity: <code><?= h($tsAuto ?: 'unknown') ?></code></div>
+  <div class="small">fare_flex_type (auto): <code><?= h($fftAuto ?: 'other') ?></code> · train_specificity: <code><?= h($tsAuto ?: 'unknown') ?></code></div>
 <?php if (!empty($ttd)): ?>
   <div class="small muted">evidence: <code><?= h(implode(', ', array_slice((array)($ttd['evidence'] ?? []), 0, 3))) ?></code> · conf: <code><?= h((string)($ttd['confidence'] ?? '')) ?></code></div>
 <?php endif; ?>
@@ -141,9 +141,8 @@
   </div>
   <div class="small" style="margin-top:4px;">Gælder billetten kun for specifikt tog?
     <?php $curTs = strtolower((string)$tsAuto); ?>
-    <label class="ml8"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
-    <label class="ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
-    <label class="ml8"><input type="radio" name="train_specificity" value="unknown" <?= ($curTs===''||$curTs==='unknown')?'checked':'' ?> /> Ved ikke</label>
+  <label class="ml8"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
+  <label class="ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
   </div>
   <button type="submit" class="small" style="margin-top:4px;">Gem</button>
   <div class="small muted" style="margin-top:4px;">Match: Art. 9 – Bilag II del I</div>

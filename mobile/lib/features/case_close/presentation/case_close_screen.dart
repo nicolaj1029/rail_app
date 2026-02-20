@@ -306,8 +306,9 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     if (gotMeals) parts.add('mad');
     if (gotHotel) parts.add('hotel');
     if (gotTransport) parts.add('transport');
-    if (needsWheelchair || needsEscort || otherNeedsCtrl.text.isNotEmpty)
+    if (needsWheelchair || needsEscort || otherNeedsCtrl.text.isNotEmpty) {
       parts.add('særlige behov');
+    }
     return parts.isEmpty ? 'Ingen' : parts.join(', ');
   }
 
@@ -738,7 +739,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
                 DropdownButtonFormField<String>(
-                  value: informedWithin100,
+                  initialValue: informedWithin100,
                   decoration: const InputDecoration(
                     labelText: 'Informerede operatøren inden for 100 min?',
                   ),
@@ -909,7 +910,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                         setState(() => delayConfirmation = v ?? false),
                   ),
                   DropdownButtonFormField<String>(
-                    value: extraordinary,
+                    initialValue: extraordinary,
                     decoration: const InputDecoration(
                       labelText:
                           'Henviste operatøren til ekstraordinære forhold?',
@@ -1072,7 +1073,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   ),
                 ],
                 DropdownButtonFormField<String>(
-                  value: forceMajeureReason,
+                  initialValue: forceMajeureReason,
                   decoration: const InputDecoration(
                     labelText: 'Force majeure årsag (valgfri)',
                   ),
@@ -1250,7 +1251,6 @@ class _TicketTile extends StatelessWidget {
     required this.onRemove,
     required this.onSelectForUpload,
     required this.selectedForUpload,
-    super.key,
   });
 
   @override
@@ -1363,7 +1363,7 @@ class _ReceiptItem {
 class _ReceiptTile extends StatelessWidget {
   final _ReceiptItem item;
   final VoidCallback onRemove;
-  const _ReceiptTile({required this.item, required this.onRemove, super.key});
+  const _ReceiptTile({required this.item, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -1396,7 +1396,7 @@ class _ReceiptTile extends StatelessWidget {
               ),
             ),
             DropdownButtonFormField<String>(
-              value: item.category,
+              initialValue: item.category,
               decoration: const InputDecoration(labelText: 'Kategori'),
               items: categories
                   .map(

@@ -71,9 +71,9 @@ final class LlmSegmentsVerifier
                 'temperature' => $temperature,
                 'top_p' => 1.0,
                 'messages' => $messages,
-                'max_tokens' => $maxTokens,
             ];
-            if ($forceJson) { $body['response_format'] = ['type' => 'json_object']; }
+            $body = $this->applyReasoningParams($body, $model, $maxTokens);
+            if ($forceJson && !$this->isReasoningModel($model)) { $body['response_format'] = ['type' => 'json_object']; }
 
             $resp = $client->post($url, json_encode($body), ['headers' => $headers]);
             if (!$resp->isOk()) {
@@ -82,6 +82,7 @@ final class LlmSegmentsVerifier
             }
             $data = (array)$resp->getJson();
             $content = (string)($data['choices'][0]['message']['content'] ?? '');
+            $content = $this->normalizeJsonWhitespace($content);
             $decoded = json_decode($content, true);
             if (!is_array($decoded)) {
                 $logs[] = 'LLM verify non-JSON or empty';
@@ -121,6 +122,7 @@ Rules:
 - Use ISO8601 for times: YYYY-MM-DDTHH:MM. If date is missing, use context_date; if still missing, omit the segment.
 - No invented stations. Use real station names; normalize common aliases (e.g., 'Stockholm c' -> 'Stockholm C').
 - If you guess, set confidence <= 0.5 and source='llm_infer' with a brief note.
+- Only fill classPurchased/reservationPurchased if clearly stated on the ticket for that leg; otherwise return empty string or omit the field.
 - Do not include free text outside JSON. Only return the JSON object.
 EOT;
     }
@@ -144,6 +146,8 @@ EOT;
                             'operator' => ['type'=>'string'],
                             'platform' => ['type'=>'string'],
                             'pnr' => ['type'=>'string'],
+                            'classPurchased' => ['type'=>'string'],
+                            'reservationPurchased' => ['type'=>'string'],
                             'confidence' => ['type'=>'number'],
                             'source' => ['type'=>'string'],
                             'notes' => ['type'=>'string'],
@@ -173,6 +177,23 @@ EOT;
         if (!is_array($obj) || !isset($obj['segments']) || !is_array($obj['segments'])) {
             return ['segments' => [], 'error' => 'missing segments'];
         }
+        $mapClass = function($v): string {
+            $v = strtolower(trim((string)$v));
+            if ($v === '') { return ''; }
+            if (in_array($v, ['1st','1st_class','first','1','business','comfort','premiere','premium'], true)) { return '1st'; }
+            if (in_array($v, ['2nd','2nd_class','second','2','standard','economy'], true)) { return '2nd'; }
+            if (in_array($v, ['couchette','berth','liegewagen','liggevogn'], true)) { return 'couchette'; }
+            if (in_array($v, ['sleeper','sleeping','sovevogn'], true)) { return 'sleeper'; }
+            return '';
+        };
+        $mapRes = function($v): string {
+            $v = strtolower(trim((string)$v));
+            if ($v === '') { return ''; }
+            if (in_array($v, ['reserved','seat','seat_reserved','reservation','reserveret','platzreservierung'], true)) { return 'reserved'; }
+            if (in_array($v, ['free','free_seat','unreserved','open_seat','no_reservation','ingen reservation'], true)) { return 'free_seat'; }
+            if (in_array($v, ['missing','none','not_included'], true)) { return 'missing'; }
+            return '';
+        };
         $out = [];
         foreach ($obj['segments'] as $s) {
             if (!is_array($s)) { continue; }
@@ -194,6 +215,10 @@ EOT;
                 'arrDate' => $arrDate !== '' ? $arrDate : $depDate,
                 'trainNo' => (string)($s['trainNo'] ?? ''),
             ];
+            $classPurchased = $mapClass($s['classPurchased'] ?? $s['class_purchased'] ?? '');
+            if ($classPurchased !== '') { $seg['classPurchased'] = $classPurchased; }
+            $resPurchased = $mapRes($s['reservationPurchased'] ?? $s['reservation_purchased'] ?? '');
+            if ($resPurchased !== '') { $seg['reservationPurchased'] = $resPurchased; }
             // carry through confidence/source/notes if present
             $c = (float)($s['confidence'] ?? 0.0);
             if ($c > 0) { $seg['confidence'] = $c; }
@@ -266,6 +291,29 @@ EOT;
         if (function_exists('env')) { $v = env($key); return $v !== null ? (string)$v : null; }
         $v = getenv($key);
         return $v !== false ? (string)$v : null;
+    }
+
+    private function normalizeJsonWhitespace(string $s): string
+    {
+        return preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', $s) ?? $s;
+    }
+
+    private function applyReasoningParams(array $body, string $model, int $maxTokens): array
+    {
+        if ($this->isReasoningModel($model)) {
+            $effort = strtolower((string)($this->env('LLM_REASONING_EFFORT') ?? 'low'));
+            if (!in_array($effort, ['low','medium','high'], true)) { $effort = 'low'; }
+            $body['max_completion_tokens'] = $maxTokens;
+            $body['reasoning_effort'] = $effort;
+        } else {
+            $body['max_tokens'] = $maxTokens;
+        }
+        return $body;
+    }
+
+    private function isReasoningModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'gpt-oss');
     }
 
     private function clip(string $s, int $max): string

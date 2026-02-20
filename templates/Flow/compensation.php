@@ -1,12 +1,22 @@
 <?php
 /**
- * TRIN 6 – Kompensation (Art. 19)
+ * TRIN 9 – Kompensation (Art. 19)
  * Vars injected from controller: form, compute, incident, profile, claim, meta, seasonMode, seasonSummary, etc.
  */
 $form = $form ?? [];
+$flags = $flags ?? [];
 $compute = $compute ?? [];
 $incident = $incident ?? [];
 $profile = $profile ?? ['articles' => []];
+$travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
+$isOngoing = ($travelState === 'ongoing');
+$isCompleted = ($travelState === 'completed');
+$compTitle = $isOngoing
+    ? 'TRIN 9 - Kompensation (foreloebig)'
+    : ($isCompleted ? 'TRIN 9 - Kompensation (afsluttet rejse)' : 'TRIN 9 - Kompensation (Art. 19)');
+$compHint = $isOngoing
+    ? 'Beregningen kan aendre sig, naar rejsen er afsluttet.'
+    : ($isCompleted ? 'Beregningen er baseret paa den afsluttede rejse.' : '');
 $delayAtFinal = (int)($delayAtFinal ?? 0);
 $bandAuto = (string)($bandAuto ?? '0');
 $refundChosen = (bool)($refundChosen ?? false);
@@ -43,32 +53,54 @@ $downgradeRate = $rateMap[$downgradeBasis] ?? 0.0;
 // Forsøg automatisk at udlede sats ud fra per-leg købt/leveret niveau, hvis ikke sat
 $legBuy = (array)($form['leg_class_purchased'] ?? []);
 $legDel = (array)($form['leg_class_delivered'] ?? []);
+$legResBuy = (array)($form['leg_reservation_purchased'] ?? []);
+$legResDel = (array)($form['leg_reservation_delivered'] ?? []);
 $legDg  = (array)($form['leg_downgraded'] ?? []);
 $rank = [
-    'sleeper' => 3,
-    'couchette' => 2,
-    '1st_class' => 1,
-    'seat_reserved' => 1,
-    '2nd_class' => 0,
-    'free_seat' => 0,
-    'other' => 0,
+    'sleeper' => 4,
+    'couchette' => 3,
+    '1st' => 2,
+    '2nd' => 1,
 ];
-$autoRateFor = function(string $buy, string $del) use ($rank): float {
-    $rb = $rank[$buy] ?? 0;
-    $rd = $rank[$del] ?? 0;
-    if ($rb <= $rd) { return 0.0; }
-    if ($rb >= 3) { return 0.75; }
-    if ($rb === 2) { return 0.50; }
-    return 0.25;
+$normClass = function(string $v): string {
+    $v = strtolower(trim($v));
+    if (in_array($v, ['1st_class','1st','first','1'], true)) return '1st';
+    if (in_array($v, ['2nd_class','2nd','second','2'], true)) return '2nd';
+    if ($v === 'seat_reserved' || $v === 'free_seat') return '2nd';
+    return $v;
 };
-$countLegs = max(count($legBuy), count($legDel), count($legDg));
+$normRes = function(string $v): string {
+    $v = strtolower(trim($v));
+    if (in_array($v, ['seat_reserved','reserved','seat'], true)) return 'reserved';
+    if (in_array($v, ['free','free_seat'], true)) return 'free_seat';
+    if ($v === 'missing') return 'missing';
+    return $v;
+};
+$autoRateFor = function(string $buy, string $del, string $buyRes, string $delRes) use ($rank, $normClass, $normRes): float {
+    $bc = $normClass($buy);
+    $dc = $normClass($del);
+    $rb = $rank[$bc] ?? 0;
+    $rd = $rank[$dc] ?? 0;
+    if ($rb > 0 && $rd > 0 && $rb > $rd) {
+        if ($bc === 'sleeper') { return 0.75; }
+        if ($bc === 'couchette') { return 0.50; }
+        return 0.25;
+    }
+    $br = $normRes($buyRes);
+    $dr = $normRes($delRes);
+    if ($br === 'reserved' && $dr !== '' && $dr !== 'reserved') { return 0.25; }
+    return 0.0;
+};
+$countLegs = max(count($legBuy), count($legDel), count($legResBuy), count($legResDel), count($legDg));
 if ($downgradeRate <= 0 && $countLegs > 0) {
     $dgFound = false;
     for ($i = 0; $i < $countLegs; $i++) {
         $buy = (string)($legBuy[$i] ?? '');
         $del = (string)($legDel[$i] ?? '');
+        $buyRes = (string)($legResBuy[$i] ?? '');
+        $delRes = (string)($legResDel[$i] ?? '');
         $dg  = ((string)($legDg[$i] ?? '') === '1');
-        $autoRate = $autoRateFor($buy, $del);
+        $autoRate = $autoRateFor($buy, $del, $buyRes, $delRes);
         if ($dg || $autoRate > 0) {
             $dgFound = $dgFound || $dg || $autoRate > 0;
             if ($autoRate > $downgradeRate) {
@@ -141,7 +173,10 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   .mt4{margin-top:4px}.mt8{margin-top:8px}.mt12{margin-top:12px}.ml8{margin-left:8px}
 </style>
 
-<h1><?= __('TRIN 6 · Kompensation (Art. 19)') ?></h1>
+<h1><?= h($compTitle) ?></h1>
+<?php if ($compHint !== ''): ?>
+  <p class="small muted"><?= h($compHint) ?></p>
+<?php endif; ?>
 <?= $this->Form->create(null) ?>
 
 <?php if (!empty($claim)): ?>
@@ -192,15 +227,23 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       </div>
       <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
         <div><strong><?= __('Art. 20 ? Udgifter') ?></strong></div>
+        <?php
+          $expMeals = (float)($br['expenses']['meals'] ?? 0);
+          $expHotel = (float)($br['expenses']['hotel'] ?? 0);
+          $expAlt = (float)($br['expenses']['alt_transport'] ?? 0);
+          $expOther = (float)($br['expenses']['other'] ?? 0);
+          $expA202 = max(0.0, $expMeals + $expHotel + $expOther);
+          $expA203 = max(0.0, $expAlt);
+          $altLabel = (string)($br['expenses']['alt_transport_label'] ?? '');
+        ?>
         <div class="mt4"><?= __('Udgifter (indsendt):') ?> <strong><?= number_format($expVal,2) ?> <?= h($expCur) ?></strong></div>
+        <div class="mt4"><?= __('Ophold/forplejning (Art. 20(2)):' ) ?> <strong><?= number_format($expA202,2) ?> <?= h($expCur) ?></strong></div>
+        <div class="mt4"><?= __('Transport (Art. 20(3)):' ) ?> <strong><?= number_format($expA203,2) ?> <?= h($expCur) ?></strong><?= $altLabel !== '' && $expA203 > 0 ? ' - ' . h($altLabel) : '' ?></div>
         <?php if ($expToTicket !== null): ?>
           <div class="mt4"><?= __('Udgifter i billetvaluta:') ?> <strong><?= number_format($expToTicket,2) ?> <?= h($priceCurrency) ?></strong></div>
         <?php endif; ?>
         <?php if ($expToEur !== null): ?>
           <div class="mt4"><?= __('Udgifter i EUR:') ?> <strong><?= number_format($expToEur,2) ?> EUR</strong></div>
-        <?php endif; ?>
-        <?php if (!empty($br['expenses']['alt_transport']) && (float)$br['expenses']['alt_transport']>0): ?>
-          <div class="mt4"><?= __('Alt. transportandel:') ?> <strong><?= number_format((float)$br['expenses']['alt_transport'],2) ?> <?= h($expCur) ?></strong></div>
         <?php endif; ?>
       </div>
       <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
@@ -377,35 +420,6 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   </script>
 </div>
 
-<div class="card mt12">
-  <strong><?= __('3) Form og undtagelser') ?></strong>
-  <div class="small mt4"><?= __('Udbetaling sker som udgangspunkt kontant. Vouchers accepteres ikke i denne løsning.') ?></div>
-  <input type="hidden" name="voucherAccepted" value="no" />
-
-  <?php $exc = (string)($form['operatorExceptionalCircumstances'] ?? ''); ?>
-  <div class="mt8"><?= __('Henviser operatøren til ekstraordinære forhold (Art. 19(10))?') ?></div>
-  <label><input type="radio" name="operatorExceptionalCircumstances" value="yes" <?= $exc==='yes'?'checked':'' ?> /> <?= __('Ja') ?></label>
-  <label class="ml8"><input type="radio" name="operatorExceptionalCircumstances" value="no" <?= $exc==='no'?'checked':'' ?> /> <?= __('Nej') ?></label>
-  <label class="ml8"><input type="radio" name="operatorExceptionalCircumstances" value="unknown" <?= ($exc===''||$exc==='unknown')?'checked':'' ?> /> <?= __('Ved ikke') ?></label>
-
-  <?php $excType = (string)($form['operatorExceptionalType'] ?? ''); ?>
-  <div class="small mt8"><?= __('Hvis ja: vælg type (bruges til korrekt undtagelse, fx egen personalestrejke udelukker ikke kompensation)') ?></div>
-  <select name="operatorExceptionalType">
-    <option value=""><?= __('- Vælg type -') ?></option>
-    <option value="weather" <?= $excType==='weather'?'selected':'' ?>><?= __('Vejr') ?></option>
-    <option value="sabotage" <?= $excType==='sabotage'?'selected':'' ?>><?= __('Sabotage') ?></option>
-    <option value="infrastructure_failure" <?= $excType==='infrastructure_failure'?'selected':'' ?>><?= __('Infrastrukturfejl') ?></option>
-    <option value="third_party" <?= $excType==='third_party'?'selected':'' ?>><?= __('Tredjepart') ?></option>
-    <option value="own_staff_strike" <?= $excType==='own_staff_strike'?'selected':'' ?>><?= __('Egen personalestrejke') ?></option>
-    <option value="external_strike" <?= $excType==='external_strike'?'selected':'' ?>><?= __('Ekstern strejke') ?></option>
-    <option value="other" <?= $excType==='other'?'selected':'' ?>><?= __('Andet') ?></option>
-  </select>
-
-  <div class="mt8">
-    <label><input type="checkbox" name="minThresholdApplies" value="1" <?= !empty($form['minThresholdApplies']) ? 'checked' : '' ?> /> <?= __('Anvend min. tærskel ≤ 4 EUR (Art. 19(8))') ?></label>
-  </div>
-</div>
-
 <?php if (!empty($claim)): ?>
 <div class="card mt12" style="display:grid;gap:8px;">
   <strong><?= __('Beløb pr. artikel (live)') ?></strong>
@@ -549,12 +563,11 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <a class="button" style="background:#6c757d;color:#fff;padding:8px 12px;border-radius:4px;text-decoration:none;" href="<?= $this->Url->build(['controller'=>'Reimbursement','action'=>'generate','?'=>['flow'=>'1']]) ?>" target="_blank"><?= __('Reimbursement Claim Summary') ?></a>
     <?php if(!$ccOk): ?><div class="small muted" style="align-self:center;"><?= __('National skabelon ikke fundet - EU anvendes.') ?></div><?php endif; ?>
   </div>
-  <div class="small mt8 muted"><?= __('Efter generering kan du fortsætte til næste trin; formularerne åbner i ny fane.') ?></div>
+  <div class="small mt8 muted"><?= __('Efter generering kan du afslutte her; formularerne åbner i ny fane.') ?></div>
 </div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-  <?= ->Html->link('<- Tilbage', ['action' => 'assistance'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-  <?= ->Form->button('Naeste ->', ['class' => 'button']) ?>
+  <?= $this->Html->link('<- Tilbage', ['action' => 'downgrade'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 </div>
 
 <?= $this->Form->end() ?>

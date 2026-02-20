@@ -97,10 +97,10 @@ final class LlmExtractor implements ExtractorInterface
                 // Use only when enabled to avoid 400s on unsupported backends
                 // Azure recent API versions support it too.
                 // We'll add the key conditionally below.
-                'max_tokens' => 400,
             ];
+            $body = $this->applyReasoningParams($body, $model, 400);
 
-            if ($forceJson) {
+            if ($forceJson && !$this->isReasoningModel($model)) {
                 $body['response_format'] = ['type' => 'json_object'];
             }
 
@@ -212,6 +212,7 @@ EOT;
     private function tryParseJson(string $content): ?array
     {
         $content = trim($content);
+        $content = $this->normalizeJsonWhitespace($content);
         // Remove markdown fences if present
         if (str_starts_with($content, '```')) {
             $content = preg_replace('/^```(?:json)?/i', '', $content);
@@ -229,6 +230,7 @@ EOT;
     private function salvageJson(string $content): ?array
     {
         $s = trim($content);
+        $s = $this->normalizeJsonWhitespace($s);
         // Quick fence strip again
         if (str_starts_with($s, '```')) {
             $s = preg_replace('/^```(?:json)?/i', '', $s);
@@ -298,5 +300,28 @@ EOT;
         }
         $v = getenv($key);
         return $v !== false ? (string)$v : null;
+    }
+
+    private function normalizeJsonWhitespace(string $s): string
+    {
+        return preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', $s) ?? $s;
+    }
+
+    private function applyReasoningParams(array $body, string $model, int $maxTokens): array
+    {
+        if ($this->isReasoningModel($model)) {
+            $effort = strtolower((string)($this->env('LLM_REASONING_EFFORT') ?? 'low'));
+            if (!in_array($effort, ['low','medium','high'], true)) { $effort = 'low'; }
+            $body['max_completion_tokens'] = $maxTokens;
+            $body['reasoning_effort'] = $effort;
+        } else {
+            $body['max_tokens'] = $maxTokens;
+        }
+        return $body;
+    }
+
+    private function isReasoningModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'gpt-oss');
     }
 }

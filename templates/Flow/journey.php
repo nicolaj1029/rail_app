@@ -4,9 +4,21 @@ $form     = $form ?? [];
 $flags    = $flags ?? [];
 $incident = $incident ?? [];
 $meta     = $meta ?? [];
+$travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
+$isOngoing = ($travelState === 'ongoing');
+$isCompleted = ($travelState === 'completed');
+$bikeHint = $isOngoing ? 'Svar ud fra det, der er sket indtil nu.' : ($isCompleted ? 'Svar ud fra hvad der faktisk skete.' : '');
+$pmrHint = $isOngoing ? 'Har du faaet den assistance, du har brug for indtil nu?' : ($isCompleted ? 'Fik du den assistance, du havde ret til?' : '');
+$disruptionHint = $isOngoing ? 'Hvad er status lige nu?' : ($isCompleted ? 'Hvad skete der under hele rejsen?' : '');
 
 $bikeAutoDetected = !empty($meta['_auto']['bike_booked']) || !empty($meta['_bike_detection']);
 $pmrAutoDetected  = !empty($meta['_auto']['pmr_user']) || !empty($meta['_pmr_detection']) || !empty($meta['_pmr_detected']);
+$profile  = $profile ?? ['articles' => []];
+$articles = (array)($profile['articles'] ?? []);
+$art9On  = ($articles['art9'] ?? true) !== false;
+$art91On = ($articles['art9_1'] ?? ($articles['art9'] ?? true)) !== false;
+$art92On = ($articles['art9_2'] ?? ($articles['art9'] ?? true)) !== false;
+$art93On = ($articles['art9_3'] ?? ($articles['art9'] ?? true)) !== false;
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 ?>
@@ -21,10 +33,17 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
   .ml8 { margin-left:8px; }
   .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
   .hidden { display:none; }
+  .hide-bike-delay { display:none !important; }
   [data-show-if] { display:none; }
 </style>
 
-<h1>TRIN 3 – Bekræft rejse og forsinkelse</h1>
+<?php if ($isOngoing): ?>
+  <h1>TRIN 3 - Bekraeft rejse og forsinkelse (igangvaerende)</h1>
+<?php elseif ($isCompleted): ?>
+  <h1>TRIN 3 - Bekraeft hvad der skete paa rejsen</h1>
+<?php else: ?>
+  <h1>TRIN 3 - Bekraeft rejse og forsinkelse</h1>
+<?php endif; ?>
 <?php if (!empty($contractWarning ?? '')): ?>
   <div class="card hl" style="border:1px solid #f5c2c7; background:#fff5f5; margin-bottom:8px;">
     <div class="small" style="color:#a71d2a;"><?= h($contractWarning) ?></div>
@@ -35,7 +54,7 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
 <!-- TRIN 3a – Cykel -->
 <div class="card mt12">
   <strong>🚲 TRIN 3a – Cykel og bagage (Art.6)</strong>
-  <p class="small muted">Svarene her aktiverer Art.18/20 ved cykel-problemer.</p>
+  <p class="small muted">Svarene her aktiverer Art.18/20 ved cykel-problemer.<?= ($bikeHint !== '') ? (' ' . h($bikeHint)) : '' ?></p>
   <?php if ($bikeAutoDetected): ?>
     <div class="small muted mt4">Auto-note: Billet/OCR ser ud til at nævne cykel. Valget er stadig sat til “Nej” som udgangspunkt – ret hvis det er forkert.</div>
   <?php endif; ?>
@@ -46,45 +65,51 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
     <label class="ml8"><input type="radio" name="bike_was_present" value="no" <?= $v('bike_was_present')==='no'?'checked':'' ?> /> Nej</label>
   </div>
 
-  <div class="mt4" data-show-if="bike_was_present:yes">
+  <div class="mt4 hide-bike-delay <?= $art92On ? '' : 'hidden' ?>" data-show-if="bike_was_present:yes" data-art="9(2)">
     <div>2. Forsinkede cyklen eller dens håndtering dig?</div>
     <label><input type="radio" name="bike_delay" value="yes" <?= $v('bike_delay')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="bike_delay" value="no" <?= $v('bike_delay')==='no'?'checked':'' ?> /> Nej</label>
   </div>
 
-  <div class="mt4" data-show-if="bike_was_present:yes">
-    <div>3. Havde du reserveret plads til cyklen?</div>
+  <div class="mt4 <?= $art91On ? '' : 'hidden' ?>" data-show-if="bike_was_present:yes" data-art="9(1)">
+    <div>2. Havde du reserveret plads til cyklen?</div>
     <label><input type="radio" name="bike_reservation_made" value="yes" <?= $v('bike_reservation_made')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="bike_reservation_made" value="no" <?= $v('bike_reservation_made')==='no'?'checked':'' ?> /> Nej</label>
   </div>
 
-  <div class="mt4" data-show-if="bike_reservation_made:no">
-    <div>3B. Var toget cykelvenligt uden reservation?</div>
+  <div class="mt4 <?= $art91On ? '' : 'hidden' ?>" data-show-if="bike_reservation_made:no" data-art="9(1)">
+    <div>2B. Var det et tog, hvor der krævedes cykelreservation?</div>
     <label><input type="radio" name="bike_reservation_required" value="yes" <?= $v('bike_reservation_required')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="bike_reservation_required" value="no" <?= $v('bike_reservation_required')==='no'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="bike_reservation_required" value="unknown" <?= $v('bike_reservation_required')==='unknown'?'checked':'' ?> /> Ved ikke</label>
   </div>
 
-  <div class="mt4" data-show-if="bike_was_present:yes">
-    <div>4. Blev du nægtet at tage cyklen med?</div>
-    <label><input type="radio" name="bike_denied_boarding" value="yes" <?= $v('bike_denied_boarding')==='yes'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="bike_denied_boarding" value="no" <?= $v('bike_denied_boarding')==='no'?'checked':'' ?> /> Nej</label>
-  </div>
+  <div id="bikeAfter2B" class="mt4" data-show-if="bike_was_present:yes">
+    <div class="mt4 <?= $art92On ? '' : 'hidden' ?>" data-art="9(2)">
+      <div>3. Blev du nægtet at tage cyklen med?</div>
+      <label><input type="radio" name="bike_denied_boarding" value="yes" <?= $v('bike_denied_boarding')==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="ml8"><input type="radio" name="bike_denied_boarding" value="no" <?= $v('bike_denied_boarding')==='no'?'checked':'' ?> /> Nej</label>
+    </div>
 
-  <div class="mt4" data-show-if="bike_denied_boarding:yes">
-    <div>5. Informerede operatøren dig om årsagen?</div>
-    <label><input type="radio" name="bike_refusal_reason_provided" value="yes" <?= $v('bike_refusal_reason_provided')==='yes'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="bike_refusal_reason_provided" value="no" <?= $v('bike_refusal_reason_provided')==='no'?'checked':'' ?> /> Nej</label>
-  </div>
+    <div class="mt4 <?= $art92On ? '' : 'hidden' ?>" data-show-if="bike_denied_boarding:yes" data-art="9(2)">
+      <div>4. Informerede operatøren dig om årsagen?</div>
+      <label><input type="radio" name="bike_refusal_reason_provided" value="yes" <?= $v('bike_refusal_reason_provided')==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="ml8"><input type="radio" name="bike_refusal_reason_provided" value="no" <?= $v('bike_refusal_reason_provided')==='no'?'checked':'' ?> /> Nej</label>
+    </div>
 
-  <div class="mt4" data-show-if="bike_refusal_reason_provided:yes">
-    <div>6. Hvad var begrundelsen for afvisningen?</div>
+  <div class="mt4 <?= $art92On ? '' : 'hidden' ?>" data-show-if="bike_refusal_reason_provided:yes" data-art="9(2)">
+    <div>5. Hvad var begrundelsen for afvisningen?</div>
     <select name="bike_refusal_reason_type">
       <option value="">- vælg -</option>
       <option value="capacity" <?= $v('bike_refusal_reason_type')==='capacity'?'selected':'' ?>>Kapacitet</option>
       <option value="equipment" <?= $v('bike_refusal_reason_type')==='equipment'?'selected':'' ?>>Materiel tillader det ikke</option>
       <option value="weight_dim" <?= $v('bike_refusal_reason_type')==='weight_dim'?'selected':'' ?>>Vægt/dimensioner</option>
+      <option value="other" <?= $v('bike_refusal_reason_type')==='other'?'selected':'' ?>>Andet</option>
     </select>
+  </div>
+  <div class="mt4" data-show-if="bike_refusal_reason_type:other">
+    <label class="small">Beskriv kort</label>
+    <textarea name="bike_refusal_reason_other_text" rows="2"><?= h($v('bike_refusal_reason_other_text')) ?></textarea>
+  </div>
   </div>
 </div>
 
@@ -102,121 +127,33 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
     <label class="ml8"><input type="radio" name="pmr_user" value="no" <?= $v('pmr_user')==='no'?'checked':'' ?> /> Nej</label>
   </div>
 
-  <div class="mt4" data-show-if="pmr_user:yes">
+  <div class="mt4 <?= $art91On ? '' : 'hidden' ?>" data-show-if="pmr_user:yes" data-art="9(1)">
     <div>2. Bestilte du assistance før rejsen?</div>
     <label><input type="radio" name="pmr_booked" value="yes" <?= $v('pmr_booked')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="pmr_booked" value="no" <?= $v('pmr_booked')==='no'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="pmr_booked" value="attempted_refused" <?= $v('pmr_booked')==='attempted_refused'?'checked':'' ?> /> Forsøgte men fik afslag</label>
   </div>
 
-  <div class="mt4" data-show-if="pmr_booked:yes">
+  <div class="mt4 <?= $art92On ? '' : 'hidden' ?>" data-show-if="pmr_booked:yes" data-art="9(2)">
     <div>3. Blev assistancen leveret?</div>
-    <label><input type="radio" name="pmr_delivered_status" value="yes_full" <?= $v('pmr_delivered_status')==='yes_full'?'checked':'' ?> /> Ja, fuldt ud</label>
-    <label class="ml8"><input type="radio" name="pmr_delivered_status" value="partial" <?= $v('pmr_delivered_status')==='partial'?'checked':'' ?> /> Delvist</label>
+    <label><input type="radio" name="pmr_delivered_status" value="yes" <?= $v('pmr_delivered_status')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="pmr_delivered_status" value="no" <?= $v('pmr_delivered_status')==='no'?'checked':'' ?> /> Nej</label>
   </div>
 
-  <div class="mt4" data-show-if="pmr_user:yes">
+  <div id="pmrQ4Wrap" class="mt4 <?= $art92On ? '' : 'hidden' ?>" data-art="9(2)">
     <div>4. Manglede der PMR-faciliteter, som var lovet før købet?</div>
     <label><input type="radio" name="pmr_promised_missing" value="yes" <?= $v('pmr_promised_missing')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="pmr_promised_missing" value="no" <?= $v('pmr_promised_missing')==='no'?'checked':'' ?> /> Nej</label>
-    <label class="ml8"><input type="radio" name="pmr_promised_missing" value="unknown" <?= $v('pmr_promised_missing')==='unknown'?'checked':'' ?> /> Ved ikke</label>
   </div>
   <div class="mt4" data-show-if="pmr_promised_missing:yes">
     <label class="small">Beskriv kort</label>
-    <textarea name="pmr_promised_missing_text" rows="2"><?= h($v('pmr_promised_missing_text')) ?></textarea>
+    <textarea name="pmr_facility_details" rows="2"><?= h($v('pmr_facility_details')) ?></textarea>
   </div>
 </div>
 
-<!-- TRIN 3c – Nedgradering (Art.18 stk.3) -->
-<div class="card mt12">
-  <strong>⬇️ TRIN 3c – Nedgradering (Art.18 stk.3)</strong>
-  <p class="small muted">Default er ingen nedgradering. Ret kun hvis du blev placeret i lavere klasse.</p>
-  <div class="mt8">
-    <div>1. Blev du nedgraderet under rejsen?</div>
-    <label><input type="radio" name="downgrade_occurred" value="yes" <?= $v('downgrade_occurred')==='yes'?'checked':'' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="downgrade_occurred" value="no" <?= $v('downgrade_occurred')==='no'?'checked':'' ?> /> Nej</label>
-  </div>
-  <div class="mt4" data-show-if="downgrade_occurred:yes">
-    <div class="small muted">Udfyld klasse/reservations-niveau pr. strækning (pkt. 6 fra Trin 2) så vi kan beregne nedgradering.</div>
-    <?php
-      $classOptions = [
-        '1st_class' => '1. klasse',
-        '2nd_class' => '2. klasse',
-        'seat_reserved' => 'Reserveret sæde',
-        'couchette' => 'Liggevogn',
-        'sleeper' => 'Sovevogn',
-        'free_seat' => 'Fri plads / ingen reservation',
-        'other' => 'Andet',
-      ];
-      $journeyRowsDowng = $journeyRows ?? [];
-      if (empty($journeyRowsDowng)) {
-        try {
-          $segSrc = (array)($meta['_segments_auto'] ?? []);
-          $jr = [];
-          foreach ($segSrc as $s) {
-            $from = trim((string)($s['from'] ?? ''));
-            $to = trim((string)($s['to'] ?? ''));
-            $jr[] = [
-              'leg' => $from . ' -> ' . $to,
-              'dep' => (string)($s['schedDep'] ?? ''),
-              'arr' => (string)($s['schedArr'] ?? ''),
-              'train' => (string)($s['train'] ?? ($s['trainNo'] ?? '')),
-              'change' => (string)($s['change'] ?? ''),
-            ];
-          }
-          if (!empty($jr)) { $journeyRowsDowng = $jr; }
-        } catch (\Throwable $e) { /* ignore */ }
-      }
-      echo $this->element('downgrade_table', compact('journeyRowsDowng','classOptions','form','meta'));
-    ?>
-  </div>
-</div>
-
-<!-- TRIN 3d – Afbrydelser/forsinkelser -->
-<div class="card mt12">
-  <strong>⏱️ TRIN 3d – Afbrydelser/forsinkelser</strong>
-  <p class="small muted">Default er “Nej”/“Ved ikke”. Udfyld kun hvis relevant.</p>
-  <?php
-    $pid = strtolower((string)$v('preinformed_disruption'));
-    $pic = (string)$v('preinfo_channel');
-    $ris = (string)$v('realtime_info_seen');
-    if ($pid === '' || $pid === 'unknown') { $pid = 'no'; }
-    $rtOptions = [
-      'app' => 'Ja, i app',
-      'train' => 'Ja, i toget',
-      'station' => 'Ja, på station',
-      'no' => 'Nej',
-      'unknown' => 'Ved ikke',
-    ];
-  ?>
-  <div class="mt8">
-    <div class="small">Var der meddelt afbrydelse/forsinkelse før dit køb?</div>
-    <label class="mr8"><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
-    <label class="mr8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
-  </div>
-  <div class="mt4" data-show-if="preinformed_disruption:yes">
-    <div class="small">Hvis ja: Hvor blev det vist?</div>
-    <select name="preinfo_channel">
-      <option value=""><?= __('- Vælg -') ?></option>
-      <option value="website" <?= $pic==='website'?'selected':'' ?>>Hjemmeside</option>
-      <option value="journey_planner" <?= $pic==='journey_planner'?'selected':'' ?>>Rejseplan</option>
-      <option value="app" <?= $pic==='app'?'selected':'' ?>>App</option>
-      <option value="station" <?= $pic==='station'?'selected':'' ?>>Station</option>
-      <option value="other" <?= $pic==='other'?'selected':'' ?>>Andet</option>
-    </select>
-  </div>
-  <div class="mt4" data-show-if="preinformed_disruption:yes">
-    <div class="small">Så du realtime-opdateringer under rejsen?</div>
-    <?php foreach ($rtOptions as $key => $label): ?>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="<?= h($key) ?>" <?= $ris===$key?'checked':'' ?> /> <?= h($label) ?></label>
-    <?php endforeach; ?>
-  </div>
-</div>
 
 <div class="mt12" style="display:flex; gap:8px; align-items:center;">
   <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-  <?= $this->Html->link('Næste trin →', ['action' => 'incident'], ['class' => 'button']) ?>
+  <?= $this->Form->button('Næste trin →', ['class' => 'button']) ?>
 </div>
 
 <?= $this->Form->end() ?>
@@ -230,10 +167,38 @@ function updateReveal() {
     var parts = spec.split(':'); if (parts.length !== 2) return;
     var name = parts[0]; var valid = parts[1].split(',');
     var checked = document.querySelector('input[name="' + name + '"]:checked');
-    var show = checked && valid.includes(checked.value);
+    var value = checked ? checked.value : '';
+    if (!value) {
+      var select = document.querySelector('select[name="' + name + '"]');
+      if (select) { value = select.value; }
+    }
+    var show = value && valid.includes(value);
     el.style.display = show ? 'block' : 'none';
     el.hidden = !show;
   });
+  var after2b = document.getElementById('bikeAfter2B');
+  if (after2b) {
+    var present = document.querySelector('input[name="bike_was_present"]:checked');
+    var presVal = present ? present.value : '';
+    var resMade = document.querySelector('input[name="bike_reservation_made"]:checked');
+    var resVal = resMade ? resMade.value : '';
+    var req = document.querySelector('input[name="bike_reservation_required"]:checked');
+    var reqVal = req ? req.value : '';
+    var show = (presVal === 'yes') && (resVal === 'yes' || (resVal === 'no' && reqVal === 'no'));
+    after2b.style.display = show ? 'block' : 'none';
+    after2b.hidden = !show;
+  }
+  var pmrQ4 = document.getElementById('pmrQ4Wrap');
+  if (pmrQ4) {
+    var booked = document.querySelector('input[name="pmr_booked"]:checked');
+    var bookedVal = booked ? booked.value : '';
+    var delivered = document.querySelector('input[name="pmr_delivered_status"]:checked');
+    var delVal = delivered ? delivered.value : '';
+    var showQ4 = (bookedVal === 'no') || (bookedVal === 'yes' && (delVal === 'yes' || delVal === 'no'));
+    if (pmrQ4.classList.contains('hidden')) { showQ4 = false; }
+    pmrQ4.style.display = showQ4 ? 'block' : 'none';
+    pmrQ4.hidden = !showQ4;
+  }
 }
 document.addEventListener('change', function(e) {
   if (!e.target || !e.target.name) return;

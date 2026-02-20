@@ -19,7 +19,100 @@
             ],
             "distance_km": 120
         },
-        "wizard": {},
+        "wizard": {
+            "step1_start": {
+                "travel_state": null,
+                "eu_only": null
+            },
+            "step2_entitlements": {
+                "operator": null,
+                "operator_country": null,
+                "operator_product": null,
+                "ticket_no": null,
+                "dep_date": null,
+                "dep_time": null,
+                "dep_station": null,
+                "arr_station": null,
+                "arr_time": null,
+                "train_no": null,
+                "price": null,
+                "seller_channel": null,
+                "through_ticket_disclosure": null,
+                "separate_contract_notice": null,
+                "single_txn_operator": null,
+                "single_txn_retailer": null
+            },
+            "step3_journey": {},
+            "step4_incident": {
+                "incident_main": null,
+                "incident_missed": null,
+                "expected_delay_60": null,
+                "stranded_location": null,
+                "blocked_train_alt_transport": null,
+                "assistance_alt_transport_offered_by": null,
+                "assistance_alt_transport_type": null,
+                "assistance_alt_to_destination": null,
+                "blocked_self_paid_amount": null,
+                "blocked_self_paid_currency": null
+            },
+            "step5_choices": {
+                "art18_expected_delay_60": null,
+                "remedyChoice": null,
+                "self_purchased_new_ticket": null,
+                "self_purchase_approved_by_operator": null,
+                "offer_provided": null,
+                "reroute_same_conditions_soonest": null,
+                "reroute_later_at_choice": null,
+                "reroute_info_within_100min": null,
+                "reroute_extra_costs": null,
+                "reroute_extra_costs_amount": null,
+                "reroute_extra_costs_currency": null,
+                "delayAtFinalMinutes": null,
+                "compensationBand": null,
+                "voucherAccepted": null,
+                "trip_cancelled_return_to_origin": null,
+                "return_to_origin_expense": null,
+                "return_to_origin_amount": null,
+                "return_to_origin_currency": null,
+                "delay_confirmation_info": null,
+                "delay_confirmation_received": null,
+                "delay_confirmation_upload": null,
+                "delay_confirmation_type": null,
+                "stranded_location": null,
+                "journey_outcome": null,
+                "blocked_train_alt_transport": null,
+                "blocked_no_transport_action": null,
+                "assistance_alt_transport_offered_by": null,
+                "assistance_alt_transport_type": null,
+                "assistance_alt_to_destination": null,
+                "blocked_self_paid_transport_type": null,
+                "blocked_self_paid_amount": null,
+                "blocked_self_paid_currency": null,
+                "blocked_self_paid_receipt": null,
+                "a20_3_solution_offered": null,
+                "a20_3_solution_type": null,
+                "a20_3_solution_offered_by": null,
+                "a20_3_no_solution_action": null,
+                "a20_3_outcome": null,
+                "a20_3_self_arranged_type": null,
+                "a20_3_self_paid_amount": null,
+                "a20_3_self_paid_currency": null,
+                "a20_3_self_paid_receipt": null,
+                "reroute_later_ticket_upload": null
+            },
+            "step6_assistance": {},
+            "step7_compensation": {
+                "delayAtFinalMinutes": null,
+                "compensationBand": null,
+                "voucherAccepted": null,
+                "operatorExceptionalCircumstances": null,
+                "operatorExceptionalType": null,
+                "extraordinary_claimed": null,
+                "extraordinary_type": null,
+                "minThresholdApplies": null,
+                "delayMinEU": null
+            }
+        },
         "expected": {
             "profile.scope": "regional",
             "profile.articles.art8": false,
@@ -28,6 +121,59 @@
             "profile.articles.art18_3": false,
             "profile.articles.art19": false,
             "profile.articles.art20_2": false
+        },
+        "art9_meta": {
+            "_groups": {
+                "bike": {
+                    "art9_1": {
+                        "bike_reservation_made": "unknown",
+                        "bike_reservation_required": "unknown"
+                    },
+                    "art9_2": {
+                        "bike_denied_boarding": "unknown",
+                        "bike_refusal_reason_provided": "unknown",
+                        "bike_refusal_reason_type": "",
+                        "bike_refusal_reason_other_text": ""
+                    },
+                    "art9_3": {}
+                },
+                "pmr": {
+                    "art9_1": {
+                        "pmr_booked": "unknown"
+                    },
+                    "art9_2": {
+                        "pmr_delivered_status": "unknown",
+                        "pmr_promised_missing": "unknown"
+                    },
+                    "art9_3": {}
+                },
+                "preinfo": {
+                    "art9_1": {
+                        "preinformed_disruption": "unknown",
+                        "preinfo_channel": ""
+                    },
+                    "art9_2": {
+                        "realtime_info_seen": "unknown"
+                    },
+                    "art9_3": {
+                        "preinfo_channel": "",
+                        "realtime_info_seen": "unknown"
+                    }
+                }
+            },
+            "preinformed_disruption": "unknown",
+            "preinfo_channel": "",
+            "realtime_info_seen": "unknown",
+            "pmr_user": "unknown",
+            "pmr_booked": "unknown",
+            "pmr_promised_missing": "unknown",
+            "pmr_delivered_status": "unknown",
+            "bike_reservation_made": "unknown",
+            "bike_reservation_required": "unknown",
+            "bike_denied_boarding": "unknown",
+            "bike_refusal_reason_provided": "unknown",
+            "bike_refusal_reason_type": "",
+            "bike_refusal_reason_other_text": ""
         }
     }
 }

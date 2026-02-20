@@ -123,7 +123,14 @@ class ClaimCalculator
         $refundBasis = 'none';
         $refundAmount = 0.0;
         if (!empty($choices['wants_refund'])) {
-            $meetsArt18 = ($delay >= 60) || !empty($disruption['trip_cancelled']) || !empty($choices['wants_reroute_same_soonest']) || !empty($choices['wants_reroute_later_choice']);
+            // Art.18(1)(a): refund eligibility can be triggered by upstream gating (e.g., cancellation/missed/PMR/bike),
+            // not necessarily by final arrival delay minutes available at computation time.
+            $art18Active = !empty($disruption['art18_active']);
+            $meetsArt18 = $art18Active
+                || ($delay >= 60)
+                || !empty($disruption['trip_cancelled'])
+                || !empty($choices['wants_reroute_same_soonest'])
+                || !empty($choices['wants_reroute_later_choice']);
             if ($meetsArt18) {
                 $refundBasis = 'Art.18(1)(a) whole fare';
                 $refundAmount = round($ticketTotal, 2);

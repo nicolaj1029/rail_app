@@ -3,6 +3,9 @@
 $compute = $compute ?? [];
 $form = $form ?? [];
 $incident = $incident ?? [];
+$meta = $meta ?? [];
+$groupedTickets = $groupedTickets ?? [];
+$hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
 <style>
@@ -13,7 +16,7 @@ $incident = $incident ?? [];
 </style>
 <div class="fe-header">
   <div class="fe-step">Trin 2</div>
-  <h1 class="fe-title">Rejsedetaljer og rettigheder</h1>
+  <h1 class="fe-title">Upload billet</h1>
   <p class="fe-sub">Upload billetter, bekræft rejsen og svar kort på spørgsmål. Sidepanelet viser løbende dine rettigheder.</p>
 </div>
 <?php
@@ -121,7 +124,7 @@ $incident = $incident ?? [];
 
   <!-- Art. 12 blok (behold auto + rediger) vises længere nede -->
 
-  <button type="button" id="toggleJourneyFields" class="button button-outline" style="margin-top:12px; margin-bottom:8px;">Vis/skjul rejsefelter (3.1–3.5)</button>
+  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;">Vis/skjul rejsefelter (3.1–3.5)</button>
   <div id="journeyFields" style="display:none;">
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>3.1. Name of railway undertaking:</strong>
@@ -283,15 +286,17 @@ $incident = $incident ?? [];
     </div>
       <?php if (!empty($journeyRowsInline)): ?>
       <div class="missed-connection-section" style="display:none;">
+      <?php
+        $normClassInline = function($v): string {
+          $v = strtolower(trim((string)$v));
+          if (in_array($v, ['1st_class','1st','first','1'], true)) return '1st';
+          if (in_array($v, ['2nd_class','2nd','second','2'], true)) return '2nd';
+          if ($v === 'seat_reserved' || $v === 'free_seat') return '2nd';
+          return $v;
+        };
+      ?>
       <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflæst fra billetten)</strong></div>
       <div class="small" style="overflow:auto;">
-        <style>
-          /* Skjul leveret/nedgraderet kolonner i MC-tabellen */
-          #mcJourneyTable th:nth-child(6),
-          #mcJourneyTable td:nth-child(6),
-          #mcJourneyTable th:nth-child(7),
-          #mcJourneyTable td:nth-child(7) { display:none; }
-        </style>
         <table id="mcJourneyTable" class="fe-table">
           <thead>
             <tr>
@@ -300,14 +305,14 @@ $incident = $incident ?? [];
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Skift</th>
-              <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Misset?</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($journeyRowsInline as $idx => $r): ?>
               <?php
                 // Brug gemt værdi, ellers evt. auto-detektion; fald ikke tilbage til "købt"-valg
-                $deliveredVal = (string)($form['leg_class_delivered'][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ''));
+                $deliveredValRaw = (string)($form['leg_class_delivered'][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ''));
+                $deliveredVal = $normClassInline($deliveredValRaw);
                 $downgVal = isset($form['leg_downgraded'][$idx]) && $form['leg_downgraded'][$idx] === '1';
               ?>
               <tr>
@@ -316,23 +321,6 @@ $incident = $incident ?? [];
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['arr']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['train']) ?></td>
                 <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r['change']) ?></td>
-                <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
-                  <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
-                    <option value=""><?= __('Vælg leveret niveau') ?></option>
-                    <option value="1st_class" <?= $deliveredVal==='1st_class'?'selected':'' ?>>1. klasse</option>
-                    <option value="2nd_class" <?= $deliveredVal==='2nd_class'?'selected':'' ?>>2. klasse</option>
-                    <option value="seat_reserved" <?= $deliveredVal==='seat_reserved'?'selected':'' ?>>Reserveret sæde</option>
-                    <option value="couchette" <?= $deliveredVal==='couchette'?'selected':'' ?>>Ligge (couchette)</option>
-                    <option value="sleeper" <?= $deliveredVal==='sleeper'?'selected':'' ?>>Sovevogn</option>
-                    <option value="free_seat" <?= $deliveredVal==='free_seat'?'selected':'' ?>>Fri plads / ingen reservation</option>
-                  </select>
-                </td>
-                <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
-                  <label class="small">
-                    <input type="checkbox" name="leg_downgraded[<?= (int)$idx ?>]" value="1" <?= $downgVal?'checked':'' ?> />
-                    <?= __('Nedgraderet') ?>
-                  </label>
-                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -428,7 +416,6 @@ $incident = $incident ?? [];
       <div><strong>Spm 4.</strong> Manglede der PMR-faciliteter, som var lovet før købet?</div>
       <label class="mr8"><input type="radio" name="pmr_promised_missing" value="yes" <?= $pmrPromisedMissingVal==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="pmr_promised_missing" value="no" <?= $pmrPromisedMissingVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="pmr_promised_missing" value="unknown" <?= ($pmrPromisedMissingVal===''||$pmrPromisedMissingVal==='unknown')?'checked':'' ?> /> Ved ikke</label>
     </div>
     <div id="pmrQDetails" class="small" style="margin-top:8px; display:<?= ($pmrPromisedMissingVal==='yes')?'block':'none' ?>;">
       <div><strong>Spm 5.</strong> Hvilke faciliteter manglede? (rampe, skiltning, lift …)</div>
@@ -484,7 +471,6 @@ $incident = $incident ?? [];
         <div><strong>Spm 3B.</strong> Var det et tog, hvor der ikke krævedes cykelreservation?</div>
         <label class="mr8"><input type="radio" name="bike_reservation_required" value="yes" <?= $bikeResReq==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="bike_reservation_required" value="no" <?= $bikeResReq==='no'?'checked':'' ?> /> Nej</label>
-        <label class="mr8"><input type="radio" name="bike_reservation_required" value="unknown" <?= ($bikeResReq===''||$bikeResReq==='unknown')?'checked':'' ?> /> Ved ikke</label>
       </div>
       <div id="bikeQ4" class="small" style="margin-top:8px;">
         <div><strong>Spm 4.</strong> Blev du nægtet at tage cyklen med?</div>
@@ -573,7 +559,6 @@ $incident = $incident ?? [];
       <?php $curTs = strtolower($tsVal ?: 'unknown'); ?>
       <label class="small"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
       <label class="small ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
-      <label class="small ml8"><input type="radio" name="train_specificity" value="unknown" <?= ($curTs===''||$curTs==='unknown')?'checked':'' ?> /> Ved ikke</label>
     </div>
   </div>
   <?php else: ?>
@@ -584,14 +569,16 @@ $incident = $incident ?? [];
     // 6) Klasse og reservationer samles i per-leg tabel
     $classAuto = (array)($meta['_class_detection'] ?? []);
     $journeyRows = $journeyRows ?? [];
-    $classOptions = [
-      '1st_class' => '1. klasse',
-      '2nd_class' => '2. klasse',
-      'seat_reserved' => 'Reserveret saede',
-      'couchette' => 'Liggevogn',
+        $classOptions = [
       'sleeper' => 'Sovevogn',
-      'free_seat' => 'Fri plads / ingen reservation',
-      'other' => 'Andet',
+      'couchette' => 'Liggevogn',
+      '1st' => '1. klasse',
+      '2nd' => '2. klasse',
+    ];
+    $reservationOptions = [
+      'reserved' => 'Reserveret plads',
+      'free_seat' => 'Ingen reservation',
+      'missing' => 'Reservation mangler',
     ];
     $journeyRowsDowng = $journeyRows;
     if (empty($journeyRowsDowng)) {
@@ -623,7 +610,7 @@ $incident = $incident ?? [];
     <?php endif; ?>
     <?php if (!empty($journeyRowsDowng)): ?>
       <div id="perLegDowngrade" style="display:none;">
-        <?= $this->element('downgrade_table', compact('journeyRowsDowng','classOptions','form','meta')) ?>
+        <?= $this->element('downgrade_table', compact('journeyRowsDowng','classOptions','reservationOptions','form','meta')) ?>
       </div>
     <?php endif; ?>
   </div>
@@ -642,7 +629,6 @@ $incident = $incident ?? [];
     <div class="small" style="margin-top:4px;">
       <label class="mr8"><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="preinformed_disruption" value="unknown" <?= ($pid===''||$pid==='unknown')?'checked':'' ?> /> Ved ikke</label>
     </div>
     <div id="disQ2" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
       <div>2. Hvis ja: Hvor blev det vist?</div>
@@ -902,11 +888,14 @@ if ($a12Applies === false && !empty($contractsView)) {
   // Toggle journey fields 3.1–3.5
   const toggleBtn = document.getElementById('toggleJourneyFields');
   const jf = document.getElementById('journeyFields');
+  const openJourneyFields = () => { if (jf) { jf.style.display = 'block'; } };
+  const hasTickets = !!(toggleBtn && toggleBtn.dataset.hasTickets === '1');
   if (toggleBtn && jf) {
     toggleBtn.addEventListener('click', function(){
       jf.style.display = (jf.style.display === 'none' || jf.style.display === '') ? 'block' : 'none';
     });
   }
+  if (hasTickets) { openJourneyFields(); }
   const panel = document.getElementById('hooksPanel');
   if (!form || !panel) return;
   // Upload UI wiring
@@ -924,6 +913,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   function addFiles(files){
     const seen = new Set(Array.from(dt.files).map(fileKey));
     for (const f of files) { if (!seen.has(fileKey(f))) dt.items.add(f); }
+    openJourneyFields();
     sync();
   }
   function removeIndex(idx){

@@ -247,7 +247,7 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
                         onChanged: (v) => setState(() => rerouteLater = v ?? false),
                       ),
                       DropdownButtonFormField<String>(
-                        value: informedWithin100,
+                        initialValue: informedWithin100,
                         decoration: const InputDecoration(labelText: 'Informeret inden for 100 min?'),
                         items: const [
                           DropdownMenuItem(value: 'yes', child: Text('Ja')),

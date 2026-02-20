@@ -105,12 +105,19 @@ class ScenarioRunner
     {
         $fixture['version'] = 2;
         $fixture['wizard'] = (array)($fixture['wizard'] ?? []);
-        $fixture['wizard']['step3_entitlements'] = (array)($fixture['wizard']['step3_entitlements'] ?? []);
-        $fixture['wizard']['step3_entitlements'] += [
-            'preinformed_disruption' => $fixture['wizard']['step3_entitlements']['preinformed_disruption'] ?? 'Ved ikke',
-            'preinfo_channel' => $fixture['wizard']['step3_entitlements']['preinfo_channel'] ?? 'Ved ikke',
-            'realtime_info_seen' => $fixture['wizard']['step3_entitlements']['realtime_info_seen'] ?? [],
+        $legacyStep3 = (array)($fixture['wizard']['step3_entitlements'] ?? []);
+        $fixture['wizard']['step3_journey'] = (array)($fixture['wizard']['step3_journey'] ?? $legacyStep3);
+        $fixture['wizard']['step3_journey'] += [
+            'preinformed_disruption' => $fixture['wizard']['step3_journey']['preinformed_disruption'] ?? 'Ved ikke',
+            'preinfo_channel' => $fixture['wizard']['step3_journey']['preinfo_channel'] ?? 'Ved ikke',
+            'realtime_info_seen' => $fixture['wizard']['step3_journey']['realtime_info_seen'] ?? [],
         ];
+        if (!empty($fixture['wizard']['step4_choices']) && empty($fixture['wizard']['step5_choices'])) {
+            $fixture['wizard']['step5_choices'] = (array)$fixture['wizard']['step4_choices'];
+        }
+        if (!empty($fixture['wizard']['step5_assistance']) && empty($fixture['wizard']['step6_assistance'])) {
+            $fixture['wizard']['step6_assistance'] = (array)$fixture['wizard']['step5_assistance'];
+        }
         $fixture['computeOverrides'] = (array)($fixture['computeOverrides'] ?? []);
         return $fixture;
     }

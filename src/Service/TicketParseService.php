@@ -18,6 +18,7 @@ class TicketParseService
     public function parseSegmentsFromText(string $text): array
     {
         $segments = [];
+        $dsbSegments = [];
         $debug = [
             'blockMatched' => false,
             'events' => [],
@@ -55,99 +56,85 @@ class TicketParseService
             $idxDetaljer = null;
             foreach ($clean as $i => $ln) {
                 $low = mb_strtolower($ln, 'UTF-8');
-                if (strpos($low, 'detaljer') !== false) { $idxDetaljer = $i; break; }
+                if (preg_match('/^detaljer\\b/u', $low)) { $idxDetaljer = $i; break; }
             }
             if ($idxDetaljer !== null) {
-    $stationSeq = [];
-    $i = $idxDetaljer + 1;
+                $stationSeq = [];
+                $i = $idxDetaljer + 1;
 
-    $stationLike = function (string $s): bool {
-        if ($s === '') {
-            return false;
-        }
-        $s = mb_strtolower($s);
-        if (preg_match('/(afg:|ank:|lyntog|intercity|lyntog|arriva|pladsnr|vognnr|tognr|pris|voksen|ung|pensionist|børn|\d+\s*kr|kontrolnummer|bestilling|rejsekort|betingelser|journey|ticket|billetoplysninger|pladsreservation)/u', $s)) {
-            return false;
-        }
-        if (preg_match('/(læs mere|dsb orange)/u', $s)) {
-            return false;
-        }
-        return true;
-    };
+                $stationLike = function (string $s): bool {
+                    if ($s === '') {
+                        return false;
+                    }
+                    $s = mb_strtolower($s, 'UTF-8');
+                    if (!preg_match('/\p{L}/u', $s)) { return false; }
+                    if (preg_match('/(afg:|ank:|lyntog|intercity|arriva|pladsnr|vognnr|tognr|pris|voksen|ung|pensionist|\d+\s*kr|kontrolnummer|bestilling|rejsekort|betingelser|journey|ticket|billetoplysninger|pladsreservation)/u', $s)) {
+                        return false;
+                    }
+                    if (preg_match('/(laes mere|dsb orange)/u', $s)) {
+                        return false;
+                    }
+                    return true;
+                };
 
-    $seenStations = false;
-    while ($i < count($clean)) {
-        $s = $this->cleanStation($clean[$i]);
-        if ($stationLike($s)) {
-            $stationSeq[] = $s;
-            $seenStations = true;
-            $i++;
-            continue;
-        }
-        if ($seenStations && preg_match('/(Billetoplysninger|Pladsreservation|Rejseplan|Kontrolnummer|Bestillingstidspunkt|Billetnummer)/ui', $clean[$i])) {
-            break;
-        }
-        $i++;
-    }
+                $seenStations = false;
+                while ($i < count($clean)) {
+                    $raw = $clean[$i];
+                    $s = $this->cleanStation($raw);
+                    $sNorm = mb_strtolower($s, 'UTF-8');
+                    if (preg_match('/^st\.?$/u', $sNorm)) {
+                        if (!empty($stationSeq)) {
+                            $prev = $stationSeq[count($stationSeq) - 1]['name'];
+                            if (!preg_match('/\bst\.?$/iu', $prev)) {
+                                $stationSeq[count($stationSeq) - 1]['name'] = rtrim($prev, '.') . ' St.';
+                            }
+                        }
+                        $i++;
+                        continue;
+                    }
+                    if ($stationLike($s)) {
+                        $stationSeq[] = ['name' => $s, 'idx' => $i];
+                        $seenStations = true;
+                        $i++;
+                        continue;
+                    }
+                    if ($seenStations && preg_match('/(Billetoplysninger|Pladsreservation|Rejseplan|Kontrolnummer|Bestillingstidspunkt|Billetnummer)/ui', $clean[$i])) {
+                        break;
+                    }
+                    $i++;
+                }
 
-    $i = 0;
-    while ($i + 1 < count($stationSeq)) {
-        $a = $stationSeq[$i];
-        $b = $stationSeq[$i + 1];
-        if ($stationLike($a) && $stationLike($b)) {
-            $dep = $this->findTimeNear($clean, $idxDetaljer + $i + 1, 8, 'dep');
-            $arr = $this->findTimeNear($clean, $idxDetaljer + $i + 2, 8, 'arr');
-            $segments[] = [
-                'from' => $a,
-                'to' => $b,
-                'schedDep' => $dep,
-                'schedArr' => $arr,
-                'trainNo' => '',
-                'depDate' => null,
-                'arrDate' => null,
-                'source' => 'parser',
-                'confidence' => 0.95,
-            ];
-            $debug['events'][] = [
-                'src' => 'dsb-detaljer',
-                'station' => $a . '→' . $b,
-                'time' => $dep . '→' . $arr,
-                'prod' => '',
-                'line' => '',
-            ];
-            $i += 2;
-            continue;
-        }
-        $i++;
-    }
-
-    if (count($stationSeq) >= 2 && count($segments) < count($stationSeq) - 1) {
-        for ($j = 0; $j + 1 < count($stationSeq); $j++) {
-            $from = $stationSeq[$j];
-            $to = $stationSeq[$j + 1];
-            $dep = $this->findTimeNear($clean, $idxDetaljer + $j + 1, 8, 'dep');
-            $arr = $this->findTimeNear($clean, $idxDetaljer + $j + 2, 8, 'arr');
-            $segments[] = [
-                'from' => $from,
-                'to' => $to,
-                'schedDep' => $dep,
-                'schedArr' => $arr,
-                'trainNo' => '',
-                'depDate' => null,
-                'arrDate' => null,
-                'source' => 'dsb-detaljer-repair',
-                'confidence' => 0.9,
-            ];
-            $debug['events'][] = [
-                'src' => 'dsb-detaljer-repair',
-                'station' => $from . '→' . $to,
-                'time' => $dep . '→' . $arr,
-                'prod' => '',
-                'line' => '',
-            ];
-        }
-    }
-}
+                for ($j = 0; $j + 1 < count($stationSeq); $j++) {
+                    $from = $stationSeq[$j]['name'];
+                    $to = $stationSeq[$j + 1]['name'];
+                    if ($from === $to) { continue; }
+                    if ($stationLike($from) && $stationLike($to)) {
+                        $lineIdx = $stationSeq[$j + 1]['idx'];
+                        $dep = $this->findTimeForward($clean, $lineIdx, 6, 'dep');
+                        $arr = $this->findTimeForward($clean, $lineIdx, 6, 'arr');
+                        $seg = [
+                            'from' => $from,
+                            'to' => $to,
+                            'schedDep' => $dep,
+                            'schedArr' => $arr,
+                            'trainNo' => '',
+                            'depDate' => null,
+                            'arrDate' => null,
+                            'source' => 'dsb-detaljer',
+                            'confidence' => 0.95,
+                        ];
+                        $segments[] = $seg;
+                        $dsbSegments[] = $seg;
+                        $debug['events'][] = [
+                            'src' => 'dsb-detaljer',
+                            'station' => $from . '->' . $to,
+                            'time' => $dep . '->' . $arr,
+                            'prod' => '',
+                            'line' => '',
+                        ];
+                    }
+                }
+            }
 
             // Supplement: infer missing final leg from product lines like "IC-Lyntog 62 til København H" if not already captured
             if (!empty($segments)) {
@@ -553,6 +540,9 @@ class TicketParseService
             }
         }
 
+        // If DSB detaljer parsing succeeded, prefer those segments
+        if (!empty($dsbSegments)) { $segments = $dsbSegments; }
+
         // If we have overall date(s), attach them to segments
         $dates = $this->extractDates($t);
         if (!empty($dates)) {
@@ -627,6 +617,7 @@ class TicketParseService
             // If collapsing reduced to a single leg, return that to avoid phantom connection UI.
             if (count($collapsed) >= 1) { $out = $collapsed; }
         }
+        if (!empty($dsbSegments)) { $debug['dsbSegments'] = $dsbSegments; }
         self::$lastDebug = $debug;
         return $out;
     }
@@ -635,6 +626,49 @@ class TicketParseService
     public static function getLastDebug(): array
     {
         return is_array(self::$lastDebug) ? self::$lastDebug : [];
+    }
+
+    /**
+     * Find a time (hh:mm) preferring forward scan from a given line index.
+     * Falls back to a backward scan within the window if not found.
+     */
+    private function findTimeForward(array $lines, int $startIdx, int $window = 6, string $kind = ''): string
+    {
+        $lo = max(0, $startIdx - $window);
+        $hi = min(count($lines) - 1, $startIdx + $window);
+        $patKind = null;
+        if ($kind === 'dep') {
+            $patKind = '/\b(afg|ab|dep)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu';
+        } elseif ($kind === 'arr') {
+            $patKind = '/\b(ank|an|arr)\b\s*: ?((?:[01]?\d|2[0-3])[:.h]?\s*\d{2})/iu';
+        }
+        $patAny = '/\b((?:[01]?\d|2[0-3])[:.h]\s*\d{2})\b/u';
+
+        for ($i = $startIdx; $i <= $hi; $i++) {
+            $probe = $lines[$i];
+            if ($patKind && preg_match($patKind, $probe, $m)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
+            }
+        }
+        for ($i = $startIdx; $i <= $hi; $i++) {
+            $probe = $lines[$i];
+            if (preg_match($patAny, $probe, $m2)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[1]);
+            }
+        }
+        for ($i = $lo; $i < $startIdx; $i++) {
+            $probe = $lines[$i];
+            if ($patKind && preg_match($patKind, $probe, $m)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m[2]);
+            }
+        }
+        for ($i = $lo; $i < $startIdx; $i++) {
+            $probe = $lines[$i];
+            if (preg_match($patAny, $probe, $m2)) {
+                return str_replace(['.', 'h', ' '], [':', ':', ''], (string)$m2[1]);
+            }
+        }
+        return '';
     }
 
     /**
@@ -681,7 +715,12 @@ class TicketParseService
         }
         // Contains obvious non-station keywords
         foreach (($filters['contains'] ?? []) as $c) {
-            if ($c !== '' && str_contains($x, $c)) { return true; }
+            if ($c === '') { continue; }
+            if (mb_strlen($c, 'UTF-8') <= 3) {
+                if (preg_match('/\b' . preg_quote($c, '/') . '\b/u', $x)) { return true; }
+            } else {
+                if (str_contains($x, $c)) { return true; }
+            }
         }
         return false;
     }

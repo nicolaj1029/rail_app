@@ -18,11 +18,11 @@
 
 <div class="qa-page">
   <h1>Flow QA (trin-test for split steps)</h1>
-  <p>Hurtige links og en simpel "how-to" til at teste split-steps flowet. Fokus er trin 1-6. Passer til begyndere.</p>
+  <p>Hurtige links og en simpel "how-to" til at teste split-steps flowet. Fokus er trin 1-7. Passer til begyndere.</p>
 
   <h2>Sådan tester du trin for trin</h2>
   <ol>
-    <li>Åbn hovedflowet (split steps) og kør igennem trin 1-6: <a href="<?= h($this->Url->build('/flow/start', ['fullBase' => true])) ?>" target="_blank">/flow/start</a>.</li>
+    <li>Åbn hovedflowet (split steps) og kør igennem trin 1-7: <a href="<?= h($this->Url->build('/flow/start', ['fullBase' => true])) ?>" target="_blank">/flow/start</a>.</li>
     <li>Når du er færdig, dump sessionen som fixture-skelet: <a href="<?= $this->Url->build('/api/demo/v2/dump-session?asFixture=1', ['fullBase' => true]) ?>" target="_blank">/api/demo/v2/dump-session?asFixture=1</a> (kopiér JSON).<br>
       <span class="note">Enriched: <a href="<?= $this->Url->build('/api/demo/v2/dump-session?asFixture=1&enriched=1', ['fullBase' => true]) ?>" target="_blank">/api/demo/v2/dump-session?asFixture=1&enriched=1</a> (journey+segments+step 3 ekstra).</span>
     </li>
@@ -34,11 +34,12 @@
   <h2>Direkte trin-links (split steps)</h2>
   <div class="cards">
     <div class="card"><h3>Trin 1</h3><a href="<?= h($this->Url->build('/flow/start', ['fullBase' => true])) ?>" target="_blank">/flow/start</a><div class="note">Sæt travel_state, euOnly (admin).</div></div>
-    <div class="card"><h3>Trin 2</h3><a href="<?= h($this->Url->build('/flow/journey', ['fullBase' => true])) ?>" target="_blank">/flow/journey</a><div class="note">Incident valg, scope/auto (profil, art12/9 previews).</div></div>
-    <div class="card"><h3>Trin 3</h3><a href="<?= h($this->Url->build('/flow/entitlements', ['fullBase' => true])) ?>" target="_blank">/flow/entitlements</a><div class="note">Klasse/PMR/cykel, preinformed, nedgradering.</div></div>
-    <div class="card"><h3>Trin 4</h3><a href="<?= h($this->Url->build('/flow/choices', ['fullBase' => true])) ?>" target="_blank">/flow/choices</a><div class="note">Remedy + kompensationsbasis, art19 gate.</div></div>
-    <div class="card"><h3>Trin 5</h3><a href="<?= h($this->Url->build('/flow/assistance', ['fullBase' => true])) ?>" target="_blank">/flow/assistance</a><div class="note">Assistance/udgifter.</div></div>
-    <div class="card"><h3>Trin 6</h3><a href="<?= h($this->Url->build('/flow/compensation', ['fullBase' => true])) ?>" target="_blank">/flow/compensation</a><div class="note">Final delay/band, art19 flag.</div></div>
+    <div class="card"><h3>Trin 2</h3><a href="<?= h($this->Url->build('/flow/entitlements', ['fullBase' => true])) ?>" target="_blank">/flow/entitlements</a><div class="note">Billet/upload, operatør, pris, Art.12/9 input.</div></div>
+    <div class="card"><h3>Trin 3</h3><a href="<?= h($this->Url->build('/flow/journey', ['fullBase' => true])) ?>" target="_blank">/flow/journey</a><div class="note">Cykel/PMR, preinformed, nedgradering.</div></div>
+    <div class="card"><h3>Trin 4</h3><a href="<?= h($this->Url->build('/flow/incident', ['fullBase' => true])) ?>" target="_blank">/flow/incident</a><div class="note">Hændelse, 60-min varsel, transport til/fra.</div></div>
+    <div class="card"><h3>Trin 5</h3><a href="<?= h($this->Url->build('/flow/choices', ['fullBase' => true])) ?>" target="_blank">/flow/choices</a><div class="note">Art.18 valg + omlægning/refund.</div></div>
+    <div class="card"><h3>Trin 6</h3><a href="<?= h($this->Url->build('/flow/assistance', ['fullBase' => true])) ?>" target="_blank">/flow/assistance</a><div class="note">Art.20 assistance/udgifter.</div></div>
+    <div class="card"><h3>Trin 7</h3><a href="<?= h($this->Url->build('/flow/compensation', ['fullBase' => true])) ?>" target="_blank">/flow/compensation</a><div class="note">Kompensation (Art.19) og udbetaling.</div></div>
   </div>
 
     <h2>Trin 4+5 / Multi-ticket regressions</h2>

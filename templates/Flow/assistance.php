@@ -13,11 +13,22 @@ $articles = (array)($profile['articles'] ?? []);
 
 $pmrUser      = strtolower((string)($form['pmr_user'] ?? $flags['pmr_user'] ?? '')) === 'yes';
 $travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
+$isOngoing = ($travelState === 'ongoing');
+$isCompleted = ($travelState === 'completed');
+$assistTitle = $isOngoing
+    ? 'TRIN 7 - Mad og drikke, hotel (igangvaerende rejse)'
+    : ($isCompleted ? 'TRIN 7 - Mad og drikke, hotel (afsluttet rejse)' : 'TRIN 7 - Mad og drikke, hotel (Art. 20)');
+$assistHint = $isOngoing
+    ? 'Udgifter indtil nu (du kan tilfoeje flere senere).'
+    : ($isCompleted ? 'Udgifter under hele rejsen.' : '');
 $assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistStationOff = ($articles['art20_3'] ?? true) === false;
 $assistOff    = ($articles['art20_2'] ?? true) === false || ($assistMealsOff && $assistHotelOff && $assistTrackOff && $assistStationOff);
+$art20Active = $art20Active ?? true;
+$art20Partial = $art20Partial ?? false;
+$art20Blocked = $art20Blocked ?? false;
 
 
 
@@ -91,11 +102,17 @@ $hintText = function (string $key) use ($priceHints): string {
 
   [data-show-if] { display:none; }
 
+  /* Inline icon badges to avoid emoji encoding issues in headings */
+  .icon-badge { width:26px; height:26px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; margin-right:8px; border:1px solid #d0d7de; background:#f8f9fb; }
+  .icon-badge svg { width:16px; height:16px; display:block; }
+  .icon-badge.hotel { background:#eef7ff; border-color:#cfe0ff; }
+  .icon-badge.hotel svg path { fill:#1e3a8a; }
+
 </style>
 
 
 
-<h1>TRIN 5 - Assistance og udgifter (Art. 20)</h1>
+<h1><?= h($assistTitle) ?></h1>
 
 <?= $this->Form->create(null, ['type' => 'file', 'novalidate' => true]) ?>
 
@@ -107,21 +124,28 @@ $hintText = function (string $key) use ($priceHints): string {
 
 </p>
 
-<?php
-
-    if ($travelState === 'completed') {
-
-        echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
-
-    } elseif ($travelState === 'ongoing') {
-
-        echo '<p class="small muted">Status: Rejsen er i gang. Besvar ud fra hvad du oplever nu.</p>';
-
-    }
-
-?>
+<?php if ($assistHint !== ''): ?>
+  <p class="small muted"><?= h($assistHint) ?></p>
+<?php endif; ?>
 
 
+
+<?php if ($art20Partial): ?>
+  <div class="card hl mt8">
+    <strong>Art. 20 er delvist aktiveret via PMR.</strong>
+    <div class="small muted">Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.</div>
+  </div>
+<?php elseif (!$art20Active): ?>
+  <div class="card hl mt8">
+    <?php if ($art20Blocked): ?>
+      <strong>Art. 20 er ikke aktiveret.</strong>
+      <div class="small muted">Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.</div>
+    <?php else: ?>
+      <strong>Art. 20 afventer gating.</strong>
+      <div class="small muted">Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.</div>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
 <?php if ($assistOff): ?>
 
@@ -134,6 +158,8 @@ $hintText = function (string $key) use ($priceHints): string {
 <?php endif; ?>
 
 
+
+<div id="art20Core" class="<?= $art20Active ? '' : 'hidden' ?>">
 
 <!-- Måltider / drikke -->
 <div class="card mt12 <?= $assistMealsOff ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
@@ -148,7 +174,7 @@ $hintText = function (string $key) use ($priceHints): string {
     <label>Måltider blev ikke tilbudt – hvorfor?
       <select name="assistance_meals_unavailable_reason">
         <option value="">Vælg</option>
-        <?php foreach (['not_available'=>'Ikke til rådighed','unreasonable_terms'=>'Urimelige vilkår','closed'=>'Lukket','other'=>'Andet','unknown'=>'Ved ikke'] as $val => $label): ?>
+        <?php foreach (['not_available'=>'Ikke til rådighed','unreasonable_terms'=>'Urimelige vilkår','closed'=>'Lukket','other'=>'Andet'] as $val => $label): ?>
           <option value="<?= $val ?>" <?= $v('assistance_meals_unavailable_reason')===$val?'selected':'' ?>><?= $label ?></option>
         <?php endforeach; ?>
       </select>
@@ -179,7 +205,14 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <div class="card mt12 <?= $assistHotelOff ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
 
-  <strong>??? Hotel og indkvartering (Art.20)</strong>
+  <strong>
+    <span class="icon-badge hotel" title="Hotel / indkvartering">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M7 10h10a3 3 0 0 1 3 3v6h-2v-2H6v2H4v-8a3 3 0 0 1 3-3zm-1 5h12v-2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2zm1-9a2 2 0 1 1 0 4a2 2 0 0 1 0-4z"/>
+      </svg>
+    </span>
+    Hotel og indkvartering (Art.20)
+  </strong>
 
   <p class="small muted">Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.</p>
 
@@ -255,7 +288,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
         <option value="">Vælg</option>
 
-        <?php foreach (['yes'=>'Ja','no'=>'Nej','unknown'=>'Ved ikke'] as $val => $label): ?>
+        <?php foreach (['yes'=>'Ja','no'=>'Nej'] as $val => $label): ?>
 
           <option value="<?= $val ?>" <?= $v('overnight_needed')===$val?'selected':'' ?>><?= $label ?></option>
 
@@ -356,7 +389,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg måtte selv arrangere</label>
 
-    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ved ikke</label>
+    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
 
   </div>
 
@@ -486,7 +519,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
-<?php if ($pmrUser): ?>
+<?php if ($pmrUser && ($art20Active || $art20Partial)): ?>
 
   <div class="card mt12">
 
@@ -500,7 +533,6 @@ $hintText = function (string $key) use ($priceHints): string {
 
       <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="no" <?= $v('assistance_pmr_priority_applied')==='no'?'checked':'' ?> /> Nej</label>
 
-      <label class="ml8"><input type="radio" name="assistance_pmr_priority_applied" value="unknown" <?= $v('assistance_pmr_priority_applied')==='unknown'?'checked':'' ?> /> Ved ikke</label>
 
     </div>
 
@@ -520,11 +552,11 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <?php endif; ?>
 
-
+</div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
 
-  <?= $this->Html->link('Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Html->link('Tilbage', ['action' => 'remedies'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 
   <?= $this->Form->button('Næste ?', ['class' => 'button']) ?>
 
@@ -573,4 +605,3 @@ document.addEventListener('change', function(e) {
 document.addEventListener('DOMContentLoaded', updateReveal);
 
 </script>
-

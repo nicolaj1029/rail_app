@@ -1,0 +1,178 @@
+{
+    "fixture": {
+        "id": "session_20260110_153202",
+        "version": 2,
+        "label": "Captured wizard session 2026-01-10T15:32:02+00:00",
+        "journey": [],
+        "meta": {
+            "_multi_tickets": [
+                {
+                    "file": "Hjemrejse-billet__1_.pdf",
+                    "pnr": "51HERNING",
+                    "dep_date": "2024-03-05",
+                    "passengers": [],
+                    "segments": [
+                        {
+                            "from": "Herning Messecenter",
+                            "to": "Herning St.",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        },
+                        {
+                            "from": "Herning St.",
+                            "to": "Vejle St.",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        },
+                        {
+                            "from": "18.03.24",
+                            "to": "03:11 2",
+                            "schedDep": "17:51",
+                            "schedArr": "17:51",
+                            "trainNo": "",
+                            "depDate": "2024-03-05",
+                            "arrDate": "2024-03-05"
+                        }
+                    ]
+                }
+            ]
+        },
+        "wizard": {
+            "step1": {
+                "travel_state": "ongoing"
+            },
+            "step2": {
+                "incident_main": "cancellation"
+            },
+            "step3_entitlements": {
+                "leg_class_purchased": [
+                    "couchette",
+                    "couchette"
+                ],
+                "leg_class_delivered": [
+                    "",
+                    ""
+                ],
+                "leg_downgraded": [],
+                "pmr_user": "no",
+                "pmr_booked": "Nej",
+                "pmrQBooked": null,
+                "pmrQDelivered": null,
+                "pmrQPromised": null,
+                "pmr_facility_details": null,
+                "fare_flex_type": null,
+                "train_specificity": null,
+                "fare_class_purchased": null,
+                "berth_seat_type": null,
+                "reserved_amenity_delivered": null,
+                "class_delivered_status": null,
+                "preinformed_disruption": "Ved ikke",
+                "preinfo_channel": "Ved ikke",
+                "realtime_info_seen": [],
+                "downgrade_occurred": "no",
+                "downgrade_comp_basis": null,
+                "downgrade_segment_share": "1"
+            },
+            "step4_choices": {
+                "art18_expected_delay_60": null,
+                "remedyChoice": "reroute_soonest",
+                "self_purchased_new_ticket": "yes",
+                "self_purchase_approved_by_operator": "unknown",
+                "offer_provided": "unknown",
+                "reroute_same_conditions_soonest": "yes",
+                "reroute_later_at_choice": null,
+                "reroute_info_within_100min": "yes",
+                "reroute_extra_costs": null,
+                "reroute_extra_costs_amount": null,
+                "reroute_extra_costs_currency": null,
+                "delayAtFinalMinutes": null,
+                "compensationBand": null,
+                "voucherAccepted": null,
+                "trip_cancelled_return_to_origin": null,
+                "return_to_origin_expense": null,
+                "return_to_origin_amount": null,
+                "return_to_origin_currency": null,
+                "delay_confirmation_info": null,
+                "delay_confirmation_received": null,
+                "delay_confirmation_upload": null,
+                "delay_confirmation_type": null
+            },
+            "step5_assistance": {
+                "art20_expected_delay_60": null,
+                "meal_offered": "no",
+                "assistance_meals_unavailable_reason": "not_available",
+                "hotel_offered": "irrelevant",
+                "overnight_needed": null,
+                "assistance_hotel_transport_included": null,
+                "assistance_hotel_accessible": null,
+                "blocked_train_alt_transport": null,
+                "blocked_on_track": null,
+                "stranded_at_station": null,
+                "stranded_unknown": null,
+                "assistance_blocked_transport_to": null,
+                "assistance_blocked_transport_time": null,
+                "assistance_blocked_transport_possible": null,
+                "alt_transport_provided": null,
+                "assistance_alt_transport_offered_by": "operator",
+                "assistance_alt_transport_type": "rail",
+                "assistance_alt_to_destination": "",
+                "assistance_alt_departure_time": null,
+                "assistance_alt_arrival_time": null,
+                "assistance_pmr_priority_applied": null,
+                "assistance_pmr_companion_supported": null,
+                "assistance_pmr_dog_supported": null,
+                "meal_self_paid_amount": "100.00",
+                "meal_self_paid_currency": "DKK",
+                "meal_self_paid_receipt": null,
+                "hotel_self_paid_nights": null,
+                "hotel_self_paid_amount": null,
+                "hotel_self_paid_currency": null,
+                "hotel_self_paid_receipt": null,
+                "blocked_self_paid_amount": "",
+                "blocked_self_paid_currency": "",
+                "blocked_self_paid_receipt": "",
+                "alt_self_paid_amount": null,
+                "alt_self_paid_currency": null,
+                "alt_self_paid_receipt": null,
+                "price_hints": {
+                    "meals": {
+                        "min": 60,
+                        "max": 110,
+                        "currency": "DKK"
+                    },
+                    "hotelPerNight": {
+                        "min": 600,
+                        "max": 970,
+                        "currency": "DKK"
+                    },
+                    "taxi": {
+                        "min": 75,
+                        "max": 135,
+                        "currency": "DKK"
+                    },
+                    "altTransport": {
+                        "min": 75,
+                        "max": 185,
+                        "currency": "DKK"
+                    },
+                    "upgradeFirstClass": {
+                        "min": 110,
+                        "max": 260,
+                        "currency": "DKK"
+                    }
+                }
+            }
+        },
+        "computeOverrides": {
+            "knownDelayBeforePurchase": false,
+            "delayAtFinalMinutes": null
+        },
+        "expected": []
+    }
+}
