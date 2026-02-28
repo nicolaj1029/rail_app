@@ -209,40 +209,46 @@ try {
             </div>
         </div>
 
-        <div class="mt4 <?= $showTrack ? '' : 'hidden' ?>" data-show-if="stranded_location:track" data-art="20(2c)">
-            <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
-            <?php $bt = $v('blocked_train_alt_transport'); ?>
-            <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
-            <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej</label>
-            <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
-        </div>
-
-        <div class="mt4 <?= $showTrack ? '' : 'hidden' ?>" data-show-if="blocked_train_alt_transport:yes" data-art="20(2c)">
-            <div class="grid-2">
-                <label>Transporttype
-                    <?php $tt = $v('assistance_alt_transport_type'); ?>
-                    <select name="assistance_alt_transport_type">
-                        <option value="">Vaelg</option>
-                        <option value="rail" <?= $tt==='rail'?'selected':'' ?>>Tog</option>
-                        <option value="bus" <?= $tt==='bus'?'selected':'' ?>>Bus</option>
-                        <option value="taxi" <?= $tt==='taxi'?'selected':'' ?>>Taxi</option>
-                        <option value="other" <?= $tt==='other'?'selected':'' ?>>Andet</option>
-                    </select>
-                </label>
+        <?php
+            // IMPORTANT: Only ask follow-up questions when the user explicitly answered "Ja" to being stranded on track.
+            // Otherwise `stranded_location=track` remains truthy (hidden input), and reveal logic would wrongly show the sub-flow.
+            $showTrackFlow = ($showTrack && $isStrandedTrin5 === 'yes');
+        ?>
+        <div class="<?= $showTrackFlow ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
+            <div class="mt4" data-show-if="stranded_location:track">
+                <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
+                <?php $bt = $v('blocked_train_alt_transport'); ?>
+                <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej</label>
+                <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
             </div>
-        </div>
 
-        <div class="mt4 <?= $showTrack ? '' : 'hidden' ?>" data-show-if="blocked_train_alt_transport:no" data-art="20(2c)">
-            <div>Hvad gjorde du saa?</div>
-            <?php $bn = $v('blocked_no_transport_action'); ?>
-            <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="waited" <?= $bn==='waited'?'checked':'' ?> /> Ventede til toget kunne koere videre</label>
-            <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="walked_station" <?= $bn==='walked_station'?'checked':'' ?> /> Fandt selv vej til station/spor</label>
-            <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="evacuated_later" <?= $bn==='evacuated_later'?'checked':'' ?> /> Blev evakueret senere</label>
-            <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="self_arranged" <?= $bn==='self_arranged'?'checked':'' ?> /> Fandt selv transport</label>
-            <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="other" <?= $bn==='other'?'checked':'' ?> /> Andet</label>
-        </div>
+            <div class="mt4" data-show-if="blocked_train_alt_transport:yes" data-art="20(2c)">
+                <div class="grid-2">
+                    <label>Transporttype
+                        <?php $tt = $v('assistance_alt_transport_type'); ?>
+                        <select name="assistance_alt_transport_type">
+                            <option value="">Vaelg</option>
+                            <option value="rail" <?= $tt==='rail'?'selected':'' ?>>Tog</option>
+                            <option value="bus" <?= $tt==='bus'?'selected':'' ?>>Bus</option>
+                            <option value="taxi" <?= $tt==='taxi'?'selected':'' ?>>Taxi</option>
+                            <option value="other" <?= $tt==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
 
-        <div class="mt4 <?= $showTrack ? '' : 'hidden' ?>" data-show-if="blocked_no_transport_action:self_arranged" data-art="20(2c)">
+            <div class="mt4" data-show-if="blocked_train_alt_transport:no" data-art="20(2c)">
+                <div>Hvad gjorde du saa?</div>
+                <?php $bn = $v('blocked_no_transport_action'); ?>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="waited" <?= $bn==='waited'?'checked':'' ?> /> Ventede til toget kunne koere videre</label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="walked_station" <?= $bn==='walked_station'?'checked':'' ?> /> Fandt selv vej til station/spor</label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="evacuated_later" <?= $bn==='evacuated_later'?'checked':'' ?> /> Blev evakueret senere</label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="self_arranged" <?= $bn==='self_arranged'?'checked':'' ?> /> Fandt selv transport</label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="other" <?= $bn==='other'?'checked':'' ?> /> Andet</label>
+            </div>
+
+            <div class="mt4" data-show-if="blocked_no_transport_action:self_arranged" data-art="20(2c)">
             <div class="small muted">Angiv egne udgifter hvis du selv ordnede transport.</div>
             <div class="grid-2 mt4">
                 <label>Transporttype
@@ -267,6 +273,7 @@ try {
                 </label>
             </div>
             <?php if ($f = $v('blocked_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+        </div>
         </div>
 
         <!-- Common resolution endpoint (TRIN 5 / Art.20): where did you end up after being stranded? -->
