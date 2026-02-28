@@ -137,19 +137,19 @@ if (empty($journeyRowsDowng)) {
         <button type="button" id="toggleAllDowngLegs" style="margin-left:8px; padding:2px 6px; font-size:12px;">Vis alle ben</button>
       </div>
     <?php endif; ?>
-    <div class="small muted" style="margin-top:4px;">LLM/OCR har udfyldt kÃ¸bt/leveret niveau; marker nedgraderet hvis leveret var lavere.</div>
+    <div class="small muted" style="margin-top:4px;">LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.</div>
     <div class="small" style="overflow:auto; margin-top:6px;">
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">StrÃ¦kning</th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Straekning</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Skift</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Afgang</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">KÃ¸bt klasse</th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Koebt klasse</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Leveret klasse</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">KÃ¸bt reservation</th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Koebt reservation</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Leveret reservation</th>
           </tr>
         </thead>

@@ -86,7 +86,7 @@ try {
     ];
   ?>
   <div class="card mt12 <?= $art91On ? '' : 'hidden' ?>" data-art="9(1)">
-    <strong>Ã¢ÂÂ±Ã¯Â¸Â Afbrydelser/forsinkelser</strong>
+    <strong><span aria-hidden="true">&#x23F1;</span> Afbrydelser/forsinkelser</strong>
     <p class="small muted">Default er "Nej". Udfyld kun hvis relevant.</p>
 
     <div class="mt8">
@@ -118,7 +118,7 @@ try {
 
   <!-- Standard gating -->
   <div class="card mt12">
-    <strong>Ã¢Å¡Â¡ Haendelse (Art.18/20)</strong>
+    <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art.18/20)</strong>
     <p class="small muted">Vaelg den haendelse, der ramte dit tog. Bruges til at aktivere standard vurdering af Art. 18/20.<?= $incidentHint !== '' ? (' ' . h($incidentHint)) : '' ?></p>
 
     <div class="mt8">
@@ -213,7 +213,7 @@ try {
 
   <!-- Mistet forbindelse -->
   <div class="card mt12">
-    <strong>Ã°Å¸â€â€” Mistet forbindelse</strong>
+    <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
     <p class="small muted">Marker kun hvis du faktisk missede et skift.</p>
 
     <div class="mt4">
