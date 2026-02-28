@@ -4731,10 +4731,6 @@ class FlowController extends AppController
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
 
-        // TRIN 7 prereq: TRIN 6 completed (read-only preview allowed via ?preview=1).
-        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step6_done'], 'choices');
-        if ($resp) { return $resp; }
-
         // TRIN 6 prereq: TRIN 5 completed (read-only preview allowed via ?preview=1).
         [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step5_done'], 'incident');
         if ($resp) { return $resp; }
