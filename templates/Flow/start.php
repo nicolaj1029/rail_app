@@ -7,10 +7,11 @@ $isAdmin = (bool)($isAdmin ?? false);
 <?= $this->Form->create(null) ?>
   <fieldset style="background:#ffa50022; padding:10px;">
     <legend>TRIN 1 - Rejsens status</legend>
-    <div class="small muted" style="margin-bottom:6px;">V?lg den situation der passer nu:</div>
+    <div class="small muted" style="margin-bottom:6px;">Vaelg den situation der passer nu:</div>
     <?= $this->Form->radio('travel_state', [
       ['value' => 'completed', 'text' => 'Rejsen er afsluttet'],
-      ['value' => 'ongoing',   'text' => 'Rejsen er igang'],
+      ['value' => 'ongoing',   'text' => 'Rejsen er i gang'],
+      ['value' => 'before_start', 'text' => 'Rejsen starter senere'],
     ], ['legend' => false, 'separator' => '<br/>']) ?>
   </fieldset>
   <?php if ($isAdmin): ?>
@@ -18,5 +19,5 @@ $isAdmin = (bool)($isAdmin ?? false);
     <label><?= $this->Form->checkbox('eu_only', ['checked' => !empty($compute['euOnly'])]) ?> Beregn kun for EU-delen (EU only)</label>
   </div>
   <?php endif; ?>
-  <?= $this->Form->button('Forts?t') ?>
+  <?= $this->Form->button('Fortsaet') ?>
 <?= $this->Form->end() ?>

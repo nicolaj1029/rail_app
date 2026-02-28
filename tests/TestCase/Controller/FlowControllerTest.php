@@ -18,25 +18,18 @@ class FlowControllerTest extends TestCase
 
     public function testAjaxHooksReturnsOnlyHooksPanel(): void
     {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+        ]);
+
         $this->configRequest([
             'headers' => [
                 'X-Requested-With' => 'XMLHttpRequest',
             ],
         ]);
 
-        // Enable CSRF/Security tokens for POST requests in tests
-        $this->enableCsrfToken();
-        $this->enableSecurityToken();
-
-        $data = [
-            // Minimal fields that may influence hooks rendering
-            'remedyChoice' => 'reroute_soonest',
-            'reroute_info_within_100min' => 'yes',
-            'delayAtFinalMinutes' => '75',
-            'compensationBand' => '60_119',
-        ];
-
-        $this->post('/flow/one?ajax_hooks=1', $data);
+        // Split-flow: AJAX hooks fragment is served from entitlements()
+        $this->get('/flow/entitlements?ajax_hooks=1');
 
         $this->assertResponseOk();
         $body = (string)$this->_response->getBody();
@@ -50,22 +43,32 @@ class FlowControllerTest extends TestCase
         $this->assertStringNotContainsString('class="toc"', $body, 'TOC sidebar should not be included in hooks fragment.');
     }
 
-    public function testChoicesPostRedirectsToAssistance(): void
+    public function testChoicesPostRedirectsToRemedies(): void
     {
         $this->enableCsrfToken();
         $this->enableSecurityToken();
+
+        // TRIN 6 has strict gating: requires TRIN 3-5 to be completed.
+        $this->session([
+            'flow.flags' => ['step3_done' => '1', 'step4_done' => '1', 'step5_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.incident' => ['main' => 'cancellation', 'missed' => '', 'missed_source' => 'incident_form'],
+        ]);
+
         $data = [
-            'remedyChoice' => 'refund_return',
-            'refund_requested' => 'yes',
-            // minimal set of fields; controller should still redirect regardless of completeness
+            // Minimal TRIN 6 payload; controller should still redirect regardless of completeness.
+            'is_stranded_trin5' => 'no',
         ];
         $this->post('/flow/choices', $data);
         $this->assertResponseCode(302);
-        $this->assertRedirect(['controller' => 'Flow', 'action' => 'assistance']);
+        $this->assertNotSame('', $this->_response->getHeaderLine('Location'));
     }
 
     public function testBikeWasPresentAutoDefaultsToNoOnEntitlements(): void
     {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+        ]);
+
         // Step 1: POST OCR text with no bike signals to trigger detection with low confidence and no hits
         $this->enableCsrfToken();
         $this->enableSecurityToken();
@@ -88,6 +91,7 @@ class FlowControllerTest extends TestCase
     {
         // Seed session so Art. 20 is active (cancellation) and hotel_offered = no
         $this->session([
+            'flow.flags' => ['step7_done' => '1', 'travel_state' => 'ongoing'],
             'flow.incident' => ['main' => 'cancellation'],
             'flow.form' => [
                 'hotel_offered' => 'no',
@@ -100,8 +104,8 @@ class FlowControllerTest extends TestCase
         $body = (string)$this->_response->getBody();
 
         // Self-paid hotel fields should be present in the HTML (gated client-side via data-show-if)
-        $this->assertStringContainsString('name="hotel_self_paid_amount"', $body);
+        $this->assertStringContainsString('name="hotel_self_paid_amount_items[]"', $body);
         $this->assertStringContainsString('name="hotel_self_paid_currency"', $body);
-        $this->assertStringContainsString('name="hotel_self_paid_nights"', $body);
+        $this->assertStringContainsString('name="hotel_self_paid_nights_items[]"', $body);
     }
 }

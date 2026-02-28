@@ -13,9 +13,20 @@ class StationGeocoder
     /** @var array<string,array{lat:float,lon:float}> */
     private array $db = [];
 
+    /** @var array<string,array{lat:float,lon:float}>|null */
+    private static ?array $cacheDb = null;
+    private static ?int $cacheMtime = null;
+
     public function __construct(?string $path = null)
     {
         $path = $path ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'stations_coords.json');
+        $mtime = is_file($path) ? (int)@filemtime($path) : null;
+        if ($mtime !== null && self::$cacheDb !== null && self::$cacheMtime === $mtime) {
+            $this->db = self::$cacheDb;
+            return;
+        }
+
+        $db = [];
         if (is_file($path)) {
             $json = (string)file_get_contents($path);
             $data = json_decode($json, true);
@@ -29,17 +40,21 @@ class StationGeocoder
                         if (!is_array($row)) { continue; }
                         $name = (string)($row['name'] ?? ($row['station'] ?? ''));
                         if ($name === '' || !isset($row['lat'], $row['lon'])) { continue; }
-                        $this->db[$this->norm($name)] = ['lat' => (float)$row['lat'], 'lon' => (float)$row['lon']];
+                        $db[$this->norm($name)] = ['lat' => (float)$row['lat'], 'lon' => (float)$row['lon']];
                     }
                 } else {
                     foreach ($data as $k => $v) {
                         if (is_array($v) && isset($v['lat'], $v['lon'])) {
-                            $this->db[$this->norm((string)$k)] = ['lat' => (float)$v['lat'], 'lon' => (float)$v['lon']];
+                            $db[$this->norm((string)$k)] = ['lat' => (float)$v['lat'], 'lon' => (float)$v['lon']];
                         }
                     }
                 }
             }
         }
+
+        $this->db = $db;
+        self::$cacheDb = $db;
+        self::$cacheMtime = $mtime;
     }
 
     /** @return array{lat:float,lon:float}|null */

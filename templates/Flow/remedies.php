@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /** @var \App\View\AppView $this */
 $form = $form ?? [];
 $flags = $flags ?? [];
@@ -7,15 +7,23 @@ $meta = $meta ?? [];
 $profile = $profile ?? ['articles' => []];
 $art18Active = $art18Active ?? true;
 $art18Blocked = $art18Blocked ?? false;
+$maps = $maps ?? [];
+$mapsOptIn = !empty($form['maps_opt_in_trin6']);
+$mapsTrin6 = (is_array($maps) && isset($maps['trin6']) && is_array($maps['trin6'])) ? $maps['trin6'] : null;
+$ticketMode = (string)($form['ticket_upload_mode'] ?? '');
+$hasTickets = !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']) || !empty($meta['_ticket_files']);
+$isTicketless = ($ticketMode === 'ticketless' && !$hasTickets);
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isCompleted = ($travelState === 'completed');
 $isOngoing = ($travelState === 'ongoing');
+$isBeforeStart = ($travelState === 'before_start');
+$isFutureLike = ($isOngoing || $isBeforeStart);
 $remediesTitle = $isOngoing
-    ? 'TRIN 6 - Dine valg (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 6 - Dine valg (afsluttet rejse)' : 'TRIN 6 - Dine valg (Art. 18)');
-$art18Title = $isOngoing ? 'Rejsen er i gang - hvad er dit valg nu?' : 'Rejsen er afsluttet - hvad skete der?';
-$art18Help = $isOngoing ? 'Ud fra din nuvaerende situation kan foelgende muligheder vaere relevante.' : 'Ved afgang, missed connection eller aflysning - ved forsinkelse paa 60+ min. tilbydes nedenstaaende muligheder.';
-$decisionHint = $isOngoing ? 'Foreloebige valg baseret paa nuvaerende situation.' : ($isCompleted ? 'Endelige valg baseret paa hvad der skete.' : '');
+    ? 'TRIN 7 - Dine valg (igangvaerende rejse)'
+    : ($isCompleted ? 'TRIN 7 - Dine valg (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Dine valg (rejsen starter senere)' : 'TRIN 7 - Dine valg (Art. 18)'));
+$art18Title = $isOngoing ? 'Rejsen er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Rejsen starter senere - hvad vil du vaelge, hvis det sker?' : 'Rejsen er afsluttet - hvad skete der?');
+$art18Help = $isFutureLike ? 'Ud fra din nuvaerende situation kan foelgende muligheder vaere relevante.' : 'Ved afgang, missed connection eller aflysning - ved forsinkelse paa 60+ min. tilbydes nedenstaaende muligheder.';
+$decisionHint = $isFutureLike ? 'Foreloebige valg baseret paa nuvaerende situation.' : ($isCompleted ? 'Endelige valg baseret paa hvad der skete.' : '');
 $downgradeHint = $isOngoing ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.' : 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.';
 $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til udgangspunktet?' : 'Havde du udgifter til at komme tilbage til udgangspunktet?';
 
@@ -25,7 +33,7 @@ elseif (!empty($meta['_segments_all']) && is_array($meta['_segments_all'])) { $s
 $stations = [];
 $addStation = function ($val) use (&$stations) {
     $s = trim((string)$val);
-    if ($s === '') { return; }
+    if ($s === '' || $s === 'other' || $s === 'unknown') { return; }
     $stations[$s] = true;
 };
 foreach ($segments as $seg) {
@@ -36,8 +44,21 @@ foreach ($segments as $seg) {
 }
 $addStation($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? ''));
 $addStation($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? ''));
+// Ticketless / strandings-flow can add station context without segments
+$addStation($form['missed_connection_station'] ?? ($meta['_auto']['missed_connection_station']['value'] ?? ''));
+$addStation($form['handoff_station'] ?? '');
+$scs0 = (string)($form['stranded_current_station'] ?? '');
+if ($scs0 === 'other') { $addStation($form['stranded_current_station_other'] ?? ''); }
+else { $addStation($scs0); }
+$arr0 = (string)($form['a20_arrival_station'] ?? '');
+if ($arr0 === 'other') { $addStation($form['a20_arrival_station_other'] ?? ''); }
+else { $addStation($arr0); }
 $stationOptions = array_keys($stations);
 sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
+$stationSet = array_fill_keys($stationOptions, true);
+// Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
+$stationsSearchUrl = $this->Url->build('/api/stations/search');
+$stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
 ?>
 
 <style>
@@ -50,11 +71,53 @@ sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
     .mt12 { margin-top:12px; }
     .ml8 { margin-left:8px; }
     .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .grid-1 { display:grid; grid-template-columns:1fr; gap:8px; }
     .disabled-block { opacity: 0.6; }
     .flow-wrapper { max-width: 1100px; margin: 0 auto; }
     .flow-wide { width: 100%; }
     .card-title { display:flex; align-items:center; gap:8px; font-weight:600; }
     .card-title .icon { font-size:16px; line-height:1; }
+    .station-autocomplete { position: relative; }
+    .station-suggest {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 2px);
+        z-index: 50;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+        max-height: 220px;
+        overflow: auto;
+    }
+    .station-suggest button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #111 !important;
+    }
+    .station-suggest button:hover { background: #f6f6f6; color: #111 !important; }
+    .station-suggest button:active { color: #111 !important; }
+    .station-suggest button:focus { outline: none; background: #f1f3f5; color: #111 !important; }
+    .station-suggest .muted { color: #666; font-size: 12px; }
+
+    /* Google Maps routes rendering (TRIN 6 helper) */
+    .maps-routes-title { font-weight: 600; margin-top: 8px; }
+    .maps-route { padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; margin-top: 10px; }
+    .maps-route-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+    .maps-route-time { font-weight: 700; }
+    .maps-route-meta { color:#666; font-size:12px; }
+    .maps-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .maps-chip { font-size:12px; padding:2px 8px; border-radius:999px; background:#f1f3f5; border:1px solid #e6e8eb; }
+    .maps-segs { margin-top: 8px; padding-left: 16px; }
+    .maps-segs li { margin-top: 4px; }
+    .maps-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px; }
+    .maps-actions a { text-decoration:none; }
 </style>
 <div class="flow-wrapper">
 <h1><?= h($remediesTitle) ?></h1>
@@ -63,7 +126,7 @@ sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
         echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
     } elseif ($travelState === 'ongoing') {
         echo '<p class="small muted">Status: Rejsen er i gang. Vi samler dine valg for resten af forloebet.</p>';
-    } elseif ($travelState === 'not_started') {
+    } elseif ($travelState === 'before_start') {
         echo '<p class="small muted">Status: Rejsen er endnu ikke paabegyndt. Besvar ud fra, hvad du forventer at goere ved forsinkelse/aflysning.</p>';
     }
 ?>
@@ -74,9 +137,38 @@ sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
     $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     $showArt183 = !isset($articles['art18_3']) || $articles['art18_3'] !== false;
     $v = fn(string $k): string => (string)($form[$k] ?? '');
+    $isPreview = !empty($flowPreview);
 ?>
+<?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'remedies'], 'type' => 'file', 'novalidate' => true]) ?>
-<input type="hidden" name="journey_outcome" value="<?= h((string)($form['journey_outcome'] ?? '')) ?>" />
+<fieldset <?= $isPreview ? 'disabled' : '' ?>>
+<!-- TRIN 5 (Art.20) hint data: used only for UX hints in this step -->
+<input type="hidden" id="trin5_a20_3_self_paid_amount" value="<?= h($v('a20_3_self_paid_amount')) ?>" />
+<input type="hidden" id="trin5_a20_3_self_paid_currency" value="<?= h($v('a20_3_self_paid_currency')) ?>" />
+<input type="hidden" id="trin5_a20_3_self_paid_direction" value="<?= h($v('a20_3_self_paid_direction')) ?>" />
+<?php
+    // TRIN 5 is the stranded/assistance step. TRIN 6 is a separate Art.18 flow.
+    // If TRIN 5 ended at final destination explicitly, TRIN 6 is only needed when the journey no longer had purpose.
+    $toDest0 = $v('a20_where_ended');
+    $assumed0 = $v('a20_where_ended_assumed') ?: '0';
+    $arrivedFinalExplicit = ($toDest0 === 'final_destination' && $assumed0 !== '1');
+    $purposeVal = $v('journey_no_longer_purpose');
+    $hideArt18Flow = $arrivedFinalExplicit && $purposeVal !== 'yes';
+?>
+
+<?php if ($arrivedFinalExplicit): ?>
+    <div class="card mt12" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+        <strong>Rejsen havde ikke laengere noget formaal?</strong>
+        <div class="small muted mt4">Hvis du naaede dit endelige bestemmelsessted, er Trin 6 normalt ikke noedvendigt. Kun hvis rejsen ikke laengere havde noget formaal kan du have krav paa refusion/returtransport.</div>
+        <div class="mt8">
+            <label><input type="radio" name="journey_no_longer_purpose" value="yes" <?= $purposeVal==='yes'?'checked':'' ?> /> Ja</label>
+            <label class="ml8"><input type="radio" name="journey_no_longer_purpose" value="no" <?= $purposeVal==='no'?'checked':'' ?> /> Nej</label>
+        </div>
+        <?php if ($purposeVal === 'no'): ?>
+            <div class="small muted mt8">OK - vi springer Art. 18 over og gaar videre til assistance (Trin 7).</div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 
 <?php if (!$art18Active): ?>
     <div class="card mt12" style="padding:12px; border:1px solid #ddd; background:#fff3cd; border-radius:6px;">
@@ -90,7 +182,7 @@ sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
     </div>
 <?php endif; ?>
 
-<div id="coreAfterArt18">
+<div id="coreAfterArt18" class="<?= $hideArt18Flow ? 'hidden' : '' ?>">
 <?php
 // Downgrade preview context (server-side): ticket price from controller or fallback
 $tp = isset($ticketPrice) ? (float)$ticketPrice : (float)preg_replace('/[^0-9.]/','', (string)($form['price'] ?? '0'));
@@ -111,21 +203,11 @@ $preview = round($tp * $rate * $share, 2);
         elseif (($form['reroute_same_conditions_soonest'] ?? '') === 'yes') { $remedy = 'reroute_soonest'; }
         elseif (($form['reroute_later_at_choice'] ?? '') === 'yes') { $remedy = 'reroute_later'; }
     }
+    $refundOnly = $arrivedFinalExplicit && $purposeVal === 'yes';
+    if ($refundOnly) { $remedy = 'refund_return'; }
     $ri100 = (string)($form['reroute_info_within_100min'] ?? '');
 ?>
-    <?php $journeyOutcomeVal = (string)($form['journey_outcome'] ?? ''); ?>
-    <?php if ($journeyOutcomeVal === ''): ?>
-        <div class="card mt12" style="padding:12px; border:1px solid #ddd; background:#fff3cd; border-radius:6px;">
-            <strong>Tip:</strong>
-            <div class="small muted">Hvis du udfylder TRIN 5 (Transport), kan vi give en bedre anbefaling i TRIN 6. Du kan stadig fortsatte her.</div>
-        </div>
-    <?php endif; ?>
-
     <div id="art18Wrapper" class="<?= $art18Active ? '' : 'hidden' ?>">
-        <div id="art18OutcomePrompt" class="card mt12 <?= $journeyOutcomeVal === '' ? '' : 'hidden' ?>" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-            <strong>Udfald i TRIN 5 mangler.</strong>
-            <div class="small muted">Valgfrit: ga tilbage og udfyld TRIN 5 for at faa en anbefaling.</div>
-        </div>
         <div id="art18Flow">
     <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)">
         <div class="card-title"><span class="icon">&#127919;</span><span><?= h($art18Title) ?></span></div>
@@ -133,8 +215,10 @@ $preview = round($tp * $rate * $share, 2);
         <div id="remedyHint" class="small muted mt8"></div>
         <div class="mt8" data-art="18(1)"><strong>V&aelig;lg pr&aelig;cis en mulighed</strong></div>
         <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> Jeg &oslash;nsker refusion</label><br/>
-        <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning hurtigst muligt</label><br/>
-        <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning senere (efter eget valg)</label>
+        <?php if (!$refundOnly): ?>
+            <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning hurtigst muligt</label><br/>
+            <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning senere (efter eget valg)</label>
+        <?php endif; ?>
 
         <!-- Hidden sync to legacy hooks -->
         <input type="hidden" id="tcr_sync_past" name="trip_cancelled_return_to_origin" value="<?= ($form['trip_cancelled_return_to_origin'] ?? '') ?>" />
@@ -149,6 +233,127 @@ $preview = round($tp * $rate * $share, 2);
             <?php if ($decisionHint !== ''): ?>
                 <div class="small muted"><?= h($decisionHint) ?></div>
             <?php endif; ?>
+
+            <?php
+                // TRIN 6 refund context: where are you now, and where are you returning to?
+                // Prefer explicit TRIN 5 handoff_station; if missing, fall back to stranded_current_station (so refund can be chosen before handoff is known).
+                $handoff = trim((string)($form['handoff_station'] ?? ''));
+                if ($handoff === '') {
+                    $scs = trim((string)($form['stranded_current_station'] ?? ''));
+                    if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
+                    if ($scs !== '' && $scs !== 'unknown') { $handoff = $scs; }
+                }
+                $fromVal = (string)($form['a18_from_station'] ?? '');
+                $fromOther = (string)($form['a18_from_station_other'] ?? '');
+                $fromPref = $fromVal !== '' ? $fromVal : ($handoff !== '' ? $handoff : '');
+                $fromSel = $fromVal;
+                if ($fromSel === '') {
+                    if ($fromPref !== '' && isset($stationSet[$fromPref])) { $fromSel = $fromPref; }
+                    elseif ($fromPref === 'unknown') { $fromSel = 'unknown'; }
+                    elseif ($fromPref !== '') { $fromSel = 'other'; if ($fromOther === '') { $fromOther = $fromPref; } }
+                }
+                if ($isTicketless && $fromSel !== 'unknown') {
+                    $fromSel = 'other';
+                    if ($fromOther === '' && $fromPref !== '' && $fromPref !== 'unknown') { $fromOther = $fromPref; }
+                }
+
+                $depDefault0 = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
+                $retVal = (string)($form['a18_return_to_station'] ?? '');
+                $retOther = (string)($form['a18_return_to_station_other'] ?? '');
+                $retPref = $retVal !== '' ? $retVal : ($depDefault0 !== '' ? $depDefault0 : '');
+                $retSel = $retVal;
+                if ($retSel === '') {
+                    if ($retPref !== '' && isset($stationSet[$retPref])) { $retSel = $retPref; }
+                    elseif ($retPref === 'unknown') { $retSel = 'unknown'; }
+                    elseif ($retPref !== '') { $retSel = 'other'; if ($retOther === '') { $retOther = $retPref; } }
+                }
+                if ($isTicketless && $retSel !== 'unknown') {
+                    $retSel = 'other';
+                    if ($retOther === '' && $retPref !== '' && $retPref !== 'unknown') { $retOther = $retPref; }
+                }
+            ?>
+            <div class="grid-2 mt8" id="refundStationsPast">
+                <?php if ($isTicketless): ?>
+                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                        <select name="a18_from_station" style="display:none;">
+                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                        </select>
+                        <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                        <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_country" value="<?= h((string)($form['a18_from_station_other_country'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_type" value="<?= h((string)($form['a18_from_station_other_type'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_source" value="<?= h((string)($form['a18_from_station_other_source'] ?? '')) ?>" />
+                        <div class="station-suggest" data-for="a18_from_station_other" style="display:none;"></div>
+                        <?php if ($handoff !== '' && $fromVal === ''): ?>
+                            <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
+                        <?php endif; ?>
+                    </label>
+                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other">Hvilken station skal du tilbage til?
+                        <select name="a18_return_to_station" style="display:none;">
+                            <option value="other" <?= $retSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="unknown" <?= $retSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                        </select>
+                        <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                        <input type="hidden" name="a18_return_to_station_other_osm_id" value="<?= h((string)($form['a18_return_to_station_other_osm_id'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_lat" value="<?= h((string)($form['a18_return_to_station_other_lat'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_lon" value="<?= h((string)($form['a18_return_to_station_other_lon'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_country" value="<?= h((string)($form['a18_return_to_station_other_country'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_type" value="<?= h((string)($form['a18_return_to_station_other_type'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_source" value="<?= h((string)($form['a18_return_to_station_other_source'] ?? '')) ?>" />
+                        <div class="station-suggest" data-for="a18_return_to_station_other" style="display:none;"></div>
+                        <?php if ($depDefault0 !== '' && $retVal === ''): ?>
+                            <div class="small muted mt4">Default fra billetten: <strong><?= h($depDefault0) ?></strong></div>
+                        <?php endif; ?>
+                    </label>
+                <?php else: ?>
+                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                        <select name="a18_from_station">
+                            <option value="">V&aelig;lg</option>
+                            <?php foreach ($stationOptions as $st): ?>
+                                <option value="<?= h($st) ?>" <?= $fromSel===$st?'selected':'' ?>><?= h($st) ?></option>
+                            <?php endforeach; ?>
+                            <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                        </select>
+                        <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="Anden station" data-show-if="a18_from_station:other" />
+                        <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_country" value="<?= h((string)($form['a18_from_station_other_country'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_type" value="<?= h((string)($form['a18_from_station_other_type'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_from_station_other_source" value="<?= h((string)($form['a18_from_station_other_source'] ?? '')) ?>" />
+                        <div class="station-suggest" data-for="a18_from_station_other" style="display:none;"></div>
+                        <?php if ($handoff !== '' && $fromVal === ''): ?>
+                            <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
+                        <?php endif; ?>
+                    </label>
+                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other">Hvilken station skal du tilbage til?
+                        <select name="a18_return_to_station">
+                            <option value="">V&aelig;lg</option>
+                            <?php foreach ($stationOptions as $st): ?>
+                                <option value="<?= h($st) ?>" <?= $retSel===$st?'selected':'' ?>><?= h($st) ?></option>
+                            <?php endforeach; ?>
+                            <option value="unknown" <?= $retSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                            <option value="other" <?= $retSel==='other'?'selected':'' ?>>Anden station</option>
+                        </select>
+                        <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="Anden station" data-show-if="a18_return_to_station:other" />
+                        <input type="hidden" name="a18_return_to_station_other_osm_id" value="<?= h((string)($form['a18_return_to_station_other_osm_id'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_lat" value="<?= h((string)($form['a18_return_to_station_other_lat'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_lon" value="<?= h((string)($form['a18_return_to_station_other_lon'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_country" value="<?= h((string)($form['a18_return_to_station_other_country'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_type" value="<?= h((string)($form['a18_return_to_station_other_type'] ?? '')) ?>" />
+                        <input type="hidden" name="a18_return_to_station_other_source" value="<?= h((string)($form['a18_return_to_station_other_source'] ?? '')) ?>" />
+                        <div class="station-suggest" data-for="a18_return_to_station_other" style="display:none;"></div>
+                        <?php if ($depDefault0 !== '' && $retVal === ''): ?>
+                            <div class="small muted mt4">Default fra billetten: <strong><?= h($depDefault0) ?></strong></div>
+                        <?php endif; ?>
+                    </label>
+                <?php endif; ?>
+            </div>
+
             <div class="mt4"><?= h($returnQuestion) ?></div>
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
             <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
@@ -185,51 +390,219 @@ $preview = round($tp * $rate * $share, 2);
             <?php endif; ?>
 
             <?php
-                $needResolutionFallback = trim((string)($form['assistance_alt_to_destination'] ?? '')) === '';
-                $assumedResolution = ((string)($form['assistance_alt_to_destination_assumed'] ?? '')) === '1';
-                $showResolutionFallback = $needResolutionFallback || $assumedResolution;
+                $depDefault = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
+                $destDefault = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
+                $missedDefault = trim((string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? '')));
+
+                // Default origin for reroute: prefer missed-connection station, then TRIN 5 stranded station,
+                // then "ended at station" from TRIN 5, then departure station from ticket.
+                $originDefault = $missedDefault !== '' ? $missedDefault : '';
+                if ($originDefault === '') {
+                    $scs = trim((string)($form['stranded_current_station'] ?? ''));
+                    if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
+                    if ($scs !== '' && $scs !== 'unknown') { $originDefault = $scs; }
+                }
+                if ($originDefault === '') {
+                    // Prefer explicit handoff station from TRIN 5 (Art.20), otherwise fall back to legacy keys.
+                    $arrSt = trim((string)($form['handoff_station'] ?? ''));
+                    if ($arrSt === '') {
+                        $arrSt = trim((string)($form['a20_arrival_station'] ?? ''));
+                        if ($arrSt === 'other') { $arrSt = trim((string)($form['a20_arrival_station_other'] ?? '')); }
+                    }
+                    if ($arrSt !== '' && $arrSt !== 'unknown') { $originDefault = $arrSt; }
+                }
+                if ($originDefault === '') { $originDefault = $depDefault; }
+                $mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
             ?>
-            <?php if ($showResolutionFallback): ?>
-                <div class="mt8 card" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
-                    <div class="small"><strong>Hvor endte du?</strong></div>
-                    <div class="small muted mt4">Kun relevant hvis TRIN 5 ikke blev udfyldt. Bruges til at kunne beregne downgrade senere.</div>
-                    <?php if ($assumedResolution): ?>
-                        <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">Vi antog tidligere: <strong>Mit endelige bestemmelsessted</strong>. Ret hvis forkert.</div>
-                    <?php else: ?>
-                        <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">Hvis du ikke vaelger, antager vi <strong>Mit endelige bestemmelsessted</strong>.</div>
-                    <?php endif; ?>
-                    <div class="grid-2 mt8">
-                        <label>Slutpunkt
-                            <?php $rtDest = (string)($form['assistance_alt_to_destination'] ?? ''); ?>
-                            <select name="assistance_alt_to_destination">
-                                <option value="">Vaelg</option>
-                                <option value="nearest_station" <?= $rtDest==='nearest_station'?'selected':'' ?>>Naermeste station</option>
-                                <option value="other_departure_point" <?= $rtDest==='other_departure_point'?'selected':'' ?>>Et andet egnet afgangssted</option>
-                                <option value="final_destination" <?= $rtDest==='final_destination'?'selected':'' ?>>Mit endelige bestemmelsessted</option>
-                            </select>
+            <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
+                <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
+                <div class="small muted mt4">Klik for at hente forslag til oml&aelig;gning (TRANSIT). Vi sender start/destination til Google.</div>
+                <input type="hidden" name="maps_opt_in_trin6" value="0" />
+                <label class="mt8"><input type="checkbox" name="maps_opt_in_trin6" value="1" <?= $mapsOptIn ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
+
+                <div id="mapsPanelTrin6" class="mt8 <?= $mapsOptIn ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>" data-origin="<?= h($originDefault) ?>" data-destination="<?= h($destDefault) ?>">
+                    <div class="grid-2">
+                        <label class="station-autocomplete">Fra (station)
+                            <input type="text" id="mapsOriginTrin6" value="<?= h($originDefault) ?>" />
+                            <div class="station-suggest" id="mapsOriginSuggest" style="display:none;"></div>
+                            <div class="small muted mt4">Tip: Brug missed connection / din nuv&aelig;rende station som start.</div>
                         </label>
-                        <label data-show-if="assistance_alt_to_destination:nearest_station,other_departure_point">Hvilken station endte du ved?
-                            <?php $stVal = (string)($form['assistance_alt_arrival_station'] ?? ''); ?>
-                            <select name="assistance_alt_arrival_station">
-                                <option value="">Vaelg</option>
-                                <?php foreach ($stationOptions as $st): ?>
-                                    <option value="<?= h($st) ?>" <?= $stVal===$st?'selected':'' ?>><?= h($st) ?></option>
-                                <?php endforeach; ?>
-                                <option value="unknown" <?= $stVal==='unknown'?'selected':'' ?>>Ved ikke</option>
-                                <option value="other" <?= $stVal==='other'?'selected':'' ?>>Anden station</option>
-                            </select>
-                            <input type="text" name="assistance_alt_arrival_station_other" value="<?= h((string)($form['assistance_alt_arrival_station_other'] ?? '')) ?>" placeholder="Anden station" data-show-if="assistance_alt_arrival_station:other" />
+                        <label class="station-autocomplete">Til (destination)
+                            <input
+                                type="text"
+                                id="mapsDestTrin6"
+                                value="<?= h($destDefault) ?>"
+                                <?= ($isTicketless || $destDefault === '') ? '' : 'readonly' ?>
+                                placeholder="<?= h(($isTicketless || $destDefault === '') ? 'Soeg destination' : '') ?>"
+                            />
+                            <div class="station-suggest" id="mapsDestSuggest" style="display:none;"></div>
+                            <?php if ($isTicketless || $destDefault === ''): ?>
+                                <div class="small muted mt4">Angiv destination (ticketless/ukendt destination).</div>
+                            <?php else: ?>
+                                <div class="small muted mt4">Hentes fra billetten (destination).</div>
+                            <?php endif; ?>
                         </label>
                     </div>
+                    <div class="mt8" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="button" id="mapsFetchTrin6" <?= $mapsConfigured ? '' : 'disabled' ?>>Hent forslag</button>
+                        <a class="button" id="mapsOpenTrin6" target="_blank" rel="noopener">Aabn i Google Maps</a>
+                        <span class="small muted" id="mapsStatusTrin6"></span>
+                    </div>
+                    <div id="mapsRoutesTrin6" class="mt8"></div>
+                    <?php if (!$mapsConfigured): ?>
+                        <div class="small muted mt8">Bemaerk: Google Routes er ikke konfigureret (mangler server API key).</div>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            </div>
 
-            <div id="ri100PastWrap" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)">
-                <div>Fik du besked om mulighederne for oml&aelig;gning inden for 100 minutter? (Art. 18(3))
-                    <span class="small muted">Vi bruger planlagt afgang + f&oslash;rste oml&aelig;gnings-besked til at vurdere 100-min-reglen.</span>
+            <div id="trin6StationContext" class="mt8 card" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
+                <div class="small"><strong>Stationsvalg (oml&aelig;gning)</strong></div>
+                <div class="small muted mt4">TRIN 7 er uafhaengigt af TRIN 6. Brug evt. stationen fra Art.20 som udgangspunkt.</div>
+                <?php
+                    $handoff = trim((string)($form['handoff_station'] ?? ''));
+                    $fromVal = (string)($form['a18_from_station'] ?? '');
+                    $fromOther = (string)($form['a18_from_station_other'] ?? '');
+                    $fromPref = $fromVal !== '' ? $fromVal : ($handoff !== '' ? $handoff : '');
+                    $fromSel = $fromVal;
+                    if ($fromSel === '') {
+                        if ($fromPref !== '' && isset($stationSet[$fromPref])) { $fromSel = $fromPref; }
+                        elseif ($fromPref === 'unknown') { $fromSel = 'unknown'; }
+                        elseif ($fromPref !== '') { $fromSel = 'other'; if ($fromOther === '') { $fromOther = $fromPref; } }
+                    }
+                    if ($isTicketless && $fromSel !== 'unknown') {
+                        $fromSel = 'other';
+                        if ($fromOther === '' && $fromPref !== '' && $fromPref !== 'unknown') { $fromOther = $fromPref; }
+                    }
+                    $modeVal = (string)($form['a18_reroute_mode'] ?? '');
+                    $endVal = (string)($form['a18_reroute_endpoint'] ?? '');
+                    $endSt = (string)($form['a18_reroute_arrival_station'] ?? '');
+                    $endStOther = (string)($form['a18_reroute_arrival_station_other'] ?? '');
+                    // Suggest arrival station from TRIN 5 (handoff/arrival) when user hasn't provided anything yet.
+                    $endPref = '';
+                    if ($endSt === '' && $endStOther === '') {
+                        $a20Arr = trim((string)($form['a20_arrival_station'] ?? ''));
+                        if ($a20Arr === 'other') { $a20Arr = trim((string)($form['a20_arrival_station_other'] ?? '')); }
+                        if ($a20Arr !== '' && $a20Arr !== 'unknown') { $endPref = $a20Arr; }
+                        if ($endPref === '' && $handoff !== '' && $handoff !== 'unknown') { $endPref = $handoff; }
+                    }
+                    $endSuggested = ($endSt === '' && $endStOther === '' && $endPref !== '');
+                    $endSel = $endSt;
+                    if ($endSel === '' && $endPref !== '') {
+                        if (isset($stationSet[$endPref])) { $endSel = $endPref; }
+                        else { $endSel = 'other'; if ($endStOther === '') { $endStOther = $endPref; } }
+                    }
+                    if ($isTicketless && $endSel !== 'unknown') {
+                        if ($endSel !== 'other' && $endStOther === '') { $endStOther = $endSel; }
+                        $endSel = 'other';
+                    }
+                ?>
+                <div class="grid-1 mt8">
+                    <?php if ($isTicketless): ?>
+                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                            <select name="a18_from_station" style="display:none;">
+                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                            </select>
+                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                            <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_country" value="<?= h((string)($form['a18_from_station_other_country'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_type" value="<?= h((string)($form['a18_from_station_other_type'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_source" value="<?= h((string)($form['a18_from_station_other_source'] ?? '')) ?>" />
+                            <div class="station-suggest" data-for="a18_from_station_other" style="display:none;"></div>
+                            <?php if ($handoff !== '' && $fromVal === ''): ?>
+                                <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
+                            <?php endif; ?>
+                        </label>
+                    <?php else: ?>
+                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                            <select name="a18_from_station">
+                                <option value="">V&aelig;lg</option>
+                                <?php foreach ($stationOptions as $st): ?>
+                                    <option value="<?= h($st) ?>" <?= $fromSel===$st?'selected':'' ?>><?= h($st) ?></option>
+                                <?php endforeach; ?>
+                                <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                            </select>
+                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="Anden station" data-show-if="a18_from_station:other" />
+                            <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_country" value="<?= h((string)($form['a18_from_station_other_country'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_type" value="<?= h((string)($form['a18_from_station_other_type'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_from_station_other_source" value="<?= h((string)($form['a18_from_station_other_source'] ?? '')) ?>" />
+                            <div class="station-suggest" data-for="a18_from_station_other" style="display:none;"></div>
+                            <?php if ($handoff !== '' && $fromVal === ''): ?>
+                                <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
+                            <?php endif; ?>
+                        </label>
+                    <?php endif; ?>
                 </div>
-                <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
+
+                <div class="grid-2 mt8">
+                    <label>Transportform (oml&aelig;gning)
+                        <select name="a18_reroute_mode">
+                            <option value="">V&aelig;lg</option>
+                            <option value="rail" <?= $modeVal==='rail'?'selected':'' ?>>Tog</option>
+                            <option value="bus" <?= $modeVal==='bus'?'selected':'' ?>>Bus</option>
+                            <option value="taxi" <?= $modeVal==='taxi'?'selected':'' ?>>Taxi/minibus</option>
+                            <option value="other" <?= $modeVal==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+                    <label>Hvor endte oml&aelig;gningen?
+                        <select name="a18_reroute_endpoint">
+                            <option value="">V&aelig;lg</option>
+                            <option value="nearest_station" <?= $endVal==='nearest_station'?'selected':'' ?>>N&aelig;rmeste station</option>
+                            <option value="other_departure_point" <?= $endVal==='other_departure_point'?'selected':'' ?>>Et andet egnet afgangssted</option>
+                            <option value="final_destination" <?= $endVal==='final_destination'?'selected':'' ?>>Mit endelige bestemmelsessted</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="grid-1 mt8">
+                    <?php if ($isTicketless): ?>
+                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point">Hvilken station omlagde du til?
+                            <select name="a18_reroute_arrival_station" style="display:none;">
+                                <option value="other" <?= $endSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="unknown" <?= $endSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                            </select>
+                            <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_osm_id" value="<?= h((string)($form['a18_reroute_arrival_station_other_osm_id'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_lat" value="<?= h((string)($form['a18_reroute_arrival_station_other_lat'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_lon" value="<?= h((string)($form['a18_reroute_arrival_station_other_lon'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_country" value="<?= h((string)($form['a18_reroute_arrival_station_other_country'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_type" value="<?= h((string)($form['a18_reroute_arrival_station_other_type'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_source" value="<?= h((string)($form['a18_reroute_arrival_station_other_source'] ?? '')) ?>" />
+                            <div class="station-suggest" data-for="a18_reroute_arrival_station_other" style="display:none;"></div>
+                            <?php if ($endSuggested): ?>
+                                <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($endPref) ?></strong></div>
+                            <?php endif; ?>
+                        </label>
+                    <?php else: ?>
+                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point">Hvilken station omlagde du til?
+                            <select name="a18_reroute_arrival_station">
+                                <option value="">V&aelig;lg</option>
+                                <?php foreach ($stationOptions as $st): ?>
+                                    <option value="<?= h($st) ?>" <?= $endSel===$st?'selected':'' ?>><?= h($st) ?></option>
+                                <?php endforeach; ?>
+                                <option value="unknown" <?= $endSel==='unknown'?'selected':'' ?>>Ved ikke</option>
+                                <option value="other" <?= $endSel==='other'?'selected':'' ?>>Anden station</option>
+                            </select>
+                            <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="Anden station" data-show-if="a18_reroute_arrival_station:other" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_osm_id" value="<?= h((string)($form['a18_reroute_arrival_station_other_osm_id'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_lat" value="<?= h((string)($form['a18_reroute_arrival_station_other_lat'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_lon" value="<?= h((string)($form['a18_reroute_arrival_station_other_lon'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_country" value="<?= h((string)($form['a18_reroute_arrival_station_other_country'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_type" value="<?= h((string)($form['a18_reroute_arrival_station_other_type'] ?? '')) ?>" />
+                            <input type="hidden" name="a18_reroute_arrival_station_other_source" value="<?= h((string)($form['a18_reroute_arrival_station_other_source'] ?? '')) ?>" />
+                            <div class="station-suggest" data-for="a18_reroute_arrival_station_other" style="display:none;"></div>
+                            <?php if ($endSuggested): ?>
+                                <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($endPref) ?></strong></div>
+                            <?php endif; ?>
+                        </label>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <!-- OFF-variant additions: always simple branch without 100-min dependency -->
@@ -260,7 +633,7 @@ $preview = round($tp * $rate * $share, 2);
                 <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du k&oslash;bte selv ny billet, selvom oml&aelig;gning blev tilbudt inden for 100 min - udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig v&aelig;re mulig.</div>
             </div>
 
-            <div class="mt8" data-show-if="remedyChoice:reroute_later">
+            <div id="rerouteLaterOutcomePast" class="mt8" data-show-if="remedyChoice:reroute_later">
                 <div>Hvad skete der s&aring;?</div>
                 <?php $rlo = (string)($form['reroute_later_outcome'] ?? ''); ?>
                 <label class="ml8"><input type="radio" name="reroute_later_outcome" value="operator_offered" <?= $rlo==='operator_offered'?'checked':'' ?> /> Operat&oslash;ren tilb&oslash;d senere oml&aelig;gning</label>
@@ -288,7 +661,25 @@ $preview = round($tp * $rate * $share, 2);
                 <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
                 <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
+                <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="unknown" <?= $opOK==='unknown'?'checked':'' ?> /> Ved ikke</label>
             </fieldset>
+
+            <div id="ri100PastWrap" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)" style="display:none;">
+                <div>Fik du besked om mulighederne for oml&aelig;gning inden for 100 minutter? (Art. 18(3))
+                    <span class="small muted">Vi bruger planlagt afgang + f&oslash;rste oml&aelig;gnings-besked til at vurdere 100-min-reglen.</span>
+                </div>
+                <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
+                <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= $ri100==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                <div id="note100FallbackPast" class="small mt8" style="display:none; background:#e7f5ff; padding:8px; border-radius:6px;">
+                    <strong>100-minuttersfallback:</strong>
+                    <div class="muted">Hvis du ikke fik konkrete oml&aelig;gningsmuligheder inden for 100 minutter, kan du have ret til at k&oslash;be alternativ offentlig transport (tog/bus/turistbus) og f&aring; rimelige omkostninger refunderet.</div>
+                </div>
+                <div id="note100ManualPast" class="small mt8" style="display:none; background:#fff3cd; padding:8px; border-radius:6px;">
+                    <strong>Bem&aelig;rk:</strong>
+                    <div class="muted">Hvis oml&aelig;gningsmuligheder blev meddelt inden for 100 minutter, er selvk&oslash;b normalt ikke automatisk refunderbart efter Art. 18(3). Vi kan stadig vurdere sagen manuelt.</div>
+                </div>
+            </div>
 
             <div id="notesAreaPast" class="notes small">
                 <p id="noteApprovedPast" class="note success" style="display:none;">&#10003; Selvk&oslash;b er oplyst som godkendt af operat&oslash;ren.</p>
@@ -319,11 +710,11 @@ $preview = round($tp * $rate * $share, 2);
                         <?php $curCur = strtoupper(trim((string)($form['reroute_extra_costs_currency'] ?? ''))); ?>
                         <select name="reroute_extra_costs_currency">
                             <option value="">Auto</option>
-                            <?php foreach (['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
-                                <option value="<?= $cc ?>" <?= $curCur===$cc?'selected':'' ?>><?= $cc ?></option>
+                            <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+                              <option value="<?= $cc ?>" <?= $curCur===$cc?'selected':'' ?>><?= $cc ?></option>
                             <?php endforeach; ?>
-                            <?php if ($curCur !== '' && !in_array($curCur, ['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'], true)): ?>
-                                <option value="<?= h($curCur) ?>" selected><?= h($curCur) ?></option>
+                            <?php if ($curCur !== '' && !in_array($curCur, ['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'], true)): ?>
+                              <option value="<?= h($curCur) ?>" selected><?= h($curCur) ?></option>
                             <?php endif; ?>
                         </select>
                     </label>
@@ -341,13 +732,20 @@ $preview = round($tp * $rate * $share, 2);
 
 
 </div>
-<script>
-// TRIN 5 (Art. 18): klientlogik for valg og sektioner
-(function(){
-    function updateReveal() {
-        document.querySelectorAll('[data-show-if]').forEach(function(el) {
-            var spec = el.getAttribute('data-show-if'); if (!spec) return;
-            var parts = spec.split(':'); if (parts.length !== 2) return;
+ <script>
+ // TRIN 5 (Art. 18): klientlogik for valg og sektioner
+  (function(){
+     const stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
+     const stationCountryDefault = <?= json_encode((string)$stationCountryDefault, JSON_UNESCAPED_SLASHES) ?>;
+     // Embed as safe JS literal (avoid U+2028/U+2029 breaking scripts; also protect against script-tag injection)
+     const savedMapsTrin6 = <?= json_encode(
+         (is_array($mapsTrin6) ? $mapsTrin6 : null),
+         JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+     ) ?>;
+      function updateReveal() {
+          document.querySelectorAll('[data-show-if]').forEach(function(el) {
+              var spec = el.getAttribute('data-show-if'); if (!spec) return;
+              var parts = spec.split(':'); if (parts.length !== 2) return;
             var name = parts[0]; var valid = parts[1].split(',');
             var val = '';
             var checked = document.querySelector('input[name="' + name + '"]:checked');
@@ -383,72 +781,26 @@ $preview = round($tp * $rate * $share, 2);
     }
     function handleResets(target) {
         var name = target.name || '';
-        if (name === 'stranded_location') {
-            clearFields([
-                'blocked_train_alt_transport','assistance_alt_transport_type','assistance_alt_to_destination','assistance_alt_transport_offered_by',
-                'blocked_no_transport_action','blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency','blocked_self_paid_receipt',
-                'a20_3_solution_offered','a20_3_solution_type','a20_3_solution_offered_by','a20_3_no_solution_action',
-                'a20_3_self_arranged_type','a20_3_self_paid_amount','a20_3_self_paid_currency','a20_3_self_paid_receipt',
-                'journey_outcome','remedyChoice','trip_cancelled_return_to_origin','reroute_same_conditions_soonest','reroute_later_at_choice'
-            ]);
-            return;
-        }
-        if (name === 'blocked_train_alt_transport') {
-            var v = target.value || '';
-            if (v === 'yes') {
-                clearFields(['blocked_no_transport_action','blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency','blocked_self_paid_receipt']);
-            } else if (v === 'no') {
-                clearFields(['assistance_alt_transport_type','assistance_alt_to_destination','assistance_alt_transport_offered_by']);
-            } else {
-                clearFields([
-                    'blocked_no_transport_action','blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency','blocked_self_paid_receipt',
-                    'assistance_alt_transport_type','assistance_alt_to_destination','assistance_alt_transport_offered_by'
-                ]);
-            }
-            return;
-        }
-        if (name === 'blocked_no_transport_action') {
-            if ((target.value || '') !== 'self_arranged') {
-                clearFields(['blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency','blocked_self_paid_receipt']);
-            }
-            return;
-        }
-        if (name === 'a20_3_solution_offered') {
-            var v2 = target.value || '';
-            if (v2 === 'yes') {
-                clearFields(['a20_3_no_solution_action','a20_3_self_arranged_type','a20_3_self_paid_amount','a20_3_self_paid_currency','a20_3_self_paid_receipt']);
-            } else if (v2 === 'no') {
-                clearFields(['a20_3_solution_type','a20_3_solution_offered_by']);
-            } else {
-                clearFields([
-                    'a20_3_solution_type','a20_3_solution_offered_by',
-                    'a20_3_no_solution_action','a20_3_self_arranged_type','a20_3_self_paid_amount','a20_3_self_paid_currency','a20_3_self_paid_receipt'
-                ]);
-            }
-            return;
-        }
-        if (name === 'a20_3_no_solution_action') {
-            if ((target.value || '') !== 'self_arranged') {
-                clearFields(['a20_3_self_arranged_type','a20_3_self_paid_amount','a20_3_self_paid_currency','a20_3_self_paid_receipt']);
-            }
-            return;
-        }
-        if (name === 'journey_outcome') {
-            if (!(target.value || '')) {
-                clearFields(['remedyChoice','trip_cancelled_return_to_origin','reroute_same_conditions_soonest','reroute_later_at_choice']);
-            }
-        }
+        // TRIN 6 is independent of TRIN 5 (Art.20); avoid clearing Art.20 keys here.
         if (name === 'remedyChoice') {
-            if ((target.value || '') !== 'reroute_soonest') {
-                clearFields(['reroute_info_within_100min']);
-            }
+            // 100-min question is relevant for both reroute types (b and c); clear only when leaving reroute.
+            var vRem = (target.value || '');
+            if (!(vRem === 'reroute_soonest' || vRem === 'reroute_later')) { clearFields(['reroute_info_within_100min']); }
             if ((target.value || '') !== 'reroute_later') {
                 clearFields(['reroute_later_outcome','reroute_later_self_paid_amount','reroute_later_self_paid_currency','reroute_later_ticket_upload']);
+            }
+            if (vRem !== 'refund_return') {
+                clearFields(['a18_return_to_station','a18_return_to_station_other']);
             }
         }
         if (name === 'self_purchased_new_ticket') {
             if ((target.value || '') !== 'yes') {
-                clearFields(['self_purchase_reason']);
+                clearFields(['self_purchase_reason','self_purchase_approved_by_operator','reroute_info_within_100min']);
+            }
+        }
+        if (name === 'self_purchase_approved_by_operator') {
+            if ((target.value || '') === 'yes') {
+                clearFields(['reroute_info_within_100min']);
             }
         }
         if (name === 'reroute_later_outcome') {
@@ -466,15 +818,26 @@ $preview = round($tp * $rate * $share, 2);
                 clearFields(['return_to_origin_amount','return_to_origin_currency','return_to_origin_transport_type','return_to_origin_receipt']);
             }
         }
-        if (name === 'assistance_alt_to_destination') {
-            var v4 = target.value || '';
-            if (!(v4 === 'nearest_station' || v4 === 'other_departure_point')) {
-                clearFields(['assistance_alt_arrival_station','assistance_alt_arrival_station_other']);
+        // TRIN 6 station context (separate from TRIN 5 "Hvor endte du?")
+        if (name === 'a18_from_station') {
+            if ((target.value || '') !== 'other') {
+                clearFields(['a18_from_station_other']);
             }
         }
-        if (name === 'assistance_alt_arrival_station') {
+        if (name === 'a18_reroute_endpoint') {
+            var v4 = target.value || '';
+            if (!(v4 === 'nearest_station' || v4 === 'other_departure_point')) {
+                clearFields(['a18_reroute_arrival_station','a18_reroute_arrival_station_other']);
+            }
+        }
+        if (name === 'a18_reroute_arrival_station') {
             if ((target.value || '') !== 'other') {
-                clearFields(['assistance_alt_arrival_station_other']);
+                clearFields(['a18_reroute_arrival_station_other']);
+            }
+        }
+        if (name === 'a18_return_to_station') {
+            if ((target.value || '') !== 'other') {
+                clearFields(['a18_return_to_station_other']);
             }
         }
     }
@@ -483,80 +846,51 @@ $preview = round($tp * $rate * $share, 2);
             var els = document.querySelectorAll('input[name="'+name+'"]');
             els.forEach(function(r){ r.checked = (r.value === value); });
         }
-        var outcomeEl = document.getElementById('journey_outcome');
-        var outcomeHidden = document.querySelector('input[name="journey_outcome"]');
-        var outcome = outcomeEl ? (outcomeEl.value || '') : ((outcomeHidden && outcomeHidden.value) ? outcomeHidden.value : '');
-        var autoOutcome = '';
-        if (outcomeEl) {
-            var loc = (document.querySelector('input[name="stranded_location"]:checked') || {}).value || '';
-            var solOff = (document.querySelector('input[name="a20_3_solution_offered"]:checked') || {}).value || '';
-            var noAction = (document.querySelector('input[name="a20_3_no_solution_action"]:checked') || {}).value || '';
-            var blkAlt = (document.querySelector('input[name="blocked_train_alt_transport"]:checked') || {}).value || '';
-            var blkAction = (document.querySelector('input[name="blocked_no_transport_action"]:checked') || {}).value || '';
-            if (loc === 'station' && solOff === 'no' && noAction) {
-                if (noAction === 'self_arranged') autoOutcome = 'self_arranged';
-                else if (noAction === 'went_home') autoOutcome = 'returned_origin';
-                else if (noAction === 'abandoned') autoOutcome = 'abandoned';
-            }
-            if (loc === 'track' && blkAlt === 'no' && blkAction) {
-                if (blkAction === 'self_arranged') autoOutcome = 'self_arranged';
-                else if (['waited','walked_station','evacuated_later'].includes(blkAction)) autoOutcome = 'continued_trip';
-            }
-            var outcomeWrap = document.getElementById('journeyOutcomeWrap');
-            var outcomeHint = document.getElementById('journeyOutcomeHint');
-            if (outcomeWrap) {
-                var allowOutcome = (loc === 'track' || loc === 'station') && ((loc === 'track' && blkAlt) || (loc === 'station' && solOff));
-                if (!allowOutcome) {
-                    outcomeWrap.style.display = 'none';
-                    outcomeWrap.hidden = true;
-                    if (outcomeEl) outcomeEl.disabled = false;
-                    if (outcomeHint) outcomeHint.classList.add('hidden');
-                } else {
-                    outcomeWrap.style.display = '';
-                    outcomeWrap.hidden = false;
-                    if (autoOutcome) {
-                        if (outcomeEl && outcomeEl.value !== autoOutcome) {
-                            outcomeEl.value = autoOutcome;
-                            clearFields(['remedyChoice','trip_cancelled_return_to_origin','reroute_same_conditions_soonest','reroute_later_at_choice']);
-                        }
-                        if (outcomeEl) outcomeEl.disabled = true;
-                        if (outcomeHint) outcomeHint.classList.remove('hidden');
-                    } else {
-                        if (outcomeEl) outcomeEl.disabled = false;
-                        if (outcomeHint) outcomeHint.classList.add('hidden');
-                    }
-                }
-            }
-            if (autoOutcome) { outcome = autoOutcome; }
-        }
-        var outcomeChosen = outcome !== '';
         var remEl = document.querySelector('input[name="remedyChoice"]:checked');
         var val = remEl ? remEl.value : '';
-        var art18Flow = document.getElementById('art18Flow');
-        var art18Prompt = document.getElementById('art18OutcomePrompt');
-        if (art18Flow) { art18Flow.style.display = ''; }
-        if (art18Prompt) { art18Prompt.style.display = outcomeChosen ? 'none' : ''; }
-        var hintEl = document.getElementById('remedyHint');
-        var recommendMap = {
-            continued_trip: 'reroute_soonest',
-            returned_origin: 'refund_return',
-            abandoned: 'refund_return',
-            self_arranged: 'reroute_soonest'
-        };
-        var hintMap = {
-            continued_trip: 'Ud fra dit svar ser det ud til, at omlaegning er relevant.',
-            returned_origin: 'Ud fra dit svar ser det ud til, at refusion er relevant.',
-            abandoned: 'Ud fra dit svar ser det ud til, at refusion er relevant.',
-            self_arranged: 'Ud fra dit svar kan du muligvis kraeve dine rimelige udgifter refunderet. Husk kvitteringer.'
-        };
-        if (outcomeChosen) {
-            if (!val && recommendMap[outcome]) {
-                setRadio('remedyChoice', recommendMap[outcome]);
-                val = recommendMap[outcome];
+
+        // If TRIN 5 explicitly ended at final destination, TRIN 6 only applies when
+        // "Rejsen havde ikke laengere noget formaal?" is YES. Otherwise this step is skipped server-side.
+        var purposeEl = document.querySelector('input[name="journey_no_longer_purpose"]:checked');
+        var purpose = purposeEl ? (purposeEl.value || '') : '';
+        var isArrivedFinal = !!document.querySelector('input[name="journey_no_longer_purpose"]');
+        var core = document.getElementById('coreAfterArt18');
+        if (purpose) {
+            if (core) core.classList.toggle('hidden', purpose !== 'yes');
+            if (purpose !== 'yes') {
+                // Avoid stale answers if user flips to "no" and then back.
+                clearFields(['remedyChoice','trip_cancelled_return_to_origin','reroute_same_conditions_soonest','reroute_later_at_choice']);
             }
-            if (hintEl) { hintEl.textContent = hintMap[outcome] || ''; }
-        } else if (hintEl) {
+        }
+        if (isArrivedFinal && purpose === 'yes') {
+            // When the passenger reached the final destination, only refund/return is relevant if
+            // the journey no longer had purpose (Art.18(1)(a)).
+            setRadio('remedyChoice', 'refund_return');
+            val = 'refund_return';
+            document.querySelectorAll('input[name="remedyChoice"][value="reroute_soonest"], input[name="remedyChoice"][value="reroute_later"]').forEach(function(r){
+                r.disabled = true;
+                var lbl = r.closest('label');
+                if (lbl) lbl.classList.add('hidden');
+            });
+        }
+
+        // Keep hint empty in TRIN 6; we no longer infer remedy from a separate "journey outcome" question.
+        var hintEl = document.getElementById('remedyHint');
+        if (hintEl) {
             hintEl.textContent = '';
+            // UX hint: if the user self-paid for transport in TRIN 5 (station/no), that expense can be "return" vs "continue".
+            // We do not auto-change remedyChoice here; we only show a hint to avoid mis-bucketing.
+            var amt = (document.getElementById('trin5_a20_3_self_paid_amount') || {}).value || '';
+            var dir = (document.getElementById('trin5_a20_3_self_paid_direction') || {}).value || '';
+            if (amt && dir) {
+                if (dir === 'return' && (val === 'reroute_soonest' || val === 'reroute_later')) {
+                    hintEl.textContent = 'Note: Din selvbetalte transport i TRIN 5 ligner returtransport. Overvej om refusion/returtransport passer bedre.';
+                } else if (dir === 'continue' && val === 'refund_return') {
+                    hintEl.textContent = 'Note: Din selvbetalte transport i TRIN 5 ligner videre rejse mod destination. Overvej om omlaegning passer bedre.';
+                } else if (dir === 'hotel') {
+                    hintEl.textContent = 'Note: Din selvbetalte transport i TRIN 5 ligner hotel/overnatning. Det vurderes typisk under assistance (Trin 7).';
+                }
+            }
         }
         // Feature flags for Art. 18 sections
         var artFlags = (window.__artFlags && window.__artFlags.art) || {};
@@ -575,9 +909,9 @@ $preview = round($tp * $rate * $share, 2);
             if (tcr) tcr.value = (val === 'refund_return') ? 'yes' : '';
             if (rsc) rsc.value = (val === 'reroute_soonest') ? 'yes' : '';
             if (rlc) rlc.value = (val === 'reroute_later') ? 'yes' : '';
-            // 100-min kun for reroute_soonest
             var riWrap = document.getElementById('ri100' + suf + 'Wrap');
-            if (riWrap) { riWrap.style.display = (a183On && val === 'reroute_soonest') ? '' : 'none'; }
+            // Progressive gating controls 100-min visibility later; default to hidden here to avoid stale overlap.
+            if (riWrap) { riWrap.style.display = 'none'; }
         });
         // Detail toggles
         var recChecked = document.querySelector('input[name="reroute_extra_costs"]:checked');
@@ -605,6 +939,9 @@ $preview = round($tp * $rate * $share, 2);
         var selfBuy = selfBuyEl ? selfBuyEl.value : '';
         var opApprEl = document.querySelector('input[name="self_purchase_approved_by_operator"]:checked');
     var opAppr = opApprEl ? opApprEl.value : '';
+    var riWrapPast = document.getElementById('ri100PastWrap');
+    var note100FallbackPast = document.getElementById('note100FallbackPast');
+    var note100ManualPast = document.getElementById('note100ManualPast');
     var notePast = document.getElementById('selfBuyNotePast');
     var noteNow = document.getElementById('selfBuyNoteNow');
     var apprPast = document.getElementById('opApprovalWrapPast');
@@ -615,9 +952,23 @@ var returnPast = document.getElementById('returnExpensePast');
 var returnNow = document.getElementById('returnExpenseNow');
 var returnFieldsPast = document.getElementById('returnExpenseFieldsPast');
 var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
-var advPast = document.getElementById('advPast');
-var advNow = document.getElementById('advNow');
-var live = document.getElementById('rerouteLive');
+ var advPast = document.getElementById('advPast');
+ var advNow = document.getElementById('advNow');
+ var live = document.getElementById('rerouteLive');
+ 
+        function showBlock(el){
+            if (!el) return;
+            // Some blocks are server-rendered with class="hidden" and/or the HTML `hidden` attribute.
+            // When we reveal progressively on the client, we must remove both, otherwise the block stays invisible.
+            el.classList.remove('hidden');
+            el.hidden = false;
+            el.style.display = '';
+        }
+        function hideBlock(el){
+            if (!el) return;
+            el.style.display = 'none';
+            el.hidden = true;
+        }
 
         function disableGroup(name, disabled) {
             document.querySelectorAll('input[name="'+name+'"]').forEach(function(r){
@@ -633,33 +984,99 @@ var live = document.getElementById('rerouteLive');
             else { el.classList.remove('disabled-block'); el.removeAttribute('aria-disabled'); }
         }
 
-        // Progressive visibility
-        // Step 1 (only when 18(3) is ON) -> Step 2: show Step 2 only when answered OR 18(3) OFF
-        var step1Answered = a183On ? ((val === 'reroute_later') ? true : !!ri100) : true;
+        // Progressive ask-order: show one question at a time (do not clear previous answers).
         var step2Past = document.getElementById('step2Past');
         var step2Now = document.getElementById('step2Now');
+        var laterOutcomePast = document.getElementById('rerouteLaterOutcomePast');
         var advBox = document.getElementById('advToggle');
         var advOn = !!(advBox && advBox.checked);
-        if (step2Past) step2Past.style.display = (step1Answered || (advPast && advPast.open) || advOn) ? '' : 'none';
-        if (step2Now) step2Now.style.display = (step1Answered || (advNow && advNow.open) || advOn) ? '' : 'none';
+        var laterTicket = document.getElementById('rerouteLaterTicketUpload');
+        // Hide everything by default, then progressively reveal.
+        hideBlock(step2Past);
+        hideBlock(step2Now);
+        hideBlock(laterOutcomePast);
+        hideBlock(laterTicket);
+        hideBlock(apprPast);
+        hideBlock(apprNow);
+        hideBlock(riWrapPast);
+        hideBlock(recBlockPast);
+        hideBlock(recBlockNow);
+        if (dgcBlockPast) dgcBlockPast.style.display = ((advPast && advPast.open) || advOn) ? '' : 'none';
+        if (dgcBlockNow) dgcBlockNow.style.display = ((advNow && advNow.open) || advOn) ? '' : 'none';
+        if (live) { live.textContent = 'TRIN 7: Art.18(3) flow aktiv'; }
 
-        // Step 2 -> Branch: hide detail blocks until Step 2 is answered (only explicit yes/no)
-        var step2Answered = (selfBuy === 'yes' || selfBuy === 'no');
-        if ((advPast && advPast.open) || advOn) {
-            if (recBlockPast && a182On) recBlockPast.style.display = '';
-            if (dgcBlockPast) dgcBlockPast.style.display = '';
+        // If not in reroute/refund, nothing to show.
+        var isReroute = (val === 'reroute_soonest' || val === 'reroute_later');
+        if (!isReroute) {
+            // Refund flow is handled by returnExpensePast toggles above.
+            if (live) { live.textContent = 'TRIN 7: ikke-omlaegning'; }
         } else {
-            if (recBlockPast && a182On) recBlockPast.style.display = step2Answered ? '' : 'none';
-            if (dgcBlockPast) dgcBlockPast.style.display = step2Answered ? '' : 'none';
+            // Progressive reveal for reroute paths.
+            // 1) Ask whether user self-purchased a new ticket (Art.18(3) trigger).
+            if (a183On) showBlock(step2Past);
+            if (!a183On) {
+                // When Art.18(3) is OFF, we still collect a simple offer indicator, but only after reroute is chosen.
+                var offProvPast = document.getElementById('offerProvidedWrapPast');
+                if (offProvPast) offProvPast.hidden = false;
+                if (live) { live.textContent = 'TRIN 7: afventer omlaegningstilbud'; }
+            } else if (!selfBuy) {
+                if (live) { live.textContent = 'TRIN 7: afventer selvkoeb'; }
+            } else {
+                // For reroute_later, keep the extra outcome question, but only after self-purchase reason is selected (single-question feel).
+                var sprSel = document.querySelector('select[name=\"self_purchase_reason\"]');
+                var spr = sprSel ? (sprSel.value || '') : '';
+                var stop = false;
+                if (val === 'reroute_later') {
+                    if (!spr && selfBuy === 'yes') {
+                        if (live) { live.textContent = 'TRIN 7: afventer hvorfor du koebte selv'; }
+                        // stop here (only show reason select)
+                        // (reason select is inside step2Past and already gated by data-show-if)
+                        stop = true;
+                    }
+                    if (!stop && selfBuy === 'yes') showBlock(laterOutcomePast);
+                    var rloEl = document.querySelector('input[name=\"reroute_later_outcome\"]:checked');
+                    var rlo = rloEl ? (rloEl.value || '') : '';
+                    if (!stop && selfBuy === 'yes' && !rlo) {
+                        if (live) { live.textContent = 'TRIN 7: afventer udfald (senere)'; }
+                        stop = true;
+                    }
+                    if (!stop && laterTicket) {
+                        if (selfBuy === 'yes' && rlo === 'self_bought') showBlock(laterTicket);
+                    }
+                }
+
+                // 2) Ask operator approval when self purchase = yes (preapproval pathway).
+                if (!stop && selfBuy === 'yes') {
+                    showBlock(apprPast);
+                    if (!opAppr) {
+                        if (live) { live.textContent = 'TRIN 7: afventer godkendelse'; }
+                        stop = true;
+                    }
+                }
+
+                // 3) Ask 100-min only when self purchase=yes and operator not preapproved.
+                var needRi = a183On && isReroute && (selfBuy === 'yes') && (opAppr !== 'yes');
+                if (!stop && needRi) {
+                    showBlock(riWrapPast);
+                    if (!ri100) {
+                        if (live) { live.textContent = 'TRIN 7: afventer 100-min'; }
+                        stop = true;
+                    }
+                }
+
+                // 4) Extra costs question comes last (Art.18(2)).
+                if (!stop) {
+                    if (a182On) showBlock(recBlockPast);
+                    if (a182On) showBlock(recBlockNow);
+                }
+            }
         }
-        if ((advNow && advNow.open) || advOn) {
-            if (recBlockNow && a182On) recBlockNow.style.display = '';
-            if (dgcBlockNow) dgcBlockNow.style.display = 'none';
-        } else {
-            if (recBlockNow && a182On) recBlockNow.style.display = step2Answered ? '' : 'none';
-            if (dgcBlockNow) dgcBlockNow.style.display = 'none';
+        if (note100FallbackPast) note100FallbackPast.style.display = 'none';
+        if (note100ManualPast) note100ManualPast.style.display = 'none';
+        if (a183On && (val === 'reroute_soonest' || val === 'reroute_later') && (selfBuy === 'yes') && (opAppr !== 'yes')) {
+            if (ri100 === 'no' && note100FallbackPast) note100FallbackPast.style.display = '';
+            if (ri100 === 'yes' && note100ManualPast) note100ManualPast.style.display = '';
         }
-        if (live) { live.textContent = step2Answered ? 'Trin 2 besvaret - gren valgt' : (step1Answered ? 'Trin 1 besvaret - vis trin 2' : 'Trin 1 endnu ikke besvaret'); }
 
         // Reset any prior locks (ensures toggling between scenarios clears stale states)
         disableGroup('reroute_extra_costs', false);
@@ -669,9 +1086,9 @@ var live = document.getElementById('rerouteLive');
         setBlockDisabled('dgcBlockPast', false);
         setBlockDisabled('dgcBlockNow', false);
 
-        // Reset approval UI first
-        if (apprPast) apprPast.hidden = (selfBuy !== 'yes');
-        if (apprNow) apprNow.hidden = (selfBuy !== 'yes');
+        // Reset approval UI first (keep class/hidden attribute in sync with progressive reveal)
+        if (selfBuy === 'yes') { showBlock(apprPast); showBlock(apprNow); }
+        else { hideBlock(apprPast); hideBlock(apprNow); }
         if (noteApprovedPast) noteApprovedPast.style.display='none';
         if (noteApprovedNow) noteApprovedNow.style.display='none';
         // Return-to-origin expense fields toggle (shared radio group)
@@ -681,23 +1098,14 @@ var live = document.getElementById('rerouteLive');
         var showRt = (rtVal === 'yes');
         if (rtPastFields) { rtPastFields.style.display = showRt ? '' : 'none'; }
         if (rtNowFields) { rtNowFields.style.display = showRt ? '' : 'none'; }
-        // Attach live listener so toggle happens immediately on click
-        var rtRadios = document.querySelectorAll('input[name="return_to_origin_expense"]');
-        rtRadios.forEach(function(r){
-          r.addEventListener('change', function(){
-            var val = this.value || '';
-            var show = (val === 'yes');
-            if (rtPastFields) rtPastFields.style.display = show ? '' : 'none';
-            if (rtNowFields) rtNowFields.style.display = show ? '' : 'none';
-          });
-        });
 
         // Scenario logic differs when Art. 18(3) OFF:
         // OFF: extra costs only if selfBuy==yes AND operator approved (opAppr==yes). Downgrade always shown for reroute.
         // ON: retain legacy 100-min branching (C/A/B cases).
+        var isReroute = (val === 'reroute_soonest' || val === 'reroute_later');
         if (a183On) {
             // Scenario C: offered within 100 AND self purchased
-            if (ri100 === 'yes' && selfBuy === 'yes') {
+            if (isReroute && ri100 === 'yes' && selfBuy === 'yes') {
                 if (opAppr === 'yes') {
                     // Operator approved self-purchase: allow extra costs to be claimed; keep downgrade off
                     if (!recVal || recVal === 'unknown') { setRadio('reroute_extra_costs', 'yes'); }
@@ -729,7 +1137,7 @@ var live = document.getElementById('rerouteLive');
                 }
             }
             // Scenario A: NOT offered within 100 AND self purchased -> extra costs allowed; hide downgrade
-            else if ((ri100 === 'no' || ri100 === 'unknown') && selfBuy === 'yes') {
+            else if (isReroute && (ri100 === 'no') && selfBuy === 'yes') {
             setRadio('reroute_extra_costs', 'yes');
             disableGroup('reroute_extra_costs', false); // user can edit amount
             setBlockDisabled('recBlockPast', false);
@@ -744,7 +1152,7 @@ var live = document.getElementById('rerouteLive');
             if (noteNow) noteNow.style.display = 'none';
             }
             // Scenario B: offered within 100 AND did not self purchase -> default no extra costs; show downgrade
-            else if (ri100 === 'yes' && (selfBuy === 'no')) {
+            else if (isReroute && ri100 === 'yes' && (selfBuy === 'no')) {
             // Default only if user hasn't chosen yet (or chose 'unknown'); don't override an explicit Yes/No selection
             if (!recVal || recVal === 'unknown') {
                 setRadio('reroute_extra_costs', 'no');
@@ -889,6 +1297,506 @@ var live = document.getElementById('rerouteLive');
             updOne('Now');
         } catch(e) { /* no-op */ }
     }
+
+    function mapsInitTrin6(initialPayload){
+        // There is both a hidden input (value=0) and a checkbox (value=1).
+        // Bind UI behavior to the checkbox, not the hidden field.
+        var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin6"]');
+        var panel = document.getElementById('mapsPanelTrin6');
+        var originEl = document.getElementById('mapsOriginTrin6');
+        var destEl = document.getElementById('mapsDestTrin6');
+        var btn = document.getElementById('mapsFetchTrin6');
+        var open = document.getElementById('mapsOpenTrin6');
+        var out = document.getElementById('mapsRoutesTrin6');
+        var status = document.getElementById('mapsStatusTrin6');
+        if (!cb || !panel || !originEl || !destEl || !btn || !open || !out) { return; }
+
+        function getOrigin(){ return (originEl.value || '').trim(); }
+        function getDest(){ return (destEl.value || '').trim(); }
+        function setOpenLink(){
+            var o = encodeURIComponent(getOrigin());
+            var d = encodeURIComponent(getDest());
+            open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+        }
+        function updatePanel(){
+            panel.classList.toggle('hidden', !cb.checked);
+            panel.hidden = !cb.checked;
+            setOpenLink();
+        }
+        function renderRoutes(payload, opts){
+            opts = opts || {};
+            out.innerHTML = '';
+            if (!payload || !payload.ok) {
+                var msg = (payload && payload.error) ? String(payload.error) : 'Kunne ikke hente ruter.';
+                // Make common Google Routes errors more actionable for noobs.
+                if (/HTTP\\s*403/i.test(msg) || /IP address restriction/i.test(msg) || /violates this restriction/i.test(msg)) {
+                    msg = 'Google Routes fejler (HTTP 403): Din API key er IP-restricted. Whitelist serverens IP i Google Cloud Console (eller fjern IP restriction), og sikre at Routes API er enabled.';
+                }
+                out.innerHTML = '<div class="small muted">' + ('' + msg).replace(/</g,'&lt;') + '</div>';
+                return;
+            }
+            var routes = Array.isArray(payload.routes) ? payload.routes.slice() : [];
+            if (!routes.length) {
+                out.innerHTML = '<div class="small muted">Ingen forslag fundet.</div>';
+                return;
+            }
+
+            function pad2(n){ n = String(n||''); return n.length === 1 ? ('0' + n) : n; }
+            function hhmm(ts){
+                if (!ts) return '';
+                var m = /T(\\d{2}:\\d{2})/.exec(ts.toString());
+                return m ? m[1] : '';
+            }
+            function fmtDurationS(sec){
+                sec = parseInt(sec || 0, 10);
+                if (!isFinite(sec) || sec <= 0) return '';
+                var min = Math.round(sec / 60);
+                var h = Math.floor(min / 60);
+                var m = min % 60;
+                if (h <= 0) return min + ' min';
+                return h + 't ' + pad2(m) + 'm';
+            }
+            function fmtKm(m){
+                m = parseInt(m || 0, 10);
+                if (!isFinite(m) || m <= 0) return '';
+                var km = Math.round((m / 1000) * 10) / 10;
+                return ('' + km).replace('.', ',') + ' km';
+            }
+            function vehicleLabel(v){
+                v = (v || '').toString().toUpperCase();
+                if (v.indexOf('TRAIN') >= 0 || v === 'RAIL') return 'Tog';
+                if (v.indexOf('BUS') >= 0) return 'Bus';
+                if (v.indexOf('SUBWAY') >= 0) return 'Metro';
+                if (v.indexOf('LIGHT_RAIL') >= 0 || v.indexOf('TRAM') >= 0) return 'Letbane';
+                if (v.indexOf('FERRY') >= 0) return 'Faerge';
+                return v || 'Transit';
+            }
+            function vehicleIcon(v){
+                v = (v || '').toString().toUpperCase();
+                // Keep source ASCII-only; use unicode escapes for icons.
+                if (v.indexOf('TRAIN') >= 0 || v === 'RAIL') return '\\uD83D\\uDE86';      // ðŸš†
+                if (v.indexOf('BUS') >= 0) return '\\uD83D\\uDE8C';                       // ðŸšŒ
+                if (v.indexOf('SUBWAY') >= 0) return '\\uD83D\\uDE87';                    // ðŸš‡
+                if (v.indexOf('LIGHT_RAIL') >= 0 || v.indexOf('TRAM') >= 0) return '\\uD83D\\uDE8A'; // ðŸšŠ
+                if (v.indexOf('FERRY') >= 0) return '\\u26F4';                            // â›´
+                return '\\uD83D\\uDE8D';                                                  // ðŸš
+            }
+            function routeTimes(r){
+                var segs = Array.isArray(r.segments) ? r.segments : [];
+                if (!segs.length) return { start:'', end:'' };
+                var start = hhmm(segs[0].dep_time);
+                var end = hhmm(segs[segs.length - 1].arr_time);
+                return { start:start, end:end };
+            }
+            function routeKey(r){
+                var segs = Array.isArray(r.segments) ? r.segments : [];
+                var segKey = segs.map(function(s){
+                    return [
+                        (s.vehicle||''), (s.line||''), (s.from||''), (s.to||''),
+                        hhmm(s.dep_time), hhmm(s.arr_time)
+                    ].join('~');
+                }).join('|');
+                var lines = Array.isArray(r.transit_lines) ? r.transit_lines.join(',') : '';
+                return [r.duration_s||'', r.distance_m||'', r.transfers||'', lines, segKey].join('||');
+            }
+            function buildMapsDirLink(origin, dest){
+                var o = encodeURIComponent((origin || '').trim());
+                var d = encodeURIComponent((dest || '').trim());
+                return 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+            }
+
+            // Dedup + sort by duration (fastest first)
+            var seen = new Set();
+            var uniq = [];
+            routes.forEach(function(r){
+                if (!r || typeof r !== 'object') return;
+                var k = routeKey(r);
+                if (seen.has(k)) return;
+                seen.add(k);
+                uniq.push(r);
+            });
+            uniq.sort(function(a,b){
+                return (parseInt(a.duration_s||0,10) || 0) - (parseInt(b.duration_s||0,10) || 0);
+            });
+
+            var titleText = (opts && opts.title) ? String(opts.title) : '';
+            if (titleText) {
+                var title = document.createElement('div');
+                title.className = 'maps-routes-title small muted';
+                title.textContent = titleText;
+                out.appendChild(title);
+            }
+
+            uniq.forEach(function(r, idx){
+                var box = document.createElement('div');
+                box.className = 'maps-route';
+
+                var t = routeTimes(r);
+                var durTxt = fmtDurationS(r.duration_s);
+                var kmTxt = fmtKm(r.distance_m);
+                var tr = parseInt(r.transfers || 0, 10) || 0;
+                var transferTxt = (tr > 0) ? (tr + ' skift') : 'Direkte';
+
+                var head = document.createElement('div');
+                head.className = 'maps-route-head';
+
+                var time = document.createElement('div');
+                time.className = 'maps-route-time';
+                time.textContent = (t.start && t.end) ? (t.start + 'â€“' + t.end) : (r.summary || ('Rute ' + (idx+1)));
+                head.appendChild(time);
+
+                var meta = document.createElement('div');
+                meta.className = 'maps-route-meta';
+                meta.textContent = [durTxt, kmTxt, transferTxt].filter(Boolean).join(' â€¢ ');
+                head.appendChild(meta);
+
+                box.appendChild(head);
+
+                var chips = Array.isArray(r.transit_lines) ? r.transit_lines : [];
+                if (chips.length) {
+                    var chipWrap = document.createElement('div');
+                    chipWrap.className = 'maps-chips';
+                    chips.slice(0, 8).forEach(function(c){
+                        var sp = document.createElement('span');
+                        sp.className = 'maps-chip';
+                        sp.textContent = String(c);
+                        chipWrap.appendChild(sp);
+                    });
+                    box.appendChild(chipWrap);
+                }
+
+                var segs = Array.isArray(r.segments) ? r.segments : [];
+                if (segs.length) {
+                    var ul = document.createElement('ul');
+                    ul.className = 'maps-segs small muted';
+                    segs.forEach(function(s){
+                        s = s || {};
+                        var li = document.createElement('li');
+                        var icon = vehicleIcon(s.vehicle);
+                        var mode = vehicleLabel(s.vehicle);
+                        var line = (s.line || '').toString().trim();
+                        var from = (s.from || '').toString().trim();
+                        var to = (s.to || '').toString().trim();
+                        var dep = hhmm(s.dep_time);
+                        var arr = hhmm(s.arr_time);
+                        var headTxt = (mode + (line ? (' ' + line) : '')).trim();
+                        var parts = [];
+                        if (from || to) parts.push((from || '?') + ' -> ' + (to || '?'));
+                        if (dep || arr) parts.push((dep || '') + (arr ? ('-' + arr) : ''));
+                        li.textContent = icon + ' ' + headTxt + (parts.length ? (': ' + parts.join(' / ')) : '');
+                        ul.appendChild(li);
+                    });
+                    box.appendChild(ul);
+                }
+
+                var actions = document.createElement('div');
+                actions.className = 'maps-actions';
+
+                var segOrigin = (segs[0] && segs[0].from) ? String(segs[0].from) : getOrigin();
+                var segDest = (segs[segs.length - 1] && segs[segs.length - 1].to) ? String(segs[segs.length - 1].to) : getDest();
+                var a = document.createElement('a');
+                a.className = 'button button-outline';
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.href = buildMapsDirLink(segOrigin, segDest);
+                a.textContent = 'Aabn i Google Maps (detaljer)';
+                actions.appendChild(a);
+
+                box.appendChild(actions);
+                out.appendChild(box);
+            });
+        }
+
+        cb.addEventListener('change', updatePanel);
+        originEl.addEventListener('input', setOpenLink);
+        destEl.addEventListener('input', setOpenLink);
+
+        btn.addEventListener('click', async function(){
+            var origin = getOrigin();
+            var dest = getDest();
+            setOpenLink();
+            if (!origin || !dest) {
+                if (status) status.textContent = 'Angiv start og destination foerst.';
+                return;
+            }
+            if (status) status.textContent = 'Henter...';
+            try {
+                var csrf = (document.querySelector('input[name="_csrfToken"]') || {}).value || '';
+                var res = await fetch(panel.getAttribute('data-endpoint'), {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/x-www-form-urlencoded', ...(csrf ? {'X-CSRF-Token': csrf} : {})},
+                    body: new URLSearchParams({
+                        context: 'trin6',
+                        maps_opt_in_trin6: '1',
+                        origin: origin,
+                        destination: dest
+                    })
+                });
+                var j = await res.json();
+                renderRoutes(j, { title: 'Forslag (Google Routes)' });
+                if (status) status.textContent = j && j.ok ? 'OK' : 'Fejl';
+            } catch(e) {
+                if (status) status.textContent = 'Fejl';
+                renderRoutes({ok:false, error: (e && e.message) ? e.message : 'Fejl'});
+            }
+        });
+
+        updatePanel();
+        setOpenLink();
+        // Render saved session routes on load (if any) using the richer UI.
+        try {
+            if (initialPayload && initialPayload.ok && Array.isArray(initialPayload.routes) && initialPayload.routes.length) {
+                renderRoutes(initialPayload, { title: 'Seneste forslag (gemt i session)' });
+            }
+        } catch(e) { /* ignore */ }
+    }
+
+    // Optional: offline station autocomplete for the MAP inputs too (so ticketless works without Google Places).
+    function initMapsStationAutocompleteTrin6(){
+        if (!stationsSearchUrl) return;
+        var originEl = document.getElementById('mapsOriginTrin6');
+        var destEl = document.getElementById('mapsDestTrin6');
+        var originBox = document.getElementById('mapsOriginSuggest');
+        var destBox = document.getElementById('mapsDestSuggest');
+        if (!originEl || !destEl || !originBox || !destBox) return;
+
+        function niceType(t){
+            var s = (t || '').toString().toLowerCase();
+            if (s === 'station') return 'Station';
+            if (s === 'halt') return 'Stopested';
+            return s;
+        }
+
+        function setup(input, box){
+            var timer = null;
+            var ctrl = null;
+
+            function hide(){
+                box.style.display = 'none';
+                box.innerHTML = '';
+            }
+
+            function render(stations){
+                box.innerHTML = '';
+                if (!stations || !stations.length) { hide(); return; }
+
+                // Prefer "station" results to reduce noise for city-level queries.
+                var stStations = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() === 'station'; });
+                var stOthers = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() !== 'station'; });
+                var shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
+
+                shown.slice(0, 10).forEach(function(st){
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    var nm = (st && st.name) ? String(st.name) : '';
+                    var cc = (st && st.country) ? String(st.country) : '';
+                    var tp = (st && st.type) ? String(st.type) : '';
+                    btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+                    if (cc || tp) {
+                        var meta = document.createElement('div');
+                        meta.className = 'muted';
+                        meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' \\u00b7 ');
+                        btn.appendChild(document.createElement('br'));
+                        btn.appendChild(meta);
+                    }
+                    btn.addEventListener('click', function(){
+                        if (nm) input.value = nm;
+                        hide();
+                        input.dispatchEvent(new Event('input', { bubbles:true }));
+                    });
+                    box.appendChild(btn);
+                });
+                box.style.display = 'block';
+            }
+
+            async function fetchStations(){
+                var q = (input.value || '').trim();
+                if (q.length < 2) { hide(); return; }
+                var cc = (stationCountryDefault || '').trim().toUpperCase();
+                if (!cc && q.length < 4) { hide(); return; }
+
+                var buildUrl = function(country){
+                    var u = new URL(stationsSearchUrl, window.location.origin);
+                    u.searchParams.set('q', q);
+                    if (country) u.searchParams.set('country', country);
+                    u.searchParams.set('limit', '10');
+                    return u.toString();
+                };
+
+                if (ctrl) { try { ctrl.abort(); } catch(e) {} }
+                ctrl = new AbortController();
+                try {
+                    var res = await fetch(buildUrl(cc), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) { hide(); return; }
+                    var js = await res.json();
+                    var stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                    if ((!stations || stations.length === 0) && cc) {
+                        res = await fetch(buildUrl(''), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                        if (res.ok) {
+                            js = await res.json();
+                            stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                        }
+                    }
+                    render(stations);
+                } catch(e) {
+                    // ignore abort/network
+                }
+            }
+
+            input.addEventListener('input', function(){
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(fetchStations, 200);
+            });
+            input.addEventListener('focus', function(){
+                if (box.innerHTML.trim() !== '') { box.style.display = 'block'; }
+            });
+            input.addEventListener('blur', function(){ setTimeout(hide, 180); });
+            box.addEventListener('mousedown', function(e){ e.preventDefault(); });
+        }
+
+        setup(originEl, originBox);
+        setup(destEl, destBox);
+    }
+
+    // Reuse TRIN 2 station autocomplete: only active when the related <select> is set to "other".
+	    function initStationAutocomplete(){
+	        if (!stationsSearchUrl) return;
+	        document.querySelectorAll('.station-autocomplete').forEach(function(lbl){
+            var selectName = lbl.getAttribute('data-station-select') || '';
+            var otherName = lbl.getAttribute('data-station-other') || '';
+            if (!selectName || !otherName) return;
+            var sel = lbl.querySelector('select[name="' + selectName + '"]');
+            var input = lbl.querySelector('input[name="' + otherName + '"]');
+            var box = lbl.querySelector('.station-suggest[data-for="' + otherName + '"]');
+            if (!sel || !input || !box) return;
+
+	            var timer = null;
+	            var ctrl = null;
+	            function niceType(t){
+	                var s = (t || '').toString().toLowerCase();
+	                if (s === 'station') return 'Station';
+	                if (s === 'halt') return 'Stopested';
+	                return s;
+	            }
+	            function metaInput(suffix){
+	                return lbl.querySelector('input[name="' + otherName + '_' + suffix + '"]');
+	            }
+	            function clearMeta(){
+	                ['osm_id','lat','lon','country','type','source'].forEach(function(s){
+	                    var el = metaInput(s);
+	                    if (el) el.value = '';
+	                });
+	            }
+	            function setMeta(st){
+	                if (!st) { clearMeta(); return; }
+	                var v = function(k){
+	                    return (st && st[k] !== undefined && st[k] !== null) ? String(st[k]) : '';
+	                };
+	                var m = {
+	                    osm_id: v('osm_id'),
+	                    lat: v('lat'),
+	                    lon: v('lon'),
+	                    country: v('country'),
+	                    type: v('type'),
+	                    source: v('source')
+	                };
+	                Object.keys(m).forEach(function(k){
+	                    var el = metaInput(k);
+	                    if (el) el.value = m[k];
+	                });
+	            }
+	            function hide(){
+	                box.style.display = 'none';
+	                box.innerHTML = '';
+	            }
+	            function render(stations){
+	                box.innerHTML = '';
+	                if (!stations || !stations.length) { hide(); return; }
+
+	                // Prefer "station" results to reduce noise for city-level queries.
+	                var stStations = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() === 'station'; });
+	                var stOthers = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() !== 'station'; });
+	                var shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
+
+	                shown.slice(0, 10).forEach(function(st){
+	                    var btn = document.createElement('button');
+	                    btn.type = 'button';
+	                    var nm = (st && st.name) ? String(st.name) : '';
+	                    var cc = (st && st.country) ? String(st.country) : '';
+	                    var tp = (st && st.type) ? String(st.type) : '';
+	                    btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+	                    if (cc || tp) {
+	                        var meta = document.createElement('div');
+	                        meta.className = 'muted';
+	                        meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' \u00b7 ');
+	                        btn.appendChild(document.createElement('br'));
+	                        btn.appendChild(meta);
+	                    }
+	                    btn.addEventListener('click', function(){
+	                        if (nm) input.value = nm;
+	                        setMeta(st);
+	                        hide();
+	                    });
+	                    box.appendChild(btn);
+	                });
+	                box.style.display = 'block';
+	            }
+            async function fetchStations(){
+                if ((sel.value || '') !== 'other') { hide(); return; }
+                var q = (input.value || '').trim();
+                if (q.length < 2) { hide(); return; }
+	                var cc = (stationCountryDefault || '').trim().toUpperCase();
+	                if (!cc && q.length < 4) { hide(); return; }
+
+	                // Two-phase lookup:
+	                // 1) Try with country filter (fast, reduces noise)
+	                // 2) If empty and we had a country, retry without country (international routes)
+	                var buildUrl = function(country){
+	                    var u = new URL(stationsSearchUrl, window.location.origin);
+	                    u.searchParams.set('q', q);
+	                    if (country) u.searchParams.set('country', country);
+	                    u.searchParams.set('limit', '10');
+	                    return u.toString();
+	                };
+
+                if (ctrl) { try { ctrl.abort(); } catch(e) {} }
+                ctrl = new AbortController();
+                try {
+                    var res = await fetch(buildUrl(cc), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) { hide(); return; }
+                    var js = await res.json();
+                    var stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                    if ((!stations || stations.length === 0) && cc) {
+                        res = await fetch(buildUrl(''), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                        if (res.ok) {
+                            js = await res.json();
+                            stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                        }
+                    }
+                    render(stations);
+                } catch(e) {
+                    // ignore (abort or network)
+                }
+            }
+
+ 	            input.addEventListener('input', function(){
+ 	                // Ticketless UI can show the "other" input without exposing the <select>;
+ 	                // ensure the backing select stays on "other" when the user types.
+ 	                if ((sel.value || '') !== 'other') { sel.value = 'other'; }
+ 	                clearMeta();
+ 	                if (timer) clearTimeout(timer);
+ 	                timer = setTimeout(fetchStations, 200);
+ 	            });
+            input.addEventListener('focus', function(){
+                if (box.innerHTML.trim() !== '' && (sel.value || '') === 'other') { box.style.display = 'block'; }
+            });
+            input.addEventListener('blur', function(){ setTimeout(hide, 180); });
+            box.addEventListener('mousedown', function(e){ e.preventDefault(); });
+            sel.addEventListener('change', function(){
+                if ((sel.value || '') !== 'other') { hide(); }
+            });
+        });
+    }
     document.addEventListener('DOMContentLoaded', function(){
         // Expose exemption flags like in one.php
         try {
@@ -898,6 +1806,9 @@ var live = document.getElementById('rerouteLive');
         } catch(e) { /* no-op */ }
         updateReveal();
         s7Update();
+        initStationAutocomplete();
+        initMapsStationAutocompleteTrin6();
+        mapsInitTrin6(savedMapsTrin6);
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
@@ -945,5 +1856,6 @@ var live = document.getElementById('rerouteLive');
     <input type="hidden" name="_choices_submitted" value="1" />
 </div>
 
+</fieldset>
 <?= $this->Form->end() ?>
 </div>

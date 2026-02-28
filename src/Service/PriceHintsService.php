@@ -57,8 +57,6 @@ class PriceHintsService
         $currency = $currencyOverride !== '' ? $currencyOverride : (string)($countryProfile['currency'] ?? 'EUR');
         $stationProfile = $this->stationProfiles['stationTypes'][$stationType] ?? $this->stationProfiles['stationTypes']['REGIONAL'];
 
-        $timeIsNight = ($arrivalHour >= 20 || $arrivalHour < 6);
-
         $fx = function (string $cur) use ($fxFetcher): float {
             $cur = strtoupper(trim($cur));
             if ($fxFetcher) {
@@ -103,7 +101,9 @@ class PriceHintsService
             $range ? ['min' => $range['min'] * $mult, 'max' => $range['max'] * $mult] : null;
 
         $mealsAdj = $scale($mealsBase, (float)$stationProfile['mealMultiplier']);
-        $hotelAdj = $timeIsNight ? $scale($hotelBase, (float)$stationProfile['hotelMultiplier']) : null;
+        // Keep hotel price hints always available in the UI (users may not know/enter times in ticketless mode),
+        // and the hint is only guidance anyway.
+        $hotelAdj = $scale($hotelBase, (float)$stationProfile['hotelMultiplier']);
         $taxiAdj = $scale($taxiBase, (float)$stationProfile['taxiMultiplier']);
 
         return [

@@ -16,8 +16,8 @@ $travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_stat
 $isOngoing = ($travelState === 'ongoing');
 $isCompleted = ($travelState === 'completed');
 $assistTitle = $isOngoing
-    ? 'TRIN 7 - Mad og drikke, hotel (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 7 - Mad og drikke, hotel (afsluttet rejse)' : 'TRIN 7 - Mad og drikke, hotel (Art. 20)');
+    ? 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)'
+    : ($isCompleted ? 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)');
 $assistHint = $isOngoing
     ? 'Udgifter indtil nu (du kan tilfoeje flere senere).'
     : ($isCompleted ? 'Udgifter under hele rejsen.' : '');
@@ -29,6 +29,7 @@ $assistOff    = ($articles['art20_2'] ?? true) === false || ($assistMealsOff && 
 $art20Active = $art20Active ?? true;
 $art20Partial = $art20Partial ?? false;
 $art20Blocked = $art20Blocked ?? false;
+$isPreview = !empty($flowPreview);
 
 
 
@@ -39,6 +40,12 @@ $currencyOptions = [
     'DKK' => 'DKK - Dansk krone',
 
     'SEK' => 'SEK - Svensk krona',
+
+    'NOK' => 'NOK - Norsk krone',
+
+    'GBP' => 'GBP - Britisk pund',
+
+    'CHF' => 'CHF - Schweizisk franc',
 
     'PLN' => 'PLN - Polsk zloty',
 
@@ -114,7 +121,9 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <h1><?= h($assistTitle) ?></h1>
 
+<?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['type' => 'file', 'novalidate' => true]) ?>
+<fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
 
 
@@ -182,9 +191,6 @@ $hintText = function (string $key) use ($priceHints): string {
   </div>
   <div class="mt8" data-show-if="meal_offered:no">
     <div class="grid-3">
-      <label>Beløb
-        <input type="number" step="0.01" name="meal_self_paid_amount" value="<?= h($v('meal_self_paid_amount')) ?>" />
-      </label>
       <label>Valuta
         <select name="meal_self_paid_currency">
           <option value="">Vælg</option>
@@ -193,11 +199,42 @@ $hintText = function (string $key) use ($priceHints): string {
           <?php endforeach; ?>
         </select>
       </label>
-      <label class="small">Kvittering
-        <input type="file" name="meal_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-      </label>
+      <div></div>
+      <div></div>
     </div>
-    <?php if ($f = $v('meal_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+
+    <?php
+      $mealAmtItems = $form['meal_self_paid_amount_items'] ?? [];
+      $mealReceiptItems = $form['meal_self_paid_receipt_items'] ?? [];
+      if (!is_array($mealAmtItems)) { $mealAmtItems = []; }
+      if (!is_array($mealReceiptItems)) { $mealReceiptItems = []; }
+      if (!$mealAmtItems && $v('meal_self_paid_amount') !== '') { $mealAmtItems = [$v('meal_self_paid_amount')]; }
+      if (!$mealReceiptItems && $v('meal_self_paid_receipt') !== '') { $mealReceiptItems = [$v('meal_self_paid_receipt')]; }
+      $mealCount = max(count($mealAmtItems), count($mealReceiptItems), 1);
+    ?>
+    <div id="mealItemsWrap" class="mt8">
+      <?php for ($i = 0; $i < $mealCount; $i++): ?>
+        <?php $mAmt = (string)($mealAmtItems[$i] ?? ''); $mRc = (string)($mealReceiptItems[$i] ?? ''); ?>
+        <div class="grid-3 mt8 meal-item-row">
+          <label>Beløb
+            <input type="number" step="0.01" name="meal_self_paid_amount_items[]" value="<?= h($mAmt) ?>" />
+          </label>
+          <label class="small">Kvittering
+            <input type="hidden" name="meal_self_paid_receipt_items_existing[]" value="<?= h($mRc) ?>" />
+            <input type="file" name="meal_self_paid_receipt_items[]" accept=".pdf,.jpg,.jpeg,.png" />
+            <?php if ($mRc !== ''): ?><div class="small muted mt4">Gemmer: <?= h(basename($mRc)) ?></div><?php endif; ?>
+          </label>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <button type="button" class="button button-outline meal-remove-btn" <?= $mealCount <= 1 ? 'disabled' : '' ?>>Fjern</button>
+          </div>
+        </div>
+      <?php endfor; ?>
+    </div>
+    <div class="mt8">
+      <button type="button" class="button button-outline" id="mealAddBtn">+ Tilføj udgift</button>
+      <span class="small muted ml8">Tilføj flere beløb/kvitteringer hvis du købte flere gange.</span>
+    </div>
+
     <?php if ($ht = $hintText('meals')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
   </div>
 </div>
@@ -301,217 +338,62 @@ $hintText = function (string $key) use ($priceHints): string {
   </div>
 
   <div class="mt8" data-show-if="hotel_offered:no">
-
     <div class="grid-3">
-
-      <label>Hotel/overnatning - beløb
-
-        <input type="number" step="0.01" name="hotel_self_paid_amount" value="<?= h($v('hotel_self_paid_amount')) ?>" />
-
-      </label>
-
       <label>Valuta
-
         <select name="hotel_self_paid_currency">
-
           <option value="">Vælg</option>
-
           <?php foreach ($currencyOptions as $code => $label): ?>
-
             <option value="<?= $code ?>" <?= strtoupper($v('hotel_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-
           <?php endforeach; ?>
-
         </select>
-
       </label>
-
-      <label>Antal nætter
-
-        <input type="number" step="1" name="hotel_self_paid_nights" value="<?= h($v('hotel_self_paid_nights')) ?>" />
-
-      </label>
-
+      <div></div>
+      <div></div>
     </div>
 
-    <?php if ($f = $v('hotel_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+    <?php
+      $hotelAmtItems = $form['hotel_self_paid_amount_items'] ?? [];
+      $hotelNightItems = $form['hotel_self_paid_nights_items'] ?? [];
+      $hotelReceiptItems = $form['hotel_self_paid_receipt_items'] ?? [];
+      if (!is_array($hotelAmtItems)) { $hotelAmtItems = []; }
+      if (!is_array($hotelNightItems)) { $hotelNightItems = []; }
+      if (!is_array($hotelReceiptItems)) { $hotelReceiptItems = []; }
+      if (!$hotelAmtItems && $v('hotel_self_paid_amount') !== '') { $hotelAmtItems = [$v('hotel_self_paid_amount')]; }
+      if (!$hotelNightItems && $v('hotel_self_paid_nights') !== '') { $hotelNightItems = [$v('hotel_self_paid_nights')]; }
+      if (!$hotelReceiptItems && $v('hotel_self_paid_receipt') !== '') { $hotelReceiptItems = [$v('hotel_self_paid_receipt')]; }
+      $hotelCount = max(count($hotelAmtItems), count($hotelNightItems), count($hotelReceiptItems), 1);
+    ?>
+    <div id="hotelItemsWrap" class="mt8">
+      <?php for ($i = 0; $i < $hotelCount; $i++): ?>
+        <?php
+          $hAmt = (string)($hotelAmtItems[$i] ?? '');
+          $hN = (string)($hotelNightItems[$i] ?? '');
+          $hRc = (string)($hotelReceiptItems[$i] ?? '');
+        ?>
+        <div class="grid-3 mt8 hotel-item-row">
+          <label>Hotel/overnatning - beløb
+            <input type="number" step="0.01" name="hotel_self_paid_amount_items[]" value="<?= h($hAmt) ?>" />
+          </label>
+          <label>Antal nætter
+            <input type="number" step="1" name="hotel_self_paid_nights_items[]" value="<?= h($hN) ?>" />
+          </label>
+          <label class="small">Kvittering
+            <input type="hidden" name="hotel_self_paid_receipt_items_existing[]" value="<?= h($hRc) ?>" />
+            <input type="file" name="hotel_self_paid_receipt_items[]" accept=".pdf,.jpg,.jpeg,.png" />
+            <?php if ($hRc !== ''): ?><div class="small muted mt4">Gemmer: <?= h(basename($hRc)) ?></div><?php endif; ?>
+          </label>
+        </div>
+        <div class="mt4" style="display:flex; justify-content:flex-end;">
+          <button type="button" class="button button-outline hotel-remove-btn" <?= $hotelCount <= 1 ? 'disabled' : '' ?>>Fjern</button>
+        </div>
+      <?php endfor; ?>
+    </div>
+    <div class="mt8">
+      <button type="button" class="button button-outline" id="hotelAddBtn">+ Tilføj udgift</button>
+      <span class="small muted ml8">Tilføj flere overnatninger/kvitteringer hvis relevant.</span>
+    </div>
 
     <?php if ($ht = $hintText('hotelPerNight')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
-
-  </div>
-
-</div>
-
-
-
-<!-- Transport / taxa / bus (flyttet til trin 4 / incident) -->
-<div class="card mt12" style="display:none;">
-
-  <strong>?? Transport til/fra (Art.20)</strong>
-
-  <p class="small muted">Alternativ transport skal tilbydes, hvis du er strandet pga. aflysning/forsinkelse.</p>
-
-  <?php
-
-    $strandedLocation = $v('stranded_location');
-
-    if (!$strandedLocation) {
-
-        if ($v('blocked_on_track') === 'yes') { $strandedLocation = 'track'; }
-
-        elseif ($v('stranded_at_station') === 'yes') { $strandedLocation = 'station'; }
-
-    }
-
-  ?>
-
-  <div class="mt4">
-
-    <div class="small muted">Hvor var du, da det skete? (vælg én)</div>
-
-    <label><input type="radio" name="stranded_location" value="track" <?= $strandedLocation==='track'?'checked':'' ?> /> Jeg sad fast i toget på sporet</label>
-
-    <label class="ml8"><input type="radio" name="stranded_location" value="station" <?= $strandedLocation==='station'?'checked':'' ?> /> Jeg var på en station uden videre tog</label>
-
-    <label class="ml8"><input type="radio" name="stranded_location" value="irrelevant" <?= $strandedLocation==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
-
-  </div>
-
-
-
-  <div class="mt4" data-show-if="stranded_location:track,station">
-
-    <span>Blev der stillet transport til rådighed for at komme væk/videre?</span>
-
-    <?php $bt = $v('blocked_train_alt_transport'); ?>
-
-    <label><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja, af operatør/station</label>
-
-    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="no" <?= $bt==='no'?'checked':'' ?> /> Nej, jeg måtte selv arrangere</label>
-
-    <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="irrelevant" <?= $bt==='irrelevant'?'checked':'' ?> /> Ikke relevant / andet</label>
-
-  </div>
-
-
-
-  <div class="mt4" data-show-if="blocked_train_alt_transport:yes">
-
-    <div class="grid-3">
-
-      <label>Tilbudt af
-
-        <select name="assistance_alt_transport_offered_by">
-
-          <?php foreach (['operator'=>'Operatør','station'=>'Station','retailer'=>'Retailer','other'=>'Andet'] as $val => $label): ?>
-
-            <option value="<?= $val ?>" <?= $v('assistance_alt_transport_offered_by')===$val?'selected':'' ?>><?= $label ?></option>
-
-          <?php endforeach; ?>
-
-        </select>
-
-      </label>
-
-      <label>Transporttype
-
-        <select name="assistance_alt_transport_type">
-
-          <?php foreach (['rail'=>'Tog','bus'=>'Bus','taxi'=>'Taxi','other'=>'Andet'] as $val => $label): ?>
-
-            <option value="<?= $val ?>" <?= $v('assistance_alt_transport_type')===$val?'selected':'' ?>><?= $label ?></option>
-
-          <?php endforeach; ?>
-
-        </select>
-
-      </label>
-
-      <label>Destination
-
-        <?php $to = $v('assistance_alt_to_destination'); ?>
-
-        <select name="assistance_alt_to_destination">
-
-          <option value="">Vælg</option>
-
-          <option value="station" <?= $to==='station'?'selected':'' ?>>Station</option>
-
-          <option value="other_departure" <?= $to==='other_departure'?'selected':'' ?>>Andet afgangssted</option>
-
-          <option value="final_destination" <?= $to==='final_destination'?'selected':'' ?>>Endelige bestemmelsessted</option>
-
-        </select>
-
-      </label>
-
-    </div>
-
-    <div class="grid-3">
-
-      <label>Afgangstid
-
-        <input type="time" name="assistance_alt_departure_time" value="<?= h($v('assistance_alt_departure_time')) ?>" />
-
-      </label>
-
-      <label>Ankomsttid
-
-        <input type="time" name="assistance_alt_arrival_time" value="<?= h($v('assistance_alt_arrival_time')) ?>" />
-
-      </label>
-
-    </div>
-
-  </div>
-
-
-
-  <div class="mt4" data-show-if="blocked_train_alt_transport:no">
-
-    <div class="small muted">Egne udgifter/kvittering for selv arrangeret transport kan angives herunder.</div>
-
-  </div>
-
-
-
-  <div class="mt8" data-show-if="blocked_train_alt_transport:no">
-
-    <div class="grid-3">
-
-      <label>Transport/bus/taxi eller alternativ billet - beløb
-
-        <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
-
-      </label>
-
-      <label>Valuta
-
-        <select name="blocked_self_paid_currency">
-
-          <option value="">Vælg</option>
-
-          <?php foreach ($currencyOptions as $code => $label): ?>
-
-            <option value="<?= $code ?>" <?= strtoupper($v('blocked_self_paid_currency')) === $code ? 'selected' : '' ?>><?= $label ?></option>
-
-          <?php endforeach; ?>
-
-        </select>
-
-      </label>
-
-      <label class="small">Kvittering
-
-        <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
-
-      </label>
-
-    </div>
-
-    <?php if ($f = $v('blocked_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
-
-    <?php if ($ht = $hintText('taxi')): ?><div class="small muted mt4"><?= h($ht) ?></div><?php endif; ?>
 
   </div>
 
@@ -564,6 +446,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
+</fieldset>
 <?= $this->Form->end() ?>
 
 
@@ -594,7 +477,7 @@ function updateReveal() {
 
 document.addEventListener('change', function(e) {
 
-  if (['meal_offered','hotel_offered','assistance_hotel_transport_included','stranded_location','blocked_train_alt_transport'].includes(e.target.name)) {
+  if (['meal_offered','hotel_offered','assistance_hotel_transport_included'].includes(e.target.name)) {
 
     updateReveal();
 
@@ -603,5 +486,126 @@ document.addEventListener('change', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', updateReveal);
+
+document.addEventListener('DOMContentLoaded', function() {
+  function el(tag, attrs) {
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function(k) {
+      if (k === 'text') { e.textContent = attrs[k]; }
+      else if (k === 'html') { e.innerHTML = attrs[k]; }
+      else { e.setAttribute(k, attrs[k]); }
+    });
+    return e;
+  }
+
+  function updateRemovers(container, selector) {
+    if (!container) return;
+    var rows = container.querySelectorAll(selector);
+    var canRemove = rows.length > 1;
+    container.querySelectorAll(selector + ' .meal-remove-btn,' + selector + ' .hotel-remove-btn,' + '.meal-remove-btn,.hotel-remove-btn').forEach(function(btn) {
+      btn.disabled = !canRemove;
+    });
+  }
+
+  function bindRemoveButtons() {
+    document.querySelectorAll('.meal-remove-btn').forEach(function(btn) {
+      if (btn.__bound) return;
+      btn.__bound = true;
+      btn.addEventListener('click', function() {
+        var row = btn.closest('.meal-item-row');
+        if (row) row.remove();
+        var wrap = document.getElementById('mealItemsWrap');
+        var remaining = wrap ? wrap.querySelectorAll('.meal-item-row') : [];
+        if (wrap && remaining.length === 0) {
+          // Always keep at least one row.
+          document.getElementById('mealAddBtn') && document.getElementById('mealAddBtn').click();
+        }
+        // Re-evaluate remove state
+        var cnt = wrap ? wrap.querySelectorAll('.meal-item-row').length : 0;
+        document.querySelectorAll('.meal-remove-btn').forEach(function(b) { b.disabled = cnt <= 1; });
+      });
+    });
+    document.querySelectorAll('.hotel-remove-btn').forEach(function(btn) {
+      if (btn.__bound) return;
+      btn.__bound = true;
+      btn.addEventListener('click', function() {
+        // Hotel remove button is outside the grid; remove the previous .hotel-item-row block + itself container if any.
+        var row = btn.closest('div');
+        // Find nearest hotel item row above.
+        var wrap = document.getElementById('hotelItemsWrap');
+        var itemRow = btn.closest('.hotel-item-row') || (row ? row.previousElementSibling : null);
+        if (itemRow && itemRow.classList && itemRow.classList.contains('hotel-item-row')) {
+          // Also remove the button wrapper directly after the row if present.
+          var next = itemRow.nextElementSibling;
+          if (next && next.querySelector && next.querySelector('.hotel-remove-btn')) { next.remove(); }
+          itemRow.remove();
+        }
+        var remaining = wrap ? wrap.querySelectorAll('.hotel-item-row') : [];
+        if (wrap && remaining.length === 0) {
+          document.getElementById('hotelAddBtn') && document.getElementById('hotelAddBtn').click();
+        }
+        var cnt = wrap ? wrap.querySelectorAll('.hotel-item-row').length : 0;
+        document.querySelectorAll('.hotel-remove-btn').forEach(function(b) { b.disabled = cnt <= 1; });
+      });
+    });
+  }
+
+  var mealAdd = document.getElementById('mealAddBtn');
+  var mealWrap = document.getElementById('mealItemsWrap');
+  if (mealAdd && mealWrap) {
+    mealAdd.addEventListener('click', function() {
+      var row = el('div', { class: 'grid-3 mt8 meal-item-row' });
+      var l1 = el('label', { });
+      l1.appendChild(document.createTextNode('Beløb'));
+      l1.appendChild(el('input', { type: 'number', step: '0.01', name: 'meal_self_paid_amount_items[]' }));
+      var l2 = el('label', { class: 'small' });
+      l2.appendChild(document.createTextNode('Kvittering'));
+      l2.appendChild(el('input', { type: 'hidden', name: 'meal_self_paid_receipt_items_existing[]', value: '' }));
+      l2.appendChild(el('input', { type: 'file', name: 'meal_self_paid_receipt_items[]', accept: '.pdf,.jpg,.jpeg,.png' }));
+      var l3 = el('div', { style: 'display:flex; align-items:flex-end; gap:8px;' });
+      l3.appendChild(el('button', { type: 'button', class: 'button button-outline meal-remove-btn', text: 'Fjern' }));
+      row.appendChild(l1);
+      row.appendChild(l2);
+      row.appendChild(l3);
+      mealWrap.appendChild(row);
+      bindRemoveButtons();
+      var cnt = mealWrap.querySelectorAll('.meal-item-row').length;
+      document.querySelectorAll('.meal-remove-btn').forEach(function(b) { b.disabled = cnt <= 1; });
+    });
+  }
+
+  var hotelAdd = document.getElementById('hotelAddBtn');
+  var hotelWrap = document.getElementById('hotelItemsWrap');
+  if (hotelAdd && hotelWrap) {
+    hotelAdd.addEventListener('click', function() {
+      var row = el('div', { class: 'grid-3 mt8 hotel-item-row' });
+      var l1 = el('label', { });
+      l1.appendChild(document.createTextNode('Hotel/overnatning - beløb'));
+      l1.appendChild(el('input', { type: 'number', step: '0.01', name: 'hotel_self_paid_amount_items[]' }));
+      var l2 = el('label', { });
+      l2.appendChild(document.createTextNode('Antal nætter'));
+      l2.appendChild(el('input', { type: 'number', step: '1', name: 'hotel_self_paid_nights_items[]' }));
+      var l3 = el('label', { class: 'small' });
+      l3.appendChild(document.createTextNode('Kvittering'));
+      l3.appendChild(el('input', { type: 'hidden', name: 'hotel_self_paid_receipt_items_existing[]', value: '' }));
+      l3.appendChild(el('input', { type: 'file', name: 'hotel_self_paid_receipt_items[]', accept: '.pdf,.jpg,.jpeg,.png' }));
+      row.appendChild(l1);
+      row.appendChild(l2);
+      row.appendChild(l3);
+      hotelWrap.appendChild(row);
+
+      var btnRow = el('div', { class: 'mt4', style: 'display:flex; justify-content:flex-end;' });
+      btnRow.appendChild(el('button', { type: 'button', class: 'button button-outline hotel-remove-btn', text: 'Fjern' }));
+      hotelWrap.appendChild(btnRow);
+
+      bindRemoveButtons();
+      var cnt = hotelWrap.querySelectorAll('.hotel-item-row').length;
+      document.querySelectorAll('.hotel-remove-btn').forEach(function(b) { b.disabled = cnt <= 1; });
+    });
+  }
+
+  bindRemoveButtons();
+});
 
 </script>

@@ -19,7 +19,15 @@ class NationalPolicy
      */
     public function decide(array $ctx): ?array
     {
-        $country = strtoupper((string)($ctx['country'] ?? ''));
+        $countryRaw = (string)($ctx['country'] ?? '');
+        $country = strtoupper(trim($countryRaw));
+        // Be tolerant: callers sometimes pass country names (e.g., "Denmark") instead of ISO2 codes.
+        if (!preg_match('/^[A-Z]{2}$/', $country)) {
+            try {
+                $cc = (new \App\Service\CountryNormalizer())->toIso2($countryRaw);
+                if ($cc !== '') { $country = $cc; }
+            } catch (\Throwable $e) { /* ignore */ }
+        }
         $scope = (string)($ctx['scope'] ?? '');
         if ($country === '' || $scope === '') { return null; }
 

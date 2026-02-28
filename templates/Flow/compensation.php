@@ -1,6 +1,6 @@
 <?php
 /**
- * TRIN 9 – Kompensation (Art. 19)
+ * TRIN 10 – Kompensation (Art. 19)
  * Vars injected from controller: form, compute, incident, profile, claim, meta, seasonMode, seasonSummary, etc.
  */
 $form = $form ?? [];
@@ -12,8 +12,8 @@ $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state
 $isOngoing = ($travelState === 'ongoing');
 $isCompleted = ($travelState === 'completed');
 $compTitle = $isOngoing
-    ? 'TRIN 9 - Kompensation (foreloebig)'
-    : ($isCompleted ? 'TRIN 9 - Kompensation (afsluttet rejse)' : 'TRIN 9 - Kompensation (Art. 19)');
+    ? 'TRIN 10 - Kompensation (foreloebig)'
+    : ($isCompleted ? 'TRIN 10 - Kompensation (afsluttet rejse)' : 'TRIN 10 - Kompensation (Art. 19)');
 $compHint = $isOngoing
     ? 'Beregningen kan aendre sig, naar rejsen er afsluttet.'
     : ($isCompleted ? 'Beregningen er baseret paa den afsluttede rejse.' : '');
@@ -25,6 +25,7 @@ $rerouteUnder60 = (bool)($rerouteUnder60 ?? false);
 $art19Allowed = (bool)($art19Allowed ?? true);
 $articles = (array)($profile['articles'] ?? []);
 $art19Enabled = !isset($articles['art19']) || $articles['art19'] !== false;
+$isPreview = !empty($flowPreview);
 
 $priceFromTicket = (float)($ticketPriceAmount ?? 0);
 $priceCurrency = (string)($currency ?? 'EUR');
@@ -112,12 +113,12 @@ if ($downgradeRate <= 0 && $countLegs > 0) {
         $form['downgrade_occurred'] = 'yes';
     }
 }
-$downgradeAmount = round($priceFromTicket * $downgradeRate * $downgradeShare, 2);
-$grossBase = (float)($claim['totals']['gross_claim'] ?? 0);
-$grossAdjusted = $grossBase + $rerouteExtraAmount + $returnAmt + ((($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0) ? $downgradeAmount : 0.0);
-$serviceFeeRate = 0.12;
-$serviceFee = round($grossAdjusted * $serviceFeeRate, 2);
-$netPayout = max(0, $grossAdjusted - $serviceFee);
+// Totals are computed server-side (ClaimCalculator) and shared with demo/scenario output.
+$serviceFeePct = isset($claim['totals']['service_fee_pct']) ? (int)$claim['totals']['service_fee_pct'] : 0;
+$grossAdjusted = isset($claim['totals']['gross_claim']) ? (float)$claim['totals']['gross_claim'] : 0.0;
+$serviceFee = isset($claim['totals']['service_fee_amount']) ? (float)$claim['totals']['service_fee_amount'] : 0.0;
+$netPayout = isset($claim['totals']['net_to_client']) ? (float)$claim['totals']['net_to_client'] : 0.0;
+$downgradeAmount = isset($claim['breakdown']['art18']['downgrade_annexii']) ? (float)$claim['breakdown']['art18']['downgrade_annexii'] : 0.0;
 // Static FX table (EUR base). Approximate mid-rates.
 // FX map loader: try cached daily rates from tmp/rates.json; fallback to ECB via frankfurter; else fallback static
 $fxStatic = [
@@ -177,12 +178,17 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <?php if ($compHint !== ''): ?>
   <p class="small muted"><?= h($compHint) ?></p>
 <?php endif; ?>
+<?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null) ?>
+<fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
 <?php if (!empty($claim)): ?>
   <?php
     $br = (array)($claim['breakdown'] ?? []);
     $tot = (array)($claim['totals'] ?? []);
+    $art18Br = (array)($br['art18'] ?? []);
+    $art18RerouteExtra = isset($art18Br['reroute_extra_costs']) ? (float)$art18Br['reroute_extra_costs'] : 0.0;
+    $art18Downgrade = isset($art18Br['downgrade_annexii']) ? (float)$art18Br['downgrade_annexii'] : 0.0;
     $bandLabel = $bandAuto === '50' ? '50%' : ($bandAuto === '25' ? '25%' : '<60');
     $compPct = isset($br['compensation']['pct']) ? (int)$br['compensation']['pct'] : 0;
     $compAmount = isset($br['compensation']['amount']) ? (float)$br['compensation']['amount'] : 0.0;
@@ -222,8 +228,8 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
         <div><strong><?= __('Art. 18 ? Refusion') ?></strong></div>
         <div class="mt4"><?= __('Refusion (stk. 1):') ?> <strong><?= number_format($refundAmount,2) ?> <?= h($refundCur) ?></strong></div>
-        <div class="mt4"><?= __('Ekstra omkostninger:') ?> <strong><?= $rerouteExtraAmount > 0 ? number_format($rerouteExtraAmount,2) : '0.00' ?> <?= h($rerouteExtraCur) ?></strong></div>
-        <div class="mt4"><?= __('Forholdsm?ssigt afslag nedgradering (stk. 3):') ?> <strong><?= ($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?></strong></div>
+        <div class="mt4"><?= __('Ekstra omkostninger:') ?> <strong><?= $art18RerouteExtra > 0 ? number_format($art18RerouteExtra,2) : '0.00' ?> <?= h($refundCur) ?></strong></div>
+        <div class="mt4"><?= __('Forholdsm?ssigt afslag nedgradering (stk. 3):') ?> <strong><?= $art18Downgrade > 0 ? number_format($art18Downgrade,2) : '0.00' ?> <?= h($refundCur) ?></strong></div>
       </div>
       <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
         <div><strong><?= __('Art. 20 ? Udgifter') ?></strong></div>
@@ -249,7 +255,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
         <div><strong><?= __('Total & udbetaling') ?></strong></div>
         <div class="mt4"><?= __('Samlet krav (brutto, inkl. Art.18 stk.3):') ?> <strong><?= number_format($grossAdjusted, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
-        <div class="mt4"><?= __('Servicefee 12%:') ?> <strong><?= number_format($serviceFee, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
+        <div class="mt4"><?= __('Servicefee {0}%:', $serviceFeePct) ?> <strong><?= number_format($serviceFee, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
         <div class="mt4"><?= __('Udbetaling inden 24t (netto):') ?> <strong><?= number_format($netPayout, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
       </div>
     </div>
@@ -458,7 +464,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
           (<?= __('= {0} EUR', number_format($fxConv($returnAmt, $returnCur, 'EUR'),2)) ?>)
         <?php endif; ?>
       </div>
-      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= ($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if (($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
+      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= $downgradeAmount > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if ($downgradeAmount > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
     </div>
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
       <div class="small"><strong><?= __('Art. 18 stk. 2 og 3') ?></strong></div>
@@ -470,7 +476,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
           (<?= __('= {0} EUR', number_format($fxConv($rerouteExtraAmount, $rerouteExtraCur, 'EUR'),2)) ?>)
         <?php endif; ?>
       </div>
-      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= ($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if (($form['downgrade_occurred'] ?? '') === 'yes' && $downgradeRate > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
+      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= $downgradeAmount > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if ($downgradeAmount > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
     </div>
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
       <div class="small"><strong><?= __('Art. 19') ?></strong></div>
@@ -530,7 +536,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
       <div class="small"><strong><?= __('Total & udbetaling') ?></strong></div>
       <div class="small"><?= __('Samlet krav (brutto, inkl. Art.18 stk.3):') ?> <strong><?= number_format($grossAdjusted, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
-      <div class="small"><?= __('Servicefee 12%:') ?> <strong><?= number_format($serviceFee, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
+      <div class="small"><?= __('Servicefee {0}%:', $serviceFeePct) ?> <strong><?= number_format($serviceFee, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
       <div class="small"><?= __('Udbetaling inden 24t (netto):') ?> <strong><?= number_format($netPayout, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
     </div>
   </div>
@@ -570,4 +576,5 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <?= $this->Html->link('<- Tilbage', ['action' => 'downgrade'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 </div>
 
+</fieldset>
 <?= $this->Form->end() ?>

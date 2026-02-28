@@ -21,7 +21,7 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
     </title>
     <?= $this->Html->meta('icon') ?>
 
-    <?= $this->Html->css(['normalize.min', 'milligram.min', 'fonts', 'cake']) ?>
+    <?= $this->Html->css(['normalize.min', 'milligram.min', 'fonts', 'cake', 'flow_stepper']) ?>
 
     <?= $this->fetch('meta') ?>
     <?= $this->fetch('css') ?>
@@ -43,7 +43,16 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
     <main class="main">
         <div class="container">
             <?= $this->Flash->render() ?>
-            <?= $this->fetch('content') ?>
+            <?php if (!empty($flowSteps) && is_array($flowSteps)): ?>
+                <div class="flow-layout">
+                    <?= $this->element('flow_stepper', ['flowSteps' => $flowSteps, 'flowCurrentAction' => $flowCurrentAction ?? '']) ?>
+                    <div class="flow-content">
+                        <?= $this->fetch('content') ?>
+                    </div>
+                </div>
+            <?php else: ?>
+                <?= $this->fetch('content') ?>
+            <?php endif; ?>
         </div>
     </main>
     <footer>

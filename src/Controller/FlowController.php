@@ -8,6 +8,20 @@ use App\Service\PriceHintsService;
 
 class FlowController extends AppController
 {
+    private const SUPPORTED_CURRENCIES = ['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'];
+    private const COUNTRY_TO_CURRENCY = [
+        'BG' => 'BGN',
+        'CZ' => 'CZK',
+        'DK' => 'DKK',
+        'HU' => 'HUF',
+        'PL' => 'PLN',
+        'RO' => 'RON',
+        'SE' => 'SEK',
+        'NO' => 'NOK',
+        'GB' => 'GBP',
+        'CH' => 'CHF',
+    ];
+
     private function isAdmin(): bool
     {
         try {
@@ -19,6 +33,29 @@ class FlowController extends AppController
         parent::initialize();
         $this->viewBuilder()->setClassName('App');
         $this->autoRender = true;
+    }
+
+    private function deriveDefaultCurrency(array $form, array $meta, array $journey): string
+    {
+        $cc = strtoupper(trim((string)(
+            $form['operator_country'] ??
+            ($meta['_auto']['operator_country']['value'] ?? null) ??
+            ($journey['country']['value'] ?? null) ??
+            ''
+        )));
+        $cur = self::COUNTRY_TO_CURRENCY[$cc] ?? 'EUR';
+        return in_array($cur, self::SUPPORTED_CURRENCIES, true) ? $cur : 'EUR';
+    }
+
+    private function applyCurrencyDefaultForAmount(array &$form, string $amountKey, string $currencyKey, string $defaultCurrency): void
+    {
+        $amountRaw = (string)($form[$amountKey] ?? '');
+        $hasAmount = trim($amountRaw) !== '' && preg_match('/[0-9]/', $amountRaw);
+        if (!$hasAmount) { return; }
+        $cur = strtoupper(trim((string)($form[$currencyKey] ?? '')));
+        if ($cur !== '') { return; }
+        $form[$currencyKey] = $defaultCurrency;
+        $form[$currencyKey . '_assumed'] = '1';
     }
 
     /**
@@ -96,6 +133,50 @@ class FlowController extends AppController
         ];
     }
 
+    /**
+     * Enforce split-flow step prerequisites.
+     *
+     * - If prerequisites are missing:
+     *   - GET + ?preview=1: allow render in read-only "preview" mode.
+     *   - otherwise: redirect to the first missing prerequisite step.
+     *
+     * @param list<string> $requiredFlags
+     * @return array{0:bool,1:bool,2:list<string>,3:\Cake\Http\Response|null} [$unlocked,$preview,$missingFlags,$redirectResponse]
+     */
+    private function enforceStepPrereqs(array $requiredFlags, string $fallbackRedirectAction): array
+    {
+        $sess = $this->request->getSession();
+        $flags = (array)$sess->read('flow.flags') ?: [];
+
+        $missing = [];
+        foreach ($requiredFlags as $rf) {
+            if (((string)($flags[$rf] ?? '')) !== '1') {
+                $missing[] = $rf;
+            }
+        }
+        $unlocked = empty($missing);
+        $preview = $this->request->is('get') && ((string)$this->request->getQuery('preview') === '1');
+
+        if (!$unlocked && !$preview) {
+            $target = $fallbackRedirectAction;
+            try {
+                $map = (new \App\Service\FlowStepsService())->flagsToStepMeta();
+                $first = $missing[0] ?? null;
+                if ($first && !empty($map[$first]['action'])) {
+                    $target = (string)$map[$first]['action'];
+                }
+            } catch (\Throwable $e) { /* ignore */ }
+
+            try { $this->Flash->warning('Dette trin er laast. Udfyld forrige trin foerst.'); } catch (\Throwable $e) { /* ignore */ }
+            return [$unlocked, $preview, $missing, $this->redirect(['action' => $target])];
+        }
+
+        // View vars used by templates/layout to show a consistent read-only notice.
+        $this->set('flowPreview', !$unlocked);
+        $this->set('flowMissingPrereqs', $missing);
+        return [$unlocked, $preview, $missing, null];
+    }
+
     public function start(): \Cake\Http\Response|null
     {
         // Entry: choose EU-only and set travel state (no OCR/JSON, no Art. 9 here)
@@ -116,6 +197,7 @@ class FlowController extends AppController
             if (in_array($travelState, ['completed','ongoing','before_start'], true)) {
                 $flags['travel_state'] = $travelState;
             }
+            $flags['step1_done'] = '1';
             $this->request->getSession()->write('flow.journey', $journey);
             $this->request->getSession()->write('flow.meta', $meta);
             $this->request->getSession()->write('flow.compute', $compute);
@@ -125,6 +207,140 @@ class FlowController extends AppController
         $compute = (array)$this->request->getSession()->read('flow.compute') ?: ['euOnly' => true];
         $this->set('isAdmin', $this->isAdmin());
         $this->set('compute', $compute);
+        return null;
+    }
+
+    /**
+     * Split-step: Transport fra station (Art.20(3)) – collected before TRIN 5 gating.
+     * This step is optional (default "Nej") and only collects facts for the station-stranding scenario.
+     */
+    public function station(): \Cake\Http\Response|null
+    {
+        $sess = $this->request->getSession();
+        $journey = (array)$sess->read('flow.journey') ?: [];
+        $meta = (array)$sess->read('flow.meta') ?: [];
+        $compute = (array)$sess->read('flow.compute') ?: [];
+        $form = (array)$sess->read('flow.form') ?: [];
+        $incident = (array)$sess->read('flow.incident') ?: [];
+        $flags = (array)$sess->read('flow.flags') ?: [];
+
+        // TRIN 4 prereq: TRIN 3 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step3_done'], 'journey');
+        if ($resp) { return $resp; }
+
+        if ($this->request->is('get')) {
+            if (!isset($form['a20_station_stranded'])) {
+                $form['a20_station_stranded'] = 'no';
+                $sess->write('flow.form', $form);
+            }
+        }
+
+        if ($this->request->is('post')) {
+            $data = (array)$this->request->getData();
+            $form = array_merge($form, $data);
+
+            // Keep TRIN 6's "is_stranded_trin5" independent by using a separate flag here.
+            $a20StationStranded = strtolower(trim((string)($data['a20_station_stranded'] ?? ($form['a20_station_stranded'] ?? 'no'))));
+            if (!in_array($a20StationStranded, ['yes','no'], true)) { $a20StationStranded = 'no'; }
+            $form['a20_station_stranded'] = $a20StationStranded;
+
+            // Receipt upload (station self-paid). Store a filesystem path string in session (not the UploadedFile object).
+            try { $stationReceipt = $this->request->getUploadedFile('a20_3_self_paid_receipt'); } catch (\Throwable $e) { $stationReceipt = null; }
+            if ($stationReceipt && $stationReceipt->getError() === \UPLOAD_ERR_OK) {
+                $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+                if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
+                $name = (string)($stationReceipt->getClientFilename() ?? ('a20_3_' . bin2hex(random_bytes(4))));
+                $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name);
+                $target = $uploadDir . (uniqid('a20_3_') . '_' . $safe);
+                try { $stationReceipt->moveTo($target); $form['a20_3_self_paid_receipt'] = $target; } catch (\Throwable $e) { /* ignore */ }
+            } elseif (($rawStation = $this->request->getData('a20_3_self_paid_receipt')) && is_string($rawStation)) {
+                // Back-compat: keep existing stored path.
+                $form['a20_3_self_paid_receipt'] = $rawStation;
+            } else {
+                // Ensure we don't keep an UploadedFile object in session.
+                if (isset($form['a20_3_self_paid_receipt']) && !is_string($form['a20_3_self_paid_receipt'])) {
+                    unset($form['a20_3_self_paid_receipt']);
+                }
+            }
+
+            // Normalize/canonicalize: if station stranded is yes, mark the shared Art.20 fields accordingly.
+            // If user turns it off again, clear only the station-scoped keys and shared fields when they were station-derived.
+            if ($a20StationStranded === 'yes') {
+                $form['is_stranded'] = 'yes';
+                $form['stranded_location'] = 'station';
+
+                // Derive handoff_station from the Art.20 resolution endpoint when a station is required.
+                $ended = (string)($form['a20_where_ended'] ?? '');
+                if (in_array($ended, ['nearest_station','other_departure_point'], true)) {
+                    $hs = (string)($form['a20_arrival_station'] ?? '');
+                    if ($hs === 'other') { $hs = (string)($form['a20_arrival_station_other'] ?? ''); }
+                    $form['handoff_station'] = trim((string)$hs);
+                }
+            } else {
+                if ((string)($form['stranded_location'] ?? '') === 'station') {
+                    unset($form['stranded_location']);
+                    // Only clear is_stranded when it was station-driven (TRIN 6 may set it later for track).
+                    if ((string)($form['is_stranded'] ?? '') === 'yes') {
+                        $form['is_stranded'] = 'no';
+                    }
+                    foreach ([
+                        'stranded_current_station',
+                        'stranded_current_station_other',
+                        'stranded_current_station_other_osm_id',
+                        'stranded_current_station_other_lat',
+                        'stranded_current_station_other_lon',
+                        'stranded_current_station_other_country',
+                        'stranded_current_station_other_type',
+                        'stranded_current_station_other_source',
+                        'a20_3_solution_offered',
+                        'a20_3_solution_type',
+                        'a20_3_solution_offered_by',
+                        'a20_3_self_paid',
+                        'a20_3_self_arranged_type',
+                        'a20_3_self_paid_direction',
+                        'a20_3_self_paid_amount',
+                        'a20_3_self_paid_currency',
+                        'a20_3_self_paid_receipt',
+                        'a20_where_ended',
+                        'a20_arrival_station',
+                        'a20_arrival_station_other',
+                        'a20_arrival_station_other_osm_id',
+                        'a20_arrival_station_other_lat',
+                        'a20_arrival_station_other_lon',
+                        'a20_arrival_station_other_country',
+                        'a20_arrival_station_other_type',
+                        'a20_arrival_station_other_source',
+                        'handoff_station',
+                    ] as $k) {
+                        unset($form[$k]);
+                    }
+                }
+            }
+
+            // Currency defaults (TRIN 4): only default when an amount is present.
+            try {
+                $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                $this->applyCurrencyDefaultForAmount($form, 'a20_3_self_paid_amount', 'a20_3_self_paid_currency', $defaultCur);
+            } catch (\Throwable $e) { /* ignore */ }
+
+            // Mark step completion for strict gating on later steps.
+            $flags['step4_done'] = '1';
+
+            $sess->write('flow.form', $form);
+            $sess->write('flow.flags', $flags);
+            return $this->redirect(['action' => 'incident']);
+        }
+
+        // Build profile for Art. 20(3) gating hints.
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
+            $journey = $inferRes['journey'];
+        } catch (\Throwable $e) { /* ignore for station */ }
+        $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+
+        $sess->write('flow.journey', $journey);
+        $sess->write('flow.meta', $meta);
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile'));
         return null;
     }
 
@@ -138,31 +354,102 @@ class FlowController extends AppController
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
 
+        // TRIN 5 prereq: TRIN 4 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step4_done'], 'station');
+        if ($resp) { return $resp; }
+
         if ($this->request->is('post')) {
             $data = (array)$this->request->getData();
             $form = array_merge($form, $data);
             $main = (string)($data['incident_main'] ?? '');
             if (!in_array($main, ['delay','cancellation',''], true)) { $main = ''; }
             $incident['main'] = $main;
+
+            // Normalize missed-connection flag: if the field isn't posted, treat as "no" to avoid stale session state
+            // bleeding into later steps (TRIN 5 transport UI relies on incident.missed).
             if (array_key_exists('incident_missed', $data)) {
                 $incident['missed'] = $this->truthy($data['incident_missed'] ?? false) ? 'yes' : '';
                 $incident['missed_source'] = !empty($incident['missed']) ? 'incident_form' : '';
+            } else {
+                $incident['missed'] = '';
+                $incident['missed_source'] = '';
             }
-            if (isset($data['expected_delay_60'])) {
-                $form['expected_delay_60'] = (string)$data['expected_delay_60'];
-                if ($main === 'delay') {
-                    $form['art18_expected_delay_60'] = $form['expected_delay_60'];
-                    $form['art20_expected_delay_60'] = $form['expected_delay_60'];
-                    $meta['art18_expected_delay_60'] = $form['expected_delay_60'];
-                    $meta['art20_expected_delay_60'] = $form['expected_delay_60'];
+
+            // Mirror incident gating into meta for evaluators and API scenarios that rely on meta['incident'].
+            // This keeps Art. 20/18 gating consistent even when no ticket/OCR data exists (ticketless input).
+            $meta['incident'] = [
+                'cancellation' => ($incident['main'] ?? '') === 'cancellation',
+                'missed_connection' => !empty($incident['missed']),
+            ];
+
+            // If missed connection is OFF, clear any station input (and metadata) to avoid stale state
+            // leaking into later steps (e.g., Art. 20(3) overrides and downgrade leg-scoping).
+            if (empty($incident['missed'])) {
+                foreach ([
+                    'missed_connection_station',
+                    'missed_connection_pick',
+                    'missed_connection_station_osm_id',
+                    'missed_connection_station_lat',
+                    'missed_connection_station_lon',
+                    'missed_connection_station_country',
+                    'missed_connection_station_type',
+                    'missed_connection_station_source',
+                ] as $k) {
+                    if (array_key_exists($k, $form)) { unset($form[$k]); }
                 }
             }
+
+            // --- EU gating (Art.18/Art.20) with national fallback support ---
+            // Store a canonical "expected >=60" flag for Art.18/20 in form+meta so downstream steps
+            // can gate consistently (ticketless included).
+            $norm = static function($v): string { return strtolower(trim((string)$v)); };
+            $expected60 = $norm($data['expected_delay_60'] ?? ($form['expected_delay_60'] ?? ''));
+            $already60  = $norm($data['delay_already_60'] ?? ($form['delay_already_60'] ?? ''));
+            $missed60   = $norm($data['missed_expected_delay_60'] ?? ($form['missed_expected_delay_60'] ?? ''));
+
+            // EU gating can be satisfied either by the main incident (delay>=60 or cancellation),
+            // or by missed-connection implying >=60 to final destination (only if EU is not already satisfied).
+            $euGateFromMain = false;
+            if ($main === 'cancellation') {
+                $euGateFromMain = true;
+            } elseif ($main === 'delay') {
+                $euGateFromMain = ($expected60 === 'yes') || ($already60 === 'yes');
+            }
+            $euGate = $euGateFromMain;
+            // Keep missed_expected_delay_60 in session for audit, but ignore it for gating if EU gate is already met.
+            if (!$euGateFromMain && !empty($incident['missed'])) {
+                $euGate = $euGate || ($missed60 === 'yes');
+            }
+
+            $form['art18_expected_delay_60'] = $euGate ? 'yes' : 'no';
+            $form['art20_expected_delay_60'] = $euGate ? 'yes' : 'no';
+            $meta['art18_expected_delay_60'] = $form['art18_expected_delay_60'];
+            $meta['art20_expected_delay_60'] = $form['art20_expected_delay_60'];
+
+            // Keep delay-specific questions only when delay is the selected main incident.
             if ($main !== 'delay') {
-                unset($form['art18_expected_delay_60'], $form['art20_expected_delay_60']);
-                unset($meta['art18_expected_delay_60'], $meta['art20_expected_delay_60']);
+                unset($form['expected_delay_60'], $form['delay_already_60']);
+            }
+            // Keep missed>=60 question only when missed connection is enabled.
+            if (empty($incident['missed'])) {
+                unset($form['missed_expected_delay_60']);
+            }
+
+            // National fallback input (used only when EU gate is not met).
+            if (array_key_exists('national_delay_minutes', $data)) {
+                $n = trim((string)($data['national_delay_minutes'] ?? ''));
+                $n = preg_replace('/[^0-9]/', '', $n) ?? $n;
+                $form['national_delay_minutes'] = ($n !== '') ? (string)(int)$n : '';
+                $meta['national_delay_minutes'] = $form['national_delay_minutes'];
+            }
+            if (array_key_exists('national_delay_reported_at', $data)) {
+                $ts = trim((string)($data['national_delay_reported_at'] ?? ''));
+                $ts = preg_replace('/[^0-9]/', '', $ts) ?? $ts;
+                $form['national_delay_reported_at'] = ($ts !== '') ? $ts : '';
+                $meta['national_delay_reported_at'] = $form['national_delay_reported_at'];
             }
             // Mark step completion for strict gating on later steps (prevents direct URL skipping).
-            $flags['step4_done'] = '1';
+            $flags['step5_done'] = '1';
             $sess->write('flow.compute', $compute);
             $sess->write('flow.form', $form);
             $sess->write('flow.incident', $incident);
@@ -200,6 +487,23 @@ class FlowController extends AppController
             }
         } catch (\Throwable $e) { /* ignore */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        $nationalPolicy = null;
+        try {
+            $countryCtx = (string)($journey['country']['value'] ?? ($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? '')));
+            try {
+                $cc = (new \App\Service\CountryNormalizer())->toIso2($countryCtx);
+                if ($cc !== '') { $countryCtx = $cc; }
+            } catch (\Throwable $e) { /* ignore */ }
+            $scopeCtx = (string)($profile['scope'] ?? '');
+            $opCtx = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
+            $prodCtx = (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''));
+            $nationalPolicy = (new \App\Service\NationalPolicy())->decide([
+                'country' => $countryCtx,
+                'scope' => $scopeCtx,
+                'operator' => $opCtx,
+                'product' => $prodCtx,
+            ]);
+        } catch (\Throwable $e) { $nationalPolicy = null; }
         try {
             $auto12 = (new \App\Service\Art12AutoDeriver())->apply($journey, $meta);
             $meta = $auto12['meta'];
@@ -212,6 +516,7 @@ class FlowController extends AppController
         try { $art20 = (new \App\Service\Art20AssistanceEvaluator())->evaluate($journey, $meta); } catch (\Throwable $e) { $art20 = null; $meta['logs'][] = 'WARN: Art20AssistanceEvaluator failed: ' . $e->getMessage(); }
         $refund = (new \App\Service\RefundEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
         $refusion = (new \App\Service\Art18RefusionEvaluator())->evaluate($journey, ['delayMin' => ($compute['delayMinEU'] ?? 0)]);
+        $pmrBikeGate = $this->computePmrBikeGate($form, $meta);
         [$euOnlySuggested, $euOnlyReason] = $this->suggestEuOnly($journey, $meta);
         $serviceWarnings = [];
         if (!empty($journey['is_suburban'])) {
@@ -233,7 +538,7 @@ class FlowController extends AppController
 
         $sess->write('flow.journey', $journey);
         $sess->write('flow.meta', $meta);
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile','art12','art9','art6','pmr','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','nationalPolicy','art12','art9','art6','pmr','pmrBikeGate','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
         return null;
     }
 
@@ -253,6 +558,10 @@ class FlowController extends AppController
         $flags = (array)$sess->read('flow.flags') ?: [];
         $contractOptions = (array)($meta['contract_options'] ?? []);
         $contractWarning = '';
+
+        // TRIN 3 prereq: TRIN 2 completed.
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step2_done'], 'entitlements');
+        if ($resp) { return $resp; }
 
         // Apply contract filtering (separate model) or warn if missing selection
         $cm = (string)($form['contract_model'] ?? '');
@@ -307,7 +616,7 @@ class FlowController extends AppController
             $this->request->getSession()->write('flow.form', $form);
             $this->request->getSession()->write('flow.incident', $incident);
             $this->request->getSession()->write('flow.flags', $flags);
-            return $this->redirect(['action' => 'incident']);
+            return $this->redirect(['action' => 'station']);
         }
 // Recompute hooks/evaluators for live preview in TRIN 3 like one()/entitlements
         // Fallbacks to improve scope inference when extractor missed stations
@@ -400,6 +709,11 @@ class FlowController extends AppController
             $session->delete('flow.leg_reservation_delivered_locked');
             // Leave flow.journey / flow.compute / flow.flags / flow.incident intact
         }
+
+        // TRIN 2 prereq: TRIN 1 completed (travel state chosen).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step1_done'], 'start');
+        if ($resp) { return $resp; }
+
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
         $compute = (array)$session->read('flow.compute') ?: [];
@@ -530,13 +844,18 @@ class FlowController extends AppController
 
     // Handle uploads and inline edits first, then recompute evaluators; only redirect to summary when explicitly requested
         if ($this->request->is('post')) {
+            // Ticketless mode: persist early so "clear/remove ticket" actions don't wipe manual inputs.
+            $tm = (string)($this->request->getData('ticket_upload_mode') ?? '');
+            if (in_array($tm, ['ticket', 'ticketless'], true)) {
+                $form['ticket_upload_mode'] = $tm;
+            }
+            $isTicketless = ((string)($form['ticket_upload_mode'] ?? '') === 'ticketless');
+
             // Clear-all action from UI: remove current and multi tickets and wipe 3.2 fields + identifiers
             if ($this->truthy($this->request->getData('clear_all'))) {
                 foreach (['_ticketUploaded','_ticketFilename','_ticketOriginalName'] as $rk) { unset($form[$rk]); }
-                foreach ([
-                    'operator','operator_country','operator_product',
-                    'dep_date','dep_time','dep_station','arr_station','arr_time',
-                    'train_no','ticket_no','price',
+                // Always clear ticket-derived fields. Keep manual ticketless journey basics (operator/stations/times/price) if ticketless is active.
+                $clearKeys = [
                     'actual_arrival_date','actual_dep_time','actual_arr_time',
                     'missed_connection_station','leg_class_purchased','leg_class_delivered','leg_downgraded','leg_reservation_purchased','leg_reservation_delivered',
                     // TRIN 3 – inline hooks/fields to reset along with files
@@ -544,8 +863,15 @@ class FlowController extends AppController
                     'fare_class_purchased','berth_seat_type','reserved_amenity_delivered','class_delivered_status','leg_class_purchased','leg_class_delivered','leg_downgraded','leg_reservation_purchased','leg_reservation_delivered',
                     'bike_booked','bike_count','bike_was_present','bike_caused_issue','bike_reservation_made','bike_reservation_required','bike_denied_boarding','bike_refusal_reason_provided','bike_refusal_reason_type',
                     'pmr_user','pmr_booked','pmr_delivered_status','pmr_promised_missing','pmr_facility_details',
-                    
-                ] as $rk) { unset($form[$rk]); }
+                ];
+                if (!$isTicketless) {
+                    $clearKeys = array_merge([
+                        'operator','operator_country','operator_product',
+                        'dep_date','dep_time','dep_station','arr_station','arr_time',
+                        'train_no','ticket_no','price','price_currency','price_known','scope_choice',
+                    ], $clearKeys);
+                }
+                foreach ($clearKeys as $rk) { unset($form[$rk]); }
                 // Clear controller-built helpers
                 unset($form['_miss_conn_choices']);
                 // Clear meta caches and detections
@@ -574,13 +900,18 @@ class FlowController extends AppController
                 $currentFile = (string)($form['_ticketFilename'] ?? '');
                 if ($currentFile !== '' && ($removeFile === $currentFile || basename($currentFile) === $removeBase)) {
                     unset($form['_ticketUploaded'], $form['_ticketFilename'], $form['_ticketOriginalName']);
-                    foreach ([
-                        'operator','operator_country','operator_product',
-                        'dep_date','dep_time','dep_station','arr_station','arr_time',
-                        'train_no','ticket_no','price',
+                    $clearKeys = [
                         'actual_arrival_date','actual_dep_time','actual_arr_time',
                         'missed_connection_station','leg_class_purchased','leg_class_delivered','leg_downgraded','leg_reservation_purchased','leg_reservation_delivered'
-                    ] as $rk) { unset($form[$rk]); }
+                    ];
+                    if (!$isTicketless) {
+                        $clearKeys = array_merge([
+                            'operator','operator_country','operator_product',
+                            'dep_date','dep_time','dep_station','arr_station','arr_time',
+                            'train_no','ticket_no','price','price_currency','price_known','scope_choice',
+                        ], $clearKeys);
+                    }
+                    foreach ($clearKeys as $rk) { unset($form[$rk]); }
                     unset($meta['_auto'], $meta['_segments_auto'], $meta['_passengers_auto'], $meta['_identifiers'], $meta['_barcode']);
                     unset($meta['extraction_provider'], $meta['extraction_confidence']);
                     unset($meta['_multi_tickets']);
@@ -734,13 +1065,19 @@ class FlowController extends AppController
             if ($cls !== '') {
                 $clsLow = strtolower(trim($cls));
                 $allowedCls = ['1','2','other','unknown'];
-                if (in_array($clsLow, $allowedCls, true)) { $meta['fare_class_purchased'] = $clsLow; }
+                if (in_array($clsLow, $allowedCls, true)) {
+                    $meta['fare_class_purchased'] = $clsLow;
+                    $form['fare_class_purchased'] = $clsLow;
+                }
             }
             $bst = (string)($this->request->getData('berth_seat_type') ?? '');
             if ($bst !== '') {
                 $bstLow = strtolower(trim($bst));
                 $allowedBst = ['seat','free','couchette','sleeper','none','unknown'];
-                if (in_array($bstLow, $allowedBst, true)) { $meta['berth_seat_type'] = $bstLow; }
+                if (in_array($bstLow, $allowedBst, true)) {
+                    $meta['berth_seat_type'] = $bstLow;
+                    $form['berth_seat_type'] = $bstLow;
+                }
             }
             $rad = (string)($this->request->getData('reserved_amenity_delivered') ?? '');
             if ($rad !== '') {
@@ -916,7 +1253,10 @@ class FlowController extends AppController
             $allowedFormKeys = [
                 'operator','operator_country','operator_product',
                 'dep_date','dep_time','dep_station','arr_station','arr_time',
-                'train_no','ticket_no','price',
+                // Station metadata (set by autocomplete; improves stability for ticketless and later distance/scope logic)
+                'dep_station_osm_id','dep_station_lat','dep_station_lon','dep_station_country','dep_station_type','dep_station_source',
+                'arr_station_osm_id','arr_station_lat','arr_station_lon','arr_station_country','arr_station_type','arr_station_source',
+                'train_no','ticket_no','price','price_currency','price_known','scope_choice','ticket_upload_mode',
                 'actual_arrival_date','actual_dep_time','actual_arr_time',
                 'missed_connection_station','leg_class_purchased','leg_class_delivered','leg_downgraded','leg_reservation_purchased','leg_reservation_delivered',
                 // passengers auto edit entries
@@ -949,6 +1289,11 @@ class FlowController extends AppController
                 if (in_array($staLow, ['ja','yes','y','1','true'], true)) { $meta['same_transaction_all'] = 'yes'; }
                 elseif (in_array($staLow, ['nej','no','n','0','false'], true)) { $meta['same_transaction_all'] = 'no'; }
                 elseif (in_array($staLow, ['unknown','ved ikke','-'], true)) { $meta['same_transaction_all'] = 'unknown'; }
+            }
+            // Ticketless/TRIN 2: Shared PNR scope (Art. 12 Q1b)
+            $pnrScope = (string)($this->request->getData('shared_pnr_scope') ?? '');
+            if ($pnrScope === 'yes' || $pnrScope === 'no') {
+                $meta['shared_pnr_scope'] = $pnrScope;
             }
             // TRIN 3 (PGR): Minimal Art. 12 questions inline — persist into meta so evaluators can use them immediately
             // 1) Seller channel → journey.seller_type + seller_type_* hooks
@@ -1181,7 +1526,18 @@ class FlowController extends AppController
                     $meta['_auto'] = $auto;
                     foreach (['dep_date','dep_time','dep_station','arr_station','arr_time','train_no','ticket_no','price'] as $rk) { $form[$rk] = isset($auto[$rk]['value']) ? (string)$auto[$rk]['value'] : ''; }
                     if (!empty($auto['operator']['value'])) { $form['operator'] = (string)$auto['operator']['value']; }
-                    if (!empty($auto['operator_country']['value'])) { $form['operator_country'] = (string)$auto['operator_country']['value']; }
+                    if (!empty($auto['operator_country']['value'])) {
+                        $ccRaw = (string)$auto['operator_country']['value'];
+                        // Normalize country names (e.g., "Denmark") to ISO2 (e.g., "DK") for downstream gating/policy.
+                        try {
+                            $cc = (new \App\Service\CountryNormalizer())->toIso2($ccRaw);
+                            if ($cc !== '') {
+                                $ccRaw = $cc;
+                                $meta['_auto']['operator_country']['value'] = $cc;
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+                        $form['operator_country'] = $ccRaw;
+                    }
                     if (!empty($auto['operator_product']['value'])) { $form['operator_product'] = (string)$auto['operator_product']['value']; }
 
                     // PMR/handicap auto-detection from ticket text (Art. 9/20 hooks)
@@ -1552,11 +1908,21 @@ class FlowController extends AppController
                                     $p = strtolower((string)((function_exists('env')?env('LLM_SEGMENTS_PRIMARY'):getenv('LLM_SEGMENTS_PRIMARY')) ?? ''));
                                     $primaryLlm = in_array($p, ['1','true','yes','on'], true);
                                 } catch (\Throwable $e) { $primaryLlm = false; }
-                                if ($primaryLlm && !empty($llmSegs)) {
-                                    $segAuto = $llmSegs;
+                                 if ($primaryLlm && !empty($llmSegs)) {
+                                    // Mark LLM-primary segments so downstream sanitizers can avoid dropping them.
+                                    $segAuto = array_values(array_map(function ($s) {
+                                        if (!is_array($s)) { return $s; }
+                                        // Force a stable marker even if the verifier labels the segment with another source.
+                                        // (We keep the original in case we want to audit/debug later.)
+                                        if (!isset($s['_orig_source'])) { $s['_orig_source'] = $s['source'] ?? null; }
+                                        $s['source'] = 'llm_primary';
+                                        if (!isset($s['confidence'])) { $s['confidence'] = 0.95; }
+                                        return $s;
+                                    }, $llmSegs));
                                     $meta['_segments_source'] = 'llm_primary';
+                                    $meta['_segments_trusted'] = true;
                                     $meta['logs'][] = 'LLM verify: using LLM segments as primary';
-                                } else {
+                                 } else {
                                 // Normalize stations before merge for better dedup
                                 $normStation = function(string $n): string {
                                     $n = trim($n); if ($n==='') return '';
@@ -1615,6 +1981,7 @@ class FlowController extends AppController
                         } catch (\Throwable $e) { $meta['logs'][] = 'WARN: LLM structuring failed: ' . $e->getMessage(); }
                         // Sanitize segments from both heuristics and LLM: drop non-station phrases (e.g., 'den dag og den afgang')
                         try {
+                            $trusted = !empty($meta['_segments_trusted']) || ((string)($meta['_segments_source'] ?? '') === 'llm_primary');
                             $isValidName = function(string $name): bool {
                                 $n = trim(mb_strtolower($name, 'UTF-8'));
                                 if ($n === '') return false;
@@ -1645,15 +2012,22 @@ class FlowController extends AppController
                                 return true;
                             };
                             $before = is_array($segAuto) ? count($segAuto) : 0;
-                            $segAuto = array_values(array_filter((array)$segAuto, function($s) use ($isValidName){
+                            $segAuto = array_values(array_filter((array)$segAuto, function($s) use ($isValidName, $trusted){
                                 $from = (string)($s['from'] ?? '');
                                 $to = (string)($s['to'] ?? '');
                                 if ($from === '' || $to === '' || $from === $to) return false;
-                                if (!$isValidName($from) || !$isValidName($to)) return false;
-                                return true;
+                                 // If LLM segments are trusted/primary, only apply minimal structural checks.
+                                 // (We still drop empty/from==to above to avoid downstream table breaks.)
+                                 if ($trusted) return true;
+                                 $src = (string)($s['source'] ?? '');
+                                 if ($src !== '' && strpos($src, 'llm_') === 0) return true;
+                                 if (!$isValidName($from) || !$isValidName($to)) return false;
+                                 return true;
                             }));
                             $after = count($segAuto);
-                            if ($after < $before) { $meta['logs'][] = 'Sanitized segments: removed ' . (int)($before-$after) . ' non-station row(s).'; }
+                            if (!$trusted && $after < $before) {
+                                $meta['logs'][] = 'Sanitized segments: removed ' . (int)($before-$after) . ' non-station row(s).';
+                            }
                         } catch (\Throwable $e) { /* ignore sanitize errors */ }
                         // Coalesce pseudo-skifts: when seg[i].to ≈ seg[i+1].from (e.g., 'BOLOGNA CLE' vs 'BOLOGNA CENTRALE'), merge into a single leg
                         try {
@@ -1908,16 +2282,118 @@ class FlowController extends AppController
                             $langs = (function_exists('env') ? env('TESSERACT_LANGS') : getenv('TESSERACT_LANGS')) ?: 'eng';
                             $out = @shell_exec(escapeshellarg((string)$tess) . ' ' . escapeshellarg((string)$dest2) . ' stdout -l ' . escapeshellarg((string)$langs) . ' 2>&1');
                             if (is_string($out) && trim($out) !== '') { $text2 = (string)$out; }
+                            // Optional LLM Vision OCR fallback for images (more robust on low-quality scans)
+                            if (trim((string)$text2) === '') {
+                                $visionEnabled = strtolower((string)((function_exists('env') ? env('LLM_VISION_ENABLED') : getenv('LLM_VISION_ENABLED')) ?? '0')) === '1';
+                                if ($visionEnabled) {
+                                    try {
+                                        [$vtxt, $vlogs] = (new \App\Service\Ocr\LlmVisionOcr())->extractTextFromImage($dest2);
+                                        if ($vtxt !== '') { $text2 = $vtxt; }
+                                    } catch (\Throwable $e) { /* ignore */ }
+                                }
+                            }
                         }
                     } catch (\Throwable $e) { $text2 = ''; }
                     $text2 = preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', (string)$text2) ?? (string)$text2;
-                    $summary = [ 'file' => $safe2, 'pnr' => null, 'dep_date' => null, 'passengers' => [], 'segments' => [] ];
+                    $summary = [ 'file' => $safe2, 'pnr' => null, 'dep_date' => null, 'passengers' => [], 'segments' => [], 'auto' => [], 'logs' => [] ];
                     if ($text2 !== '') {
                         $tp2 = new \App\Service\TicketParseService();
-                        $summary['segments'] = $tp2->parseSegmentsFromText($text2);
+                        $baseSegs = $tp2->parseSegmentsFromText($text2);
+                        $summary['segments'] = $baseSegs;
                         $summary['passengers'] = $tp2->extractPassengerData($text2);
                         $ids2 = $tp2->extractIdentifiers($text2); $summary['pnr'] = (string)($ids2['pnr'] ?? '');
                         $dates2 = $tp2->extractDates($text2); $summary['dep_date'] = (string)($dates2[0] ?? '');
+
+                        // Run the same extraction pipeline as the primary ticket (Heuristics + optional LLM).
+                        // This does NOT replace OCR/text extraction; it improves structuring and adds confidence/provenance.
+                        try {
+                            $broker2 = $this->buildExtractorBroker();
+                            $er2 = $broker2->run($text2);
+                            $summary['logs'] = array_merge($summary['logs'], (array)($er2->logs ?? []));
+                            // Convert to _auto-like shape for UI/table prefill
+                            foreach ((array)($er2->fields ?? []) as $k => $v) {
+                                if ($v === null || $v === '') { continue; }
+                                $summary['auto'][$k] = [
+                                    'value' => is_string($v) ? trim($v) : (string)$v,
+                                    'source' => (string)($er2->provider ?? 'unknown'),
+                                    'provider' => (string)($er2->provider ?? 'unknown'),
+                                    'confidence' => (float)($er2->confidence ?? 0.0),
+                                ];
+                            }
+                            // Prefer extracted dep_date/PNR if heuristics missed it
+                            if ((string)($summary['dep_date'] ?? '') === '' && !empty($summary['auto']['dep_date']['value'])) {
+                                $summary['dep_date'] = (string)$summary['auto']['dep_date']['value'];
+                            }
+                            if ((string)($summary['pnr'] ?? '') === '' && !empty($summary['auto']['ticket_no']['value'])) {
+                                $summary['pnr'] = (string)$summary['auto']['ticket_no']['value'];
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+
+                        // AI structuring for segments (preferred when available). This improves from/to/time parsing and can extract per-leg class/reservation.
+                        try {
+                            $forceMultiAi = $this->truthy(function_exists('env') ? env('LLM_MULTI_TICKETS_AI') : getenv('LLM_MULTI_TICKETS_AI'));
+                            $useStruct = $this->truthy(function_exists('env') ? env('USE_LLM_STRUCTURING') : getenv('USE_LLM_STRUCTURING'));
+                            $prov = strtolower((string)((function_exists('env') ? env('LLM_PROVIDER') : getenv('LLM_PROVIDER')) ?? 'disabled'));
+                            $hasKey = (string)((function_exists('env') ? env('OPENAI_API_KEY') : getenv('OPENAI_API_KEY')) ?? '') !== '';
+                            // User preference: run AI structuring for extra tickets when LLM is configured (even if USE_LLM_STRUCTURING is off).
+                            if ($forceMultiAi || $useStruct || ($prov !== 'disabled' && $hasKey)) {
+                                $segLlm2 = (new \App\Service\TicketExtraction\LlmSegmentsExtractor())->extractSegments($text2, true);
+                                $llmSegs2 = (array)($segLlm2['segments'] ?? []);
+                                if (!empty($segLlm2['logs'])) { $summary['logs'] = array_merge($summary['logs'], (array)$segLlm2['logs']); }
+                                if (!empty($llmSegs2)) {
+                                    // Normalize to our internal segment keys (from/to/schedDep/schedArr/trainNo/depDate/arrDate + optional classPurchased/reservationPurchased)
+                                    $norm = static function($s): array {
+                                        $s = is_array($s) ? $s : [];
+                                        return [
+                                            'from' => (string)($s['from'] ?? ''),
+                                            'to' => (string)($s['to'] ?? ''),
+                                            'schedDep' => (string)($s['schedDep'] ?? ''),
+                                            'schedArr' => (string)($s['schedArr'] ?? ''),
+                                            'trainNo' => (string)($s['trainNo'] ?? ''),
+                                            'depDate' => (string)($s['depDate'] ?? ''),
+                                            'arrDate' => (string)($s['arrDate'] ?? ''),
+                                            'classPurchased' => (string)($s['classPurchased'] ?? ''),
+                                            'reservationPurchased' => (string)($s['reservationPurchased'] ?? ''),
+                                            'confidence' => isset($s['confidence']) ? (float)$s['confidence'] : null,
+                                            'source' => 'llm_structuring',
+                                        ];
+                                    };
+                                    $llmNorm = array_map($norm, $llmSegs2);
+                                    if (empty($baseSegs)) {
+                                        $summary['segments'] = $llmNorm;
+                                    } else {
+                                        // Merge: keep base as skeleton, but fill class/reservation hints from LLM when matched.
+                                        $keyOf = static function(array $s): string {
+                                            return strtolower(trim((string)($s['from'] ?? ''))) . '|' . strtolower(trim((string)($s['to'] ?? ''))) . '|' . (string)($s['schedDep'] ?? '');
+                                        };
+                                        $map = [];
+                                        foreach ($llmNorm as $ls) { $map[$keyOf($ls)] = $ls; }
+                                        $merged = [];
+                                        foreach ($baseSegs as $bs) {
+                                            $bs = is_array($bs) ? $bs : [];
+                                            $k = $keyOf($bs);
+                                            if (isset($map[$k])) {
+                                                $ls = $map[$k];
+                                                if (empty($bs['classPurchased']) && !empty($ls['classPurchased'])) { $bs['classPurchased'] = $ls['classPurchased']; }
+                                                if (empty($bs['reservationPurchased']) && !empty($ls['reservationPurchased'])) { $bs['reservationPurchased'] = $ls['reservationPurchased']; }
+                                                if (empty($bs['trainNo']) && !empty($ls['trainNo'])) { $bs['trainNo'] = $ls['trainNo']; }
+                                            }
+                                            $merged[] = $bs;
+                                        }
+                                        $summary['segments'] = $merged;
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+
+                        // Keep heuristics fallback for class/reservation if LLM isn't available.
+                        if (empty($summary['auto'])) {
+                            try {
+                                $map2 = (new \App\Service\OcrHeuristicsMapper())->mapText($text2);
+                                foreach ((array)($map2['auto'] ?? []) as $k => $v) { $summary['auto'][$k] = $v; }
+                                if (!empty($map2['logs'])) { $summary['logs'] = array_merge($summary['logs'], (array)$map2['logs']); }
+                            } catch (\Throwable $e) { /* ignore */ }
+                        }
                     }
                     // Skip if this filename already exists in the list
                     $exists = false; foreach ((array)$meta['_multi_tickets'] as $ex) { if ((string)($ex['file'] ?? '') === (string)$safe2) { $exists = true; break; } }
@@ -1932,11 +2408,28 @@ class FlowController extends AppController
             $session->write('flow.form', $form);
 
             if ($this->truthy($this->request->getData('continue'))) {
+                $flags = (array)$session->read('flow.flags') ?: [];
+                $flags['step2_done'] = '1';
+                $session->write('flow.flags', $flags);
                 return $this->redirect(['action' => 'journey']);
             }
         }
 
     // Services (recompute after any upload/edits)
+        // Normalize operator_country to ISO2 early (some extractors/UI inputs provide country names like "Denmark").
+        try {
+            $ccRaw = (string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''));
+            $cc = (new \App\Service\CountryNormalizer())->toIso2($ccRaw);
+            if ($cc !== '') {
+                $form['operator_country'] = $cc;
+                if (!isset($meta['_auto']) || !is_array($meta['_auto'])) { $meta['_auto'] = []; }
+                if (!isset($meta['_auto']['operator_country']) || !is_array($meta['_auto']['operator_country'])) {
+                    $meta['_auto']['operator_country'] = ['value' => $cc, 'source' => 'normalize'];
+                } else {
+                    $meta['_auto']['operator_country']['value'] = $cc;
+                }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
         // Fallbacks to improve scope inference when extractor missed stations
         try {
             if (empty($journey['segments']) && !empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) {
@@ -1949,6 +2442,175 @@ class FlowController extends AppController
                 $meta['_auto']['arr_station'] = ['value' => (string)$form['arr_station'], 'source' => 'form'];
             }
         } catch (\Throwable $e) { /* ignore */ }
+
+        // Ticketless mode: when no ticket files are uploaded, synthesize minimal auto fields + a single segment
+        // so exemption matrix + downstream steps can work (split flow only).
+        try {
+            $ticketModeNow = (string)($form['ticket_upload_mode'] ?? 'ticket');
+            $hasTicketFilesNow = !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
+            if ($ticketModeNow === 'ticketless' && !$hasTicketFilesNow) {
+                $provider = 'ticketless';
+                $conf = 1.0;
+
+                $op = trim((string)($form['operator'] ?? ''));
+                $opC = strtoupper(trim((string)($form['operator_country'] ?? '')));
+                // Normalize "Denmark"/"Danmark"/etc to ISO2 for downstream policy lookups.
+                try {
+                    $cc = (new \App\Service\CountryNormalizer())->toIso2($opC);
+                    if ($cc !== '') {
+                        $opC = $cc;
+                        $form['operator_country'] = $opC;
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+                $prod = trim((string)($form['operator_product'] ?? ''));
+                $depDate = trim((string)($form['dep_date'] ?? ''));
+                $depTime = trim((string)($form['dep_time'] ?? ''));
+                $arrTime = trim((string)($form['arr_time'] ?? ''));
+                $from = trim((string)($form['dep_station'] ?? ''));
+                $to = trim((string)($form['arr_station'] ?? ''));
+
+                // Ticketless: normalize operator/country/product using local catalog (no tokens).
+                try {
+                    $cat = new \App\Service\OperatorCatalog();
+                    $countryAssumed = ((string)($form['operator_country_assumed'] ?? '0')) === '1';
+                    if ($op !== '') {
+                        $found = $cat->findOperator($op);
+                        if ($found) {
+                            if (($opC === '' || $countryAssumed) && !empty($found['country'])) {
+                                $opC = (string)$found['country'];
+                                $form['operator_country'] = $opC;
+                                $form['operator_country_assumed'] = '1';
+                            }
+                            if (!empty($found['name']) && strcasecmp((string)$found['name'], $op) !== 0) {
+                                $op = (string)$found['name'];
+                                $form['operator'] = $op;
+                                $form['operator_assumed'] = '1';
+                            }
+                        }
+                    }
+                    if ($prod !== '') {
+                        $normProd = $cat->findProduct($prod);
+                        if ($normProd && strcasecmp($normProd, $prod) !== 0) {
+                            $prod = $normProd;
+                            $form['operator_product'] = $prod;
+                            $form['operator_product_assumed'] = '1';
+                        }
+                    }
+                    if ($op === '' && $prod !== '') {
+                        $byProd = $cat->findOperatorByProduct($prod);
+                        if ($byProd) {
+                            if (!empty($byProd['name'])) {
+                                $op = (string)$byProd['name'];
+                                $form['operator'] = $op;
+                                $form['operator_assumed'] = '1';
+                            }
+                            if (($opC === '' || $countryAssumed) && !empty($byProd['country'])) {
+                                $opC = (string)$byProd['country'];
+                                $form['operator_country'] = $opC;
+                                $form['operator_country_assumed'] = '1';
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+
+                // Scope override from UI (v1 mapping)
+                $sc = (string)($form['scope_choice'] ?? '');
+                if ($sc === 'regional') { $journey['scope'] = 'regional'; }
+                elseif ($sc === 'long_distance') { $journey['scope'] = 'long_domestic'; }
+                elseif ($sc === 'international') { $journey['scope'] = 'intl_inside_eu'; }
+                elseif ($sc === '') { unset($journey['scope']); }
+
+                // Country for exemption matrix fallback
+                if ($opC !== '') {
+                    $journey['country']['value'] = $opC;
+                }
+
+                if (!isset($meta['_auto']) || !is_array($meta['_auto'])) { $meta['_auto'] = []; }
+                if ($op !== '') { $meta['_auto']['operator'] = ['value' => $op, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($opC !== '') { $meta['_auto']['operator_country'] = ['value' => $opC, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($prod !== '') { $meta['_auto']['operator_product'] = ['value' => $prod, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($depDate !== '') { $meta['_auto']['dep_date'] = ['value' => $depDate, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($depTime !== '') { $meta['_auto']['dep_time'] = ['value' => $depTime, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($from !== '') { $meta['_auto']['dep_station'] = ['value' => $from, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($to !== '') { $meta['_auto']['arr_station'] = ['value' => $to, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                if ($arrTime !== '') { $meta['_auto']['arr_time'] = ['value' => $arrTime, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf]; }
+                // Optional purchased class/reservation hints (ticketless UI)
+                try {
+                    $fc = strtolower(trim((string)($form['fare_class_purchased'] ?? ($meta['fare_class_purchased'] ?? ''))));
+                    if ($fc !== '' && in_array($fc, ['1','2','other','unknown'], true)) {
+                        $meta['_auto']['fare_class_purchased'] = ['value' => $fc, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf];
+                    }
+                    $bst = strtolower(trim((string)($form['berth_seat_type'] ?? ($meta['berth_seat_type'] ?? ''))));
+                    if ($bst !== '' && in_array($bst, ['seat','free','couchette','sleeper','none','unknown'], true)) {
+                        $meta['_auto']['berth_seat_type'] = ['value' => $bst, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf];
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+
+                // Optional price
+                $pk = strtolower(trim((string)($form['price_known'] ?? '')));
+                if ($pk === 'no') {
+                    unset($form['price'], $form['price_currency']);
+                }
+                $priceRaw = trim((string)($form['price'] ?? ''));
+                $cur = strtoupper(trim((string)($form['price_currency'] ?? '')));
+                if ($priceRaw !== '' && ($pk === 'yes' || $pk === '')) {
+                    $num = preg_replace('/[^0-9,\\.]/', '', $priceRaw);
+                    $num = str_replace(',', '.', (string)$num);
+                    $amt = is_numeric($num) ? (float)$num : 0.0;
+                    if ($amt > 0) {
+                        if ($cur === '') {
+                            $cur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                            $form['price_currency'] = $cur;
+                            $form['price_currency_assumed'] = '1';
+                        }
+                        $meta['_auto']['price'] = ['value' => number_format($amt, 2, '.', '') . ' ' . $cur, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf, 'currency' => $cur];
+                        $meta['_auto']['price_currency'] = ['value' => $cur, 'source' => $provider, 'provider' => $provider, 'confidence' => $conf];
+                        $journey['ticketPrice'] = ['value' => number_format($amt, 2, '.', '') . ' ' . $cur, 'currency' => $cur];
+                    }
+                }
+
+                // Segment skeleton (single leg)
+                $seg = [
+                    'from' => $from,
+                    'to' => $to,
+                    'schedDep' => $depTime,
+                    'schedArr' => $arrTime,
+                    'trainNo' => (string)($form['train_no'] ?? ''),
+                    'depDate' => $depDate,
+                    'arrDate' => $depDate,
+                    'operator' => $op,
+                    'product' => $prod,
+                    'country' => $opC,
+                ];
+                // Enrich with ticketless class/reservation when provided, so downstream evaluators (incl. downgrade) can work.
+                try {
+                    if (!empty($meta['_auto']['fare_class_purchased']['value'])) {
+                        $seg['fare_class_purchased'] = (string)$meta['_auto']['fare_class_purchased']['value'];
+                    }
+                    if (!empty($meta['_auto']['berth_seat_type']['value'])) {
+                        $bstv = (string)$meta['_auto']['berth_seat_type']['value'];
+                        // Seat/free are expressed as reserved_amenity_booked; couchette/sleeper treated as purchased comfort level.
+                        if (in_array($bstv, ['seat','free'], true)) {
+                            $seg['reserved_amenity_booked'] = $bstv === 'seat' ? 'seat' : 'none';
+                        } elseif (in_array($bstv, ['couchette','sleeper'], true)) {
+                            $seg['berth_seat_type'] = $bstv;
+                        }
+                    }
+                } catch (\Throwable $e) { /* ignore */ }
+                $meta['_segments_auto'] = [$seg];
+                $meta['extraction_provider'] = $provider;
+                $meta['extraction_confidence'] = (string)$conf;
+                if (empty($journey['segments'])) { $journey['segments'] = [$seg]; }
+                $meta['logs'][] = 'Ticketless: synthesized 1 segment for exemptions/flow.';
+
+                // Persist synthesized structures so later steps can rely on them even if user navigates away/back.
+                $session->write('flow.form', $form);
+                $session->write('flow.meta', $meta);
+                $session->write('flow.journey', $journey);
+            }
+        } catch (\Throwable $e) {
+            $meta['logs'][] = 'WARN: ticketless synth failed: ' . $e->getMessage();
+        }
         // Infer scope from stations before computing profile
         try {
             $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $meta);
@@ -2007,7 +2669,8 @@ class FlowController extends AppController
 
         // If der ikke er nogen filer tilbage, ryd visningsfelter og grupper
         $hasTickets = !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
-        if (!$hasTickets) {
+        $ticketModeNow2 = (string)($form['ticket_upload_mode'] ?? 'ticket');
+        if (!$hasTickets && $ticketModeNow2 !== 'ticketless') {
             foreach ([
                 'operator','operator_country','operator_product',
                 'dep_date','dep_time','dep_station','arr_station','arr_time',
@@ -3813,8 +4476,19 @@ class FlowController extends AppController
             ],
             'expenses' => $expensesIn,
             'already_refunded' => 0,
-            // Apply 25% fee on expenses only, not on compensation base (ticket price)
-            'service_fee_mode' => 'expenses_only',
+            // Art. 18 extras + CIV/Annex II downgrade inputs
+            'return_to_origin_expense' => $form['return_to_origin_expense'] ?? null,
+            'return_to_origin_amount' => $form['return_to_origin_amount'] ?? null,
+            'reroute_extra_costs' => $form['reroute_extra_costs'] ?? null,
+            'reroute_extra_costs_amount' => $form['reroute_extra_costs_amount'] ?? null,
+            'downgrade_occurred' => $form['downgrade_occurred'] ?? null,
+            'downgrade_comp_basis' => $form['downgrade_comp_basis'] ?? ($meta['downgrade_comp_basis'] ?? null),
+            'downgrade_segment_share' => $form['downgrade_segment_share'] ?? ($meta['downgrade_segment_share'] ?? null),
+            'leg_class_purchased' => $form['leg_class_purchased'] ?? null,
+            'leg_class_delivered' => $form['leg_class_delivered'] ?? null,
+            'leg_reservation_purchased' => $form['leg_reservation_purchased'] ?? null,
+            'leg_reservation_delivered' => $form['leg_reservation_delivered'] ?? null,
+            'leg_downgraded' => $form['leg_downgraded'] ?? null,
         ]);
 
         // If user chose refund_return (Art. 18(1)(1)), zero Art.19 and surface refund of ticket price
@@ -4046,7 +4720,7 @@ class FlowController extends AppController
     }
 
     /**
-     * Split-step: Choices (TRIN 5 - Transport til/fra (Art. 20))
+     * Split-step: Choices (TRIN 6 - Transport til/fra (Art. 20(2)(c)) paa sporet)
      */
     public function choices(): \Cake\Http\Response|null
     {
@@ -4057,29 +4731,51 @@ class FlowController extends AppController
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
 
-        // Strict gating: prevent direct URL skipping of TRIN 3/4.
-        $step3Done = ((string)($flags['step3_done'] ?? '')) === '1';
-        $step4Done = ((string)($flags['step4_done'] ?? '')) === '1';
+        // TRIN 7 prereq: TRIN 6 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step6_done'], 'choices');
+        if ($resp) { return $resp; }
+
+        // TRIN 6 prereq: TRIN 5 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step5_done'], 'incident');
+        if ($resp) { return $resp; }
+
         $main = (string)($incident['main'] ?? '');
-        if (!$step3Done) {
-            try { $this->Flash->warning('Udfyld TRIN 3 foerst.'); } catch (\Throwable $e) { /* ignore */ }
-            return $this->redirect(['action' => 'journey']);
+        if (!in_array($main, ['delay','cancellation'], true)) {
+            if (!$preview) {
+                try { $this->Flash->warning('Udfyld TRIN 5 foerst.'); } catch (\Throwable $e) { /* ignore */ }
+                return $this->redirect(['action' => 'incident']);
+            }
+            $this->set('flowPreview', true);
+            $this->set('flowMissingPrereqs', array_values(array_unique(array_merge((array)$missing, ['incident_main']))));
         }
-        if (!$step4Done || !in_array($main, ['delay','cancellation'], true)) {
-            try { $this->Flash->warning('Udfyld TRIN 4 foerst.'); } catch (\Throwable $e) { /* ignore */ }
-            return $this->redirect(['action' => 'incident']);
+
+        // TRIN 6 no longer contains the Art.20(3) station flow (moved to TRIN 4).
+        // Keep any station-derived session keys intact here.
+
+        // Back-compat migration: older sessions used assistance_alt_to_destination* in TRIN 5.
+        if (empty($form['a20_where_ended']) && !empty($form['assistance_alt_to_destination'])) {
+            $form['a20_where_ended'] = (string)$form['assistance_alt_to_destination'];
+            $form['a20_arrival_station'] = (string)($form['assistance_alt_arrival_station'] ?? '');
+            $form['a20_arrival_station_other'] = (string)($form['assistance_alt_arrival_station_other'] ?? '');
+            if (!isset($form['a20_where_ended_assumed']) && isset($form['assistance_alt_to_destination_assumed'])) {
+                $form['a20_where_ended_assumed'] = (string)$form['assistance_alt_to_destination_assumed'];
+            }
+            // Derive handoff_station (if applicable)
+            $hs = (string)($form['a20_arrival_station'] ?? '');
+            if ($hs === 'other') { $hs = (string)($form['a20_arrival_station_other'] ?? ''); }
+            $form['handoff_station'] = trim($hs);
+            $session->write('flow.form', $form);
         }
+
         if ($this->request->is('post')) {
             foreach ([
                 // Art. 20 transport (moved from incident)
-                'stranded_location','journey_outcome','blocked_train_alt_transport','blocked_no_transport_action',
-                'assistance_alt_transport_offered_by','assistance_alt_transport_type','assistance_alt_to_destination',
-                'assistance_alt_arrival_station','assistance_alt_arrival_station_other',
+                'maps_opt_in_trin5',
+                'is_stranded_trin5','stranded_location','blocked_train_alt_transport','blocked_no_transport_action',
+                'assistance_alt_transport_type','a20_where_ended',
+                'a20_arrival_station','a20_arrival_station_other',
+                'a20_arrival_station_other_osm_id','a20_arrival_station_other_lat','a20_arrival_station_other_lon','a20_arrival_station_other_country','a20_arrival_station_other_type','a20_arrival_station_other_source',
                 'blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency',
-                // Art. 20(3) station-specific
-                'a20_3_solution_offered','a20_3_solution_type','a20_3_solution_offered_by','a20_3_no_solution_action',
-                'a20_3_outcome','a20_3_self_arranged_type','a20_3_self_paid_amount','a20_3_self_paid_currency',
-                'a20_3_to_destination','a20_3_arrival_station','a20_3_arrival_station_other',
             ] as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') {
@@ -4087,8 +4783,9 @@ class FlowController extends AppController
                     else { $form[$k] = is_string($v) ? $v : (string)$v; }
                 }
             }
+
+            // If the user is stranded at a station, we need to know which station they are currently at.
             try { $blockedReceipt = $this->request->getUploadedFile('blocked_self_paid_receipt'); } catch (\Throwable $e) { $blockedReceipt = null; }
-            try { $stationReceipt = $this->request->getUploadedFile('a20_3_self_paid_receipt'); } catch (\Throwable $e) { $stationReceipt = null; }
             $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
             if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
             if ($blockedReceipt && $blockedReceipt->getError() === \UPLOAD_ERR_OK) {
@@ -4099,21 +4796,13 @@ class FlowController extends AppController
             } elseif (($rawBlocked = $this->request->getData('blocked_self_paid_receipt')) && is_string($rawBlocked)) {
                 $form['blocked_self_paid_receipt'] = $rawBlocked;
             }
-            if ($stationReceipt && $stationReceipt->getError() === \UPLOAD_ERR_OK) {
-                $name = (string)($stationReceipt->getClientFilename() ?? ('station_' . bin2hex(random_bytes(4))));
-                $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name);
-                $target = $uploadDir . (uniqid('a20_3_') . '_' . $safe);
-                try { $stationReceipt->moveTo($target); $form['a20_3_self_paid_receipt'] = $target; } catch (\Throwable $e) { /* ignore */ }
-            } elseif (($rawStation = $this->request->getData('a20_3_self_paid_receipt')) && is_string($rawStation)) {
-                $form['a20_3_self_paid_receipt'] = $rawStation;
-            }
 
-            // Normalize Art. 20 branch fields to avoid stale values
-            $loc = (string)($form['stranded_location'] ?? '');
-            if ($loc !== 'track') {
+            // Normalize TRIN 5 (track) branch fields to avoid stale values.
+            $isStrandedTrin5 = strtolower(trim((string)($form['is_stranded_trin5'] ?? '')));
+            if ($isStrandedTrin5 !== 'yes') {
+                // Clear only track-scoped keys. Do NOT clear station-derived Art.20(3) fields (TRIN 4).
                 unset(
                     $form['blocked_train_alt_transport'],
-                    $form['assistance_alt_transport_offered_by'],
                     $form['assistance_alt_transport_type'],
                     $form['blocked_no_transport_action'],
                     $form['blocked_self_paid_transport_type'],
@@ -4121,24 +4810,34 @@ class FlowController extends AppController
                     $form['blocked_self_paid_currency'],
                     $form['blocked_self_paid_receipt']
                 );
+                if ((string)($form['stranded_location'] ?? '') === 'track') {
+                    unset(
+                        $form['stranded_location'],
+                        $form['a20_where_ended'],
+                        $form['a20_arrival_station'],
+                        $form['a20_arrival_station_other'],
+                        $form['a20_where_ended_assumed'],
+                        $form['handoff_station']
+                    );
+                    // Only clear the canonical flag if it was set from the track flow.
+                    if ((string)($form['is_stranded'] ?? '') === 'yes') {
+                        $form['is_stranded'] = 'no';
+                    }
+                }
+
+                $session->write('flow.form', $form);
+                $flags['step6_done'] = '1';
+                $session->write('flow.flags', $flags);
+                try { $this->Flash->success('Transportvalg er gemt. Fortsaetter til dine valg.'); } catch (\Throwable $e) { /* ignore */ }
+                return $this->redirect(['action' => 'remedies']);
             }
-            if ($loc !== 'station') {
-                unset(
-                    $form['a20_3_solution_offered'],
-                    $form['a20_3_solution_type'],
-                    $form['a20_3_solution_offered_by'],
-                    $form['a20_3_no_solution_action'],
-                    $form['a20_3_self_arranged_type'],
-                    $form['a20_3_self_paid_amount'],
-                    $form['a20_3_self_paid_currency'],
-                    $form['a20_3_self_paid_receipt']
-                );
-            }
+
+            // TRIN 5 is track-only: set shared canonical keys for downstream evaluators.
+            $form['is_stranded'] = 'yes';
+            $form['stranded_location'] = 'track';
+
             if (($form['blocked_train_alt_transport'] ?? '') !== 'yes') {
-                unset(
-                    $form['assistance_alt_transport_offered_by'],
-                    $form['assistance_alt_transport_type']
-                );
+                unset($form['assistance_alt_transport_type']);
             }
             if (($form['blocked_train_alt_transport'] ?? '') !== 'no') {
                 unset(
@@ -4157,78 +4856,55 @@ class FlowController extends AppController
                     $form['blocked_self_paid_receipt']
                 );
             }
-            if (($form['a20_3_solution_offered'] ?? '') !== 'yes') {
-                unset(
-                    $form['a20_3_solution_type'],
-                    $form['a20_3_solution_offered_by']
-                );
-            }
-            if (($form['a20_3_solution_offered'] ?? '') !== 'no') {
-                unset($form['a20_3_no_solution_action']);
-            }
-            if (($form['a20_3_no_solution_action'] ?? '') !== 'self_arranged') {
-                unset(
-                    $form['a20_3_self_arranged_type'],
-                    $form['a20_3_self_paid_amount'],
-                    $form['a20_3_self_paid_currency'],
-                    $form['a20_3_self_paid_receipt']
-                );
-            }
-            // Resolution endpoint: unify Art.20(2c) + Art.20(3) into shared keys for later steps/downgrade.
-            $toDest = '';
-            $arrSt = '';
-            $arrOther = '';
-            if ($loc === 'track' && (string)($form['blocked_train_alt_transport'] ?? '') === 'yes') {
-                $toDest = (string)($form['assistance_alt_to_destination'] ?? '');
-                $arrSt = (string)($form['assistance_alt_arrival_station'] ?? '');
-                $arrOther = (string)($form['assistance_alt_arrival_station_other'] ?? '');
-            } elseif ($loc === 'station' && (string)($form['a20_3_solution_offered'] ?? '') === 'yes') {
-                $toDest = (string)($form['a20_3_to_destination'] ?? '');
-                $arrSt = (string)($form['a20_3_arrival_station'] ?? '');
-                $arrOther = (string)($form['a20_3_arrival_station_other'] ?? '');
-            }
-            unset($form['a20_3_to_destination'], $form['a20_3_arrival_station'], $form['a20_3_arrival_station_other']);
-            if ($toDest === '') {
-                unset($form['assistance_alt_to_destination']);
-                unset($form['assistance_alt_arrival_station'], $form['assistance_alt_arrival_station_other']);
+
+            // TRIN 5 resolution endpoint: validate + derive handoff_station for TRIN 6.
+            if ((string)($form['a20_where_ended'] ?? '') !== '') {
+                $form['a20_where_ended_assumed'] = '0';
             } else {
-                $form['assistance_alt_to_destination'] = $toDest;
-                $form['assistance_alt_arrival_station'] = $arrSt;
-                $form['assistance_alt_arrival_station_other'] = $arrOther;
+                unset($form['a20_where_ended_assumed']);
             }
 
-            $toDest = (string)($form['assistance_alt_to_destination'] ?? '');
+            $toDest = (string)($form['a20_where_ended'] ?? '');
             if (!in_array($toDest, ['nearest_station','other_departure_point','final_destination'], true)) {
-                unset($form['assistance_alt_to_destination']);
-                unset($form['assistance_alt_arrival_station'], $form['assistance_alt_arrival_station_other']);
+                unset($form['a20_where_ended']);
+                unset($form['a20_arrival_station'], $form['a20_arrival_station_other'], $form['handoff_station']);
             } elseif (!in_array($toDest, ['nearest_station','other_departure_point'], true)) {
                 // Only ask arrival station when they end at a station (not final destination).
-                unset($form['assistance_alt_arrival_station'], $form['assistance_alt_arrival_station_other']);
+                unset($form['a20_arrival_station'], $form['a20_arrival_station_other'], $form['handoff_station']);
             } else {
-                $arrSt = (string)($form['assistance_alt_arrival_station'] ?? '');
+                $arrSt = (string)($form['a20_arrival_station'] ?? '');
                 if ($arrSt !== 'other') {
-                    unset($form['assistance_alt_arrival_station_other']);
+                    unset($form['a20_arrival_station_other']);
+                    unset(
+                        $form['a20_arrival_station_other_osm_id'],
+                        $form['a20_arrival_station_other_lat'],
+                        $form['a20_arrival_station_other_lon'],
+                        $form['a20_arrival_station_other_country'],
+                        $form['a20_arrival_station_other_type'],
+                        $form['a20_arrival_station_other_source']
+                    );
                 }
-            }
-            if ($loc !== 'track' && $loc !== 'station') {
-                unset($form['journey_outcome']);
-            }
-            // Auto-derive journey_outcome when station/track "no solution" branches are chosen
-            if ($loc === 'station' && (string)($form['a20_3_solution_offered'] ?? '') === 'no') {
-                $ns = (string)($form['a20_3_no_solution_action'] ?? '');
-                if ($ns === 'self_arranged') { $form['journey_outcome'] = 'self_arranged'; }
-                elseif ($ns === 'went_home') { $form['journey_outcome'] = 'returned_origin'; }
-                elseif ($ns === 'abandoned') { $form['journey_outcome'] = 'abandoned'; }
-            }
-            if ($loc === 'track' && (string)($form['blocked_train_alt_transport'] ?? '') === 'no') {
-                $ba = (string)($form['blocked_no_transport_action'] ?? '');
-                if ($ba === 'self_arranged') { $form['journey_outcome'] = 'self_arranged'; }
-                elseif (in_array($ba, ['waited','walked_station','evacuated_later'], true)) {
-                    $form['journey_outcome'] = 'continued_trip';
-                }
+                $hs = $arrSt === 'other' ? (string)($form['a20_arrival_station_other'] ?? '') : $arrSt;
+                $form['handoff_station'] = trim((string)$hs);
             }
 
+            // Cleanup legacy TRIN 5 keys (pre-split model).
+            unset(
+                $form['assistance_alt_to_destination'],
+                $form['assistance_alt_arrival_station'],
+                $form['assistance_alt_arrival_station_other'],
+                $form['assistance_alt_to_destination_assumed']
+            );
+
+            // Currency defaults (TRIN 5): only default when an amount is present.
+            try {
+                $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                $this->applyCurrencyDefaultForAmount($form, 'blocked_self_paid_amount', 'blocked_self_paid_currency', $defaultCur);
+            } catch (\Throwable $e) { /* ignore */ }
+
             $session->write('flow.form', $form);
+            $flags['step6_done'] = '1';
+            $session->write('flow.flags', $flags);
             try { $this->Flash->success('Transportvalg er gemt. Fortsaetter til dine valg.'); } catch (\Throwable $e) { /* ignore */ }
             return $this->redirect(['action' => 'remedies']);
         }
@@ -4238,8 +4914,91 @@ class FlowController extends AppController
             $journey = $inferRes['journey'];
         } catch (\Throwable $e) { /* ignore for choices */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
-        $this->set(compact('form','flags','incident','profile','meta'));
+        $maps = (array)$session->read('flow.maps') ?: [];
+        $this->set(compact('form','flags','incident','profile','meta','maps'));
         return null;
+    }
+
+    /**
+     * Helper: Fetch Google transit alternatives and store them in session (opt-in on click).
+     * Used by TRIN 5 and TRIN 6 as UX helper; not part of legal gating.
+     */
+    public function mapsRoutes(): \Cake\Http\Response|null
+    {
+        $this->request->allowMethod(['post']);
+        $session = $this->request->getSession();
+        $form = (array)$session->read('flow.form') ?: [];
+
+        $context = (string)($this->request->getData('context') ?? '');
+        if (!in_array($context, ['trin5','trin6'], true)) {
+            $context = 'trin6';
+        }
+
+        $origin = trim((string)($this->request->getData('origin') ?? ''));
+        $destination = trim((string)($this->request->getData('destination') ?? ''));
+        $departureTime = trim((string)($this->request->getData('departure_time') ?? ''));
+
+        // Persist opt-in per step to avoid TRIN 5 "popping" when user only enabled Maps in TRIN 6 (and vice versa).
+        // Keep legacy 'maps_opt_in' as read-only fallback for older sessions, but do not write it anymore.
+        $legacyOptIn = $this->truthy($this->request->getData('maps_opt_in') ?? null);
+        $optInKey = $context === 'trin5' ? 'maps_opt_in_trin5' : 'maps_opt_in_trin6';
+        $optIn = $this->truthy($this->request->getData($optInKey) ?? null) || $legacyOptIn;
+        if ($optIn) { $form[$optInKey] = '1'; }
+        else { unset($form[$optInKey]); }
+        unset($form['maps_opt_in']);
+        $session->write('flow.form', $form);
+
+        $svc = new \App\Service\GoogleRoutesService();
+        if (!$svc->isConfigured()) {
+            return $this->response
+                ->withType('application/json')
+                ->withStringBody(json_encode([
+                    'ok' => false,
+                    'error' => 'Google Routes er ikke konfigureret (mangler API key).',
+                ], JSON_UNESCAPED_SLASHES));
+        }
+
+        // Small cache per session to control cost.
+        $bucket = $departureTime !== '' ? substr($departureTime, 0, 16) : 'now';
+        $cacheKey = sha1($context . '|' . $origin . '|' . $destination . '|' . $bucket);
+        $cache = (array)$session->read('flow.maps_cache') ?: [];
+        $now = time();
+        if (isset($cache[$cacheKey]) && is_array($cache[$cacheKey])) {
+            $ts = (int)($cache[$cacheKey]['ts'] ?? 0);
+            $payload = $cache[$cacheKey]['payload'] ?? null;
+            if ($ts > 0 && ($now - $ts) < 900 && is_array($payload)) {
+                return $this->response
+                    ->withType('application/json')
+                    ->withStringBody(json_encode($payload, JSON_UNESCAPED_SLASHES));
+            }
+        }
+
+        $opts = [];
+        if ($departureTime !== '') { $opts['departureTime'] = $departureTime; }
+        $res = $svc->computeTransitRoutes($origin, $destination, $opts);
+
+        $payload = [
+            'ok' => (bool)($res['ok'] ?? false),
+            'error' => $res['error'] ?? null,
+            'context' => $context,
+            'origin' => $origin,
+            'destination' => $destination,
+            'generated_at' => gmdate('c'),
+            'routes' => $res['routes'] ?? [],
+        ];
+
+        $cache[$cacheKey] = ['ts' => $now, 'payload' => $payload];
+        // Keep cache bounded.
+        if (count($cache) > 12) {
+            $cache = array_slice($cache, -12, null, true);
+        }
+        $session->write('flow.maps_cache', $cache);
+        $session->write('flow.maps_last', $payload);
+        $session->write('flow.maps.' . $context, $payload);
+
+        return $this->response
+            ->withType('application/json')
+            ->withStringBody(json_encode($payload, JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -4254,11 +5013,32 @@ class FlowController extends AppController
         $flags = (array)$session->read('flow.flags') ?: [];
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
+
+        // If the user explicitly reached their final destination via Art.20 transport (not an assumed fallback),
+        // TRIN 6 is only needed when the journey no longer had any purpose (Art.18(1)(a)).
+        $toDest0 = (string)($form['a20_where_ended'] ?? '');
+        $assumed0 = (string)($form['a20_where_ended_assumed'] ?? '0');
+        $arrivedFinalExplicit = ($toDest0 === 'final_destination' && $assumed0 !== '1');
+        if ($arrivedFinalExplicit && (string)($form['journey_no_longer_purpose'] ?? '') === 'no' && !$this->request->is('post')) {
+            $flags['step7_done'] = '1';
+            $session->write('flow.flags', $flags);
+            return $this->redirect(['action' => 'assistance']);
+        }
+
         if ($this->request->is('post')) {
             foreach ([
-                'journey_outcome',
-                // Resolution endpoint fallback when TRIN 5 wasn't filled
-                'assistance_alt_to_destination','assistance_alt_arrival_station','assistance_alt_arrival_station_other',
+                'maps_opt_in_trin6',
+                // When final destination is reached, only ask Art.18(1)(a) purpose question
+                'journey_no_longer_purpose',
+                // TRIN 6 station context (separate from TRIN 5)
+                'a18_from_station','a18_from_station_other',
+                'a18_from_station_other_osm_id','a18_from_station_other_lat','a18_from_station_other_lon','a18_from_station_other_country','a18_from_station_other_type','a18_from_station_other_source',
+                // TRIN 6 refund context (return-to-origin station)
+                'a18_return_to_station','a18_return_to_station_other',
+                'a18_return_to_station_other_osm_id','a18_return_to_station_other_lat','a18_return_to_station_other_lon','a18_return_to_station_other_country','a18_return_to_station_other_type','a18_return_to_station_other_source',
+                'a18_reroute_mode','a18_reroute_endpoint',
+                'a18_reroute_arrival_station','a18_reroute_arrival_station_other',
+                'a18_reroute_arrival_station_other_osm_id','a18_reroute_arrival_station_other_lat','a18_reroute_arrival_station_other_lon','a18_reroute_arrival_station_other_country','a18_reroute_arrival_station_other_type','a18_reroute_arrival_station_other_source',
                 'remedyChoice','trip_cancelled_return_to_origin','refund_requested','refund_form_selected',
                 'return_to_origin_expense','return_to_origin_amount','return_to_origin_currency','return_to_origin_transport_type',
                 'reroute_same_conditions_soonest','reroute_later_at_choice','reroute_info_within_100min',
@@ -4271,6 +5051,51 @@ class FlowController extends AppController
                 if ($v !== null && $v !== '') {
                     if (is_array($v)) { $form[$k] = $v; }
                     else { $form[$k] = is_string($v) ? $v : (string)$v; }
+                }
+            }
+
+            // Final destination shortcut logic (explicit only; do not trigger on assumed endpoints).
+            $toDest1 = (string)($form['a20_where_ended'] ?? '');
+            $assumed1 = (string)($form['a20_where_ended_assumed'] ?? '0');
+            $arrivedFinalExplicitPost = ($toDest1 === 'final_destination' && $assumed1 !== '1');
+            if ($arrivedFinalExplicitPost) {
+                $p = (string)($form['journey_no_longer_purpose'] ?? '');
+                if ($p === 'no') {
+                    // No Art.18 remedies needed; continue to assistance/hotel/meals.
+                    unset(
+                        $form['remedyChoice'],
+                        $form['trip_cancelled_return_to_origin'],
+                        $form['refund_requested'],
+                        $form['refund_form_selected'],
+                        $form['return_to_origin_expense'],
+                        $form['return_to_origin_amount'],
+                        $form['return_to_origin_currency'],
+                        $form['return_to_origin_transport_type'],
+                        $form['return_to_origin_receipt'],
+                        $form['reroute_same_conditions_soonest'],
+                        $form['reroute_later_at_choice'],
+                        $form['reroute_info_within_100min'],
+                        $form['self_purchased_new_ticket'],
+                        $form['self_purchase_approved_by_operator'],
+                        $form['self_purchase_reason'],
+                        $form['offer_provided'],
+                        $form['reroute_later_outcome'],
+                        $form['reroute_later_self_paid_amount'],
+                        $form['reroute_later_self_paid_currency'],
+                        $form['reroute_later_ticket_upload'],
+                        $form['reroute_extra_costs'],
+                        $form['reroute_extra_costs_type'],
+                        $form['reroute_extra_costs_amount'],
+                        $form['reroute_extra_costs_currency']
+                    );
+                    $session->write('flow.form', $form);
+                    $flags['step7_done'] = '1';
+                    $session->write('flow.flags', $flags);
+                    return $this->redirect(['action' => 'assistance']);
+                }
+                if ($p === 'yes') {
+                    // Only refund/return is relevant in this scenario.
+                    $form['remedyChoice'] = 'refund_return';
                 }
             }
             try { $returnReceipt = $this->request->getUploadedFile('return_to_origin_receipt'); } catch (\Throwable $e) { $returnReceipt = null; }
@@ -4293,6 +5118,117 @@ class FlowController extends AppController
             } elseif (($rawLater = $this->request->getData('reroute_later_ticket_upload')) && is_string($rawLater)) {
                 $form['reroute_later_ticket_upload'] = $rawLater;
             }
+            // Canonical stable id for "new ticket" upload (so TRIN 8 can reference it without depending on absolute paths).
+            if (!empty($form['reroute_later_ticket_upload'])) {
+                $form['reroute_later_ticket_file'] = basename((string)$form['reroute_later_ticket_upload']);
+            } else {
+                unset($form['reroute_later_ticket_file']);
+            }
+
+            // If the user bought a new ticket (rail reroute) and uploads it, parse it immediately using the same extractor pipeline as TRIN 2.
+            // This enables near-automatic downgrade prefill for rail->rail reroute when operator-approved.
+            try {
+                $selfBuy = (string)($form['self_purchased_new_ticket'] ?? '');
+                $path = (string)($form['reroute_later_ticket_upload'] ?? '');
+                if ($selfBuy === 'yes' && $path !== '' && is_file($path)) {
+                    $fileKey = basename($path);
+                    // Extract OCR/text from uploaded file (PDF/text/image).
+                    $text = '';
+                    $logsN = [];
+                    $ext = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
+                    try {
+                        if ($ext === 'pdf' && class_exists('Smalot\\PdfParser\\Parser')) {
+                            $parser = new \Smalot\PdfParser\Parser();
+                            $pdf = $parser->parseFile($path);
+                            $text = $pdf->getText() ?? '';
+                            if (trim((string)$text) === '') {
+                                $pdftotext = (function_exists('env') ? env('PDFTOTEXT_PATH') : getenv('PDFTOTEXT_PATH')) ?: 'pdftotext';
+                                $out = @shell_exec(escapeshellarg($pdftotext) . ' -layout ' . escapeshellarg($path) . ' - 2>&1');
+                                if (is_string($out) && trim($out) !== '') { $text = (string)$out; $logsN[] = 'New ticket OCR: pdftotext'; }
+                            } else { $logsN[] = 'New ticket OCR: pdfparser'; }
+                        } elseif (in_array($ext, ['txt','text'], true)) {
+                            $text = (string)@file_get_contents($path);
+                            $logsN[] = 'New ticket OCR: txt';
+                        } else {
+                            // Image: Tesseract first, then optional LLM Vision OCR fallback
+                            $tess = function_exists('env') ? env('TESSERACT_PATH') : getenv('TESSERACT_PATH');
+                            if (!$tess || $tess === '') { $winDefault = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'; $tess = is_file($winDefault) ? $winDefault : 'tesseract'; }
+                            $langs = (function_exists('env') ? env('TESSERACT_LANGS') : getenv('TESSERACT_LANGS')) ?: 'eng';
+                            $out = @shell_exec(escapeshellarg((string)$tess) . ' ' . escapeshellarg((string)$path) . ' stdout -l ' . escapeshellarg((string)$langs) . ' 2>&1');
+                            if (is_string($out) && trim($out) !== '') {
+                                $text = (string)$out;
+                                $logsN[] = 'New ticket OCR: tesseract';
+                            } else {
+                                $visionEnabled = strtolower((string)((function_exists('env') ? env('LLM_VISION_ENABLED') : getenv('LLM_VISION_ENABLED')) ?? '0')) === '1';
+                                if ($visionEnabled) {
+                                    [$vtxt, $vlogs] = (new \App\Service\Ocr\LlmVisionOcr())->extractTextFromImage($path);
+                                    if ($vtxt !== '') { $text = $vtxt; $logsN = array_merge($logsN, (array)$vlogs); }
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) { $text = ''; }
+                    $text = preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', (string)$text) ?? (string)$text;
+
+                    $summary = [ 'file' => $fileKey, 'pnr' => null, 'dep_date' => null, 'passengers' => [], 'segments' => [], 'auto' => [], 'logs' => $logsN, 'source' => 'trin6' ];
+                    if ($text !== '') {
+                        $tp = new \App\Service\TicketParseService();
+                        $baseSegs = $tp->parseSegmentsFromText($text);
+                        $summary['segments'] = $baseSegs;
+                        $summary['passengers'] = $tp->extractPassengerData($text);
+                        $ids = $tp->extractIdentifiers($text); $summary['pnr'] = (string)($ids['pnr'] ?? '');
+                        $dates = $tp->extractDates($text); $summary['dep_date'] = (string)($dates[0] ?? '');
+
+                        // LLM-assisted extraction for better reliability than plain OCR heuristics.
+                        try {
+                            $broker = $this->buildExtractorBroker();
+                            $er = $broker->run($text);
+                            $summary['logs'] = array_merge((array)$summary['logs'], (array)($er->logs ?? []));
+                            foreach ((array)($er->fields ?? []) as $k => $v) {
+                                if ($v === null || $v === '') { continue; }
+                                $summary['auto'][$k] = [
+                                    'value' => is_string($v) ? trim($v) : (string)$v,
+                                    'source' => (string)($er->provider ?? 'unknown'),
+                                    'provider' => (string)($er->provider ?? 'unknown'),
+                                    'confidence' => (float)($er->confidence ?? 0.0),
+                                ];
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+                        // Segment structuring via LLM (extracts class/reservation per leg if present).
+                        try {
+                            $segL = (new \App\Service\TicketExtraction\LlmSegmentsExtractor())->extractSegments($text, true);
+                            $llmSegs = (array)($segL['segments'] ?? []);
+                            if (!empty($segL['logs'])) { $summary['logs'] = array_merge((array)$summary['logs'], (array)$segL['logs']); }
+                            if (!empty($llmSegs)) {
+                                $norm = static function($s): array {
+                                    $s = is_array($s) ? $s : [];
+                                    return [
+                                        'from' => (string)($s['from'] ?? ''),
+                                        'to' => (string)($s['to'] ?? ''),
+                                        'schedDep' => (string)($s['schedDep'] ?? ''),
+                                        'schedArr' => (string)($s['schedArr'] ?? ''),
+                                        'trainNo' => (string)($s['trainNo'] ?? ''),
+                                        'depDate' => (string)($s['depDate'] ?? ''),
+                                        'arrDate' => (string)($s['arrDate'] ?? ''),
+                                        'classPurchased' => (string)($s['classPurchased'] ?? ''),
+                                        'reservationPurchased' => (string)($s['reservationPurchased'] ?? ''),
+                                        'confidence' => isset($s['confidence']) ? (float)$s['confidence'] : null,
+                                        'source' => 'llm_structuring',
+                                    ];
+                                };
+                                $summary['segments'] = array_map($norm, $llmSegs);
+                            }
+                        } catch (\Throwable $e) { /* ignore */ }
+                    }
+
+                    // Persist into meta as a ticket record so TRIN 8 can select it.
+                    if (!isset($meta['_multi_tickets']) || !is_array($meta['_multi_tickets'])) { $meta['_multi_tickets'] = []; }
+                    $exists = false;
+                    foreach ((array)$meta['_multi_tickets'] as $ex) { if ((string)($ex['file'] ?? '') === (string)$fileKey) { $exists = true; break; } }
+                    if (!$exists) { $meta['_multi_tickets'][] = $summary; }
+                    // Also keep a direct pointer for downgrade prefills (rail->rail "delivered" inference).
+                    $meta['_reroute_new_ticket'] = $summary;
+                }
+            } catch (\Throwable $e) { /* ignore new ticket parsing */ }
 
             $remedyChoice = (string)($form['remedyChoice'] ?? '');
             if ($remedyChoice !== 'reroute_later') {
@@ -4300,13 +5236,15 @@ class FlowController extends AppController
                     $form['reroute_later_outcome'],
                     $form['reroute_later_self_paid_amount'],
                     $form['reroute_later_self_paid_currency'],
-                    $form['reroute_later_ticket_upload']
+                    $form['reroute_later_ticket_upload'],
+                    $form['reroute_later_ticket_file']
                 );
             } elseif ((string)($form['reroute_later_outcome'] ?? '') !== 'self_bought') {
                 unset(
                     $form['reroute_later_self_paid_amount'],
                     $form['reroute_later_self_paid_currency'],
-                    $form['reroute_later_ticket_upload']
+                    $form['reroute_later_ticket_upload'],
+                    $form['reroute_later_ticket_file']
                 );
             }
             if ((string)($form['self_purchased_new_ticket'] ?? '') !== 'yes') {
@@ -4328,29 +5266,98 @@ class FlowController extends AppController
                 );
             }
 
-            // Resolution fallback: if TRIN 5 (Art. 20) wasn't filled, we still need an endpoint for reroute flows.
+            // Normalize "other" station inputs (applies to both refund + reroute).
+            if ((string)($form['a18_from_station'] ?? '') !== 'other') {
+                unset(
+                    $form['a18_from_station_other'],
+                    $form['a18_from_station_other_osm_id'],
+                    $form['a18_from_station_other_lat'],
+                    $form['a18_from_station_other_lon'],
+                    $form['a18_from_station_other_country'],
+                    $form['a18_from_station_other_type'],
+                    $form['a18_from_station_other_source']
+                );
+            }
+
+            // Cleanup TRIN 6 station context if not in reroute branch.
             $remedyChoice = (string)($form['remedyChoice'] ?? '');
-            $needsEndpoint = in_array($remedyChoice, ['reroute_soonest','reroute_later'], true);
-            if ($needsEndpoint) {
-                $toDest = trim((string)($form['assistance_alt_to_destination'] ?? ''));
-                if ($toDest === '') {
-                    $form['assistance_alt_to_destination'] = 'final_destination';
-                    $form['assistance_alt_to_destination_assumed'] = '1';
+            $isReroute = in_array($remedyChoice, ['reroute_soonest','reroute_later'], true);
+            if (!$isReroute) {
+                unset(
+                    $form['a18_reroute_mode'],
+                    $form['a18_reroute_endpoint'],
+                    $form['a18_reroute_arrival_station'],
+                    $form['a18_reroute_arrival_station_other'],
+                    $form['a18_reroute_arrival_station_other_osm_id'],
+                    $form['a18_reroute_arrival_station_other_lat'],
+                    $form['a18_reroute_arrival_station_other_lon'],
+                    $form['a18_reroute_arrival_station_other_country'],
+                    $form['a18_reroute_arrival_station_other_type'],
+                    $form['a18_reroute_arrival_station_other_source']
+                );
+            } else {
+                $ep = (string)($form['a18_reroute_endpoint'] ?? '');
+                if (!in_array($ep, ['nearest_station','other_departure_point','final_destination'], true)) {
+                    unset(
+                        $form['a18_reroute_endpoint'],
+                        $form['a18_reroute_arrival_station'],
+                        $form['a18_reroute_arrival_station_other'],
+                        $form['a18_reroute_arrival_station_other_osm_id'],
+                        $form['a18_reroute_arrival_station_other_lat'],
+                        $form['a18_reroute_arrival_station_other_lon'],
+                        $form['a18_reroute_arrival_station_other_country'],
+                        $form['a18_reroute_arrival_station_other_type'],
+                        $form['a18_reroute_arrival_station_other_source']
+                    );
+                } elseif ($ep === 'final_destination') {
+                    unset(
+                        $form['a18_reroute_arrival_station'],
+                        $form['a18_reroute_arrival_station_other'],
+                        $form['a18_reroute_arrival_station_other_osm_id'],
+                        $form['a18_reroute_arrival_station_other_lat'],
+                        $form['a18_reroute_arrival_station_other_lon'],
+                        $form['a18_reroute_arrival_station_other_country'],
+                        $form['a18_reroute_arrival_station_other_type'],
+                        $form['a18_reroute_arrival_station_other_source']
+                    );
                 } else {
-                    $form['assistance_alt_to_destination_assumed'] = '0';
-                }
-                $toDest = (string)($form['assistance_alt_to_destination'] ?? '');
-                if (!in_array($toDest, ['nearest_station','other_departure_point','final_destination'], true)) {
-                    $form['assistance_alt_to_destination'] = 'final_destination';
-                    $form['assistance_alt_to_destination_assumed'] = '1';
-                    unset($form['assistance_alt_arrival_station'], $form['assistance_alt_arrival_station_other']);
-                } elseif (!in_array($toDest, ['nearest_station','other_departure_point'], true)) {
-                    unset($form['assistance_alt_arrival_station'], $form['assistance_alt_arrival_station_other']);
-                } else {
-                    $st = (string)($form['assistance_alt_arrival_station'] ?? '');
-                    if ($st !== 'other') {
-                        unset($form['assistance_alt_arrival_station_other']);
+                    if ((string)($form['a18_reroute_arrival_station'] ?? '') !== 'other') {
+                        unset(
+                            $form['a18_reroute_arrival_station_other'],
+                            $form['a18_reroute_arrival_station_other_osm_id'],
+                            $form['a18_reroute_arrival_station_other_lat'],
+                            $form['a18_reroute_arrival_station_other_lon'],
+                            $form['a18_reroute_arrival_station_other_country'],
+                            $form['a18_reroute_arrival_station_other_type'],
+                            $form['a18_reroute_arrival_station_other_source']
+                        );
                     }
+                }
+            }
+
+            // Refund-only station context
+            if ($remedyChoice !== 'refund_return') {
+                unset(
+                    $form['a18_return_to_station'],
+                    $form['a18_return_to_station_other'],
+                    $form['a18_return_to_station_other_osm_id'],
+                    $form['a18_return_to_station_other_lat'],
+                    $form['a18_return_to_station_other_lon'],
+                    $form['a18_return_to_station_other_country'],
+                    $form['a18_return_to_station_other_type'],
+                    $form['a18_return_to_station_other_source']
+                );
+            } else {
+                if ((string)($form['a18_return_to_station'] ?? '') !== 'other') {
+                    unset(
+                        $form['a18_return_to_station_other'],
+                        $form['a18_return_to_station_other_osm_id'],
+                        $form['a18_return_to_station_other_lat'],
+                        $form['a18_return_to_station_other_lon'],
+                        $form['a18_return_to_station_other_country'],
+                        $form['a18_return_to_station_other_type'],
+                        $form['a18_return_to_station_other_source']
+                    );
                 }
             }
 
@@ -4376,8 +5383,18 @@ class FlowController extends AppController
                 }
             }
 
+            // Currency defaults (TRIN 6): only default when an amount is present.
+            try {
+                $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                $this->applyCurrencyDefaultForAmount($form, 'return_to_origin_amount', 'return_to_origin_currency', $defaultCur);
+                $this->applyCurrencyDefaultForAmount($form, 'reroute_later_self_paid_amount', 'reroute_later_self_paid_currency', $defaultCur);
+                $this->applyCurrencyDefaultForAmount($form, 'reroute_extra_costs_amount', 'reroute_extra_costs_currency', $defaultCur);
+            } catch (\Throwable $e) { /* ignore */ }
+
             // Downgrade is handled in a dedicated later step (TRIN 8).
             $session->write('flow.form', $form);
+            $flags['step7_done'] = '1';
+            $session->write('flow.flags', $flags);
             try { $this->Flash->success('Dine valg er gemt. Fortsaetter til Assistance.'); } catch (\Throwable $e) { /* ignore */ }
             return $this->redirect(['action' => 'assistance']);
         }
@@ -4403,7 +5420,8 @@ class FlowController extends AppController
         if (!$art18Active && ($pmrBikeGate['pmr_gate'] || $pmrBikeGate['bike_gate'])) { $art18Active = true; }
         $art18Blocked = (!$art18Active) && ((string)($form['art18_expected_delay_60'] ?? '') === 'no');
         $showArt18Fallback = (!$art18Active) && (!$art18Blocked);
-        $this->set(compact('form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','art18Active','showArt18Fallback','art18Blocked','meta'));
+        $maps = (array)$session->read('flow.maps') ?: [];
+        $this->set(compact('form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','art18Active','showArt18Fallback','art18Blocked','meta','maps'));
         return null;
     }
 
@@ -4421,83 +5439,51 @@ class FlowController extends AppController
         $flags = (array)$session->read('flow.flags') ?: [];
         $incident = (array)$session->read('flow.incident') ?: [];
 
+        // TRIN 8 prereq: TRIN 7 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step7_done'], 'remedies');
+        if ($resp) { return $resp; }
+
         if ($this->request->is('post')) {
-            // Persist Art. 20 fields (as in one() TRIN 8) + self-paid fields for Art. 18(3) eligibility
+            // Persist TRIN 7 fields (meals/hotel + self-paid evidence). Transport/resolution is collected earlier in TRIN 5/6.
             $keys = [
                 // Art. 20(2)(a) - meals offered
                 'meal_offered','assistance_meals_unavailable_reason',
                 // Art. 20(2)(b) - hotel offered + overnight needed
-                'hotel_offered','overnight_needed','assistance_hotel_accessible',
-                // Art. 20(2)(c) - evacuation/alt transport away from blocked train
-                'blocked_train_alt_transport','blocked_on_track','stranded_at_station','stranded_unknown','assistance_blocked_transport_possible','assistance_blocked_transport_to','assistance_blocked_transport_time',
-                // Art. 20(3) - alternative transport services to destination
-                'alt_transport_provided','assistance_alt_transport_offered_by','assistance_alt_transport_type','assistance_alt_departure_time','assistance_alt_arrival_time','assistance_alt_to_destination',
-                // Art. 20(1) - info updates tracked earlier (still available via info card)
-                'assistance_info_source','assistance_updates_channel','assistance_info_time_first','assistance_info_time_last','assistance_expected_dep','assistance_expected_arr',
-                // Art. 20(4) - confirmation info + type
-                'assistance_confirmation_requested','assistance_confirmation_provided','assistance_confirmation_type','assistance_confirmation_upload',
+                'hotel_offered','overnight_needed','assistance_hotel_transport_included',
+                'hotel_transport_self_paid_amount','hotel_transport_self_paid_currency',
                 // Art. 20(5) - PMR priority
-                'assistance_pmr_priority_applied','assistance_pmr_companion_supported','assistance_pmr_dog_supported',
-                // Generic expense breakdown (legacy, kept)
-                'expense_breakdown_meals','expense_breakdown_hotel_nights','expense_breakdown_local_transport','expense_breakdown_other_amounts','expense_breakdown_currency',
-                // NEW: self-paid fields to capture out-of-pocket expenses when Art. 20 assistance was not delivered
+                'assistance_pmr_priority_applied','assistance_pmr_companion_supported',
+                // Self-paid fields to capture out-of-pocket expenses when Art. 20 assistance was not delivered
                 'meal_self_paid_amount','meal_self_paid_currency',
                 'hotel_self_paid_amount','hotel_self_paid_currency','hotel_self_paid_nights',
-                'blocked_self_paid_amount','blocked_self_paid_currency',
-                'alt_self_paid_amount','alt_self_paid_currency',
-                'art20_expected_delay_60',
             ];
             foreach ($keys as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
             }
 
-            // Handle uploads for receipts and delay confirmation (mirror one())
-            try { $u1 = $this->request->getUploadedFile('extra_expense_upload'); } catch (\Throwable $e) { $u1 = null; }
-            try { $u2 = $this->request->getUploadedFile('delay_confirmation_upload'); } catch (\Throwable $e) { $u2 = null; }
-            try { $uConf = $this->request->getUploadedFile('assistance_confirmation_upload'); } catch (\Throwable $e) { $uConf = null; }
-            // NEW: per-field self-paid receipt uploads
+            // Itemized self-paid expenses (multiple purchases/receipts)
+            // Keep legacy scalar fields as "totals" for compatibility with existing evaluators/mappers.
+            $cleanAmount = function ($v): string {
+                $s = trim((string)$v);
+                if ($s === '') { return ''; }
+                $s = str_replace(',', '.', $s);
+                return is_numeric($s) ? $s : '';
+            };
+            $cleanInt = function ($v): string {
+                $s = trim((string)$v);
+                if ($s === '') { return ''; }
+                return ctype_digit($s) ? $s : (is_numeric($s) ? (string)((int)$s) : '');
+            };
+
+            // Per-field self-paid receipt uploads (legacy)
             try { $uMeal = $this->request->getUploadedFile('meal_self_paid_receipt'); } catch (\Throwable $e) { $uMeal = null; }
             try { $uHotel = $this->request->getUploadedFile('hotel_self_paid_receipt'); } catch (\Throwable $e) { $uHotel = null; }
-            try { $uBlocked = $this->request->getUploadedFile('blocked_self_paid_receipt'); } catch (\Throwable $e) { $uBlocked = null; }
-            try { $uAlt = $this->request->getUploadedFile('alt_self_paid_receipt'); } catch (\Throwable $e) { $uAlt = null; }
+            try { $uHotelTransport = $this->request->getUploadedFile('hotel_transport_self_paid_receipt'); } catch (\Throwable $e) { $uHotelTransport = null; }
+            try { $uploadedAll = (array)$this->request->getUploadedFiles(); } catch (\Throwable $e) { $uploadedAll = []; }
             $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
             if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
-            if ($u1 && $u1->getError() === \UPLOAD_ERR_OK) {
-                $name = (string)$u1->getClientFilename();
-                $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
-                $target = $uploadDir . (uniqid('exp_') . '_' . $safe);
-                try { $u1->moveTo($target); $form['extra_expense_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
-            } elseif (($raw = $this->request->getData('extra_expense_upload')) && is_string($raw)) {
-                $form['extra_expense_upload'] = $raw;
-            }
-            if ($uConf && $uConf->getError() === \UPLOAD_ERR_OK) {
-                $name = (string)$uConf->getClientFilename();
-                $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
-                $target = $uploadDir . (uniqid('conf_') . '_' . $safe);
-                try { $uConf->moveTo($target); $form['assistance_confirmation_upload'] = $target; $form['delay_confirmation_upload'] = $target; } catch (\Throwable $e) { /* ignore */ }
-            } elseif ($u2 && $u2->getError() === \UPLOAD_ERR_OK) {
-                $name = (string)$u2->getClientFilename();
-                $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string)$name);
-                $target = $uploadDir . (uniqid('dcr_') . '_' . $safe);
-                try {
-                    $u2->moveTo($target);
-                    $form['delay_confirmation_upload'] = $target;
-                    if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $target; }
-                } catch (\Throwable $e) { /* ignore */ }
-            } elseif (($rawConf = $this->request->getData('assistance_confirmation_upload')) && is_string($rawConf)) {
-                $form['assistance_confirmation_upload'] = $rawConf;
-                if (empty($form['delay_confirmation_upload'])) { $form['delay_confirmation_upload'] = $rawConf; }
-            } elseif (($raw2 = $this->request->getData('delay_confirmation_upload')) && is_string($raw2)) {
-                $form['delay_confirmation_upload'] = $raw2;
-                if (empty($form['assistance_confirmation_upload'])) { $form['assistance_confirmation_upload'] = $raw2; }
-            }
 
-            if (!empty($form['assistance_confirmation_provided'])) {
-                $form['delay_confirmation_received'] = (string)$form['assistance_confirmation_provided'];
-            } elseif (!empty($form['delay_confirmation_received']) && empty($form['assistance_confirmation_provided'])) {
-                $form['assistance_confirmation_provided'] = (string)$form['delay_confirmation_received'];
-            }
 
             // Save per-field self-paid receipts if provided
             $saveUpload = function($ufile, string $prefix) use ($uploadDir) {
@@ -4514,16 +5500,134 @@ class FlowController extends AppController
             elseif (($raw = $this->request->getData('meal_self_paid_receipt')) && is_string($raw)) { $form['meal_self_paid_receipt'] = $raw; }
             if ($path = $saveUpload($uHotel, 'hrc_')) { $form['hotel_self_paid_receipt'] = $path; }
             elseif (($raw = $this->request->getData('hotel_self_paid_receipt')) && is_string($raw)) { $form['hotel_self_paid_receipt'] = $raw; }
-            if ($path = $saveUpload($uBlocked, 'brc_')) { $form['blocked_self_paid_receipt'] = $path; }
-            elseif (($raw = $this->request->getData('blocked_self_paid_receipt')) && is_string($raw)) { $form['blocked_self_paid_receipt'] = $raw; }
-            if ($path = $saveUpload($uAlt, 'arc_')) { $form['alt_self_paid_receipt'] = $path; }
-            elseif (($raw = $this->request->getData('alt_self_paid_receipt')) && is_string($raw)) { $form['alt_self_paid_receipt'] = $raw; }
+            if ($path = $saveUpload($uHotelTransport, 'htc_')) { $form['hotel_transport_self_paid_receipt'] = $path; }
+            elseif (($raw = $this->request->getData('hotel_transport_self_paid_receipt')) && is_string($raw)) { $form['hotel_transport_self_paid_receipt'] = $raw; }
+
+            // --- Meals (multiple items) ---
+            $mealAmountsRaw = $this->request->getData('meal_self_paid_amount_items');
+            $mealExistingRaw = $this->request->getData('meal_self_paid_receipt_items_existing');
+            $mealUploadsRaw = $uploadedAll['meal_self_paid_receipt_items'] ?? [];
+            $mealAmountsRaw = is_array($mealAmountsRaw) ? array_values($mealAmountsRaw) : [];
+            $mealExistingRaw = is_array($mealExistingRaw) ? array_values($mealExistingRaw) : [];
+            $mealUploadsRaw = is_array($mealUploadsRaw) ? array_values($mealUploadsRaw) : [];
+            $mealAmtItems = [];
+            $mealRcItems = [];
+            $mealSum = 0.0;
+            $maxMeal = max(count($mealAmountsRaw), count($mealExistingRaw), count($mealUploadsRaw));
+            for ($i = 0; $i < $maxMeal; $i++) {
+                $amt = $cleanAmount($mealAmountsRaw[$i] ?? '');
+                $existingPath = (string)($mealExistingRaw[$i] ?? '');
+                $uf = $mealUploadsRaw[$i] ?? null;
+                $path = '';
+                if ($uf instanceof \Psr\Http\Message\UploadedFileInterface) {
+                    $path = (string)($saveUpload($uf, 'mri_') ?? '');
+                }
+                if ($path === '' && $existingPath !== '') { $path = $existingPath; }
+                if ($amt === '' && $path === '') { continue; }
+                $mealAmtItems[] = $amt;
+                $mealRcItems[] = $path;
+                if ($amt !== '') { $mealSum += (float)$amt; }
+            }
+            if ($mealAmtItems || $mealRcItems) {
+                $form['meal_self_paid_amount_items'] = $mealAmtItems;
+                $form['meal_self_paid_receipt_items'] = $mealRcItems;
+                if ($mealSum > 0) { $form['meal_self_paid_amount'] = (string)$mealSum; }
+                foreach ($mealRcItems as $p) { if ($p !== '') { $form['meal_self_paid_receipt'] = $p; break; } }
+            }
+
+            // --- Hotel (multiple items) ---
+            $hotelAmountsRaw = $this->request->getData('hotel_self_paid_amount_items');
+            $hotelNightsRaw = $this->request->getData('hotel_self_paid_nights_items');
+            $hotelExistingRaw = $this->request->getData('hotel_self_paid_receipt_items_existing');
+            $hotelUploadsRaw = $uploadedAll['hotel_self_paid_receipt_items'] ?? [];
+            $hotelAmountsRaw = is_array($hotelAmountsRaw) ? array_values($hotelAmountsRaw) : [];
+            $hotelNightsRaw = is_array($hotelNightsRaw) ? array_values($hotelNightsRaw) : [];
+            $hotelExistingRaw = is_array($hotelExistingRaw) ? array_values($hotelExistingRaw) : [];
+            $hotelUploadsRaw = is_array($hotelUploadsRaw) ? array_values($hotelUploadsRaw) : [];
+            $hotelAmtItems = [];
+            $hotelNightItems = [];
+            $hotelRcItems = [];
+            $hotelSum = 0.0;
+            $hotelNightSum = 0;
+            $maxHotel = max(count($hotelAmountsRaw), count($hotelNightsRaw), count($hotelExistingRaw), count($hotelUploadsRaw));
+            for ($i = 0; $i < $maxHotel; $i++) {
+                $amt = $cleanAmount($hotelAmountsRaw[$i] ?? '');
+                $n = $cleanInt($hotelNightsRaw[$i] ?? '');
+                $existingPath = (string)($hotelExistingRaw[$i] ?? '');
+                $uf = $hotelUploadsRaw[$i] ?? null;
+                $path = '';
+                if ($uf instanceof \Psr\Http\Message\UploadedFileInterface) {
+                    $path = (string)($saveUpload($uf, 'hri_') ?? '');
+                }
+                if ($path === '' && $existingPath !== '') { $path = $existingPath; }
+                if ($amt === '' && $n === '' && $path === '') { continue; }
+                $hotelAmtItems[] = $amt;
+                $hotelNightItems[] = $n;
+                $hotelRcItems[] = $path;
+                if ($amt !== '') { $hotelSum += (float)$amt; }
+                if ($n !== '') { $hotelNightSum += (int)$n; }
+            }
+            if ($hotelAmtItems || $hotelNightItems || $hotelRcItems) {
+                $form['hotel_self_paid_amount_items'] = $hotelAmtItems;
+                $form['hotel_self_paid_nights_items'] = $hotelNightItems;
+                $form['hotel_self_paid_receipt_items'] = $hotelRcItems;
+                if ($hotelSum > 0) { $form['hotel_self_paid_amount'] = (string)$hotelSum; }
+                if ($hotelNightSum > 0) { $form['hotel_self_paid_nights'] = (string)$hotelNightSum; }
+                foreach ($hotelRcItems as $p) { if ($p !== '') { $form['hotel_self_paid_receipt'] = $p; break; } }
+            }
+
+            // AI receipt/invoice scanning (optional): propose totals/currency/date/merchant/nights from uploaded receipts.
+            // We only auto-fill EMPTY fields, and we cache per-file hash to avoid repeated token cost on every submit.
+            try {
+                $aiOn = $this->truthy(function_exists('env') ? env('LLM_RECEIPT_AUTOFILL') : getenv('LLM_RECEIPT_AUTOFILL'));
+                if ($aiOn) {
+                    if (!isset($meta['_receipt_ai']) || !is_array($meta['_receipt_ai'])) { $meta['_receipt_ai'] = []; }
+                    $defaultCurHint = '';
+                    try { $defaultCurHint = (string)$this->deriveDefaultCurrency($form, $meta, $journey); } catch (\Throwable $e) { $defaultCurHint = ''; }
+
+                    $apply = function (string $bucket, string $receiptKey, array $targets) use (&$form, &$meta, $defaultCurHint) {
+                        $path = (string)($form[$receiptKey] ?? '');
+                        if ($path === '' || !is_file($path)) { return; }
+                        $hash = $path . ':' . (string)(@filemtime($path) ?: '0');
+                        $prev = $meta['_receipt_ai'][$bucket]['hash'] ?? '';
+                        if (is_string($prev) && $prev === $hash) { return; }
+
+                        $ctx = ['default_currency' => $defaultCurHint, 'bucket' => $bucket];
+                        $sugg = (new \App\Service\ReceiptExtraction\ReceiptAiSuggester())->suggestFromFile($path, $ctx);
+                        $meta['_receipt_ai'][$bucket] = [
+                            'hash' => $hash,
+                            'confidence' => (float)($sugg['confidence'] ?? 0.0),
+                            'fields' => (array)($sugg['fields'] ?? []),
+                            'logs' => array_values(array_map('strval', (array)($sugg['logs'] ?? []))),
+                        ];
+
+                        $f = (array)($sugg['fields'] ?? []);
+                        $amtKey = (string)($targets['amount'] ?? '');
+                        $curKey = (string)($targets['currency'] ?? '');
+                        $nightKey = (string)($targets['nights'] ?? '');
+                        if ($amtKey !== '' && (string)($form[$amtKey] ?? '') === '' && !empty($f['amount_total'])) {
+                            $form[$amtKey] = (string)$f['amount_total'];
+                        }
+                        if ($curKey !== '' && (string)($form[$curKey] ?? '') === '' && !empty($f['currency'])) {
+                            $form[$curKey] = (string)$f['currency'];
+                        }
+                        if ($nightKey !== '' && (string)($form[$nightKey] ?? '') === '' && isset($f['hotel_nights']) && is_int($f['hotel_nights']) && $f['hotel_nights'] > 0) {
+                            $form[$nightKey] = (string)$f['hotel_nights'];
+                        }
+                    };
+
+                    $apply('meals', 'meal_self_paid_receipt', ['amount' => 'meal_self_paid_amount', 'currency' => 'meal_self_paid_currency']);
+                    $apply('hotel', 'hotel_self_paid_receipt', ['amount' => 'hotel_self_paid_amount', 'currency' => 'hotel_self_paid_currency', 'nights' => 'hotel_self_paid_nights']);
+                    $apply('hotel_transport', 'hotel_transport_self_paid_receipt', ['amount' => 'hotel_transport_self_paid_amount', 'currency' => 'hotel_transport_self_paid_currency']);
+                }
+            } catch (\Throwable $e) { /* ignore AI receipt errors */ }
 
             // Normalize monetary inputs and infer Art. 18(3) eligibility when self-paid due to missing Art. 20 assistance
             try {
                 $moneyFields = [
-                    'meal_self_paid_amount','hotel_self_paid_amount','blocked_self_paid_amount','alt_self_paid_amount',
-                    'expense_breakdown_meals','expense_breakdown_local_transport','expense_breakdown_other_amounts'
+                    'meal_self_paid_amount',
+                    'hotel_self_paid_amount',
+                    'hotel_transport_self_paid_amount',
                 ];
                 foreach ($moneyFields as $mf) {
                     if (!empty($form[$mf])) {
@@ -4544,18 +5648,14 @@ class FlowController extends AppController
                 }
             } catch (\Throwable $e) { /* ignore normalize errors */ }
 
-            // Default currency fallback for self-paid if not provided
+            // Default currency fallback for self-paid if not provided (use any already selected currency)
             try {
-                $fallbackCur = (string)($form['expense_breakdown_currency'] ?? '');
+                $fallbackCur = (string)($form['meal_self_paid_currency'] ?? '');
+                if ($fallbackCur === '') { $fallbackCur = (string)($form['hotel_self_paid_currency'] ?? ''); }
+                if ($fallbackCur === '') { $fallbackCur = (string)($form['hotel_transport_self_paid_currency'] ?? ''); }
                 if ($fallbackCur !== '') {
-                    foreach ([
-                        ['meal_self_paid_currency'],
-                        ['hotel_self_paid_currency'],
-                        ['blocked_self_paid_currency'],
-                        ['alt_self_paid_currency'],
-                    ] as $arr) {
-                        $key = $arr[0];
-                        if (empty($form[$key])) { $form[$key] = $fallbackCur; }
+                    foreach (['meal_self_paid_currency','hotel_self_paid_currency','hotel_transport_self_paid_currency'] as $ck) {
+                        if (empty($form[$ck])) { $form[$ck] = $fallbackCur; }
                     }
                 }
             } catch (\Throwable $e) { /* ignore */ }
@@ -4566,13 +5666,15 @@ class FlowController extends AppController
                 if ((string)($form['blocked_train_alt_transport'] ?? '') === 'no' && (string)($form['blocked_self_paid_amount'] ?? '') !== '') {
                     $eligibleUnder18_3 = true;
                 }
-                if ((string)($form['alt_transport_provided'] ?? '') === 'no' && (string)($form['alt_self_paid_amount'] ?? '') !== '') {
-                    $eligibleUnder18_3 = true;
-                }
                 if ((string)($form['meal_offered'] ?? '') === 'no' && (string)($form['meal_self_paid_amount'] ?? '') !== '') {
                     $eligibleUnder18_3 = true;
                 }
                 if ((string)($form['hotel_offered'] ?? '') === 'no' && (string)($form['hotel_self_paid_amount'] ?? '') !== '') {
+                    $eligibleUnder18_3 = true;
+                }
+                if ((string)($form['a20_3_solution_offered'] ?? '') === 'no'
+                    && (string)($form['a20_3_self_paid'] ?? '') === 'yes'
+                    && (string)($form['a20_3_self_paid_amount'] ?? '') !== '') {
                     $eligibleUnder18_3 = true;
                 }
             } catch (\Throwable $e) { /* ignore */ }
@@ -4583,7 +5685,37 @@ class FlowController extends AppController
             } catch (\Throwable $e) { $art183On = true; }
             $form['eligible_under_18_3'] = ($art183On && $eligibleUnder18_3) ? '1' : '0';
 
+            // Defensive cleanup: avoid stale branch fields when user changes answers.
+            if ((string)($form['meal_offered'] ?? '') !== 'no') {
+                unset(
+                    $form['assistance_meals_unavailable_reason'],
+                    $form['meal_self_paid_amount'], $form['meal_self_paid_currency'], $form['meal_self_paid_receipt'],
+                    $form['meal_self_paid_amount_items'], $form['meal_self_paid_receipt_items']
+                );
+            }
+            if ((string)($form['hotel_offered'] ?? '') !== 'no') {
+                unset(
+                    $form['overnight_needed'],
+                    $form['hotel_self_paid_nights'], $form['hotel_self_paid_amount'], $form['hotel_self_paid_currency'], $form['hotel_self_paid_receipt'],
+                    $form['hotel_self_paid_amount_items'], $form['hotel_self_paid_nights_items'], $form['hotel_self_paid_receipt_items']
+                );
+            }
+            if ((string)($form['assistance_hotel_transport_included'] ?? '') !== 'no') {
+                unset($form['hotel_transport_self_paid_amount'], $form['hotel_transport_self_paid_currency'], $form['hotel_transport_self_paid_receipt']);
+            }
+
+            // Currency defaults (TRIN 7): only default when an amount is present.
+            try {
+                $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                $this->applyCurrencyDefaultForAmount($form, 'meal_self_paid_amount', 'meal_self_paid_currency', $defaultCur);
+                $this->applyCurrencyDefaultForAmount($form, 'hotel_transport_self_paid_amount', 'hotel_transport_self_paid_currency', $defaultCur);
+                $this->applyCurrencyDefaultForAmount($form, 'hotel_self_paid_amount', 'hotel_self_paid_currency', $defaultCur);
+            } catch (\Throwable $e) { /* ignore */ }
+
+
             $session->write('flow.form', $form);
+            $flags['step8_done'] = '1';
+            $session->write('flow.flags', $flags);
             // After TRIN 7 · Assistance, continue to TRIN 8 · Downgrade
             return $this->redirect(['action' => 'downgrade']);
         }
@@ -4641,11 +5773,170 @@ class FlowController extends AppController
         $incident = (array)$session->read('flow.incident') ?: [];
         $flags = (array)$session->read('flow.flags') ?: [];
 
+        // TRIN 9 prereq: TRIN 8 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step8_done'], 'assistance');
+        if ($resp) { return $resp; }
+
+        // --- Multi-ticket aware downgrade ---
+        // By default, TRIN 8 renders legs based on the primary ticket. If extra tickets exist, the user can switch
+        // which ticket/contract they are filling downgrade for, without mixing per-leg arrays.
+        $multiTickets = (array)($meta['_multi_tickets'] ?? []);
+        $primaryFile = (string)($form['_ticketFilename'] ?? '');
+        $downgradeTicketOptions = [];
+        $ticketSegmentsByFile = [];
+        $ticketAutoByFile = [];
+        if ($primaryFile !== '') {
+            $downgradeTicketOptions[] = [
+                'file' => $primaryFile,
+                'label' => 'Primaer billet: ' . basename($primaryFile),
+            ];
+            $ticketSegmentsByFile[$primaryFile] = (array)($meta['_segments_auto'] ?? ($journey['segments'] ?? []));
+            $ticketAutoByFile[$primaryFile] = (array)($meta['_auto'] ?? []);
+        }
+        foreach ($multiTickets as $mt) {
+            if (!is_array($mt)) { continue; }
+            $f = (string)($mt['file'] ?? '');
+            if ($f === '' || ($primaryFile !== '' && $f === $primaryFile)) { continue; }
+            $lbl = 'Ekstra billet: ' . basename($f);
+            $pnr = (string)($mt['pnr'] ?? ($mt['identifiers']['pnr'] ?? ''));
+            $dd = (string)($mt['dep_date'] ?? '');
+            $suffix = trim(($pnr !== '' ? $pnr : '') . ($dd !== '' ? (' ' . $dd) : ''));
+            if ($suffix !== '') { $lbl .= ' (' . $suffix . ')'; }
+            $downgradeTicketOptions[] = [
+                'file' => $f,
+                'label' => $lbl,
+            ];
+            $ticketSegmentsByFile[$f] = (array)($mt['segments'] ?? []);
+            if (!empty($mt['auto']) && is_array($mt['auto'])) {
+                $ticketAutoByFile[$f] = (array)$mt['auto'];
+            }
+        }
+
+        $getSegmentsForDowngrade = function(string $file) use ($ticketSegmentsByFile, $meta, $journey): array {
+            if ($file !== '' && isset($ticketSegmentsByFile[$file]) && is_array($ticketSegmentsByFile[$file]) && !empty($ticketSegmentsByFile[$file])) {
+                return (array)$ticketSegmentsByFile[$file];
+            }
+            // Fallback: primary auto segments, then journey segments (ticketless/manual).
+            $seg = (array)($meta['_segments_auto'] ?? ($journey['segments'] ?? []));
+            return is_array($seg) ? $seg : [];
+        };
+        $getAutoForDowngrade = function(string $file) use ($ticketAutoByFile, $meta): array {
+            if ($file !== '' && isset($ticketAutoByFile[$file]) && is_array($ticketAutoByFile[$file]) && !empty($ticketAutoByFile[$file])) {
+                return (array)$ticketAutoByFile[$file];
+            }
+            return (array)($meta['_auto'] ?? []);
+        };
+
+        // Ticket selector: allow switching via GET ?ticket=<file>.
+        $ticketQ = (string)($this->request->getQuery('ticket') ?? '');
+        $availableFiles = array_map(static fn($o) => (string)($o['file'] ?? ''), $downgradeTicketOptions);
+        $availableSet = array_fill_keys(array_filter($availableFiles, static fn($s) => $s !== ''), true);
+        $selectedTicketFile = (string)($form['downgrade_ticket_file'] ?? '');
+        $switchedTicket = false;
+        if ($ticketQ !== '' && isset($availableSet[$ticketQ])) {
+            $selectedTicketFile = $ticketQ;
+            $switchedTicket = true;
+        }
+        if ($selectedTicketFile === '' && !empty($availableFiles)) {
+            $selectedTicketFile = (string)($availableFiles[0] ?? '');
+        }
+        $form['downgrade_ticket_file'] = $selectedTicketFile;
+
+        // When user switches ticket, clear per-leg arrays to avoid mixing, then load any saved per-file values.
+        if ($this->request->is('get') && $switchedTicket) {
+            foreach ([
+                'downgrade_occurred','downgrade_comp_basis','downgrade_segment_share','downgrade_segment_share_basis','downgrade_segment_share_conf',
+                'leg_class_purchased','leg_class_delivered','leg_reservation_purchased','leg_reservation_delivered','leg_downgraded'
+            ] as $k) {
+                unset($form[$k]);
+            }
+            // Prefer explicit per-ticket downgrade bundle if present; else fall back to legacy saved_leg_by_file.
+            $bundle = [];
+            if ($selectedTicketFile !== '' && !empty($meta['downgrade_by_file'][$selectedTicketFile]) && is_array($meta['downgrade_by_file'][$selectedTicketFile])) {
+                $bundle = (array)$meta['downgrade_by_file'][$selectedTicketFile];
+            } elseif ($selectedTicketFile !== '' && !empty($meta['saved_leg_by_file'][$selectedTicketFile]) && is_array($meta['saved_leg_by_file'][$selectedTicketFile])) {
+                $bundle = (array)$meta['saved_leg_by_file'][$selectedTicketFile];
+            }
+            if (!empty($bundle)) {
+                $by = (array)$bundle;
+                if (!empty($by['downgrade_occurred'])) { $form['downgrade_occurred'] = (string)$by['downgrade_occurred']; }
+                if (!empty($by['downgrade_comp_basis'])) { $form['downgrade_comp_basis'] = (string)$by['downgrade_comp_basis']; }
+                if (!empty($by['downgrade_segment_share'])) { $form['downgrade_segment_share'] = (string)$by['downgrade_segment_share']; }
+                if (!empty($by['downgrade_segment_share_basis'])) { $form['downgrade_segment_share_basis'] = (string)$by['downgrade_segment_share_basis']; }
+                if (!empty($by['downgrade_segment_share_conf'])) { $form['downgrade_segment_share_conf'] = (string)$by['downgrade_segment_share_conf']; }
+                if (!empty($by['purchased'])) { $form['leg_class_purchased'] = (array)$by['purchased']; }
+                if (!empty($by['delivered'])) { $form['leg_class_delivered'] = (array)$by['delivered']; }
+                if (!empty($by['reservation_purchased'])) { $form['leg_reservation_purchased'] = (array)$by['reservation_purchased']; }
+                if (!empty($by['reservation_delivered'])) { $form['leg_reservation_delivered'] = (array)$by['reservation_delivered']; }
+                if (!empty($by['downgraded'])) { $form['leg_downgraded'] = (array)$by['downgraded']; }
+            }
+            $session->write('flow.form', $form);
+        }
+
+        // Auto-default: only set downgrade_occurred if user has not answered, using strong signals (bus/taxi reroute or existing evidence).
+        $downgradeAutoDefaulted = false;
         if (!isset($form['downgrade_occurred']) || $form['downgrade_occurred'] === '') {
-            $form['downgrade_occurred'] = 'no';
+            $autoYes = false;
+            try {
+                $remedyChoice = (string)($form['remedyChoice'] ?? '');
+                $transport = (string)($form['a18_reroute_mode'] ?? '');
+                if ($transport === '') {
+                    $t2 = (string)($form['a20_3_solution_type'] ?? '');
+                    $t1 = (string)($form['assistance_alt_transport_type'] ?? '');
+                    $transport = $t2 !== '' ? $t2 : $t1;
+                }
+                $isBusTaxi = in_array($transport, ['bus','taxi','coach'], true);
+                $isReroute = in_array($remedyChoice, ['reroute_soonest','reroute_later'], true);
+                if ($isBusTaxi && $isReroute) { $autoYes = true; }
+                if ((string)($meta['class_delivered_status'] ?? '') === 'downgrade') { $autoYes = true; }
+                $amen = (string)($meta['reserved_amenity_delivered'] ?? '');
+                if (in_array($amen, ['no','partial'], true)) { $autoYes = true; }
+            } catch (\Throwable $e) { /* ignore */ }
+            $form['downgrade_occurred'] = $autoYes ? 'yes' : 'no';
+            $downgradeAutoDefaulted = true;
+        }
+        // Auto-pick basis when user is downgraded and basis not set (helps reach "hands-off" automation).
+        if (empty($form['downgrade_comp_basis']) && (string)($form['downgrade_occurred'] ?? '') === 'yes') {
+            try {
+                $segmentsTmp = $getSegmentsForDowngrade($selectedTicketFile);
+                $scopeTmp = $this->computeDowngradeLegScopeAuto($segmentsTmp, $form, $incident);
+                $idxTmp = (array)($scopeTmp['indices'] ?? []);
+                if (empty($idxTmp)) { $idxTmp = range(0, max(0, count($segmentsTmp) - 1)); }
+                $rank = ['sleeper' => 4, 'couchette' => 3, '1st' => 2, '2nd' => 1];
+                $max = 0;
+                $classBuy = (array)($form['leg_class_purchased'] ?? []);
+                foreach ($idxTmp as $i0) {
+                    $i = is_numeric($i0) ? (int)$i0 : null;
+                    if ($i === null) { continue; }
+                    $v = strtolower(trim((string)($classBuy[$i] ?? '')));
+                    // Map ticketless/meta short forms
+                    if ($v === '1' || $v === 'first') { $v = '1st'; }
+                    if ($v === '2' || $v === 'second') { $v = '2nd'; }
+                    if (isset($rank[$v])) { $max = max($max, (int)$rank[$v]); }
+                }
+                if ($max === 0) {
+                    $bst = strtolower(trim((string)($meta['_auto']['berth_seat_type']['value'] ?? ($meta['berth_seat_type'] ?? ($form['berth_seat_type'] ?? '')))));
+                    $fc = strtolower(trim((string)($meta['_auto']['fare_class_purchased']['value'] ?? ($meta['fare_class_purchased'] ?? ($form['fare_class_purchased'] ?? '')))));
+                    if (in_array($bst, ['sleeper','couchette'], true)) { $max = $rank[$bst]; }
+                    elseif ($fc === '1') { $max = $rank['1st']; }
+                    elseif ($fc === '2') { $max = $rank['2nd']; }
+                }
+                if ($max >= 4) { $form['downgrade_comp_basis'] = 'sleeper'; }
+                elseif ($max === 3) { $form['downgrade_comp_basis'] = 'couchette'; }
+                elseif ($max > 0) { $form['downgrade_comp_basis'] = 'seat'; }
+            } catch (\Throwable $e) { /* ignore */ }
         }
 
         if ($this->request->is('post')) {
+            // Persist ticket context (if any)
+            $ticketPosted = $this->request->getData('downgrade_ticket_file');
+            if (is_string($ticketPosted)) {
+                $posted = (string)$ticketPosted;
+                if ($posted !== '' && isset($availableSet[$posted])) {
+                    $selectedTicketFile = $posted;
+                    $form['downgrade_ticket_file'] = $posted;
+                }
+            }
             foreach (['downgrade_occurred','downgrade_comp_basis','downgrade_segment_share'] as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
@@ -4673,24 +5964,34 @@ class FlowController extends AppController
                 }
             }
 
-            // If operator rerouted by bus/taxi and user marks downgrade, prefill delivered fields only when empty.
+            // If operator rerouted by bus/taxi/coach and user marks downgrade, prefill delivered fields only when empty.
             try {
                 $remedyChoice = (string)($form['remedyChoice'] ?? '');
-                $transport = '';
-                $t2 = (string)($form['a20_3_solution_type'] ?? '');
-                $t1 = (string)($form['assistance_alt_transport_type'] ?? '');
-                $transport = $t2 !== '' ? $t2 : $t1;
-                $isBusTaxi = in_array($transport, ['bus','taxi'], true);
+                // Prefer TRIN 6 reroute mode (canonical). Fall back to older/legacy step5 keys.
+                $transport = (string)($form['a18_reroute_mode'] ?? '');
+                if ($transport === '') {
+                    $t2 = (string)($form['a20_3_solution_type'] ?? '');
+                    $t1 = (string)($form['assistance_alt_transport_type'] ?? '');
+                    $transport = $t2 !== '' ? $t2 : $t1;
+                }
+                // Treat coach as bus (some hooks/models may emit "coach" instead of "bus").
+                $isBusTaxi = in_array($transport, ['bus','taxi','coach'], true);
                 $isReroute = in_array($remedyChoice, ['reroute_soonest','reroute_later'], true);
                 if ($isBusTaxi && $isReroute && (string)($form['downgrade_occurred'] ?? '') === 'yes') {
                     $legsN = 0;
-                    if (isset($meta['_segments_auto']) && is_array($meta['_segments_auto'])) { $legsN = count((array)$meta['_segments_auto']); }
+                    $segmentsForScope = $getSegmentsForDowngrade($selectedTicketFile);
+                    if (is_array($segmentsForScope) && !empty($segmentsForScope)) { $legsN = count((array)$segmentsForScope); }
+                    if ($legsN <= 0 && isset($meta['_segments_auto']) && is_array($meta['_segments_auto'])) { $legsN = count((array)$meta['_segments_auto']); }
                     if ($legsN <= 0 && isset($journey['segments']) && is_array($journey['segments'])) { $legsN = count((array)$journey['segments']); }
                     $legsN = max($legsN, is_array($form['leg_class_delivered'] ?? null) ? count((array)$form['leg_class_delivered']) : 0);
                     if ($legsN > 0) {
+                        $scope = $this->computeDowngradeLegScopeAuto($segmentsForScope, $form, $incident);
+                        $affected = (array)($scope['indices'] ?? []);
+                        if (empty($affected)) { $affected = range(0, $legsN - 1); }
                         $lcd = (array)($form['leg_class_delivered'] ?? []);
                         $lrd = (array)($form['leg_reservation_delivered'] ?? []);
                         for ($i = 0; $i < $legsN; $i++) {
+                            if (!in_array($i, $affected, true)) { continue; }
                             if (!isset($lcd[$i]) || $lcd[$i] === '') { $lcd[$i] = '2nd'; }
                             if (!isset($lrd[$i]) || $lrd[$i] === '') { $lrd[$i] = 'missing'; }
                         }
@@ -4709,9 +6010,47 @@ class FlowController extends AppController
                 $session->write('flow.leg_class_delivered', (array)($meta['saved_leg_class_delivered'] ?? []));
                 $session->write('flow.leg_class_delivered_locked', !empty($meta['saved_leg_class_delivered']));
             }
+            // Also bind per-leg arrays per selected ticket file when possible (multi-ticket safe)
+            if ($selectedTicketFile !== '') {
+                if (!isset($meta['saved_leg_by_file']) || !is_array($meta['saved_leg_by_file'])) { $meta['saved_leg_by_file'] = []; }
+                $meta['saved_leg_by_file'][$selectedTicketFile] = [
+                    'purchased' => (array)($form['leg_class_purchased'] ?? []),
+                    'delivered' => (array)($form['leg_class_delivered'] ?? []),
+                    'reservation_purchased' => (array)($form['leg_reservation_purchased'] ?? []),
+                    'reservation_delivered' => (array)($form['leg_reservation_delivered'] ?? []),
+                    'downgraded' => (array)($form['leg_downgraded'] ?? []),
+                ];
+            }
+            // Persist a normalized per-ticket downgrade bundle (used for evaluation + fixture export).
+            if ($selectedTicketFile !== '') {
+                if (!isset($meta['downgrade_by_file']) || !is_array($meta['downgrade_by_file'])) { $meta['downgrade_by_file'] = []; }
+                $meta['downgrade_by_file'][$selectedTicketFile] = [
+                    'downgrade_occurred' => (string)($form['downgrade_occurred'] ?? ''),
+                    'downgrade_comp_basis' => (string)($form['downgrade_comp_basis'] ?? ''),
+                    'downgrade_segment_share' => (string)($form['downgrade_segment_share'] ?? ''),
+                    'downgrade_segment_share_basis' => (string)($form['downgrade_segment_share_basis'] ?? ''),
+                    'downgrade_segment_share_conf' => (string)($form['downgrade_segment_share_conf'] ?? ''),
+                    'purchased' => (array)($form['leg_class_purchased'] ?? []),
+                    'delivered' => (array)($form['leg_class_delivered'] ?? []),
+                    'reservation_purchased' => (array)($form['leg_reservation_purchased'] ?? []),
+                    'reservation_delivered' => (array)($form['leg_reservation_delivered'] ?? []),
+                    'downgraded' => (array)($form['leg_downgraded'] ?? []),
+                ];
+            }
+            // Compatibility: keep top-level downgrade_occurred=yes if ANY ticket is marked yes.
+            try {
+                $anyYes = false;
+                foreach ((array)($meta['downgrade_by_file'] ?? []) as $b) {
+                    if (!is_array($b)) { continue; }
+                    if ((string)($b['downgrade_occurred'] ?? '') === 'yes') { $anyYes = true; break; }
+                }
+                if ($anyYes) { $form['downgrade_occurred'] = 'yes'; }
+            } catch (\Throwable $e) { /* ignore */ }
 
             $session->write('flow.form', $form);
             $session->write('flow.meta', $meta);
+            $flags['step9_done'] = '1';
+            $session->write('flow.flags', $flags);
             return $this->redirect(['action' => 'compensation']);
         }
 
@@ -4721,21 +6060,190 @@ class FlowController extends AppController
         } catch (\Throwable $e) { /* ignore for downgrade */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
 
-        // Auto-calc downgrade segment share if missing.
+        // Auto-calc downgrade segment share + scope if missing.
         try {
             if (empty($form['downgrade_segment_share'])) {
-                $segments = (array)($meta['_segments_auto'] ?? ($journey['segments'] ?? []));
+                $segments = $getSegmentsForDowngrade($selectedTicketFile);
                 $missedStation = (string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? ''));
-                $auto = $this->computeDowngradeSegmentShareAuto($segments, $missedStation);
-                $shareAuto = max(0.0, min(1.0, (float)($auto['share'] ?? 1.0)));
-                $form['downgrade_segment_share'] = (string)round($shareAuto, 3);
-                $form['downgrade_segment_share_basis'] = (string)($auto['basis'] ?? 'unknown');
-                $form['downgrade_segment_share_conf'] = (string)($auto['confidence'] ?? '0');
+                $scope = $this->computeDowngradeLegScopeAuto($segments, $form, $incident);
+                $idx = (array)($scope['indices'] ?? []);
+                if (!empty($idx)) {
+                    // Prefer distance/time weighting when possible; otherwise fall back to count-based.
+                    $idxSet = [];
+                    foreach ($idx as $i0) { if (is_numeric($i0)) { $idxSet[(int)$i0] = true; } }
+                    $haveDist = false;
+                    $totalDist = 0.0; $affDist = 0.0;
+                    $totalMin = 0.0; $affMin = 0.0;
+                    $getMin = function(string $hhmm): ?int { if (!preg_match('/^(\d{1,2}):(\d{2})$/', $hhmm, $m)) return null; $h=(int)$m[1]; $mi=(int)$m[2]; return $h*60+$mi; };
+                    foreach ($segments as $i => $seg) {
+                        if (!is_array($seg)) { continue; }
+                        $dist = isset($seg['distance_km']) && is_numeric($seg['distance_km']) ? (float)$seg['distance_km'] : null;
+                        if ($dist !== null) { $haveDist = true; $totalDist += $dist; if (isset($idxSet[(int)$i])) { $affDist += $dist; } }
+                        $sd = isset($seg['schedDep']) ? $getMin((string)$seg['schedDep']) : null;
+                        $sa = isset($seg['schedArr']) ? $getMin((string)$seg['schedArr']) : null;
+                        if ($sd !== null && $sa !== null) {
+                            $dur = $sa - $sd; if ($dur < 0) { $dur += 24*60; }
+                            $dur = max(0, (float)$dur);
+                            $totalMin += $dur;
+                            if (isset($idxSet[(int)$i])) { $affMin += $dur; }
+                        }
+                    }
+                    if ($haveDist && $totalDist > 0.0) { $shareAuto = $affDist / $totalDist; $basis = 'distance_scope'; }
+                    elseif ($totalMin > 0.0) { $shareAuto = $affMin / $totalMin; $basis = 'time_scope'; }
+                    else { $shareAuto = count($idxSet) / max(1, count($segments)); $basis = 'count_scope'; }
+                    $shareAuto = max(0.0, min(1.0, (float)$shareAuto));
+                    $form['downgrade_segment_share'] = (string)round($shareAuto, 3);
+                    $form['downgrade_segment_share_basis'] = (string)($basis ?? ($scope['basis'] ?? 'station_range'));
+                    $form['downgrade_segment_share_conf'] = (string)($scope['confidence'] ?? '0.5');
+                } else {
+                    $auto = $this->computeDowngradeSegmentShareAuto($segments, $missedStation);
+                    $shareAuto = max(0.0, min(1.0, (float)($auto['share'] ?? 1.0)));
+                    $form['downgrade_segment_share'] = (string)round($shareAuto, 3);
+                    $form['downgrade_segment_share_basis'] = (string)($auto['basis'] ?? 'unknown');
+                    $form['downgrade_segment_share_conf'] = (string)($auto['confidence'] ?? '0');
+                }
                 $session->write('flow.form', $form);
             }
         } catch (\Throwable $e) { /* ignore */ }
 
-        $this->set(compact('form','flags','incident','profile','meta','compute'));
+        // Compute scope for view/highlighting (deterministic; does not persist).
+        try {
+            $segments = $getSegmentsForDowngrade($selectedTicketFile);
+            $downgradeScopeAuto = $this->computeDowngradeLegScopeAuto($segments, $form, $incident);
+        } catch (\Throwable $e) { $downgradeScopeAuto = ['indices' => [], 'basis' => 'error', 'confidence' => 0.0, 'from' => null, 'to' => null]; }
+        $affectedLegsAuto = (array)($downgradeScopeAuto['indices'] ?? []);
+
+        // Build leg rows for downgrade table from selected ticket segments (avoid relying on meta fallback in element).
+        $journeyRowsDowng = [];
+        try {
+            $segmentsForRows = $getSegmentsForDowngrade($selectedTicketFile);
+            foreach ($segmentsForRows as $s) {
+                if (!is_array($s)) { continue; }
+                $from = trim((string)($s['from'] ?? ''));
+                $to = trim((string)($s['to'] ?? ''));
+                $journeyRowsDowng[] = [
+                    'leg' => $from . ' -> ' . $to,
+                    'dep' => (string)($s['schedDep'] ?? ''),
+                    'arr' => (string)($s['schedArr'] ?? ''),
+                    'train' => (string)($s['train'] ?? ($s['trainNo'] ?? ($s['train_no'] ?? ''))),
+                    'change' => (string)($s['change'] ?? ''),
+                ];
+            }
+        } catch (\Throwable $e) { $journeyRowsDowng = []; }
+
+        $downgradeTicketFile = $selectedTicketFile;
+        // For view/prefill: use ticket-specific AUTO fields when available (multi-ticket safe).
+        // Also derive per-leg purchased class/reservation from ticket segments when present (LLM structuring can provide it).
+        $metaView = $meta;
+        $didMutateFormOnGet = false;
+        try {
+            $autoForTicket = $getAutoForDowngrade($selectedTicketFile);
+            if (!empty($autoForTicket)) {
+                if (!isset($metaView['_auto']) || !is_array($metaView['_auto'])) { $metaView['_auto'] = []; }
+                // Ticket-specific values win.
+                $metaView['_auto'] = array_merge((array)$metaView['_auto'], (array)$autoForTicket);
+            }
+            $segForTicket = $getSegmentsForDowngrade($selectedTicketFile);
+            if (!isset($metaView['_auto']) || !is_array($metaView['_auto'])) { $metaView['_auto'] = []; }
+            if (!isset($metaView['_auto']['leg_class_purchased']) || !is_array($metaView['_auto']['leg_class_purchased'])) { $metaView['_auto']['leg_class_purchased'] = []; }
+            if (!isset($metaView['_auto']['leg_reservation_purchased']) || !is_array($metaView['_auto']['leg_reservation_purchased'])) { $metaView['_auto']['leg_reservation_purchased'] = []; }
+            foreach ((array)$segForTicket as $i => $s) {
+                if (!is_array($s)) { continue; }
+                $cls = (string)($s['classPurchased'] ?? '');
+                $res = (string)($s['reservationPurchased'] ?? '');
+                if ($cls !== '' && empty($metaView['_auto']['leg_class_purchased'][$i]['value'] ?? '')) {
+                    $metaView['_auto']['leg_class_purchased'][$i] = ['value' => $cls, 'source' => (string)($s['source'] ?? 'ticket')];
+                }
+                if ($res !== '' && empty($metaView['_auto']['leg_reservation_purchased'][$i]['value'] ?? '')) {
+                    $metaView['_auto']['leg_reservation_purchased'][$i] = ['value' => $res, 'source' => (string)($s['source'] ?? 'ticket')];
+                }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+
+        // Rail->rail reroute automation: if user bought a new ticket and it was operator-approved, use that ticket's purchased class/reservation
+        // as a proxy for "delivered" level on the affected legs (only fills blanks; never overwrites user input).
+        try {
+            $approved = (string)($form['self_purchase_approved_by_operator'] ?? '');
+            $selfBuy = (string)($form['self_purchased_new_ticket'] ?? '');
+            $remedyChoice = (string)($form['remedyChoice'] ?? '');
+            $mode = (string)($form['a18_reroute_mode'] ?? '');
+            $isReroute = in_array($remedyChoice, ['reroute_soonest','reroute_later'], true);
+            $isRail = ($mode === 'rail' || $mode === '');
+            $newTicket = (array)($meta['_reroute_new_ticket'] ?? []);
+            $newSegs = (array)($newTicket['segments'] ?? []);
+            if ($selfBuy === 'yes' && $approved === 'yes' && $isReroute && $isRail && !empty($newSegs) && !empty($affectedLegsAuto)) {
+                $mapClass = static function(string $v): string {
+                    $v = strtolower(trim($v));
+                    if (in_array($v, ['1st','first','1','1st_class','business','premium'], true)) return '1st';
+                    if (in_array($v, ['2nd','second','2','2nd_class','economy','standard'], true)) return '2nd';
+                    if (in_array($v, ['sleeper','couchette'], true)) return $v;
+                    return $v;
+                };
+                $mapRes = static function(string $v): string {
+                    $v = strtolower(trim($v));
+                    if (in_array($v, ['reserved','seat_reserved','seat'], true)) return 'reserved';
+                    if (in_array($v, ['free','free_seat','none','no','unreserved','no_reservation'], true)) return 'free_seat';
+                    if ($v === 'missing') return 'missing';
+                    return $v;
+                };
+                $origSegs = (array)$getSegmentsForDowngrade($selectedTicketFile);
+                $idxSet = [];
+                foreach ($affectedLegsAuto as $i0) { if (is_numeric($i0)) { $idxSet[] = (int)$i0; } }
+                $lcd = (array)($form['leg_class_delivered'] ?? []);
+                $lrd = (array)($form['leg_reservation_delivered'] ?? []);
+                $anyFilled = false;
+                $matchByLeg = static function(array $orig, array $news): ?array {
+                    $from = strtolower(trim((string)($orig['from'] ?? '')));
+                    $to = strtolower(trim((string)($orig['to'] ?? '')));
+                    foreach ($news as $ns) {
+                        if (!is_array($ns)) { continue; }
+                        $nf = strtolower(trim((string)($ns['from'] ?? '')));
+                        $nt = strtolower(trim((string)($ns['to'] ?? '')));
+                        if ($from !== '' && $to !== '' && $nf === $from && $nt === $to) { return $ns; }
+                    }
+                    return null;
+                };
+                foreach ($idxSet as $k => $i) {
+                    $orig = is_array($origSegs[$i] ?? null) ? (array)$origSegs[$i] : [];
+                    $ns = $matchByLeg($orig, $newSegs);
+                    if ($ns === null) {
+                        // Fallback by order (1 new seg -> apply to all; else align by relative index in affected set)
+                        if (count($newSegs) === 1) { $ns = is_array($newSegs[0]) ? (array)$newSegs[0] : []; }
+                        else {
+                            $rel = min($k, count($newSegs) - 1);
+                            $ns = is_array($newSegs[$rel] ?? null) ? (array)$newSegs[$rel] : [];
+                        }
+                    }
+                    $cls = $mapClass((string)($ns['classPurchased'] ?? ''));
+                    $res = $mapRes((string)($ns['reservationPurchased'] ?? ''));
+                    if (($lcd[$i] ?? '') === '' && $cls !== '') { $lcd[$i] = $cls; $anyFilled = true; }
+                    if (($lrd[$i] ?? '') === '' && $res !== '') { $lrd[$i] = $res; $anyFilled = true; }
+                }
+                if ($anyFilled) {
+                    $form['leg_class_delivered'] = $lcd;
+                    $form['leg_reservation_delivered'] = $lrd;
+                    $didMutateFormOnGet = true;
+                    // If downgrade was only auto-defaulted, and we now have evidence of delivered levels, auto-enable downgrade when a leg is lower.
+                    if ($downgradeAutoDefaulted && (string)($form['downgrade_occurred'] ?? '') !== 'yes') {
+                        $rank = ['sleeper' => 4, 'couchette' => 3, '1st' => 2, '2nd' => 1];
+                        $buy = (array)($form['leg_class_purchased'] ?? []);
+                        $anyLower = false;
+                        foreach ($idxSet as $i) {
+                            $b = $mapClass((string)($buy[$i] ?? ''));
+                            $d = $mapClass((string)($lcd[$i] ?? ''));
+                            if ($b !== '' && $d !== '' && isset($rank[$b]) && isset($rank[$d]) && $rank[$d] < $rank[$b]) { $anyLower = true; break; }
+                            $rb = $mapRes((string)(($form['leg_reservation_purchased'][$i] ?? '') ?: ''));
+                            $rd = $mapRes((string)(($lrd[$i] ?? '') ?: ''));
+                            if ($rb === 'reserved' && $rd !== '' && $rd !== 'reserved') { $anyLower = true; break; }
+                        }
+                        if ($anyLower) { $form['downgrade_occurred'] = 'yes'; $didMutateFormOnGet = true; }
+                    }
+                }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+        if ($didMutateFormOnGet) { $session->write('flow.form', $form); }
+
+        $this->set(compact('form','flags','incident','profile','metaView','meta','compute','downgradeScopeAuto','affectedLegsAuto','journeyRowsDowng','downgradeTicketOptions','downgradeTicketFile'));
         return null;
     }
 
@@ -4751,12 +6259,22 @@ class FlowController extends AppController
 
         // Note: Compensation is the last step in this split flow; do not redirect away.
 
+        // TRIN 10 prereq: TRIN 9 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step9_done'], 'downgrade');
+        if ($resp) { return $resp; }
+        if ($this->request->is('get') && ((string)($flags['step10_done'] ?? '')) !== '1') {
+            $flags['step10_done'] = '1';
+            $session->write('flow.flags', $flags);
+        }
+
         if ($this->request->is('post')) {
             foreach (['delayAtFinalMinutes','compensationBand','voucherAccepted','operatorExceptionalCircumstances','operatorExceptionalType','minThresholdApplies'] as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
             }
             $session->write('flow.form', $form);
+            $flags['step10_done'] = '1';
+            $session->write('flow.flags', $flags);
             return $this->redirect(['action' => 'compensation']);
         }
 
@@ -4857,7 +6375,7 @@ class FlowController extends AppController
                 (string)($meta['_auto']['price']['currency'] ?? ''),
             ] as $c) {
                 $cNorm = strtoupper(trim($c));
-                if ($cNorm !== '' && preg_match('/^(EUR|DKK|SEK|BGN|CZK|HUF|PLN|RON)$/', $cNorm)) { $explicitCurrency = $cNorm; break; }
+                if ($cNorm !== '' && preg_match('/^(EUR|DKK|SEK|NOK|GBP|CHF|BGN|CZK|HUF|PLN|RON)$/', $cNorm)) { $explicitCurrency = $cNorm; break; }
             }
             $priceRaw = (string)($journey['ticketPrice']['value'] ?? ($form['price'] ?? ($meta['_auto']['price']['value'] ?? '0 EUR')));
             // Extend symbol detection (non-euro EU currencies)
@@ -4866,7 +6384,7 @@ class FlowController extends AppController
             // Use explicit currency if we captured it upstream (takes precedence over symbol parsing)
             if ($explicitCurrency !== null) {
                 $currency = $explicitCurrency;
-            } elseif (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|EUR)\b/i', $priceRaw, $mm)) {
+            } elseif (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|NOK|GBP|CHF|EUR)\b/i', $priceRaw, $mm)) {
                 $currency = strtoupper($mm[1]);
             } elseif ($currency === 'EUR' && preg_match('/\bkr\b/i', $priceRaw)) {
                 $opCountry = strtoupper((string)(
@@ -4981,38 +6499,52 @@ class FlowController extends AppController
             } catch (\Throwable $e) { /* ignore FX errors */ }
             // Art. 12(4) billetudsteder hæfter: 100 % refund + 75 % komp af transaktionsbeløb
             if ($isArt124Retailer) {
-                $baseAmount = max(0.0, $ticketPriceAmount);
-                $refundAmt = $baseAmount;
-                $compAmt = round($baseAmount * 0.75, 2);
-                $expensesTotal = array_sum(array_map('floatval', $expensesIn));
-                $claim = [
-                    'flags' => ['retailer_75' => true],
-                    'breakdown' => [
-                        'compensation' => [
-                            'eligible' => true,
-                            'amount' => $compAmt,
-                            'currency' => $currency,
-                            'pct' => 75,
-                            'basis' => 'Art. 12(4) billetudsteder: 75% af transaktionsbeløb',
-                            'regime' => 'EU_ART_12_4',
-                        ],
-                        'refund' => [
-                            'amount' => $refundAmt,
-                            'currency' => $currency,
-                            'pct' => 100,
-                            'basis' => 'Art. 12(4) billetudsteder: fuld refundering af transaktionsbeløb',
-                        ],
-                        'expenses' => [
-                            'amount' => $expensesTotal,
-                            'currency' => $currency,
-                            'basis' => 'Assistance/udlæg (konverteret til billetvaluta)',
-                        ],
+                // Use ClaimCalculator as single source of truth (same logic as demo pipeline/scenarios).
+                // ClaimCalculator contains the Art.12(4) special-case (75% + full refund) when retailer is liable.
+                $claim = (new \App\Service\ClaimCalculator())->calculate([
+                    'country_code' => (string)($journey['country']['value'] ?? 'EU'),
+                    'currency' => $currency,
+                    'ticket_price_total' => $ticketPriceAmount,
+                    'trip' => [
+                        'through_ticket' => $throughTicket,
+                        'trip_type' => (count($legs) === 2 ? 'return' : ($form['trip_type'] ?? null)),
+                        'legs' => $legs,
+                        'liable_party' => 'retailer',
                     ],
-                    'totals' => [
-                        'gross_claim' => round($refundAmt + $compAmt + $expensesTotal, 2),
-                        'currency' => $currency,
+                    'disruption' => [
+                        'delay_minutes_final' => $delayForClaim,
+                        'eu_only' => (bool)($compute['euOnly'] ?? true),
+                        'delay_minutes_final_eu' => (bool)($compute['euOnly'] ?? true) ? $delayForClaim : null,
+                        'notified_before_purchase' => (bool)($compute['knownDelayBeforePurchase'] ?? false),
+                        'extraordinary' => $extraordinary,
+                        'extraordinary_type' => $extraordinaryType,
+                        'self_inflicted' => false,
+                        'delayed_leg_index' => $delayedLegIndex,
+                        'missed_connection' => true,
+                        'art18_active' => true,
                     ],
-                ];
+                    'choices' => [
+                        'wants_refund' => ((string)($form['remedyChoice'] ?? '') === 'refund_return'),
+                        'wants_reroute_same_soonest' => ((string)($form['remedyChoice'] ?? '') === 'reroute_soonest'),
+                        'wants_reroute_later_choice' => ((string)($form['remedyChoice'] ?? '') === 'reroute_later'),
+                    ],
+                    'expenses' => $expensesIn,
+                    'already_refunded' => 0,
+                    // Art. 18 extras + CIV/Annex II downgrade inputs
+                    'return_to_origin_expense' => $form['return_to_origin_expense'] ?? null,
+                    'return_to_origin_amount' => $form['return_to_origin_amount'] ?? null,
+                    'reroute_extra_costs' => $form['reroute_extra_costs'] ?? null,
+                    'reroute_extra_costs_amount' => $form['reroute_extra_costs_amount'] ?? null,
+                    'downgrade_occurred' => $form['downgrade_occurred'] ?? null,
+                    'downgrade_comp_basis' => $form['downgrade_comp_basis'] ?? ($meta['downgrade_comp_basis'] ?? null),
+                    'downgrade_segment_share' => $form['downgrade_segment_share'] ?? ($meta['downgrade_segment_share'] ?? null),
+                    'leg_class_purchased' => $form['leg_class_purchased'] ?? null,
+                    'leg_class_delivered' => $form['leg_class_delivered'] ?? null,
+                    'leg_reservation_purchased' => $form['leg_reservation_purchased'] ?? null,
+                    'leg_reservation_delivered' => $form['leg_reservation_delivered'] ?? null,
+                    'leg_downgraded' => $form['leg_downgraded'] ?? null,
+                    'apply_min_threshold' => (bool)$this->truthy($form['minThresholdApplies'] ?? ''),
+                ]);
                 $liableParty = 'retailer';
                 $liableBasis = 'Art. 12(4)';
             } else {
@@ -5056,7 +6588,20 @@ class FlowController extends AppController
                     ],
                     'expenses' => $expensesIn,
                     'already_refunded' => 0,
-                    'service_fee_mode' => 'expenses_only',
+                    // Art. 18 extras (used in TRIN 9 "Hurtigt overblik" and scenario output)
+                    'return_to_origin_expense' => $form['return_to_origin_expense'] ?? null,
+                    'return_to_origin_amount' => $form['return_to_origin_amount'] ?? null,
+                    'reroute_extra_costs' => $form['reroute_extra_costs'] ?? null,
+                    'reroute_extra_costs_amount' => $form['reroute_extra_costs_amount'] ?? null,
+                    // CIV/Annex II downgrade (stk. 3)
+                    'downgrade_occurred' => $form['downgrade_occurred'] ?? null,
+                    'downgrade_comp_basis' => $form['downgrade_comp_basis'] ?? ($meta['downgrade_comp_basis'] ?? null),
+                    'downgrade_segment_share' => $form['downgrade_segment_share'] ?? ($meta['downgrade_segment_share'] ?? null),
+                    'leg_class_purchased' => $form['leg_class_purchased'] ?? null,
+                    'leg_class_delivered' => $form['leg_class_delivered'] ?? null,
+                    'leg_reservation_purchased' => $form['leg_reservation_purchased'] ?? null,
+                    'leg_reservation_delivered' => $form['leg_reservation_delivered'] ?? null,
+                    'leg_downgraded' => $form['leg_downgraded'] ?? null,
                     // If user selected a band, honor it for preview by overriding compensation pct
                     'override_comp_pct' => ($selectedBand === '25' || $selectedBand === '50') ? (int)$selectedBand : null,
                     'apply_min_threshold' => (bool)$this->truthy($form['minThresholdApplies'] ?? ''),
@@ -5328,6 +6873,116 @@ class FlowController extends AppController
             return ['share' => $affectedMin / $totalMin, 'basis' => 'time', 'confidence' => $conf];
         }
         return ['share' => 1.0, 'basis' => 'unknown', 'confidence' => 0.3];
+    }
+
+    /**
+     * Auto scope for downgrade: attempt to identify which planned legs belong to the affected portion.
+     *
+     * We use station context from TRIN 4-6 to compute a contiguous leg-range:
+     * - from: a18_from_station > handoff_station > stranded_current_station > missed_connection_station > dep_station
+     * - to: a18_reroute_endpoint/a18_reroute_arrival_station > a20_where_ended/a20_arrival_station > arr_station
+     *
+     * @param array<int,array<string,mixed>> $segments
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $incident
+     * @return array{indices:int[],basis:string,confidence:float,from:?string,to:?string}
+     */
+    private function computeDowngradeLegScopeAuto(array $segments, array $form, array $incident): array
+    {
+        $n = count($segments);
+        if ($n <= 0) { return ['indices' => [], 'basis' => 'no_segments', 'confidence' => 0.0, 'from' => null, 'to' => null]; }
+
+        $norm = function(string $s): string {
+            $s = strtolower(trim($s));
+            $s = str_replace([' station', ' st.', ' st', ' st ', '  '], ['', '', '', ' ', ' '], $s);
+            $s = preg_replace('/\s+/', ' ', $s);
+            return (string)$s;
+        };
+        $resolveStation = function(string $key, string $otherKey = '') use ($form): string {
+            $v = trim((string)($form[$key] ?? ''));
+            if ($v === 'other' && $otherKey !== '') { $v = trim((string)($form[$otherKey] ?? '')); }
+            return $v;
+        };
+
+        $dep = trim((string)($form['dep_station'] ?? ''));
+        $arr = trim((string)($form['arr_station'] ?? ''));
+        $missed = trim((string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? '')));
+
+        $from = $resolveStation('a18_from_station', 'a18_from_station_other');
+        if ($from === '' || $from === 'unknown') {
+            $hs = trim((string)($form['handoff_station'] ?? ''));
+            if ($hs !== '') { $from = $hs; }
+        }
+        if ($from === '' || $from === 'unknown') {
+            $scs = $resolveStation('stranded_current_station', 'stranded_current_station_other');
+            if ($scs !== '' && $scs !== 'unknown') { $from = $scs; }
+        }
+        if (($from === '' || $from === 'unknown') && $missed !== '') { $from = $missed; }
+        if ($from === '' || $from === 'unknown') { $from = $dep; }
+
+        $to = '';
+        $ep = (string)($form['a18_reroute_endpoint'] ?? '');
+        if ($ep === 'final_destination') {
+            $to = $arr;
+        } elseif (in_array($ep, ['nearest_station','other_departure_point'], true)) {
+            $to = $resolveStation('a18_reroute_arrival_station', 'a18_reroute_arrival_station_other');
+        }
+        if ($to === '' || $to === 'unknown') {
+            $a20ep = (string)($form['a20_where_ended'] ?? '');
+            if ($a20ep === 'final_destination') { $to = $arr; }
+            elseif (in_array($a20ep, ['nearest_station','other_departure_point'], true)) {
+                $to = $resolveStation('a20_arrival_station', 'a20_arrival_station_other');
+            }
+        }
+        if ($to === '' || $to === 'unknown') { $to = $arr; }
+
+        $fromN = $from !== '' ? $norm($from) : '';
+        $toN = $to !== '' ? $norm($to) : '';
+
+        $segFromTo = function(array $s) use ($norm): array {
+            $sf = ''; $st = '';
+            foreach (['from','origin','dep_station','departureStation'] as $k) { if (isset($s[$k]) && $sf === '') { $sf = trim((string)$s[$k]); } }
+            foreach (['to','destination','arr_station','arrivalStation'] as $k) { if (isset($s[$k]) && $st === '') { $st = trim((string)$s[$k]); } }
+            return [$sf !== '' ? $norm($sf) : '', $st !== '' ? $norm($st) : ''];
+        };
+
+        $findStart = function(string $stationN) use ($segments, $segFromTo): ?int {
+            if ($stationN === '') { return null; }
+            foreach ($segments as $i => $s) {
+                if (!is_array($s)) { continue; }
+                [$sfN, $stN] = $segFromTo($s);
+                if ($sfN !== '' && $sfN === $stationN) { return (int)$i; }
+                if ($stN !== '' && $stN === $stationN) { return (int)$i + 1; }
+            }
+            return null;
+        };
+        $findEnd = function(string $stationN) use ($segments, $segFromTo): ?int {
+            if ($stationN === '') { return null; }
+            foreach ($segments as $i => $s) {
+                if (!is_array($s)) { continue; }
+                [, $stN] = $segFromTo($s);
+                if ($stN !== '' && $stN === $stationN) { return (int)$i; }
+            }
+            return null;
+        };
+
+        $start = $findStart($fromN);
+        $end = $findEnd($toN);
+        if ($start === null && $missed !== '') { $start = $findStart($norm($missed)); }
+        if ($start === null) { $start = 0; }
+        if ($end === null) { $end = $n - 1; }
+        if ($end < $start) { $end = $n - 1; }
+
+        $indices = [];
+        for ($i = $start; $i <= $end && $i < $n; $i++) { $indices[] = (int)$i; }
+
+        $basis = 'station_range';
+        $conf = 0.5;
+        if ($fromN !== '' && $toN !== '' && $end !== null) { $conf = 0.9; }
+        elseif ($missed !== '') { $basis = 'missed_split'; $conf = 0.7; }
+        else { $basis = 'fallback_all'; $conf = 0.3; }
+
+        return ['indices' => $indices, 'basis' => $basis, 'confidence' => $conf, 'from' => $from ?: null, 'to' => $to ?: null];
     }
 }
 

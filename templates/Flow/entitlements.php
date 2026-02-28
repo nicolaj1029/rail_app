@@ -6,6 +6,9 @@ $incident = $incident ?? [];
 $meta = $meta ?? [];
 $groupedTickets = $groupedTickets ?? [];
 $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
+$ticketMode = (string)($form['ticket_upload_mode'] ?? 'ticket');
+if ($ticketMode !== 'ticketless') { $ticketMode = 'ticket'; }
+$isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
 <style>
@@ -13,11 +16,40 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
   #pmrFlowCard, #bikeFlowCard { display:none !important; }
   .fe-wrapper { max-width: 1200px; margin: 0 auto; }
   .fe-wide { width: 100%; }
+  /* Ticketless station autocomplete */
+  #ticketlessCard label { position: relative; }
+  #ticketlessCard .station-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 2px);
+    z-index: 50;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+    max-height: 220px;
+    overflow: auto;
+  }
+  #ticketlessCard .station-suggest button {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #111 !important;
+  }
+  #ticketlessCard .station-suggest button:hover { background: #f6f6f6; color: #111 !important; }
+  #ticketlessCard .station-suggest button:active { color: #111 !important; }
+  #ticketlessCard .station-suggest button:focus { outline: none; background: #f1f3f5; color: #111 !important; }
+  #ticketlessCard .station-suggest .muted { color: #666; font-size: 12px; }
 </style>
 <div class="fe-header">
   <div class="fe-step">Trin 2</div>
-  <h1 class="fe-title">Upload billet</h1>
-  <p class="fe-sub">Upload billetter, bekræft rejsen og svar kort på spørgsmål. Sidepanelet viser løbende dine rettigheder.</p>
+  <h1 class="fe-title">Billet (upload eller ticketless)</h1>
+  <p class="fe-sub">Upload billetter eller udfyld minimum uden billet. Sidepanelet viser løbende dine rettigheder.</p>
 </div>
 <?php
   // UI banners derived from exemption profile (global notices)
@@ -42,9 +74,40 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
   // Per clarification: pricing, class, and pre-purchase disclosure all fall under Art. 9 stk. 1
   $showArt9_1 = !isset($articlesSub['art9_1']) || $articlesSub['art9_1'] !== false;
   $contractOptions = $contractOptions ?? [];
-?>
+  // Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
+  $stationsSearchUrl = $this->Url->build('/api/stations/search');
+  // Offline operator/product catalog for ticketless suggestions (no tokens / no external calls).
+  $opCatalog = new \App\Service\OperatorCatalog();
+  $opsByCountry = (array)$opCatalog->getOperators();
+  $productsByOperator = (array)$opCatalog->getProducts();
+  $countryToCurrency = ['BG'=>'BGN','CZ'=>'CZK','DK'=>'DKK','HU'=>'HUF','PL'=>'PLN','RO'=>'RON','SE'=>'SEK','NO'=>'NOK','GB'=>'GBP','CH'=>'CHF'];
+  // Ticketless: country prefill. Default DK only when nothing else is known.
+  $journey = $journey ?? [];
+  $tlCountry = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ($journey['country']['value'] ?? '')))));
+  $tlCountryAssumed = (string)($form['operator_country_assumed'] ?? '0');
+  if ($tlCountry === '') {
+      $tlCountry = 'DK';
+      $tlCountryAssumed = '1';
+  }
+  $operatorToCountry = [];
+  foreach ($opsByCountry as $cc => $ops) {
+      foreach ((array)$ops as $name => $label) { $operatorToCountry[(string)$name] = (string)$cc; }
+  }
+  $allOperators = array_keys($operatorToCountry);
+  sort($allOperators);
+	?>
+<?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['type' => 'file', 'id' => 'entitlementsForm']) ?>
+<fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <div class="fe-wrapper">
+  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
+    <strong>Har du en billet du kan uploade?</strong>
+    <div class="small muted" style="margin-top:6px;">Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.</div>
+    <div class="small" style="margin-top:8px;">
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> Ja, jeg kan uploade billet</label>
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
+    </div>
+  </div>
   <?php $pcVal = (string)($form['purchaseChannel'] ?? ''); ?>
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px; display:none;">
     <strong>Hvor blev billetten købt?</strong>
@@ -55,7 +118,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
       <label class="mr8"><input type="radio" name="purchaseChannel" value="other" <?= $pcVal==='other'?'checked':'' ?> /> Andet</label>
     </div>
   </div>
-  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+  <div class="card" id="ticketUploadCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">
     <div class="section-title">Billetter</div>
   <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
       <div class="upload-title">Slip filer her eller klik for at tilføje</div>
@@ -69,6 +132,115 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
     <input type="file" id="ticketSingle" name="ticket_upload" accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
     <input type="file" id="ticketMulti" name="multi_ticket_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
     <ul id="selectedFilesList" class="small file-list" style="list-style:none; padding-left:0; margin:12px 0 0 0;"></ul>
+  </div>
+
+  <div class="card" id="ticketlessCard" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?'':' display:none;' ?>">
+    <div class="section-title">Ticketless (minimum)</div>
+    <div class="small muted" style="margin-top:6px;">Udfyld det du ved. Pris er valgfri (procent beregnes altid).</div>
+    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+      <label>Land (ISO2)
+        <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
+        <input type="hidden" name="operator_country_assumed" value="<?= h($tlCountryAssumed) ?>" />
+      </label>
+      <label>Scope
+        <?php $sc = (string)($form['scope_choice'] ?? ''); ?>
+        <select name="scope_choice">
+          <option value="">Vælg...</option>
+          <option value="regional" <?= $sc==='regional'?'selected':'' ?>>Regional/lokaltog</option>
+          <option value="long_distance" <?= $sc==='long_distance'?'selected':'' ?>>Langdistance</option>
+          <option value="international" <?= $sc==='international'?'selected':'' ?>>International</option>
+        </select>
+      </label>
+      <label>Operatør (valgfri)
+        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx DSB, DB, SJ" />
+      </label>
+      <label>Produkt (valgfri)
+        <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx IC, ICE" />
+      </label>
+      <label>Koebt klasse (valgfri)
+        <?php $fc = strtolower((string)($form['fare_class_purchased'] ?? ($meta['fare_class_purchased'] ?? ($meta['_auto']['fare_class_purchased']['value'] ?? '')))); ?>
+        <select name="fare_class_purchased">
+          <option value="">Vaelg...</option>
+          <option value="1" <?= $fc==='1'?'selected':'' ?>>1. klasse</option>
+          <option value="2" <?= $fc==='2'?'selected':'' ?>>2. klasse</option>
+          <option value="other" <?= $fc==='other'?'selected':'' ?>>Andet</option>
+          <option value="unknown" <?= $fc==='unknown'?'selected':'' ?>>Ved ikke</option>
+        </select>
+      </label>
+      <label>Plads/komfort (valgfri)
+        <?php $bst = strtolower((string)($form['berth_seat_type'] ?? ($meta['berth_seat_type'] ?? ($meta['_auto']['berth_seat_type']['value'] ?? '')))); ?>
+        <select name="berth_seat_type">
+          <option value="">Vaelg...</option>
+          <option value="seat" <?= $bst==='seat'?'selected':'' ?>>Reserveret plads</option>
+          <option value="free" <?= $bst==='free'?'selected':'' ?>>Ingen reservation</option>
+          <option value="couchette" <?= $bst==='couchette'?'selected':'' ?>>Liggevogn</option>
+          <option value="sleeper" <?= $bst==='sleeper'?'selected':'' ?>>Sovevogn</option>
+          <option value="none" <?= $bst==='none'?'selected':'' ?>>Ingen (ukendt)</option>
+          <option value="unknown" <?= $bst==='unknown'?'selected':'' ?>>Ved ikke</option>
+        </select>
+      </label>
+      <label>Afgangsstation
+        <input type="text" name="dep_station" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" />
+        <input type="hidden" name="dep_station_osm_id" value="<?= h((string)($form['dep_station_osm_id'] ?? '')) ?>" />
+        <input type="hidden" name="dep_station_lat" value="<?= h((string)($form['dep_station_lat'] ?? '')) ?>" />
+        <input type="hidden" name="dep_station_lon" value="<?= h((string)($form['dep_station_lon'] ?? '')) ?>" />
+        <input type="hidden" name="dep_station_country" value="<?= h((string)($form['dep_station_country'] ?? '')) ?>" />
+        <input type="hidden" name="dep_station_type" value="<?= h((string)($form['dep_station_type'] ?? '')) ?>" />
+        <input type="hidden" name="dep_station_source" value="<?= h((string)($form['dep_station_source'] ?? '')) ?>" />
+        <div class="station-suggest" data-for="dep_station" style="display:none;"></div>
+      </label>
+      <label>Destination station
+        <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" />
+        <input type="hidden" name="arr_station_osm_id" value="<?= h((string)($form['arr_station_osm_id'] ?? '')) ?>" />
+        <input type="hidden" name="arr_station_lat" value="<?= h((string)($form['arr_station_lat'] ?? '')) ?>" />
+        <input type="hidden" name="arr_station_lon" value="<?= h((string)($form['arr_station_lon'] ?? '')) ?>" />
+        <input type="hidden" name="arr_station_country" value="<?= h((string)($form['arr_station_country'] ?? '')) ?>" />
+        <input type="hidden" name="arr_station_type" value="<?= h((string)($form['arr_station_type'] ?? '')) ?>" />
+        <input type="hidden" name="arr_station_source" value="<?= h((string)($form['arr_station_source'] ?? '')) ?>" />
+        <div class="station-suggest" data-for="arr_station" style="display:none;"></div>
+      </label>
+      <label>Planlagt afgangsdato
+        <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
+      </label>
+      <label>Planlagt afgangstid (valgfri)
+        <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <label>Planlagt ankomsttid (valgfri)
+        <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+    </div>
+
+    <datalist id="operatorSuggestions">
+      <?php foreach ($allOperators as $opName): ?>
+        <option value="<?= h($opName) ?>"></option>
+      <?php endforeach; ?>
+    </datalist>
+    <datalist id="productSuggestions"></datalist>
+    <datalist id="countrySuggestions">
+      <?php foreach ($opCatalog->getCountries() as $cc => $nm): ?>
+        <option value="<?= h($cc) ?>"><?= h($nm) ?></option>
+      <?php endforeach; ?>
+    </datalist>
+
+    <?php $pk = (string)($form['price_known'] ?? ((string)($form['price'] ?? '') !== '' ? 'yes' : 'no')); ?>
+    <div class="small" style="margin-top:12px;"><strong>Kender du prisen?</strong></div>
+    <div class="small" style="margin-top:6px;">
+      <label class="mr8"><input type="radio" name="price_known" value="yes" <?= $pk==='yes'?'checked':'' ?> /> Ja</label>
+      <label class="mr8"><input type="radio" name="price_known" value="no" <?= $pk==='no'?'checked':'' ?> /> Nej</label>
+    </div>
+    <div id="ticketlessPriceBlock" style="margin-top:8px; display:<?= $pk==='yes'?'block':'none' ?>;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="text" name="price" value="<?= h((string)($form['price'] ?? ($meta['_auto']['price']['value'] ?? ''))) ?>" placeholder="Fx 399.00" style="flex:1 1 200px;" />
+        <?php $cur = strtoupper((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? ''))); ?>
+        <select name="price_currency" style="min-width:120px;">
+          <option value="">Auto</option>
+          <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+            <option value="<?= $cc ?>" <?= $cur===$cc?'selected':'' ?>><?= $cc ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="small muted" style="margin-top:4px;">Hvis prisen er ukendt, viser vi kun kompensation i procent.</div>
+    </div>
   </div>
   <?php
     // Lightweight status so users see that parsing happened even when no choices are shown
@@ -124,7 +296,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
 
   <!-- Art. 12 blok (behold auto + rediger) vises længere nede -->
 
-  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;">Vis/skjul rejsefelter (3.1–3.5)</button>
+  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1–3.5)</button>
   <div id="journeyFields" style="display:none;">
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>3.1. Name of railway undertaking:</strong>
@@ -185,7 +357,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
         $curCurrency = '';
         foreach ($currencyCandidates as $c) {
           $cc = strtoupper(trim($c));
-          if ($cc !== '' && preg_match('/^(EUR|DKK|SEK|BGN|CZK|HUF|PLN|RON)$/', $cc)) { $curCurrency = $cc; break; }
+          if ($cc !== '' && preg_match('/^(EUR|DKK|SEK|NOK|GBP|CHF|BGN|CZK|HUF|PLN|RON)$/', $cc)) { $curCurrency = $cc; break; }
         }
       ?>
       <label>3.2.8. Ticket price(s)
@@ -193,7 +365,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
           <input type="text" name="price" value="<?= h($priceVal) ?>" placeholder="100 EUR" style="flex:1 1 200px;" />
           <select name="price_currency" style="min-width:120px;">
             <option value="">Auto</option>
-            <?php foreach (['EUR','DKK','SEK','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
+            <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
               <option value="<?= $cc ?>" <?= $curCurrency===$cc?'selected':'' ?>><?= $cc ?></option>
             <?php endforeach; ?>
           </select>
@@ -663,6 +835,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
     $norm = function($v){ $s=strtolower((string)$v); if(in_array($s,['ja','yes','y','1','true'],true)) return 'yes'; if(in_array($s,['nej','no','n','0','false'],true)) return 'no'; if($s===''||$s==='-'||$s==='unknown'||$s==='ved ikke') return 'unknown'; return $s; };
     $scnVal = $norm($meta['separate_contract_notice'] ?? ($a12hooks['separate_contract_notice'] ?? 'unknown'));
     $ttdVal = $norm($meta['through_ticket_disclosure'] ?? ($a12hooks['through_ticket_disclosure'] ?? 'unknown'));
+    $pnrScopeVal = $norm($meta['shared_pnr_scope'] ?? 'unknown');
     // Seller channel inference from meta hooks
     $sellerInf = 'unknown';
     $sto = $norm($meta['seller_type_operator'] ?? '');
@@ -674,7 +847,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
     $sameTxnInf = ($stOp==='yes'||$stRt==='yes') ? 'yes' : (($stOp==='no'&&$stRt==='no') ? 'no' : 'unknown');
     // Gate visibility: show if evaluator is missing any of these, or if values are unknown
     $needA12 = in_array('separate_contract_notice', $a12missing, true) || in_array('through_ticket_disclosure', $a12missing, true)
-      || $scnVal==='unknown' || $ttdVal==='unknown' || $sellerInf==='unknown';
+      || $scnVal==='unknown' || $ttdVal==='unknown' || $pnrScopeVal==='unknown' || $sellerInf==='unknown' || ($ticketMode === 'ticketless');
     // Also compute PNR count + shared scope hint for same-transaction prompt
     $pnrCountInline = 0; try {
       $pnrSet = [];
@@ -713,6 +886,14 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
       </div>
     </div>
 
+    <div id="a12Q1b" class="small" style="margin-top:10px;">
+      Var det samme transaktion/booking (samme PNR/bookingnummer)?
+      <div class="small" style="margin-top:4px;">
+        <label class="mr8"><input type="radio" name="shared_pnr_scope" value="yes" <?= $pnrScopeVal==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="shared_pnr_scope" value="no" <?= $pnrScopeVal==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+    </div>
+
     <div id="a12Q2" class="small" style="margin-top:10px; display:<?= $showThrough ? 'block' : 'none' ?>;">
       Blev det oplyst før køb, at billetten var gennemgående?
       <div class="small" style="margin-top:4px;">
@@ -728,7 +909,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
         <label class="mr8"><input type="radio" name="separate_contract_notice" value="no" <?= $scnVal==='no'?'checked':'' ?> /> Nej</label>
       </div>
     </div>
-    <?php $showSameTxn = ($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no'); ?>
+    <?php $showSameTxn = ($ticketMode !== 'ticketless') && (($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no')); ?>
     <?php if ($showSameTxn): ?>
     <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter købt i én transaktion?</div>
     <div class="small" style="margin-top:4px;">
@@ -793,6 +974,7 @@ $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !em
   </div>
   <!-- Afslut samlet wrapper for centrering -->
 </div>
+</fieldset>
 <?= $this->Form->end() ?>
 
 <?php if ($this->getRequest()->getQuery('debug')): ?>
@@ -885,6 +1067,270 @@ if ($a12Applies === false && !empty($contractsView)) {
 <script>
 (function(){
   const form = document.getElementById('entitlementsForm');
+  const stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
+  const productsByOperator = <?= json_encode($productsByOperator, JSON_UNESCAPED_UNICODE) ?>;
+  const operatorToCountry = <?= json_encode($operatorToCountry, JSON_UNESCAPED_UNICODE) ?>;
+  const countryToCurrency = <?= json_encode($countryToCurrency, JSON_UNESCAPED_UNICODE) ?>;
+
+  // Ticketless station autocomplete (offline station DB via /api/stations/search)
+  (function(){
+    if (!form || !stationsSearchUrl) return;
+    const card = document.getElementById('ticketlessCard');
+    if (!card) return;
+    const ccInput = card.querySelector('input[name="operator_country"]');
+
+	    function setup(name){
+	      const input = card.querySelector('input[name="'+name+'"]');
+	      const box = card.querySelector('.station-suggest[data-for="'+name+'"]');
+	      if (!input || !box) return;
+	      const hid = {
+	        osm_id: card.querySelector('input[name="'+name+'_osm_id"]'),
+	        lat: card.querySelector('input[name="'+name+'_lat"]'),
+	        lon: card.querySelector('input[name="'+name+'_lon"]'),
+	        country: card.querySelector('input[name="'+name+'_country"]'),
+	        type: card.querySelector('input[name="'+name+'_type"]'),
+	        source: card.querySelector('input[name="'+name+'_source"]'),
+	      };
+	      function clearMeta(){
+	        if (hid.osm_id) hid.osm_id.value = '';
+	        if (hid.lat) hid.lat.value = '';
+	        if (hid.lon) hid.lon.value = '';
+	        if (hid.country) hid.country.value = '';
+	        if (hid.type) hid.type.value = '';
+	        if (hid.source) hid.source.value = '';
+	      }
+	      function setMeta(st){
+	        if (!st) { clearMeta(); return; }
+	        if (hid.osm_id) hid.osm_id.value = (st.osm_id !== undefined && st.osm_id !== null) ? String(st.osm_id) : '';
+	        if (hid.lat) hid.lat.value = (st.lat !== undefined && st.lat !== null) ? String(st.lat) : '';
+	        if (hid.lon) hid.lon.value = (st.lon !== undefined && st.lon !== null) ? String(st.lon) : '';
+	        if (hid.country) hid.country.value = (st.country !== undefined && st.country !== null) ? String(st.country) : '';
+	        if (hid.type) hid.type.value = (st.type !== undefined && st.type !== null) ? String(st.type) : '';
+	        if (hid.source) hid.source.value = (st.source !== undefined && st.source !== null) ? String(st.source) : '';
+	      }
+	
+	      let timer = null;
+	      let ctrl = null;
+
+      function hide(){
+        box.style.display = 'none';
+        box.innerHTML = '';
+      }
+
+      function niceType(t){
+        const s = (t||'').toString().toLowerCase();
+        if (s === 'station') return 'Station';
+        if (s === 'halt') return 'Stopested';
+        return s;
+      }
+
+      function render(stations){
+        box.innerHTML = '';
+        if (!stations || !stations.length) { hide(); return; }
+	        // Prefer "station" results to reduce noise for city-level queries (e.g., Düsseldorf).
+	        const stStations = stations.filter(st => String(st && st.type || '').toLowerCase() === 'station');
+	        const stOthers = stations.filter(st => String(st && st.type || '').toLowerCase() !== 'station');
+	        const shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
+
+	        shown.slice(0, 10).forEach(st => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          const nm = (st && st.name) ? String(st.name) : '';
+          const cc = (st && st.country) ? String(st.country) : '';
+          const tp = (st && st.type) ? String(st.type) : '';
+	          // Avoid rows with no name (e.g., "DE · HALT"): always render a visible label.
+	          btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+          if (cc || tp) {
+            const meta = document.createElement('div');
+            meta.className = 'muted';
+	            meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' · ');
+            btn.appendChild(document.createElement('br'));
+            btn.appendChild(meta);
+          }
+	          btn.addEventListener('click', ()=>{
+	            if (nm) input.value = nm;
+	            setMeta(st);
+	            hide();
+	          });
+	          box.appendChild(btn);
+	        });
+	        box.style.display = 'block';
+	      }
+
+      async function fetchStations(){
+        const q = (input.value || '').trim();
+        if (q.length < 2) { hide(); return; }
+        const cc = (ccInput && (ccInput.value || '')) ? String(ccInput.value).trim().toUpperCase() : '';
+        // If no country is provided, avoid a full EU scan until the user has typed more.
+        if (!cc && q.length < 4) { hide(); return; }
+
+        // Two-phase lookup:
+        // 1) Try with country filter (fast, reduces noise)
+        // 2) If empty and we had a country, retry without country (international routes)
+        const buildUrl = (country) => {
+          const u = new URL(stationsSearchUrl, window.location.origin);
+          u.searchParams.set('q', q);
+          if (country) u.searchParams.set('country', country);
+          u.searchParams.set('limit', '10');
+          return u;
+        };
+
+        if (ctrl) { try { ctrl.abort(); } catch(e) {} }
+        ctrl = new AbortController();
+        try {
+          let res = await fetch(buildUrl(cc).toString(), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+          if (!res.ok) { hide(); return; }
+          let js = await res.json();
+          let stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+          if ((!stations || stations.length === 0) && cc) {
+            res = await fetch(buildUrl('').toString(), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+            if (res.ok) {
+              js = await res.json();
+              stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+            }
+          }
+          render(stations);
+        } catch(e) {
+          // ignore (abort or network)
+        }
+      }
+
+	      input.addEventListener('input', ()=>{
+	        clearMeta(); // user is typing; metadata no longer trusted
+	        if (timer) clearTimeout(timer);
+	        timer = setTimeout(fetchStations, 200);
+	      });
+      input.addEventListener('focus', ()=>{
+        if (box.innerHTML.trim() !== '') { box.style.display = 'block'; }
+      });
+      input.addEventListener('blur', ()=> setTimeout(hide, 180));
+      // Prevent blur while clicking suggestions
+      box.addEventListener('mousedown', (e)=> e.preventDefault());
+    }
+
+    setup('dep_station');
+    setup('arr_station');
+  })();
+
+  // Ticketless operator/product suggestions + lightweight autofill (offline catalog)
+  (function(){
+    if (!form) return;
+    const card = document.getElementById('ticketlessCard');
+    if (!card) return;
+    const opInput = card.querySelector('input[name=\"operator\"]');
+    const ccInput = card.querySelector('input[name=\"operator_country\"]');
+    const ccAssumed = card.querySelector('input[name=\"operator_country_assumed\"]');
+    const prodInput = card.querySelector('input[name=\"operator_product\"]');
+    const prodList = document.getElementById('productSuggestions');
+
+    function setProductOptions(list){
+      if (!prodList) return;
+      prodList.innerHTML = '';
+      const seen = new Set();
+      (list||[]).forEach(p=>{
+        const v = (p||'').toString().trim();
+        if (!v || seen.has(v)) return;
+        seen.add(v);
+        const opt = document.createElement('option');
+        opt.value = v;
+        prodList.appendChild(opt);
+      });
+    }
+    function updateProductSuggestions(){
+      const op = (opInput && opInput.value || '').trim();
+      if (op && productsByOperator && productsByOperator[op]) {
+        setProductOptions(productsByOperator[op]);
+        return;
+      }
+      // Fallback: union of all products (kept short by unique filter)
+      const all = [];
+      if (productsByOperator) {
+        Object.keys(productsByOperator).forEach(k=>{
+          const arr = productsByOperator[k];
+          if (Array.isArray(arr)) all.push(...arr);
+        });
+      }
+      setProductOptions(all);
+    }
+    function maybeAutofillCountry(){
+      if (!opInput || !ccInput) return;
+      const ccNow = (ccInput.value || '').trim();
+      // Only override when empty OR when it's still marked as assumed/default.
+      const isAssumed = !!(ccAssumed && (ccAssumed.value || '').trim() === '1');
+      if (ccNow !== '' && !isAssumed) return;
+      const op = (opInput.value || '').trim();
+      const cc = (operatorToCountry && operatorToCountry[op]) ? operatorToCountry[op] : '';
+      if (cc) {
+        ccInput.value = cc;
+        if (ccAssumed) ccAssumed.value = '1';
+      }
+    }
+    function maybeAutofillPriceCurrency(){
+      const cc = (ccInput && (ccInput.value||'').trim().toUpperCase()) || '';
+      if (!cc) return;
+      const cur = countryToCurrency && countryToCurrency[cc] ? countryToCurrency[cc] : 'EUR';
+      const sel = card.querySelector('select[name=\"price_currency\"]');
+      const price = card.querySelector('input[name=\"price\"]');
+      const pkYes = !!card.querySelector('input[name=\"price_known\"][value=\"yes\"]:checked');
+      if (!sel) return;
+      if (!pkYes && !(price && (price.value||'').trim() !== '')) return;
+      if ((sel.value || '').trim() === '') sel.value = cur;
+    }
+
+    if (opInput) {
+      opInput.addEventListener('change', ()=>{ maybeAutofillCountry(); updateProductSuggestions(); maybeAutofillPriceCurrency(); }, { passive:true });
+      opInput.addEventListener('blur', ()=>{ maybeAutofillCountry(); updateProductSuggestions(); maybeAutofillPriceCurrency(); }, { passive:true });
+    }
+    if (ccInput) {
+      ccInput.addEventListener('change', ()=>{ if (ccAssumed) ccAssumed.value = '0'; maybeAutofillPriceCurrency(); }, { passive:true });
+      ccInput.addEventListener('blur', ()=>{ maybeAutofillPriceCurrency(); }, { passive:true });
+    }
+
+    updateProductSuggestions();
+    maybeAutofillCountry();
+    maybeAutofillPriceCurrency();
+  })();
+
+  // Ticket mode toggle (ticket vs ticketless)
+  (function(){
+    if (!form) return;
+    const uploadCard = document.getElementById('ticketUploadCard');
+    const ticketlessCard = document.getElementById('ticketlessCard');
+    const priceBlock = document.getElementById('ticketlessPriceBlock');
+
+    function radioVal(name){
+      const nodes = form.querySelectorAll('input[name="'+name+'"]');
+      for (const n of nodes) { if (n && n.checked) return n.value; }
+      return '';
+    }
+    function show(el, on){ if (!el) return; el.style.display = on ? 'block' : 'none'; }
+    function updateTicketMode(){
+      const mode = radioVal('ticket_upload_mode') || 'ticket';
+      const isTicketless = mode === 'ticketless';
+      show(uploadCard, !isTicketless);
+      show(ticketlessCard, isTicketless);
+    }
+    function updatePriceKnown(){
+      if (!priceBlock) return;
+      const pk = radioVal('price_known') || 'no';
+      const on = pk === 'yes';
+      show(priceBlock, on);
+      if (!on) {
+        const price = form.querySelector('input[name="price"]');
+        if (price) price.value = '';
+        const cur = form.querySelector('select[name="price_currency"]');
+        if (cur) cur.value = '';
+      }
+    }
+
+    form.addEventListener('change', (e)=>{
+      const nm = (e.target && (e.target.name||'')) || '';
+      if (nm === 'ticket_upload_mode') updateTicketMode();
+      if (nm === 'price_known') updatePriceKnown();
+    }, { passive:true });
+    updateTicketMode();
+    updatePriceKnown();
+  })();
   // Toggle journey fields 3.1–3.5
   const toggleBtn = document.getElementById('toggleJourneyFields');
   const jf = document.getElementById('journeyFields');

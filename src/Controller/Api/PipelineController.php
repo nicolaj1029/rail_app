@@ -33,18 +33,20 @@ class PipelineController extends AppController
         // Split flow: step2_entitlements contains ticket price/operator and can be needed for claim totals.
         $wizardStep2 = (array)($wizard['step2_entitlements'] ?? []);
         $wizardStep3 = (array)($wizard['step3_journey'] ?? []);
-        $wizardIncident = (array)($wizard['step4_incident'] ?? []);
-        // Keep legacy key name step5_choices, but in split flow it is transport-only
-        $wizardTransport = (array)($wizard['step5_choices'] ?? []);
-        $wizardRemedies = (array)($wizard['step6_remedies'] ?? []);
-        // Back-compat: old fixtures used step6_assistance; new split flow uses step7_assistance
-        $wizardAssistance = (array)($wizard['step7_assistance'] ?? ($wizard['step6_assistance'] ?? []));
-        $wizardDowngrade = (array)($wizard['step8_downgrade'] ?? []);
-        // Back-compat: old fixtures used step7_compensation; new split flow uses step9_compensation
-        $wizardComp = (array)($wizard['step9_compensation'] ?? ($wizard['step7_compensation'] ?? []));
+        $wizardStation = (array)($wizard['step4_station'] ?? []);
+        // Back-compat: older fixtures used step4_incident for incident gating (before station step existed)
+        $wizardIncident = (array)($wizard['step5_incident'] ?? ($wizard['step4_incident'] ?? []));
+        // Back-compat: old fixtures used step5_choices for transport; new split flow uses step6_choices
+        $wizardTransport = (array)($wizard['step6_choices'] ?? ($wizard['step5_choices'] ?? []));
+        $wizardRemedies = (array)($wizard['step7_remedies'] ?? ($wizard['step6_remedies'] ?? []));
+        // Back-compat: old fixtures used step6_assistance; later used step7_assistance; new uses step8_assistance
+        $wizardAssistance = (array)($wizard['step8_assistance'] ?? ($wizard['step7_assistance'] ?? ($wizard['step6_assistance'] ?? [])));
+        $wizardDowngrade = (array)($wizard['step9_downgrade'] ?? ($wizard['step8_downgrade'] ?? []));
+        // Back-compat: old fixtures used step7_compensation; later used step9_compensation; new uses step10_compensation
+        $wizardComp = (array)($wizard['step10_compensation'] ?? ($wizard['step9_compensation'] ?? ($wizard['step7_compensation'] ?? [])));
         $meta = (array)($payload['meta'] ?? []);
         // Wizard answers should take precedence over bare meta
-        $meta = array_merge($meta, $wizardStep2, $wizardStep3, $wizardIncident, $wizardTransport, $wizardRemedies, $wizardAssistance, $wizardDowngrade, $wizardComp);
+        $meta = array_merge($meta, $wizardStep2, $wizardStep3, $wizardStation, $wizardIncident, $wizardTransport, $wizardRemedies, $wizardAssistance, $wizardDowngrade, $wizardComp);
         $logs = [];
         // Normalize per-leg class/reservation into segments + derive hooks when available
         try {
@@ -346,10 +348,19 @@ class PipelineController extends AppController
         $missedBool = in_array($missed, ['yes','ja','1','true'], true);
         $incidentMain = strtolower(trim((string)($meta['incident_main'] ?? '')));
         $reasonCancellation = ($incidentMain === 'cancellation');
+        $missed60 = strtolower(trim((string)($meta['missed_expected_delay_60'] ?? '')));
+        $missed60Bool = in_array($missed60, ['yes','ja','1','true'], true);
+
+        // Normalize incident struct for downstream evaluators (Art. 20, etc.).
+        // In the split-flow UI this is written by TRIN 4, but API scenarios often only carry flat keys.
+        if (!isset($meta['incident']) || !is_array($meta['incident'])) { $meta['incident'] = []; }
+        $meta['incident']['cancellation'] = $reasonCancellation;
+        $meta['incident']['missed_connection'] = $missedBool;
 
         // Art.18 gating: do not rely on final delay minutes alone (TRIN 3 PMR/bike can bypass TRIN 4 details).
         $expectedDelay = (int)($compute['delayMinEU'] ?? 0);
-        $art18Active = ($expectedDelay >= 60) || $reasonCancellation || $missedBool;
+        // Missed connection only activates Art.18 when it implies >=60 min to final destination (TRIN 4 question).
+        $art18Active = ($expectedDelay >= 60) || $reasonCancellation || $missed60Bool;
         if (!$art18Active && ((string)($meta['art18_expected_delay_60'] ?? '') === 'yes')) { $art18Active = true; }
         if (!$art18Active) {
             $norm = static function($v): string {
@@ -398,12 +409,22 @@ class PipelineController extends AppController
             'choices' => $choices,
             'expenses' => $expenses,
             'already_refunded' => 0,
-            'service_fee_mode' => 'expenses_only',
             'apply_min_threshold' => $minThreshold,
             // Allow claim to incorporate downgrade/refusion output where present
             'refusion' => $refusion,
+            // Art. 18 extras + downgrade inputs
+            'return_to_origin_expense' => $meta['return_to_origin_expense'] ?? null,
+            'return_to_origin_amount' => $meta['return_to_origin_amount'] ?? null,
+            'reroute_extra_costs' => $meta['reroute_extra_costs'] ?? null,
+            'reroute_extra_costs_amount' => $meta['reroute_extra_costs_amount'] ?? null,
             'downgrade_occurred' => $meta['downgrade_occurred'] ?? null,
             'downgrade_comp_basis' => $meta['downgrade_comp_basis'] ?? null,
+            'downgrade_segment_share' => $meta['downgrade_segment_share'] ?? null,
+            'leg_class_purchased' => $meta['leg_class_purchased'] ?? null,
+            'leg_class_delivered' => $meta['leg_class_delivered'] ?? null,
+            'leg_reservation_purchased' => $meta['leg_reservation_purchased'] ?? null,
+            'leg_reservation_delivered' => $meta['leg_reservation_delivered'] ?? null,
+            'leg_downgraded' => $meta['leg_downgraded'] ?? null,
         ]);
 
         // Art. 20 (assistance) evaluation (step 5)

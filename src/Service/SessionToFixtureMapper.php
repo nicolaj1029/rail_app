@@ -15,11 +15,13 @@ class SessionToFixtureMapper
     {
         [$journeyBasic, $segments] = $this->buildJourneyParts($flow);
         $step3 = $this->mergeStep3($flow);
-        $step5Transport = $this->extractStep5Transport($flow);
-        $step6Remedies = $this->extractStep6Remedies($flow);
-        $step7Assistance = $this->extractStep7Assistance($flow);
-        $step8Downgrade = $this->extractStep8Downgrade($flow);
-        $step9Comp = $this->extractStep9Compensation($flow);
+        $step4Station = $this->extractStep4Station($flow);
+        $step5Incident = $this->extractStep5Incident($flow);
+        $step6Choices = $this->extractStep6Choices($flow);
+        $step7Remedies = $this->extractStep7Remedies($flow);
+        $step8Assistance = $this->extractStep8Assistance($flow);
+        $step9Downgrade = $this->extractStep9Downgrade($flow);
+        $step10Comp = $this->extractStep10Compensation($flow);
 
         return [
             'id' => 'session_' . date('Ymd_His'),
@@ -31,17 +33,17 @@ class SessionToFixtureMapper
             // Persist selected meta hooks (multi-ticket / guardian etc.) for QA fixtures
             'meta' => $this->extractMeta($flow),
             'wizard' => [
-                // Split flow order: start -> entitlements -> journey -> incident -> choices(transport) -> remedies -> assistance -> downgrade -> compensation
+                // Split flow order: start -> entitlements -> journey -> station -> incident -> choices -> remedies -> assistance -> downgrade -> compensation
                 'step1_start' => $this->extractStep1Start($flow),
                 'step2_entitlements' => $this->extractStep2Entitlements($flow),
                 'step3_journey' => $step3,
-                'step4_incident' => $this->extractStep4Incident($flow),
-                // Keep legacy key name step5_choices, but it now only contains Art.20 transport.
-                'step5_choices' => $step5Transport,
-                'step6_remedies' => $step6Remedies,
-                'step7_assistance' => $step7Assistance,
-                'step8_downgrade' => $step8Downgrade,
-                'step9_compensation' => $step9Comp,
+                'step4_station' => $step4Station,
+                'step5_incident' => $step5Incident,
+                'step6_choices' => $step6Choices,
+                'step7_remedies' => $step7Remedies,
+                'step8_assistance' => $step8Assistance,
+                'step9_downgrade' => $step9Downgrade,
+                'step10_compensation' => $step10Comp,
             ],
             'art9_meta' => $this->buildArt9Meta($flow),
             'art12_meta' => $this->buildArt12Meta($flow, $journeyBasic, $segments),
@@ -147,6 +149,9 @@ class SessionToFixtureMapper
             'ticket_upload_count',
             'ticket_multi_passenger',
             'claimant_is_legal_representative',
+            // Downgrade: keep per-ticket bundles so fixtures can represent multi-ticket correctly.
+            'saved_leg_by_file',
+            'downgrade_by_file',
         ];
         $out = [];
         foreach ($keep as $k) {
@@ -268,13 +273,18 @@ class SessionToFixtureMapper
             'delay_confirmation_type' => $f['delay_confirmation_type'] ?? null,
             'reroute_later_ticket_upload' => $f['reroute_later_ticket_upload'] ?? null,
             // Art.20 transport (moved to choices)
+            'is_stranded' => $f['is_stranded'] ?? null,
             'stranded_location' => $f['stranded_location'] ?? null,
-            'journey_outcome' => $f['journey_outcome'] ?? null,
             'blocked_train_alt_transport' => $f['blocked_train_alt_transport'] ?? null,
             'blocked_no_transport_action' => $f['blocked_no_transport_action'] ?? null,
-            'assistance_alt_transport_offered_by' => $f['assistance_alt_transport_offered_by'] ?? null,
             'assistance_alt_transport_type' => $f['assistance_alt_transport_type'] ?? null,
-            'assistance_alt_to_destination' => $f['assistance_alt_to_destination'] ?? null,
+            // TRIN 5 resolution endpoint (Art.20): where did you end up after being stranded?
+            'a20_where_ended' => $f['a20_where_ended'] ?? ($f['assistance_alt_to_destination'] ?? null),
+            'a20_arrival_station' => $f['a20_arrival_station'] ?? ($f['assistance_alt_arrival_station'] ?? null),
+            'a20_arrival_station_other' => $f['a20_arrival_station_other'] ?? ($f['assistance_alt_arrival_station_other'] ?? null),
+            'a20_where_ended_assumed' => $f['a20_where_ended_assumed'] ?? ($f['assistance_alt_to_destination_assumed'] ?? null),
+            // Derived handoff station for TRIN 6 (when a20_where_ended != final_destination)
+            'handoff_station' => $f['handoff_station'] ?? null,
             'blocked_self_paid_transport_type' => $f['blocked_self_paid_transport_type'] ?? null,
             'blocked_self_paid_amount' => $f['blocked_self_paid_amount'] ?? null,
             'blocked_self_paid_currency' => $f['blocked_self_paid_currency'] ?? null,
@@ -282,10 +292,9 @@ class SessionToFixtureMapper
             // Art.20(3) station-specific
             'a20_3_solution_offered' => $f['a20_3_solution_offered'] ?? null,
             'a20_3_solution_type' => $f['a20_3_solution_type'] ?? null,
-            'a20_3_solution_offered_by' => $f['a20_3_solution_offered_by'] ?? null,
-            'a20_3_no_solution_action' => $f['a20_3_no_solution_action'] ?? null,
-            'a20_3_outcome' => $f['a20_3_outcome'] ?? null,
+            'a20_3_self_paid' => $f['a20_3_self_paid'] ?? null,
             'a20_3_self_arranged_type' => $f['a20_3_self_arranged_type'] ?? null,
+            'a20_3_self_paid_direction' => $f['a20_3_self_paid_direction'] ?? null,
             'a20_3_self_paid_amount' => $f['a20_3_self_paid_amount'] ?? null,
             'a20_3_self_paid_currency' => $f['a20_3_self_paid_currency'] ?? null,
             'a20_3_self_paid_receipt' => $f['a20_3_self_paid_receipt'] ?? null,
@@ -323,10 +332,15 @@ class SessionToFixtureMapper
             'meal_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
             'meal_self_paid_currency' => $f['meal_self_paid_currency'] ?? null,
             'meal_self_paid_receipt' => $f['meal_self_paid_receipt'] ?? null,
+            'meal_self_paid_amount_items' => $f['meal_self_paid_amount_items'] ?? null,
+            'meal_self_paid_receipt_items' => $f['meal_self_paid_receipt_items'] ?? null,
             'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
             'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
             'hotel_self_paid_currency' => $f['hotel_self_paid_currency'] ?? null,
             'hotel_self_paid_receipt' => $f['hotel_self_paid_receipt'] ?? null,
+            'hotel_self_paid_amount_items' => $f['hotel_self_paid_amount_items'] ?? null,
+            'hotel_self_paid_nights_items' => $f['hotel_self_paid_nights_items'] ?? null,
+            'hotel_self_paid_receipt_items' => $f['hotel_self_paid_receipt_items'] ?? null,
             'blocked_self_paid_amount' => $f['blocked_self_paid_amount'] ?? null,
             'blocked_self_paid_currency' => $f['blocked_self_paid_currency'] ?? null,
             'blocked_self_paid_receipt' => $f['blocked_self_paid_receipt'] ?? null,
@@ -346,14 +360,20 @@ class SessionToFixtureMapper
         $f = (array)($flow['form'] ?? []);
         return [
             // Art.20(2)(c) / (3) – stranded context
+            'is_stranded_trin5' => $f['is_stranded_trin5'] ?? null,
+            'maps_opt_in_trin5' => $f['maps_opt_in_trin5'] ?? null,
             'stranded_location' => $f['stranded_location'] ?? null,
             'blocked_train_alt_transport' => $f['blocked_train_alt_transport'] ?? null,
             'blocked_no_transport_action' => $f['blocked_no_transport_action'] ?? null,
-            'assistance_alt_transport_offered_by' => $f['assistance_alt_transport_offered_by'] ?? null,
             'assistance_alt_transport_type' => $f['assistance_alt_transport_type'] ?? null,
-            'assistance_alt_to_destination' => $f['assistance_alt_to_destination'] ?? null,
-            'assistance_alt_departure_time' => $f['assistance_alt_departure_time'] ?? null,
-            'assistance_alt_arrival_time' => $f['assistance_alt_arrival_time'] ?? null,
+            // TRIN 5 resolution endpoint ("Hvor endte du?") – canonical names.
+            // Keep legacy fallbacks so old sessions can still be dumped as fixtures.
+            'a20_where_ended' => $f['a20_where_ended'] ?? ($f['assistance_alt_to_destination'] ?? null),
+            'a20_arrival_station' => $f['a20_arrival_station'] ?? ($f['assistance_alt_arrival_station'] ?? null),
+            'a20_arrival_station_other' => $f['a20_arrival_station_other'] ?? ($f['assistance_alt_arrival_station_other'] ?? null),
+            'a20_where_ended_assumed' => $f['a20_where_ended_assumed'] ?? ($f['assistance_alt_to_destination_assumed'] ?? null),
+            // Derived in FlowController::choices() when a20_where_ended indicates a station.
+            'handoff_station' => $f['handoff_station'] ?? null,
 
             // Self-paid transport while blocked on track
             'blocked_self_paid_transport_type' => $f['blocked_self_paid_transport_type'] ?? null,
@@ -361,22 +381,7 @@ class SessionToFixtureMapper
             'blocked_self_paid_currency' => $f['blocked_self_paid_currency'] ?? null,
             'blocked_self_paid_receipt' => $f['blocked_self_paid_receipt'] ?? null,
 
-            // Art.20(3) station-specific
-            'a20_3_solution_offered' => $f['a20_3_solution_offered'] ?? null,
-            'a20_3_solution_type' => $f['a20_3_solution_type'] ?? null,
-            'a20_3_solution_offered_by' => $f['a20_3_solution_offered_by'] ?? null,
-            'a20_3_no_solution_action' => $f['a20_3_no_solution_action'] ?? null,
-            'a20_3_outcome' => $f['a20_3_outcome'] ?? null,
-            'a20_3_self_arranged_type' => $f['a20_3_self_arranged_type'] ?? null,
-            'a20_3_self_paid_amount' => $f['a20_3_self_paid_amount'] ?? null,
-            'a20_3_self_paid_currency' => $f['a20_3_self_paid_currency'] ?? null,
-            'a20_3_self_paid_receipt' => $f['a20_3_self_paid_receipt'] ?? null,
-
-            // Convergence endpoints
-            'journey_outcome' => $f['journey_outcome'] ?? null,
-            'assistance_alt_to_destination_assumed' => $f['assistance_alt_to_destination_assumed'] ?? null,
-            'assistance_alt_to_destination_station' => $f['assistance_alt_to_destination_station'] ?? null,
-            'assistance_alt_to_destination_station_other' => $f['assistance_alt_to_destination_station_other'] ?? null,
+            // (legacy: assistance_alt_to_destination_assumed is replaced by a20_where_ended_assumed)
         ];
     }
 
@@ -391,6 +396,17 @@ class SessionToFixtureMapper
             'remedyChoice' => $f['remedyChoice'] ?? null,
 
             // Reroute now/later
+            // TRIN 6 station context (separate from TRIN 5)
+            'a18_from_station' => $f['a18_from_station'] ?? null,
+            'a18_from_station_other' => $f['a18_from_station_other'] ?? null,
+            // TRIN 6 refund context
+            'a18_return_to_station' => $f['a18_return_to_station'] ?? null,
+            'a18_return_to_station_other' => $f['a18_return_to_station_other'] ?? null,
+            'a18_reroute_mode' => $f['a18_reroute_mode'] ?? null,
+            'a18_reroute_endpoint' => $f['a18_reroute_endpoint'] ?? null,
+            'a18_reroute_arrival_station' => $f['a18_reroute_arrival_station'] ?? null,
+            'a18_reroute_arrival_station_other' => $f['a18_reroute_arrival_station_other'] ?? null,
+
             'reroute_same_conditions_soonest' => $f['reroute_same_conditions_soonest'] ?? null,
             'reroute_later_at_choice' => $f['reroute_later_at_choice'] ?? null,
             'reroute_info_within_100min' => $f['reroute_info_within_100min'] ?? null,
@@ -400,6 +416,7 @@ class SessionToFixtureMapper
             'reroute_extra_costs_amount' => $f['reroute_extra_costs_amount'] ?? null,
             'reroute_extra_costs_currency' => $f['reroute_extra_costs_currency'] ?? null,
             'reroute_later_ticket_upload' => $f['reroute_later_ticket_upload'] ?? null,
+            'reroute_later_ticket_file' => $f['reroute_later_ticket_file'] ?? null,
 
             // Refund + return-to-origin
             'trip_cancelled_return_to_origin' => $f['trip_cancelled_return_to_origin'] ?? null,
@@ -421,7 +438,37 @@ class SessionToFixtureMapper
      */
     private function extractStep7Assistance(array $flow): array
     {
-        return $this->extractStep5($flow);
+        $f = (array)($flow['form'] ?? []);
+        return [
+            'meal_offered' => $f['meal_offered'] ?? null,
+            'assistance_meals_unavailable_reason' => $f['assistance_meals_unavailable_reason'] ?? null,
+            'meal_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
+            'meal_self_paid_currency' => $f['meal_self_paid_currency'] ?? null,
+            'meal_self_paid_receipt' => $f['meal_self_paid_receipt'] ?? null,
+            'meal_self_paid_amount_items' => $f['meal_self_paid_amount_items'] ?? null,
+            'meal_self_paid_receipt_items' => $f['meal_self_paid_receipt_items'] ?? null,
+
+            'hotel_offered' => $f['hotel_offered'] ?? null,
+            'assistance_hotel_transport_included' => $f['assistance_hotel_transport_included'] ?? null,
+            'hotel_transport_self_paid_amount' => $f['hotel_transport_self_paid_amount'] ?? null,
+            'hotel_transport_self_paid_currency' => $f['hotel_transport_self_paid_currency'] ?? null,
+            'hotel_transport_self_paid_receipt' => $f['hotel_transport_self_paid_receipt'] ?? null,
+            'overnight_needed' => $f['overnight_needed'] ?? null,
+            'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
+            'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
+            'hotel_self_paid_currency' => $f['hotel_self_paid_currency'] ?? null,
+            'hotel_self_paid_receipt' => $f['hotel_self_paid_receipt'] ?? null,
+            'hotel_self_paid_amount_items' => $f['hotel_self_paid_amount_items'] ?? null,
+            'hotel_self_paid_nights_items' => $f['hotel_self_paid_nights_items'] ?? null,
+            'hotel_self_paid_receipt_items' => $f['hotel_self_paid_receipt_items'] ?? null,
+
+            // PMR only
+            'assistance_pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
+            'assistance_pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+
+            // Useful for scenario output and UI hinting (not user-entered in step 7)
+            'price_hints' => $flow['meta']['price_hints'] ?? null,
+        ];
     }
 
     /**
@@ -431,6 +478,7 @@ class SessionToFixtureMapper
     {
         $f = (array)($flow['form'] ?? []);
         return [
+            'downgrade_ticket_file' => $f['downgrade_ticket_file'] ?? null,
             'downgrade_occurred' => $f['downgrade_occurred'] ?? null,
             'downgrade_comp_basis' => $f['downgrade_comp_basis'] ?? null,
             'downgrade_segment_share' => $f['downgrade_segment_share'] ?? null,
@@ -521,6 +569,8 @@ class SessionToFixtureMapper
         $auto = (array)($flow['meta']['_auto'] ?? []);
 
         return [
+            'ticket_upload_mode' => $form['ticket_upload_mode'] ?? null,
+            'scope_choice' => $form['scope_choice'] ?? null,
             'operator' => $form['operator'] ?? ($auto['operator']['value'] ?? null),
             'operator_country' => $form['operator_country'] ?? ($auto['operator_country']['value'] ?? null),
             'operator_product' => $form['operator_product'] ?? ($auto['operator_product']['value'] ?? null),
@@ -532,6 +582,8 @@ class SessionToFixtureMapper
             'arr_time' => $form['arr_time'] ?? ($auto['arr_time']['value'] ?? null),
             'train_no' => $form['train_no'] ?? ($auto['train_no']['value'] ?? null),
             'price' => $form['price'] ?? ($auto['price']['value'] ?? null),
+            'price_currency' => $form['price_currency'] ?? ($auto['price_currency']['value'] ?? null),
+            'price_known' => $form['price_known'] ?? null,
             'seller_channel' => $form['seller_channel'] ?? null,
             'through_ticket_disclosure' => $form['through_ticket_disclosure'] ?? null,
             'separate_contract_notice' => $form['separate_contract_notice'] ?? null,
@@ -540,7 +592,58 @@ class SessionToFixtureMapper
         ];
     }
 
-    private function extractStep4Incident(array $flow): array
+    /**
+     * TRIN 4 (station.php): Art.20(3) – strandet paa station uden videre tog.
+     */
+    private function extractStep4Station(array $flow): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        return [
+            'a20_station_stranded' => $form['a20_station_stranded'] ?? null,
+            // Canonical Art.20 flags (set server-side when station stranded is yes)
+            'is_stranded' => $form['is_stranded'] ?? null,
+            'stranded_location' => $form['stranded_location'] ?? null,
+
+            // Where the passenger is stranded (station context)
+            'stranded_current_station' => $form['stranded_current_station'] ?? null,
+            'stranded_current_station_other' => $form['stranded_current_station_other'] ?? null,
+            'stranded_current_station_other_osm_id' => $form['stranded_current_station_other_osm_id'] ?? null,
+            'stranded_current_station_other_lat' => $form['stranded_current_station_other_lat'] ?? null,
+            'stranded_current_station_other_lon' => $form['stranded_current_station_other_lon'] ?? null,
+            'stranded_current_station_other_country' => $form['stranded_current_station_other_country'] ?? null,
+            'stranded_current_station_other_type' => $form['stranded_current_station_other_type'] ?? null,
+            'stranded_current_station_other_source' => $form['stranded_current_station_other_source'] ?? null,
+
+            // Offered solution vs self-paid
+            'a20_3_solution_offered' => $form['a20_3_solution_offered'] ?? null,
+            'a20_3_solution_type' => $form['a20_3_solution_type'] ?? null,
+            'a20_3_solution_offered_by' => $form['a20_3_solution_offered_by'] ?? null,
+            'a20_3_self_paid' => $form['a20_3_self_paid'] ?? null,
+            'a20_3_self_arranged_type' => $form['a20_3_self_arranged_type'] ?? null,
+            'a20_3_self_paid_direction' => $form['a20_3_self_paid_direction'] ?? null,
+            'a20_3_self_paid_amount' => $form['a20_3_self_paid_amount'] ?? null,
+            'a20_3_self_paid_currency' => $form['a20_3_self_paid_currency'] ?? null,
+            'a20_3_self_paid_receipt' => $form['a20_3_self_paid_receipt'] ?? null,
+
+            // Resolution endpoint: shared canonical names (legacy fallbacks included for dumps).
+            'a20_where_ended' => $form['a20_where_ended'] ?? ($form['assistance_alt_to_destination'] ?? null),
+            'a20_arrival_station' => $form['a20_arrival_station'] ?? ($form['assistance_alt_arrival_station'] ?? null),
+            'a20_arrival_station_other' => $form['a20_arrival_station_other'] ?? ($form['assistance_alt_arrival_station_other'] ?? null),
+            'a20_arrival_station_other_osm_id' => $form['a20_arrival_station_other_osm_id'] ?? null,
+            'a20_arrival_station_other_lat' => $form['a20_arrival_station_other_lat'] ?? null,
+            'a20_arrival_station_other_lon' => $form['a20_arrival_station_other_lon'] ?? null,
+            'a20_arrival_station_other_country' => $form['a20_arrival_station_other_country'] ?? null,
+            'a20_arrival_station_other_type' => $form['a20_arrival_station_other_type'] ?? null,
+            'a20_arrival_station_other_source' => $form['a20_arrival_station_other_source'] ?? null,
+            'a20_where_ended_assumed' => $form['a20_where_ended_assumed'] ?? ($form['assistance_alt_to_destination_assumed'] ?? null),
+            'handoff_station' => $form['handoff_station'] ?? null,
+        ];
+    }
+
+    /**
+     * TRIN 5 (incident.php): EU/national gating + missed connection + Art.19(10) evidence.
+     */
+    private function extractStep5Incident(array $flow): array
     {
         $incident = (array)($flow['incident'] ?? []);
         $form = (array)($flow['form'] ?? []);
@@ -549,6 +652,10 @@ class SessionToFixtureMapper
             'incident_main' => $incident['main'] ?? null,
             'incident_missed' => $incident['missed'] ?? null,
             'expected_delay_60' => $form['expected_delay_60'] ?? null,
+            'delay_already_60' => $form['delay_already_60'] ?? null,
+            'missed_expected_delay_60' => $form['missed_expected_delay_60'] ?? null,
+            'national_delay_minutes' => $form['national_delay_minutes'] ?? null,
+            'national_delay_reported_at' => $form['national_delay_reported_at'] ?? null,
 
             // Moved from TRIN 3d -> TRIN 4 top
             'preinformed_disruption' => $form['preinformed_disruption'] ?? null,
@@ -566,6 +673,43 @@ class SessionToFixtureMapper
             'minThresholdApplies' => $form['minThresholdApplies'] ?? null,
         ];
     }
+
+    /**
+     * TRIN 6 (choices.php): Art.20(2)(c) – strandet paa sporet (track-only).
+     */
+    private function extractStep6Choices(array $flow): array
+    {
+        $f = (array)($flow['form'] ?? []);
+        $isTrack = strtolower((string)($f['is_stranded_trin5'] ?? '')) === 'yes'
+            || strtolower((string)($f['stranded_location'] ?? '')) === 'track';
+
+        return [
+            'is_stranded_trin5' => $f['is_stranded_trin5'] ?? null,
+            'maps_opt_in_trin5' => $f['maps_opt_in_trin5'] ?? null,
+            'stranded_location' => $f['stranded_location'] ?? null,
+            'blocked_train_alt_transport' => $f['blocked_train_alt_transport'] ?? null,
+            'blocked_no_transport_action' => $f['blocked_no_transport_action'] ?? null,
+            'assistance_alt_transport_type' => $f['assistance_alt_transport_type'] ?? null,
+
+            // Resolution endpoint ("Hvor endte du?") – only part of this step when track-flow is active.
+            'a20_where_ended' => $isTrack ? ($f['a20_where_ended'] ?? ($f['assistance_alt_to_destination'] ?? null)) : null,
+            'a20_arrival_station' => $isTrack ? ($f['a20_arrival_station'] ?? ($f['assistance_alt_arrival_station'] ?? null)) : null,
+            'a20_arrival_station_other' => $isTrack ? ($f['a20_arrival_station_other'] ?? ($f['assistance_alt_arrival_station_other'] ?? null)) : null,
+            'a20_where_ended_assumed' => $isTrack ? ($f['a20_where_ended_assumed'] ?? ($f['assistance_alt_to_destination_assumed'] ?? null)) : null,
+            'handoff_station' => $isTrack ? ($f['handoff_station'] ?? null) : null,
+
+            // Self-paid transport while blocked on track
+            'blocked_self_paid_transport_type' => $f['blocked_self_paid_transport_type'] ?? null,
+            'blocked_self_paid_amount' => $f['blocked_self_paid_amount'] ?? null,
+            'blocked_self_paid_currency' => $f['blocked_self_paid_currency'] ?? null,
+            'blocked_self_paid_receipt' => $f['blocked_self_paid_receipt'] ?? null,
+        ];
+    }
+
+    private function extractStep7Remedies(array $flow): array { return $this->extractStep6Remedies($flow); }
+    private function extractStep8Assistance(array $flow): array { return $this->extractStep7Assistance($flow); }
+    private function extractStep9Downgrade(array $flow): array { return $this->extractStep8Downgrade($flow); }
+    private function extractStep10Compensation(array $flow): array { return $this->extractStep9Compensation($flow); }
 
     private function extractStep7Compensation(array $flow): array
     {

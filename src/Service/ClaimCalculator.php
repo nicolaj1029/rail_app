@@ -3,8 +3,11 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Cake\Core\Configure;
+
 /**
- * ClaimCalculator v1 — unified computation for refund (Art.18), compensation (Art.19) and expenses (Art.20), incl. 25% service fee.
+ * ClaimCalculator v1 — unified computation for refund (Art.18), compensation (Art.19) and expenses (Art.20).
+ * Service fee is configurable (see config/app.php: App.claim_service_fee_pct / App.claim_service_fee_mode).
  */
 class ClaimCalculator
 {
@@ -25,7 +28,7 @@ class ClaimCalculator
         $choices = (array)($input['choices'] ?? []);
         $expensesIn = (array)($input['expenses'] ?? []);
         $alreadyRefunded = (float)($input['already_refunded'] ?? 0.0);
-    $applyMinThreshold = (bool)($input['apply_min_threshold'] ?? false);
+        $applyMinThreshold = (bool)($input['apply_min_threshold'] ?? false);
 
         // Exemption profile
         $journeyForProfile = [
@@ -137,9 +140,16 @@ class ClaimCalculator
             }
         }
 
-        // Downgrade-based partial refund (heuristic) — applies when class/amenity downgraded
-        $refusion = (array)($input['refusion'] ?? []);
-        $downgrade = (array)($refusion['downgrade'] ?? []);
+        // Downgrade-based partial refund (heuristic) — applies when class/amenity downgraded.
+        // If user explicitly provided CIV/Annex II downgrade inputs (downgrade_occurred=yes),
+        // we avoid double counting by not also applying heuristic downgrade here.
+        $dgOcc = strtolower(trim((string)($input['downgrade_occurred'] ?? '')));
+        if ($dgOcc === 'ja') { $dgOcc = 'yes'; }
+        if ($dgOcc === 'nej') { $dgOcc = 'no'; }
+        $downgradeAmount = 0.0; $downgradeLabel = null;
+        if ($dgOcc !== 'yes') {
+            $refusion = (array)($input['refusion'] ?? []);
+            $downgrade = (array)($refusion['downgrade'] ?? []);
         if (empty($downgrade)) {
             // Try to assemble context from available inputs if not provided
             $dwCtx = [
@@ -153,7 +163,6 @@ class ClaimCalculator
             ];
             $downgrade = (new \App\Service\DowngradeComparator())->assess($dwCtx);
         }
-        $downgradeAmount = 0.0; $downgradeLabel = null;
         if (!empty($downgrade) && ($downgrade['severity'] ?? 'none') !== 'none') {
             $pct = (float)($downgrade['suggested_pct'] ?? 0.0);
             if ($pct > 0) {
@@ -163,6 +172,7 @@ class ClaimCalculator
                 else { $refundBasis .= ' + ' . $refBasis; $refundAmount = round($refundAmount + $downgradeAmount, 2); }
                 $downgradeLabel = $refBasis;
             }
+        }
         }
 
         // Avoid double coverage: if refund covers whole fare, suppress compensation for same portion
@@ -200,11 +210,117 @@ class ClaimCalculator
             $exemptionsApplied = array_values(array_unique($exemptionsApplied));
         }
 
+        // 4b) Art.18 extras: reroute extra costs, return transport, and CIV/Annex II downgrade (stk. 3).
+        $normYesNo = static function ($v): string {
+            $s = strtolower(trim((string)$v));
+            if ($s === 'ja') { return 'yes'; }
+            if ($s === 'nej') { return 'no'; }
+            return $s;
+        };
+
+        $rerouteExtraFlag = $normYesNo($input['reroute_extra_costs'] ?? '');
+        $rerouteExtraAmount = is_numeric($input['reroute_extra_costs_amount'] ?? null)
+            ? (float)$input['reroute_extra_costs_amount']
+            : (float)preg_replace('/[^0-9.]/', '', (string)($input['reroute_extra_costs_amount'] ?? '0'));
+        if ($rerouteExtraFlag === 'no') { $rerouteExtraAmount = 0.0; }
+
+        $returnFlag = $normYesNo($input['return_to_origin_expense'] ?? '');
+        $returnAmount = is_numeric($input['return_to_origin_amount'] ?? null)
+            ? (float)$input['return_to_origin_amount']
+            : (float)preg_replace('/[^0-9.]/', '', (string)($input['return_to_origin_amount'] ?? '0'));
+        if ($returnFlag === 'no') { $returnAmount = 0.0; }
+
+        // Downgrade Annex II (CIV) rate map (same as TRIN 9 UI).
+        $rateMap = ['seat' => 0.25, 'couchette' => 0.50, 'sleeper' => 0.75];
+        $dwOcc = $normYesNo($input['downgrade_occurred'] ?? '');
+        $dwBasis = strtolower(trim((string)($input['downgrade_comp_basis'] ?? '')));
+        $dwShare = is_numeric($input['downgrade_segment_share'] ?? null) ? (float)$input['downgrade_segment_share'] : 1.0;
+        if (!is_finite($dwShare)) { $dwShare = 1.0; }
+        $dwShare = max(0.0, min(1.0, $dwShare));
+        $dwRate = $rateMap[$dwBasis] ?? 0.0;
+
+        // If no explicit basis, attempt to infer the highest applicable downgrade rate from per-leg inputs.
+        if ($dwRate <= 0.0) {
+            $legBuy = (array)($input['leg_class_purchased'] ?? []);
+            $legDel = (array)($input['leg_class_delivered'] ?? []);
+            $legResBuy = (array)($input['leg_reservation_purchased'] ?? []);
+            $legResDel = (array)($input['leg_reservation_delivered'] ?? []);
+            $legDg = (array)($input['leg_downgraded'] ?? []);
+            $rank = ['sleeper' => 4, 'couchette' => 3, '1st' => 2, '2nd' => 1];
+            $normClass = static function (string $v): string {
+                $v = strtolower(trim($v));
+                if (in_array($v, ['1st_class','1st','first','1'], true)) { return '1st'; }
+                if (in_array($v, ['2nd_class','2nd','second','2'], true)) { return '2nd'; }
+                if (in_array($v, ['seat_reserved','free_seat'], true)) { return '2nd'; }
+                return $v;
+            };
+            $normRes = static function (string $v): string {
+                $v = strtolower(trim($v));
+                if (in_array($v, ['seat_reserved','reserved','seat'], true)) { return 'reserved'; }
+                if (in_array($v, ['free','free_seat'], true)) { return 'free_seat'; }
+                if ($v === 'missing') { return 'missing'; }
+                return $v;
+            };
+            $autoRateFor = static function (string $buy, string $del, string $buyRes, string $delRes) use ($rank, $normClass, $normRes): float {
+                $bc = $normClass($buy);
+                $dc = $normClass($del);
+                $rb = $rank[$bc] ?? 0;
+                $rd = $rank[$dc] ?? 0;
+                if ($rb > 0 && $rd > 0 && $rb > $rd) {
+                    if ($bc === 'sleeper') { return 0.75; }
+                    if ($bc === 'couchette') { return 0.50; }
+                    return 0.25;
+                }
+                $br = $normRes($buyRes);
+                $dr = $normRes($delRes);
+                if ($br === 'reserved' && $dr !== '' && $dr !== 'reserved') { return 0.25; }
+                return 0.0;
+            };
+
+            $countLegs = max(count($legBuy), count($legDel), count($legResBuy), count($legResDel), count($legDg));
+            $maxRate = 0.0;
+            for ($i = 0; $i < $countLegs; $i++) {
+                $buy = (string)($legBuy[$i] ?? '');
+                $del = (string)($legDel[$i] ?? '');
+                $buyRes = (string)($legResBuy[$i] ?? '');
+                $delRes = (string)($legResDel[$i] ?? '');
+                $dg = ((string)($legDg[$i] ?? '') === '1');
+                $autoRate = $autoRateFor($buy, $del, $buyRes, $delRes);
+                if ($dg || $autoRate > 0) {
+                    if ($autoRate > $maxRate) { $maxRate = $autoRate; }
+                }
+            }
+            $dwRate = $maxRate;
+            if ($dwBasis === '' && $dwRate > 0) {
+                $dwBasis = ($dwRate >= 0.74) ? 'sleeper' : (($dwRate >= 0.49) ? 'couchette' : 'seat');
+            }
+        }
+
+        $downgradeAnnexiiAmount = 0.0;
+        if ($dwOcc === 'yes' && $dwRate > 0.0 && $ticketTotal > 0.0) {
+            $downgradeAnnexiiAmount = round($ticketTotal * $dwRate * $dwShare, 2);
+        }
+
         // 5) Gross, fee, net
-        $gross = max($refundAmount + $compAmount + $expensesTotal - $alreadyRefunded, 0.0);
-        $serviceFeePct = 25;
+        $gross = max(
+            $refundAmount
+            + $compAmount
+            + $expensesTotal
+            + max(0.0, $rerouteExtraAmount)
+            + max(0.0, $returnAmount)
+            + max(0.0, $downgradeAnnexiiAmount)
+            - $alreadyRefunded,
+            0.0
+        );
+        $cfgPct = Configure::read('App.claim_service_fee_pct');
+        $serviceFeePct = is_numeric($input['service_fee_pct'] ?? null)
+            ? (int)$input['service_fee_pct']
+            : (is_numeric($cfgPct) ? (int)$cfgPct : 12);
+        if ($serviceFeePct < 0) { $serviceFeePct = 0; }
+        if ($serviceFeePct > 100) { $serviceFeePct = 100; }
         // Service fee mode: default on gross; if 'expenses_only', only apply on expenses
-        $feeMode = (string)($input['service_fee_mode'] ?? 'gross');
+        $feeModeCfg = (string)(Configure::read('App.claim_service_fee_mode') ?? '');
+        $feeMode = (string)($input['service_fee_mode'] ?? ($feeModeCfg !== '' ? $feeModeCfg : 'gross'));
         $feeBase = ($feeMode === 'expenses_only') ? max($expensesTotal, 0.0) : $gross;
         // Floor to 2 decimals to avoid overpay by rounding up
         $serviceFee = floor(($feeBase * ($serviceFeePct / 100)) * 100) / 100;
@@ -214,6 +330,14 @@ class ClaimCalculator
         return [
             'breakdown' => [
                 'refund' => ['basis' => $refundBasis, 'amount' => $refundAmount] + ($downgradeLabel ? ['downgrade_component' => $downgradeAmount] : []),
+                'art18' => [
+                    'reroute_extra_costs' => $rerouteExtraAmount > 0 ? round($rerouteExtraAmount, 2) : 0.0,
+                    'return_to_origin' => $returnAmount > 0 ? round($returnAmount, 2) : 0.0,
+                    'downgrade_annexii' => $downgradeAnnexiiAmount > 0 ? round($downgradeAnnexiiAmount, 2) : 0.0,
+                    'downgrade_annexii_rate' => $dwRate,
+                    'downgrade_annexii_share' => $dwShare,
+                    'downgrade_annexii_basis' => $dwBasis,
+                ],
                 'compensation' => [
                     'eligible' => $compEligible,
                     'delay_minutes' => $delay,

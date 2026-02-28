@@ -102,13 +102,14 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/wizard/expenses', ['controller' => 'ClientWizard', 'action' => 'expenses']);
     $builder->connect('/wizard/summary', ['controller' => 'ClientWizard', 'action' => 'summary']);
 
-    // Streamlined flow wizard
-    $builder->connect('/flow', ['controller' => 'Flow', 'action' => 'one']);
-    $builder->connect('/flow/one', ['controller' => 'Flow', 'action' => 'one']);
+    // Streamlined flow wizard (split-flow only; legacy one-page disabled)
+    $builder->connect('/flow', ['controller' => 'Flow', 'action' => 'start']);
+    $builder->connect('/flow/one', ['controller' => 'Flow', 'action' => 'start']);
     // Split-step flow (clearer separation)
     $builder->connect('/flow/details', ['controller' => 'Flow', 'action' => 'details']);
     $builder->connect('/flow/screening', ['controller' => 'Flow', 'action' => 'screening']);
     $builder->connect('/flow/choices', ['controller' => 'Flow', 'action' => 'choices']);
+    $builder->connect('/flow/maps-routes', ['controller' => 'Flow', 'action' => 'mapsRoutes']);
     $builder->connect('/flow/assistance', ['controller' => 'Flow', 'action' => 'assistance']);
     $builder->connect('/flow/compensation', ['controller' => 'Flow', 'action' => 'compensation']);
     $builder->connect('/flow/extras', ['controller' => 'Flow', 'action' => 'extras']);
@@ -117,6 +118,7 @@ return function (RouteBuilder $routes): void {
     // Legacy wizard steps (kept)
     $builder->connect('/flow/start', ['controller' => 'Flow', 'action' => 'start']);
     $builder->connect('/flow/journey', ['controller' => 'Flow', 'action' => 'journey']);
+    $builder->connect('/flow/station', ['controller' => 'Flow', 'action' => 'station']);
     $builder->connect('/flow/entitlements', ['controller' => 'Flow', 'action' => 'entitlements']);
     $builder->connect('/flow/summary', ['controller' => 'Flow', 'action' => 'summary']);
 

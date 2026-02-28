@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Controller\AppController;
+use App\Service\StationSearchService;
 use Cake\Http\Exception\BadRequestException;
 
 class StationsController extends AppController
@@ -59,6 +60,37 @@ class StationsController extends AppController
                 return $s['lat'] >= $minLat && $s['lat'] <= $maxLat && $s['lon'] >= $minLon && $s['lon'] <= $maxLon;
             }));
         }
+
+        $this->set([
+            'success' => true,
+            'data' => [
+                'stations' => $stations,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/stations/search?q=...&country=DK&limit=10
+     */
+    public function search()
+    {
+        $this->request->allowMethod(['get']);
+
+        $q = (string)($this->request->getQuery('q') ?? '');
+        $q = trim($q);
+        if ($q === '' || mb_strlen($q, 'UTF-8') < 2) {
+            throw new BadRequestException('q must be at least 2 characters');
+        }
+        $country = (string)($this->request->getQuery('country') ?? '');
+        $country = trim($country);
+        if ($country === '') { $country = null; }
+
+        $limit = (int)($this->request->getQuery('limit') ?? 10);
+        if ($limit <= 0) { $limit = 10; }
+        if ($limit > 50) { $limit = 50; }
+
+        $svc = new StationSearchService();
+        $stations = $svc->search($q, $country, $limit);
 
         $this->set([
             'success' => true,

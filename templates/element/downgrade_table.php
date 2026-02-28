@@ -9,6 +9,13 @@ $reservationOptions = $reservationOptions ?? [];
 $form = $form ?? [];
 $meta = $meta ?? [];
 $missedStation = $missedStation ?? '';
+$affectedLegsAuto = $affectedLegsAuto ?? [];
+$affectedSet = [];
+if (is_array($affectedLegsAuto)) {
+    foreach ($affectedLegsAuto as $ai) {
+        if (is_numeric($ai)) { $affectedSet[(int)$ai] = true; }
+    }
+}
 
 if (empty($classOptions)) {
     $classOptions = [
@@ -30,6 +37,8 @@ $mapClass = function($v): string {
     $v = strtolower(trim((string)$v));
     if ($v === '1st_class' || $v === '1st' || $v === 'first' || $v === '1') { return '1st'; }
     if ($v === '2nd_class' || $v === '2nd' || $v === 'second' || $v === '2') { return '2nd'; }
+    if ($v === 'business' || $v === 'premium') { return '1st'; }
+    if ($v === 'economy' || $v === 'standard') { return '2nd'; }
     if ($v === 'sleeper') { return 'sleeper'; }
     if ($v === 'couchette') { return 'couchette'; }
     if ($v === 'seat_reserved' || $v === 'free_seat') { return '2nd'; }
@@ -39,6 +48,8 @@ $mapRes = function($v): string {
     $v = strtolower(trim((string)$v));
     if ($v === 'seat_reserved' || $v === 'reserved' || $v === 'seat') { return 'reserved'; }
     if ($v === 'free' || $v === 'free_seat') { return 'free_seat'; }
+    if ($v === 'none' || $v === 'no' || $v === 'unreserved' || $v === 'no_reservation') { return 'free_seat'; }
+    if ($v === 'n/a' || $v === 'na') { return ''; }
     if ($v === 'missing') { return 'missing'; }
     return $v;
 };
@@ -120,6 +131,12 @@ if (empty($journeyRowsDowng)) {
     <?php if ($missedNorm !== '' && $missedIdx !== null): ?>
       <div class="small muted" style="margin-top:4px;">Skift ved: <strong><?= h($missedStation) ?></strong>. R&aelig;kker f&oslash;r/efter markeres.</div>
     <?php endif; ?>
+    <?php if (!empty($affectedSet)): ?>
+      <div class="small muted" style="margin-top:4px;">
+        Auto: viser kun de ben, vi mener er relevante. Du kan altid vise alle ben og rette.
+        <button type="button" id="toggleAllDowngLegs" style="margin-left:8px; padding:2px 6px; font-size:12px;">Vis alle ben</button>
+      </div>
+    <?php endif; ?>
     <div class="small muted" style="margin-top:4px;">LLM/OCR har udfyldt kÃ¸bt/leveret niveau; marker nedgraderet hvis leveret var lavere.</div>
     <div class="small" style="overflow:auto; margin-top:6px;">
       <table style="width:100%; border-collapse:collapse;">
@@ -137,10 +154,11 @@ if (empty($journeyRowsDowng)) {
           </tr>
         </thead>
         <tbody>
-          <?php foreach ($journeyRowsDowng as $idx => $r): ?>
-            <?php
-              $autoClass = (string)($meta['_auto']['fare_class_purchased']['value'] ?? '');
-              $autoBerth = (string)($meta['_auto']['berth_seat_type']['value'] ?? '');
+            <?php foreach ($journeyRowsDowng as $idx => $r): ?>
+              <?php
+              // Prefer AUTO extraction, fall back to manual ticketless/hook inputs (meta/form).
+              $autoClass = (string)($meta['_auto']['fare_class_purchased']['value'] ?? ($meta['fare_class_purchased'] ?? ($form['fare_class_purchased'] ?? '')));
+              $autoBerth = (string)($meta['_auto']['berth_seat_type']['value'] ?? ($meta['berth_seat_type'] ?? ($form['berth_seat_type'] ?? '')));
               $autoLegClass = (string)($meta['_auto']['leg_class_purchased'][$idx]['value'] ?? '');
               $autoLegRes = (string)($meta['_auto']['leg_reservation_purchased'][$idx]['value'] ?? '');
               $purchasedVal = (string)($form["leg_class_purchased"][$idx] ?? '');
@@ -170,7 +188,8 @@ if (empty($journeyRowsDowng)) {
                 $phase = ($idx < $missedIdx) ? 'F&oslash;r skift' : 'Efter skift';
               }
             ?>
-            <tr>
+            <?php $autoAffected = isset($affectedSet[(int)$idx]); ?>
+            <tr<?= $autoAffected ? ' data-auto-affected="1" style="background:#fff7ed;"' : (!empty($affectedSet) ? ' data-auto-affected="0" style="display:none;"' : '') ?>>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["leg"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= $phase ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["dep"]) ?></td>
@@ -225,6 +244,8 @@ if (empty($journeyRowsDowng)) {
           v = (v || '').toLowerCase().trim();
           if (v === '1st_class' || v === '1st' || v === 'first' || v === '1') return '1st';
           if (v === '2nd_class' || v === '2nd' || v === 'second' || v === '2') return '2nd';
+          if (v === 'business' || v === 'premium') return '1st';
+          if (v === 'economy' || v === 'standard') return '2nd';
           if (v === 'seat_reserved' || v === 'free_seat') return '2nd';
           return v;
         }
@@ -232,6 +253,8 @@ if (empty($journeyRowsDowng)) {
           v = (v || '').toLowerCase().trim();
           if (v === 'seat_reserved' || v === 'reserved' || v === 'seat') return 'reserved';
           if (v === 'free' || v === 'free_seat') return 'free_seat';
+          if (v === 'none' || v === 'no' || v === 'unreserved' || v === 'no_reservation') return 'free_seat';
+          if (v === 'n/a' || v === 'na') return '';
           if (v === 'missing') return 'missing';
           return v;
         }
@@ -267,6 +290,18 @@ if (empty($journeyRowsDowng)) {
           auto();
         }
         document.querySelectorAll('#perLegDowngrade table tbody tr').forEach((tr,i)=>bindRow(tr,i));
+
+        var btn = document.getElementById('toggleAllDowngLegs');
+        if (btn) {
+          var shown = false;
+          btn.addEventListener('click', function(){
+            shown = !shown;
+            document.querySelectorAll('#perLegDowngrade table tbody tr[data-auto-affected=\"0\"]').forEach(function(tr){
+              tr.style.display = shown ? '' : 'none';
+            });
+            btn.textContent = shown ? 'Skjul ekstra ben' : 'Vis alle ben';
+          });
+        }
       })();
     </script>
   </div>

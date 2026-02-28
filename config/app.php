@@ -61,6 +61,11 @@ return [
         'imageBaseUrl' => 'img/',
         'cssBaseUrl' => 'css/',
         'jsBaseUrl' => 'js/',
+        // Claim UI + scenario should share the same fee settings (shown in TRIN 9 and demo pipeline).
+        // Keep it configurable for experiments without code changes.
+        'claim_service_fee_pct' => (int)env('CLAIM_SERVICE_FEE_PCT', 12),
+        // 'gross' | 'expenses_only'
+        'claim_service_fee_mode' => (string)env('CLAIM_SERVICE_FEE_MODE', 'gross'),
         'paths' => [
             'plugins' => [ROOT . DS . 'plugins' . DS],
             'templates' => [ROOT . DS . 'templates' . DS],

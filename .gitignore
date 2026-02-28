@@ -60,6 +60,9 @@ nbproject/*
 /tmp/*.sqlite
 /tmp/*.db
 /tmp/*.sqlite3
+# root-level scratch/debug files (never commit)
+/tmp_*.php
+/tmp_*.js
 # PDF/diagram scratch files
 /webroot/files/flow_chart_*.pdf
 # yarn

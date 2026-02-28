@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use Cake\Controller\Controller;
+use Cake\Event\EventInterface;
 
 /**
  * Application Controller
@@ -48,5 +49,32 @@ class AppController extends Controller
          * see https://book.cakephp.org/5/en/controllers/components/form-protection.html
          */
         //$this->loadComponent('FormProtection');
+    }
+
+    public function beforeRender(EventInterface $event)
+    {
+        parent::beforeRender($event);
+
+        // Provide flow stepper state to all /flow/* pages (multi-page split-flow).
+        try {
+            $controller = (string)$this->getRequest()->getParam('controller');
+            if ($controller !== 'Flow') {
+                return;
+            }
+
+            $action = (string)$this->getRequest()->getParam('action');
+            $svc = new \App\Service\FlowStepsService();
+            $stepActions = array_map(static fn($s) => (string)($s['action'] ?? ''), $svc::STEPS);
+            if (!in_array($action, $stepActions, true)) {
+                return;
+            }
+            $flags = (array)$this->getRequest()->getSession()->read('flow.flags') ?: [];
+            $steps = $svc->buildSteps($flags, $action);
+
+            $this->set('flowSteps', $steps);
+            $this->set('flowCurrentAction', $action);
+        } catch (\Throwable $e) {
+            // Stepper is non-critical; ignore errors.
+        }
     }
 }

@@ -49,6 +49,4 @@
     <?= $this->Form->button('Next →') ?>
 </div>
 <?= $this->Form->end() ?>
-<p>
-    Eller brug one-page: <?= $this->Html->link('Alle trin på én side', ['action' => 'one']) ?>
-</p>
+<?php /* one-page flow disabled; split-flow only */ ?>

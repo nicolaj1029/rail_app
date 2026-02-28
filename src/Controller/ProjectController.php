@@ -116,7 +116,7 @@ class ProjectController extends AppController
             [
                 'name' => 'Client flows / UI',
                 'links' => [
-                    ['title' => 'Flow (single-page)', 'href' => '/flow/one', 'method' => 'GET', 'desc' => 'Legacy ONE-page wizard (ikke primær).'],
+                    // one-page flow disabled; split-flow only
                     ['title' => 'Flow (split steps)', 'href' => '/flow/start', 'method' => 'GET', 'desc' => 'PRIMÆR: trinvis wizard (trin 1-6).'],
                     ['title' => 'Wizard (legacy MVP)', 'href' => '/wizard', 'method' => 'GET', 'desc' => 'Legacy checkout-flow med eget variabelsæt (ikke i aktiv brug).'],
                     ['title' => 'Upload (OCR entry)', 'href' => '/upload', 'method' => 'GET', 'desc' => 'Ingest-demo; output mappes ikke 1:1 til split-steps state.'],

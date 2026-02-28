@@ -21,6 +21,7 @@ $art92On = ($articles['art9_2'] ?? ($articles['art9'] ?? true)) !== false;
 $art93On = ($articles['art9_3'] ?? ($articles['art9'] ?? true)) !== false;
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
+$isPreview = !empty($flowPreview);
 ?>
 
 <style>
@@ -38,7 +39,7 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
 </style>
 
 <?php if ($isOngoing): ?>
-  <h1>TRIN 3 - Bekraeft rejse og forsinkelse (igangvaerende)</h1>
+  <h1>TRIN 3 - Bekraeft rejse og forsinkelse (igangvaerende rejse)</h1>
 <?php elseif ($isCompleted): ?>
   <h1>TRIN 3 - Bekraeft hvad der skete paa rejsen</h1>
 <?php else: ?>
@@ -49,7 +50,9 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
     <div class="small" style="color:#a71d2a;"><?= h($contractWarning) ?></div>
   </div>
 <?php endif; ?>
+<?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['novalidate' => true]) ?>
+<fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
 <!-- TRIN 3a – Cykel -->
 <div class="card mt12">
@@ -156,6 +159,7 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
   <?= $this->Form->button('Næste trin →', ['class' => 'button']) ?>
 </div>
 
+</fieldset>
 <?= $this->Form->end() ?>
 
 <?= $this->element('hooks_panel') ?>

@@ -56,7 +56,7 @@
     <li>Kompensation (Art. 19): <?= h(($claim['breakdown']['compensation']['eligible'] ?? false) ? '✓' : '✗') ?> (<?= h(($claim['breakdown']['compensation']['pct'] ?? 0) . '%') ?>)</li>
     <li>Udgifter (Art. 20): <?= h(number_format((float)($claim['breakdown']['expenses']['total'] ?? 0), 2)) ?> <?= h($claim['totals']['currency'] ?? 'EUR') ?></li>
     <li>Samlet brutto: <?= h(number_format((float)($claim['totals']['gross_claim'] ?? 0), 2)) ?> <?= h($claim['totals']['currency'] ?? 'EUR') ?></li>
-    <li>Servicefee 25%: <?= h(number_format((float)($claim['totals']['service_fee_amount'] ?? 0), 2)) ?> <?= h($claim['totals']['currency'] ?? 'EUR') ?></li>
+    <li>Servicefee <?= h((string)($claim['totals']['service_fee_pct'] ?? '')) ?>%: <?= h(number_format((float)($claim['totals']['service_fee_amount'] ?? 0), 2)) ?> <?= h($claim['totals']['currency'] ?? 'EUR') ?></li>
     <li>Netto til klient: <strong><?= h(number_format((float)($claim['totals']['net_to_client'] ?? 0), 2)) ?> <?= h($claim['totals']['currency'] ?? 'EUR') ?></strong></li>
   </ul>
   <h3>Detaljeret profil</h3>

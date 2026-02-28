@@ -15,7 +15,7 @@
     <li>Kompensation (Art. 19): <?= h(number_format((float)($calc['breakdown']['compensation']['amount'] ?? 0), 2)) ?> (<?= h(($calc['breakdown']['compensation']['pct'] ?? 0) . '%') ?>)</li>
     <li>Kompensation regel: <?= h($calc['breakdown']['compensation']['source'] ?? 'eu') ?><?= isset($calc['breakdown']['compensation']['notes']) && $calc['breakdown']['compensation']['notes'] !== '' ? ' — ' . h($calc['breakdown']['compensation']['notes']) : '' ?></li>
     <li>Udgifter (Art. 20): <?= h(number_format((float)($calc['breakdown']['expenses']['total'] ?? 0), 2)) ?></li>
-    <li>Servicefee 25%: <?= h(number_format((float)($calc['totals']['service_fee_amount'] ?? 0), 2)) ?></li>
+    <li>Servicefee <?= h((string)($calc['totals']['service_fee_pct'] ?? '')) ?>%: <?= h(number_format((float)($calc['totals']['service_fee_amount'] ?? 0), 2)) ?></li>
     <li>Netto til klient: <strong><?= h(number_format((float)($calc['totals']['net_to_client'] ?? 0), 2)) ?></strong></li>
   </ul>
   <?php if (isset($profile['articles']['art19']) && !$profile['articles']['art19']): ?>

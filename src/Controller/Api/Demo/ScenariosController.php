@@ -74,12 +74,20 @@ class ScenariosController extends AppController
         $step1 = (array)($w['step1_start'] ?? []);
         $step2 = (array)($w['step2_entitlements'] ?? []);
         $step3 = (array)($w['step3_journey'] ?? []);
-        $step4 = (array)($w['step4_incident'] ?? []);
-        $step5 = (array)($w['step5_choices'] ?? []); // transport/stranded (split flow)
-        $step6 = (array)($w['step6_remedies'] ?? []);
-        $step7 = (array)($w['step7_assistance'] ?? ($w['step6_assistance'] ?? []));
-        $step8 = (array)($w['step8_downgrade'] ?? []);
-        $step9 = (array)($w['step9_compensation'] ?? ($w['step7_compensation'] ?? []));
+        $step4 = (array)($w['step4_station'] ?? []);
+        // Back-compat: older fixtures stored station-flow inside step4_incident before TRIN 4 existed.
+        if (empty($step4) && !empty($w['step4_incident']) && is_array($w['step4_incident'])) {
+            $legacy4 = (array)$w['step4_incident'];
+            if (array_key_exists('a20_station_stranded', $legacy4) || array_key_exists('stranded_current_station', $legacy4)) {
+                $step4 = $legacy4;
+            }
+        }
+        $step5 = (array)($w['step5_incident'] ?? ($w['step4_incident'] ?? []));
+        $step6 = (array)($w['step6_choices'] ?? ($w['step5_choices'] ?? [])); // transport/stranded (split flow)
+        $step7 = (array)($w['step7_remedies'] ?? ($w['step6_remedies'] ?? []));
+        $step8 = (array)($w['step8_assistance'] ?? ($w['step7_assistance'] ?? ($w['step6_assistance'] ?? [])));
+        $step9 = (array)($w['step9_downgrade'] ?? ($w['step8_downgrade'] ?? []));
+        $step10 = (array)($w['step10_compensation'] ?? ($w['step9_compensation'] ?? ($w['step7_compensation'] ?? [])));
 
         return [
             'step1_start' => $this->pick($step1, [
@@ -110,35 +118,76 @@ class ScenariosController extends AppController
                 'fare_class_purchased',
                 'berth_seat_type',
             ]),
-            'step4_incident' => $this->pick($step4, [
+            'step4_station' => $this->pick($step4, [
+                'a20_station_stranded',
+                'is_stranded',
+                'stranded_location',
+                'stranded_current_station',
+                'stranded_current_station_other',
+                'a20_3_solution_offered',
+                'a20_3_solution_type',
+                'a20_3_self_paid',
+                'a20_3_self_arranged_type',
+                'a20_3_self_paid_direction',
+                'a20_3_self_paid_amount',
+                'a20_3_self_paid_currency',
+                'a20_3_self_paid_receipt',
+                'a20_where_ended',
+                'a20_arrival_station',
+                'a20_arrival_station_other',
+                'a20_where_ended_assumed',
+                'handoff_station',
+            ]),
+            'step5_incident' => $this->pick($step5, [
                 'incident_main',
                 'incident_missed',
                 'expected_delay_60',
+                'delay_already_60',
+                'missed_expected_delay_60',
+                'national_delay_minutes',
+                'national_delay_reported_at',
                 'preinformed_disruption',
+                'preinfo_channel',
                 'realtime_info_seen',
                 'missed_connection_station',
+                'missed_connection_pick',
                 'voucherAccepted',
                 'operatorExceptionalCircumstances',
                 'operatorExceptionalType',
                 'minThresholdApplies',
             ]),
-            'step5_choices' => $this->pick($step5, [
+            'step6_choices' => $this->pick($step6, [
+                'is_stranded_trin5',
+                'maps_opt_in_trin5',
                 'stranded_location',
-                'a20_3_solution_offered',
-                'a20_3_solution_type',
-                'a20_3_no_solution_action',
-                'a20_3_outcome',
-                'a20_3_self_arranged_type',
-                'a20_3_self_paid_amount',
-                'a20_3_self_paid_currency',
-                'assistance_alt_to_destination',
-                'assistance_alt_to_destination_station',
-                'assistance_alt_to_destination_station_other',
-                'journey_outcome',
+                // Track (Art.20(2c))
+                'blocked_train_alt_transport',
+                'assistance_alt_transport_type',
+                'blocked_no_transport_action',
+                'blocked_self_paid_transport_type',
+                'blocked_self_paid_amount',
+                'blocked_self_paid_currency',
+                'blocked_self_paid_receipt',
+                // TRIN 5 resolution endpoint ("Hvor endte du?")
+                'a20_where_ended',
+                'a20_arrival_station',
+                'a20_arrival_station_other',
+                'a20_where_ended_assumed',
+                'handoff_station',
             ]),
-            'step6_remedies' => $this->pick($step6, [
+            'step7_remedies' => $this->pick($step7, [
                 'art18_expected_delay_60',
                 'remedyChoice',
+                // TRIN 6 station context (separate from TRIN 5)
+                'a18_from_station',
+                'a18_from_station_other',
+                // TRIN 6 refund context
+                'a18_return_to_station',
+                'a18_return_to_station_other',
+                'a18_reroute_mode',
+                'a18_reroute_endpoint',
+                'a18_reroute_arrival_station',
+                'a18_reroute_arrival_station_other',
                 'reroute_info_within_100min',
                 'reroute_same_conditions_soonest',
                 'reroute_later_at_choice',
@@ -147,24 +196,36 @@ class ScenariosController extends AppController
                 'reroute_extra_costs',
                 'reroute_extra_costs_amount',
                 'reroute_extra_costs_currency',
+                'reroute_later_ticket_upload',
+                'reroute_later_ticket_file',
                 'trip_cancelled_return_to_origin',
                 'return_to_origin_expense',
                 'return_to_origin_amount',
                 'return_to_origin_currency',
             ]),
-            'step7_assistance' => $this->pick($step7, [
+            'step8_assistance' => $this->pick($step8, [
                 'art20_expected_delay_60',
                 'meal_offered',
+                'assistance_meals_unavailable_reason',
                 'meal_self_paid_amount',
                 'meal_self_paid_currency',
+                'meal_self_paid_receipt',
                 'hotel_offered',
+                'assistance_hotel_transport_included',
+                'hotel_transport_self_paid_amount',
+                'hotel_transport_self_paid_currency',
+                'hotel_transport_self_paid_receipt',
                 'overnight_needed',
                 'hotel_self_paid_nights',
                 'hotel_self_paid_amount',
                 'hotel_self_paid_currency',
-                'alt_transport_provided',
+                'hotel_self_paid_receipt',
+                'assistance_pmr_priority_applied',
+                'assistance_pmr_companion_supported',
+                'price_hints',
             ]),
-            'step8_downgrade' => $this->pick($step8, [
+            'step9_downgrade' => $this->pick($step9, [
+                'downgrade_ticket_file',
                 'downgrade_occurred',
                 'downgrade_comp_basis',
                 'downgrade_segment_share',
@@ -172,8 +233,10 @@ class ScenariosController extends AppController
                 'leg_class_delivered',
                 'leg_reservation_purchased',
                 'leg_reservation_delivered',
+                // Useful for QA/scenarios; otherwise it will be recomputed client-side only.
+                'leg_downgraded',
             ]),
-            'step9_compensation' => $this->pick($step9, [
+            'step10_compensation' => $this->pick($step10, [
                 'delayAtFinalMinutes',
                 'delayMinEU',
                 'knownDelayBeforePurchase',
@@ -263,14 +326,13 @@ class ScenariosController extends AppController
                     'art20_expected_delay_60',
                     'stranded_location',
                     'blocked_train_alt_transport',
-                    'alt_transport_provided',
-                    'a20_3_solution_offered',
-                    'a20_3_solution_type',
-                    'a20_3_no_solution_action',
-                    'a20_3_outcome',
-                    'a20_3_self_arranged_type',
-                    'a20_3_self_paid_amount',
-                    'a20_3_self_paid_currency',
+                     'alt_transport_provided',
+                     'a20_3_solution_offered',
+                     'a20_3_solution_type',
+                     'a20_3_self_paid',
+                     'a20_3_self_arranged_type',
+                     'a20_3_self_paid_amount',
+                     'a20_3_self_paid_currency',
                     'meal_offered',
                     'meal_self_paid_amount',
                     'meal_self_paid_currency',

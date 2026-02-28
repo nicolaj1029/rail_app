@@ -13,8 +13,8 @@ namespace App\Service;
  *           hotel_self_paid_amount/currency/nights
  *  - blocked: blocked_train_alt_transport, blocked_no_transport_action, assistance_blocked_transport_to/time/possible
  *  - alternative transport: alt_transport_provided, assistance_alt_transport_offered_by/type/to_destination/departure_time/arrival_time
- *  - station (Art.20(3)): a20_3_solution_offered, a20_3_solution_type, a20_3_solution_offered_by, a20_3_no_solution_action, a20_3_outcome, a20_3_self_arranged_type, a20_3_self_paid_*
- *  - outcome: journey_outcome
+ *  - station (Art.20(3)): a20_3_solution_offered, a20_3_solution_type, a20_3_solution_offered_by, a20_3_self_paid, a20_3_self_paid_direction, a20_3_self_arranged_type, a20_3_self_paid_*
+ *  - stranded resolution (TRIN 5): a20_where_ended, a20_arrival_station/a20_arrival_station_other, handoff_station
  *  - PMR: pmr_user, assistance_pmr_priority_applied/companion_supported/dog_supported
  *  - self paid: meal_self_paid_*, hotel_self_paid_*, blocked_self_paid_*, alt_self_paid_*
  */
@@ -70,6 +70,10 @@ class Art20AssistanceEvaluator
             } elseif ($isStation) {
                 $v = $hooks['a20_3_solution_offered'] ?? 'unknown';
                 if ($v === 'unknown' || $v === '') { $missing[] = 'a20_3_solution_offered'; $ask[] = 'a20_3_solution_offered'; }
+                if (($hooks['a20_3_solution_offered'] ?? '') === 'Nej') {
+                    $sp = $hooks['a20_3_self_paid'] ?? 'unknown';
+                    if ($sp === 'unknown' || $sp === '') { $missing[] = 'a20_3_self_paid'; $ask[] = 'a20_3_self_paid'; }
+                }
             } else {
                 if ($altProvided === 'unknown' || $altProvided === '') { $missing[] = 'alt_transport_provided'; $ask[] = 'alt_transport_provided'; }
             }
@@ -117,10 +121,10 @@ class Art20AssistanceEvaluator
         }
 
         if ($mealOff === 'no') {
-            $recs[] = 'Anmod om refusion af selvbetalte måltider (bilag uploadet).';
+            $recs[] = 'Anmod om refusion af selvbetalte måltider (upload kvittering hvis muligt).';
         }
         if ($hotelOff === 'no' && $overnight === 'yes') {
-            $recs[] = 'Dokumentér behov for overnatning og selvbetalte udgifter.';
+            $recs[] = 'Dokumentér behov for overnatning og selvbetalte udgifter (upload kvittering hvis muligt).';
         }
         if ($active && $isStation && $stationOffer === 'no') {
             $recs[] = 'Dokumentér manglende alternativ transport og selvbetalt løsning.';
@@ -156,11 +160,27 @@ class Art20AssistanceEvaluator
     private function collectHooks(array $journey, array $meta): array
     {
         $incident = (array)($journey['incident'] ?? $meta['incident'] ?? []);
+        // Fallback: older sessions / API scenarios may only have flat incident keys.
+        // Keep Art. 20 activation consistent with TRIN 4 selections.
+        try {
+            if (!is_array($incident)) { $incident = []; }
+            if (!array_key_exists('cancellation', $incident)) {
+                $main = strtolower(trim((string)($meta['incident_main'] ?? $meta['incidentMain'] ?? '')));
+                $incident['cancellation'] = ($main === 'cancellation');
+            }
+            if (!array_key_exists('missed_connection', $incident)) {
+                $missed = strtolower(trim((string)($meta['incident_missed'] ?? $meta['incidentMissed'] ?? '')));
+                $incident['missed_connection'] = in_array($missed, ['yes','ja','1','true'], true);
+            }
+        } catch (\Throwable $e) { /* ignore */ }
         $delayExpected = (int)($journey['delayExpectedMinutes'] ?? $meta['delayExpectedMinutes'] ?? 0);
         $art20Fallback = (string)($meta['art20_expected_delay_60'] ?? '');
+        // Activation for Art. 20 assistance follows the EU threshold logic:
+        // - cancellation => active
+        // - expected delay >= 60 (or user-declared via art20_expected_delay_60) => active
+        // Missed connection alone is NOT sufficient unless it implies >=60 min to final destination (captured upstream as art20_expected_delay_60=yes).
         $active = $delayExpected >= 60
             || !empty($incident['cancellation'])
-            || !empty($incident['missed_connection'])
             || $art20Fallback === 'yes';
 
         $hook = function(string $key, string $type='tri') use ($meta) {
@@ -173,7 +193,6 @@ class Art20AssistanceEvaluator
             '_active' => $active,
             'art20_expected_delay_60' => $art20Fallback,
             'stranded_location' => (string)($meta['stranded_location'] ?? ''),
-            'journey_outcome' => $hook('journey_outcome', 'raw'),
             'meal_offered' => $hook('meal_offered'),
             'assistance_meals_unavailable_reason' => $hook('assistance_meals_unavailable_reason', 'raw'),
             'hotel_offered' => $hook('hotel_offered'),
@@ -188,15 +207,19 @@ class Art20AssistanceEvaluator
             'alt_transport_provided' => $hook('alt_transport_provided'),
             'assistance_alt_transport_offered_by' => $hook('assistance_alt_transport_offered_by', 'raw'),
             'assistance_alt_transport_type' => $hook('assistance_alt_transport_type', 'raw'),
-            'assistance_alt_to_destination' => $hook('assistance_alt_to_destination', 'raw'),
+            // Legacy name: assistance_alt_to_destination (used in older TRIN 5). Canonical is a20_where_ended.
+            'a20_where_ended' => (($v = $hook('a20_where_ended', 'raw')) !== null && $v !== '') ? $v : $hook('assistance_alt_to_destination', 'raw'),
+            'a20_arrival_station' => (($v = $hook('a20_arrival_station', 'raw')) !== null && $v !== '') ? $v : $hook('assistance_alt_arrival_station', 'raw'),
+            'a20_arrival_station_other' => (($v = $hook('a20_arrival_station_other', 'raw')) !== null && $v !== '') ? $v : $hook('assistance_alt_arrival_station_other', 'raw'),
+            'handoff_station' => $hook('handoff_station', 'raw'),
             'assistance_alt_departure_time' => $hook('assistance_alt_departure_time', 'raw'),
             'assistance_alt_arrival_time' => $hook('assistance_alt_arrival_time', 'raw'),
             // Art.20(3) station-specific
             'a20_3_solution_offered' => $hook('a20_3_solution_offered'),
             'a20_3_solution_type' => $hook('a20_3_solution_type', 'raw'),
             'a20_3_solution_offered_by' => $hook('a20_3_solution_offered_by', 'raw'),
-            'a20_3_no_solution_action' => $hook('a20_3_no_solution_action', 'raw'),
-            'a20_3_outcome' => $hook('a20_3_outcome', 'raw'),
+            'a20_3_self_paid' => $hook('a20_3_self_paid'),
+            'a20_3_self_paid_direction' => $hook('a20_3_self_paid_direction', 'raw'),
             'a20_3_self_arranged_type' => $hook('a20_3_self_arranged_type', 'raw'),
             'a20_3_self_paid_amount' => $hook('a20_3_self_paid_amount', 'raw'),
             'a20_3_self_paid_currency' => $hook('a20_3_self_paid_currency', 'raw'),

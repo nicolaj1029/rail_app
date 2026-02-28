@@ -8,6 +8,8 @@ $form = $form ?? [];
 $journeyRowsInline = $journeyRowsInline ?? [];
 $mcChoicesInline = $mcChoicesInline ?? [];
 $changeBullets = $changeBullets ?? [];
+// Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
+$stationsSearchUrl = $stationsSearchUrl ?? $this->Url->build('/api/stations/search');
 
 $mctEvalRaw = (array)($meta['_mct_eval'] ?? []);
 $normStation = function($s){ return trim(mb_strtolower((string)$s, 'UTF-8')); };
@@ -106,11 +108,47 @@ if (empty($changeBullets)) {
 }
 
 $currentMissInline = (string)($form['missed_connection_station'] ?? '');
+$mcCountryHint = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
 ?>
 <div style="grid-column: 1 / span 2;">
   <label>3.5. Missed connection (kun station)
     <input id="mcField" type="text" name="missed_connection_station" value="<?= h($meta['_auto']['missed_connection_station']['value'] ?? ($form['missed_connection_station'] ?? '')) ?>" placeholder="Skriv skiftestation (hvis relevant)" />
   </label>
+  <input type="hidden" name="missed_connection_station_osm_id" id="mcField_osm_id" value="<?= h((string)($form['missed_connection_station_osm_id'] ?? '')) ?>" />
+  <input type="hidden" name="missed_connection_station_lat" id="mcField_lat" value="<?= h((string)($form['missed_connection_station_lat'] ?? '')) ?>" />
+  <input type="hidden" name="missed_connection_station_lon" id="mcField_lon" value="<?= h((string)($form['missed_connection_station_lon'] ?? '')) ?>" />
+  <input type="hidden" name="missed_connection_station_country" id="mcField_country" value="<?= h((string)($form['missed_connection_station_country'] ?? '')) ?>" />
+  <input type="hidden" name="missed_connection_station_type" id="mcField_type" value="<?= h((string)($form['missed_connection_station_type'] ?? '')) ?>" />
+  <input type="hidden" name="missed_connection_station_source" id="mcField_source" value="<?= h((string)($form['missed_connection_station_source'] ?? '')) ?>" />
+
+  <style>
+    /* Offline station autocomplete for ticketless fallback */
+    #mcSuggest {
+      display:none;
+      margin-top:4px;
+      border:1px solid #ddd;
+      border-radius:6px;
+      background:#fff;
+      overflow:auto;
+      max-height:220px;
+      box-shadow:0 6px 18px rgba(0,0,0,.08);
+    }
+    #mcSuggest button {
+      display:block;
+      width:100%;
+      text-align:left;
+      padding:8px 10px;
+      border:0;
+      background:transparent;
+      cursor:pointer;
+      color:#111 !important;
+      font-size:13px;
+      line-height:1.25;
+    }
+    #mcSuggest button:hover { background:#f6f8fb; }
+    #mcSuggest .muted { color:#666 !important; font-size:11px; }
+  </style>
+  <div id="mcSuggest" class="station-suggest" aria-label="Stationsforslag"></div>
   <?php if (!empty($mcChoicesInline)): ?>
     <div class="small muted" style="margin-top:6px;">Vælg hvor skiftet blev misset (enkeltvalg):</div>
     <div class="small" style="margin-top:4px; display:flex; flex-direction:column; gap:6px;">
@@ -118,32 +156,181 @@ $currentMissInline = (string)($form['missed_connection_station'] ?? '');
         <label class="mr8"><input type="radio" name="missed_connection_pick" value="<?= h($stationOpt) ?>" <?= $checked?'checked':'' ?> data-mc-single data-station="<?= h($stationOpt) ?>" /> <?= h($labelOpt) ?></label>
       <?php endforeach; ?>
     </div>
-    <script>
-      (function(){
-        var radios = document.querySelectorAll('input[type="radio"][data-mc-single]');
-        var field = document.getElementById('mcField');
-        radios.forEach(function(r){ r.dataset.selected = r.checked ? '1' : '0'; });
-        radios.forEach(function(r){
-          r.addEventListener('click', function(ev){
-            if (r.dataset.selected === '1') {
-              r.checked = false;
-              r.dataset.selected = '0';
-              if (field) { field.value = ''; }
-              ev.preventDefault();
-              return false;
-            }
-            radios.forEach(function(o){ o.dataset.selected = '0'; });
-            r.dataset.selected = '1';
-            if (field) { field.value = (r.getAttribute('data-station') || r.value); }
-          });
-          r.addEventListener('change', function(){ if (r.checked && field) { field.value = (r.getAttribute('data-station') || r.value); } });
-        });
-      })();
-    </script>
   <?php else: ?>
     <div class="small muted" style="margin-top:6px;">Ingen skift fundet automatisk. Hvis du missede en forbindelse, skriv stationen manuelt ovenfor.</div>
   <?php endif; ?>
 </div>
+
+<script>
+(function(){
+  var field = document.getElementById('mcField');
+  var box = document.getElementById('mcSuggest');
+  var stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
+  var countryHint = <?= json_encode((string)$mcCountryHint, JSON_UNESCAPED_UNICODE) ?>;
+
+  var hid = {
+    osm_id: document.getElementById('mcField_osm_id'),
+    lat: document.getElementById('mcField_lat'),
+    lon: document.getElementById('mcField_lon'),
+    country: document.getElementById('mcField_country'),
+    type: document.getElementById('mcField_type'),
+    source: document.getElementById('mcField_source')
+  };
+
+  function clearMeta(){
+    if (hid.osm_id) hid.osm_id.value = '';
+    if (hid.lat) hid.lat.value = '';
+    if (hid.lon) hid.lon.value = '';
+    if (hid.country) hid.country.value = '';
+    if (hid.type) hid.type.value = '';
+    if (hid.source) hid.source.value = '';
+  }
+
+  function setMeta(st){
+    if (!st) { clearMeta(); return; }
+    if (hid.osm_id) hid.osm_id.value = (st.osm_id !== undefined && st.osm_id !== null) ? String(st.osm_id) : '';
+    if (hid.lat) hid.lat.value = (st.lat !== undefined && st.lat !== null) ? String(st.lat) : '';
+    if (hid.lon) hid.lon.value = (st.lon !== undefined && st.lon !== null) ? String(st.lon) : '';
+    if (hid.country) hid.country.value = (st.country !== undefined && st.country !== null) ? String(st.country) : '';
+    if (hid.type) hid.type.value = (st.type !== undefined && st.type !== null) ? String(st.type) : '';
+    if (hid.source) hid.source.value = (st.source !== undefined && st.source !== null) ? String(st.source) : '';
+  }
+
+  function hide(){
+    if (!box) return;
+    box.style.display = 'none';
+    box.innerHTML = '';
+  }
+
+  function niceType(t){
+    var s = (t || '').toString().toLowerCase();
+    if (s === 'station') return 'Station';
+    if (s === 'halt') return 'Stopested';
+    return s;
+  }
+
+  function clearMcPickRadios(){
+    var radios = document.querySelectorAll('input[type=\"radio\"][data-mc-single]');
+    radios.forEach(function(r){
+      r.checked = false;
+      r.dataset.selected = '0';
+    });
+  }
+
+  function render(stations){
+    if (!box) return;
+    box.innerHTML = '';
+    if (!stations || !stations.length) { hide(); return; }
+
+    var stStations = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() === 'station'; });
+    var stOthers = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() !== 'station'; });
+    var shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
+
+    shown.slice(0, 10).forEach(function(st){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      var nm = (st && st.name) ? String(st.name) : '';
+      var cc = (st && st.country) ? String(st.country) : '';
+      var tp = (st && st.type) ? String(st.type) : '';
+      btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+      if (cc || tp) {
+        var meta = document.createElement('div');
+        meta.className = 'muted';
+        meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' \u00b7 ');
+        btn.appendChild(document.createElement('br'));
+        btn.appendChild(meta);
+      }
+      btn.addEventListener('click', function(){
+        if (field && nm) field.value = nm;
+        setMeta(st);
+        clearMcPickRadios(); // avoid mismatch between radio-choice and autocomplete
+        hide();
+      });
+      box.appendChild(btn);
+    });
+    box.style.display = 'block';
+  }
+
+  var timer = null;
+  var ctrl = null;
+
+  async function fetchStations(){
+    if (!field || !box || !stationsSearchUrl) return;
+    var q = String(field.value || '').trim();
+    if (q.length < 2) { hide(); return; }
+    var cc = String(countryHint || '').trim().toUpperCase();
+    // If no country is available, avoid a full EU scan until the user has typed more.
+    if (!cc && q.length < 4) { hide(); return; }
+
+    var buildUrl = function(country){
+      var u = new URL(stationsSearchUrl, window.location.origin);
+      u.searchParams.set('q', q);
+      if (country) u.searchParams.set('country', country);
+      u.searchParams.set('limit', '10');
+      return u.toString();
+    };
+
+    if (ctrl) { try { ctrl.abort(); } catch(e) {} }
+    ctrl = new AbortController();
+    try {
+      var res = await fetch(buildUrl(cc), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+      if (!res.ok) { hide(); return; }
+      var js = await res.json();
+      var stations = (js && js.data && Array.isArray(js.data.stations)) ? js.data.stations : [];
+      if ((!stations || stations.length === 0) && cc) {
+        res = await fetch(buildUrl(''), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          js = await res.json();
+          stations = (js && js.data && Array.isArray(js.data.stations)) ? js.data.stations : [];
+        }
+      }
+      render(stations);
+    } catch(e) {
+      // ignore abort/network
+    }
+  }
+
+  if (field && box && stationsSearchUrl) {
+    field.addEventListener('input', function(){
+      clearMeta(); // user is typing; metadata no longer trusted
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(fetchStations, 200);
+    }, { passive:true });
+    field.addEventListener('focus', function(){
+      if (box.innerHTML.trim() !== '') box.style.display = 'block';
+    }, { passive:true });
+    field.addEventListener('blur', function(){ window.setTimeout(hide, 180); }, { passive:true });
+    // Prevent blur while clicking suggestions
+    box.addEventListener('mousedown', function(e){ e.preventDefault(); });
+  }
+
+  // Existing "single choice" radios should drive the field value, but should not leave stale station metadata.
+  var radios = document.querySelectorAll('input[type=\"radio\"][data-mc-single]');
+  radios.forEach(function(r){ r.dataset.selected = r.checked ? '1' : '0'; });
+  radios.forEach(function(r){
+    r.addEventListener('click', function(ev){
+      if (r.dataset.selected === '1') {
+        r.checked = false;
+        r.dataset.selected = '0';
+        if (field) { field.value = ''; }
+        clearMeta();
+        hide();
+        ev.preventDefault();
+        return false;
+      }
+      radios.forEach(function(o){ o.dataset.selected = '0'; });
+      r.dataset.selected = '1';
+      if (field) { field.value = (r.getAttribute('data-station') || r.value); }
+      clearMeta(); // value came from derived label; not a DB selection
+      hide();
+    });
+    r.addEventListener('change', function(){
+      if (r.checked && field) { field.value = (r.getAttribute('data-station') || r.value); }
+      if (r.checked) { clearMeta(); hide(); }
+    });
+  });
+})();
+</script>
 
 <?php if (!empty($journeyRowsInline)): ?>
   <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflæst fra billetten)</strong></div>

@@ -3,22 +3,29 @@
 $form = $form ?? [];
 $flags = $flags ?? [];
 $incident = $incident ?? [];
-$meta = $meta ?? [];
+$metaView = $metaView ?? null;
+$meta = is_array($metaView) ? $metaView : ($meta ?? []);
 $profile = $profile ?? ['articles' => []];
+$affectedLegsAuto = $affectedLegsAuto ?? [];
+$downgradeScopeAuto = $downgradeScopeAuto ?? ['from' => null, 'to' => null, 'basis' => '', 'confidence' => 0.0];
+$journeyRowsDowng = $journeyRowsDowng ?? [];
+$downgradeTicketOptions = $downgradeTicketOptions ?? [];
+$downgradeTicketFile = (string)($downgradeTicketFile ?? ($form['downgrade_ticket_file'] ?? ''));
 
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isCompleted = ($travelState === 'completed');
 $isOngoing = ($travelState === 'ongoing');
 
 $title = $isOngoing
-    ? 'TRIN 8 - Nedgradering (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 8 - Nedgradering (afsluttet rejse)' : 'TRIN 8 - Nedgradering (klasse/reservation)');
+    ? 'TRIN 9 - Nedgradering (igangvaerende rejse)'
+    : ($isCompleted ? 'TRIN 9 - Nedgradering (afsluttet rejse)' : 'TRIN 9 - Nedgradering (klasse/reservation)');
 $hint = $isOngoing
     ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.'
     : ($isCompleted ? 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.' : '');
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 $missedStation = (string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? ''));
+$isPreview = !empty($flowPreview);
 
 $articles = (array)($profile['articles'] ?? []);
 $showArt18 = !isset($articles['art18']) || $articles['art18'] !== false;
@@ -55,6 +62,23 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     <p class="small muted"><?= h($hint) ?></p>
   <?php endif; ?>
 
+  <?php if (is_array($downgradeTicketOptions) && count($downgradeTicketOptions) > 1): ?>
+    <div class="card mt12" style="background:#f8fafc;border-color:#dbeafe;">
+      <div class="small muted"><strong>Billetvalg (TRIN 9)</strong></div>
+      <div class="mt8 grid-2">
+        <label>Hvilken billet udfylder du nedgradering for?
+          <select id="downgradeTicketSelect">
+            <?php foreach ($downgradeTicketOptions as $opt): ?>
+              <?php $f = (string)($opt['file'] ?? ''); $lbl = (string)($opt['label'] ?? $f); ?>
+              <option value="<?= h($f) ?>" <?= $f!=='' && $f===$downgradeTicketFile ? 'selected' : '' ?>><?= h($lbl) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <div class="small muted" style="align-self:end;">Skift billet for at undgaa at blande per-leg felter paa tværs af kontrakter.</div>
+      </div>
+    </div>
+  <?php endif; ?>
+
   <?php if (!$showArt18 || !$showArt182): ?>
     <div class="card mt12" style="background:#fff3cd;border-color:#eed27c;">
       <strong>Bemaerk</strong>
@@ -62,7 +86,10 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     </div>
   <?php endif; ?>
 
+  <?= $this->element('flow_locked_notice') ?>
   <?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'downgrade'], 'novalidate' => true]) ?>
+  <fieldset <?= $isPreview ? 'disabled' : '' ?>>
+  <?= $this->Form->hidden('downgrade_ticket_file', ['value' => $downgradeTicketFile]) ?>
 
   <div class="card mt12">
     <div class="widget-title">
@@ -82,9 +109,9 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     </div>
 
     <div id="downgradeDetails" class="mt12 <?= $v('downgrade_occurred')==='yes' ? '' : 'hidden' ?>">
-      <details class="quick" <?= ($v('downgrade_comp_basis')!=='' || $v('downgrade_segment_share')!=='') ? 'open' : '' ?>>
-        <summary><span class="chev">&gt;</span>Hurtig beregning (valgfri)</summary>
-        <div class="small muted mt4">Du kan springe dette over og i stedet udfylde per-leg tabellen nedenfor.</div>
+      <details class="quick">
+        <summary><span class="chev">&gt;</span>Avanceret (valgfrit)</summary>
+        <div class="small muted mt4">Hurtig beregning. Du kan springe dette over og i stedet udfylde per-leg tabellen nedenfor.</div>
         <div class="grid-2 mt8">
           <label>Basis (CIV/Bilag II)
             <?php $basis = $v('downgrade_comp_basis'); ?>
@@ -109,7 +136,7 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     </div>
   </div>
 
-  <div class="card mt12">
+    <div class="card mt12">
     <div class="widget-title">
       <span class="icon-badge" aria-hidden="true" style="background:#f3f4f6;border-color:#e5e7eb;">
         <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -120,10 +147,23 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
       <span>Per-leg (koebt vs leveret)</span>
     </div>
     <div class="small muted mt4">LLM/OCR forsoeger at udfylde koebt klasse/reservation. Du kan rette og angive leveret niveau.</div>
+    <?php if (!empty($affectedLegsAuto)): ?>
+      <div class="small muted mt4">
+        Auto-scope: ben <?= h(implode(', ', array_map(static fn($i)=> (string)(((int)$i)+1), $affectedLegsAuto))) ?>
+        <?php if (!empty($downgradeScopeAuto['from']) || !empty($downgradeScopeAuto['to'])): ?>
+          (<?= h((string)($downgradeScopeAuto['from'] ?? '')) ?> &rarr; <?= h((string)($downgradeScopeAuto['to'] ?? '')) ?>)
+        <?php endif; ?>
+        <?php if (!empty($downgradeScopeAuto['basis'])): ?>
+          — <?= h((string)$downgradeScopeAuto['basis']) ?> (conf: <?= h((string)($downgradeScopeAuto['confidence'] ?? '')) ?>)
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
     <?= $this->element('downgrade_table', [
+        'journeyRowsDowng' => $journeyRowsDowng,
         'form' => $form,
         'meta' => $meta,
         'missedStation' => $missedStation,
+        'affectedLegsAuto' => $affectedLegsAuto ?? [],
     ]) ?>
   </div>
 
@@ -132,6 +172,7 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     <?= $this->Form->button('Fortsaet', ['class' => 'button', 'type' => 'submit']) ?>
   </div>
 
+  </fieldset>
   <?= $this->Form->end() ?>
 </div>
 
@@ -152,22 +193,45 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
     function maybePrefillBusTaxi(){
       try {
         var remedy = <?= json_encode((string)($form['remedyChoice'] ?? '')) ?>;
-        var transport = <?= json_encode((string)($form['a20_3_solution_type'] ?? ($form['assistance_alt_transport_type'] ?? ''))) ?>;
-        var isBusTaxi = (transport === 'bus' || transport === 'taxi');
+        // Prefer TRIN 6 reroute transport mode (Art.18). Fall back to TRIN 5 (Art.20) choices for legacy sessions.
+        var transport = <?= json_encode((string)($form['a18_reroute_mode'] ?? ($form['a20_3_solution_type'] ?? ($form['assistance_alt_transport_type'] ?? '')))) ?>;
+        // Treat coach as bus (some hooks/models may emit "coach" instead of "bus").
+        var isBusTaxi = (transport === 'bus' || transport === 'taxi' || transport === 'coach');
         var isReroute = (remedy === 'reroute_soonest' || remedy === 'reroute_later');
         var dgcYes = q('input[name="downgrade_occurred"][value="yes"]');
         if (!isBusTaxi || !isReroute || !(dgcYes && dgcYes.checked)) return;
 
-        qa('select[name^="leg_class_delivered"]').forEach(function(sel){
-          if (!sel.value) { sel.value = '2nd'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
-        });
-        qa('select[name^="leg_reservation_delivered"]').forEach(function(sel){
-          if (!sel.value) { sel.value = 'missing'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+        var affected = <?= json_encode(array_values($affectedLegsAuto ?? [])) ?>;
+        if (!affected || !affected.length) {
+          // If scope is unknown, fall back to previous behavior (all legs)
+          qa('select[name^="leg_class_delivered"]').forEach(function(sel){
+            if (!sel.value) { sel.value = '2nd'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+          });
+          qa('select[name^="leg_reservation_delivered"]').forEach(function(sel){
+            if (!sel.value) { sel.value = 'missing'; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+          });
+          return;
+        }
+        affected.forEach(function(i){
+          var selC = q('select[name="leg_class_delivered['+i+']"]');
+          if (selC && !selC.value) { selC.value = '2nd'; selC.dispatchEvent(new Event('change', {bubbles:true})); }
+          var selR = q('select[name="leg_reservation_delivered['+i+']"]');
+          if (selR && !selR.value) { selR.value = 'missing'; selR.dispatchEvent(new Event('change', {bubbles:true})); }
         });
       } catch(e) { /* ignore */ }
     }
 
     document.addEventListener('DOMContentLoaded', function(){
+      var sel = document.getElementById('downgradeTicketSelect');
+      if (sel) {
+        sel.addEventListener('change', function(){
+          var v = sel.value || '';
+          var url = new URL(window.location.href);
+          if (v) { url.searchParams.set('ticket', v); }
+          else { url.searchParams.delete('ticket'); }
+          window.location.href = url.toString();
+        });
+      }
       toggleDetails();
       qa('input[name="downgrade_occurred"]').forEach(function(r){
         r.addEventListener('change', function(){
