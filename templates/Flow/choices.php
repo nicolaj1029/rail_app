@@ -133,9 +133,8 @@ try {
             <label class="ml8"><input type="radio" name="is_stranded_trin5" value="no" <?= $isStrandedTrin5==='no'?'checked':'' ?> /> Nej</label>
         </div>
 
-        <div class="mt8 <?= $showTrack ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
-            <input type="radio" name="stranded_location" value="track" checked="checked" style="display:none" />
-        </div>
+        <?php /* NOTE: We do NOT POST stranded_location from this step. Controller derives it when is_stranded_trin5=yes.
+                 Posting a hidden checked input caused cross-step overwrites (TRIN 4 station endpoint got cleared). */ ?>
 
         <?php
             $depDefault = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
@@ -374,10 +373,9 @@ try {
         if (!wrap) return;
 
         var stranded = getVal('is_stranded_trin5');
-        var loc = getVal('stranded_location');
 
         var shouldShow = false;
-        if (stranded === 'yes' && loc === 'track') {
+        if (stranded === 'yes') {
             var bt = getVal('blocked_train_alt_transport');
             if (bt === 'yes') { shouldShow = true; }
             else if (bt === 'no') { shouldShow = !!getVal('blocked_no_transport_action'); }
@@ -385,7 +383,7 @@ try {
         setBlockVisible(wrap, shouldShow);
 
         // If hidden, clear stale resolution fields.
-        if (!shouldShow && loc === 'track') {
+        if (!shouldShow && stranded === 'yes') {
             clearFields(['a20_where_ended','a20_arrival_station','a20_arrival_station_other']);
         }
     }
@@ -425,7 +423,6 @@ try {
             if (v0 !== 'yes') {
                 var hadTrackState = !!getVal('blocked_train_alt_transport') || !!getVal('blocked_no_transport_action') || !!getVal('assistance_alt_transport_type');
                 clearFields([
-                    'stranded_location',
                     'blocked_train_alt_transport','assistance_alt_transport_type',
                     'blocked_no_transport_action',
                     'blocked_self_paid_transport_type','blocked_self_paid_amount','blocked_self_paid_currency','blocked_self_paid_receipt',

@@ -4785,7 +4785,7 @@ class FlowController extends AppController
             foreach ([
                 // Art. 20 transport (moved from incident)
                 'maps_opt_in_trin5',
-                'is_stranded_trin5','stranded_location','blocked_train_alt_transport','blocked_no_transport_action',
+                'is_stranded_trin5','blocked_train_alt_transport','blocked_no_transport_action',
                 'assistance_alt_transport_type','a20_where_ended',
                 'a20_arrival_station','a20_arrival_station_other',
                 'a20_arrival_station_other_osm_id','a20_arrival_station_other_lat','a20_arrival_station_other_lon','a20_arrival_station_other_country','a20_arrival_station_other_type','a20_arrival_station_other_source',
