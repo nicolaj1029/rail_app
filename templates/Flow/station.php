@@ -456,7 +456,11 @@ function mapsInitTrin4(initialPayload){
     });
   }
 
-  cb.addEventListener('change', updatePanel);
+  cb.addEventListener('change', function(){
+    // When Maps is enabled after selecting a stranded station, sync origin immediately.
+    if (cb.checked) { try { syncMapsOriginFromStationTrin4(); } catch(e) {} }
+    updatePanel();
+  });
   originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });
   destEl.addEventListener('input', function(){ destEl.dataset.manual = '1'; setOpenLink(); });
 

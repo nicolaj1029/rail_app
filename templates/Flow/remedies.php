@@ -243,6 +243,11 @@ $preview = round($tp * $rate * $share, 2);
                     if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
                     if ($scs !== '' && $scs !== 'unknown') { $handoff = $scs; }
                 }
+                if ($handoff === '') {
+                    // If TRIN 4 isn't set, fall back to missed connection station (TRIN 5) as the best "where are you now?" anchor.
+                    $ms = trim((string)($form['missed_connection_station'] ?? ($meta['_auto']['missed_connection_station']['value'] ?? '')));
+                    if ($ms !== '' && $ms !== 'unknown') { $handoff = $ms; }
+                }
                 $fromVal = (string)($form['a18_from_station'] ?? '');
                 $fromOther = (string)($form['a18_from_station_other'] ?? '');
                 $fromPref = $fromVal !== '' ? $fromVal : ($handoff !== '' ? $handoff : '');
@@ -394,16 +399,18 @@ $preview = round($tp * $rate * $share, 2);
                 $destDefault = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
                 $missedDefault = trim((string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? '')));
 
-                // Default origin for reroute: prefer missed-connection station, then TRIN 5 stranded station,
-                // then "ended at station" from TRIN 5, then departure station from ticket.
-                $originDefault = $missedDefault !== '' ? $missedDefault : '';
+                // Default origin for reroute (priority):
+                // 1) Explicit user choice in TRIN 7 (a18_from_station)
+                // 2) Art.20 handoff station ("Hvor endte du?") when present
+                // 3) Stranded station from TRIN 4 (station scenario)
+                // 4) Missed-connection station (TRIN 5) when TRIN 4 isn't set
+                // 5) Departure station from ticket
+                $originDefault = '';
+                $a18From = trim((string)($form['a18_from_station'] ?? ''));
+                if ($a18From === 'other') { $a18From = trim((string)($form['a18_from_station_other'] ?? '')); }
+                if ($a18From !== '' && $a18From !== 'unknown') { $originDefault = $a18From; }
+
                 if ($originDefault === '') {
-                    $scs = trim((string)($form['stranded_current_station'] ?? ''));
-                    if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
-                    if ($scs !== '' && $scs !== 'unknown') { $originDefault = $scs; }
-                }
-                if ($originDefault === '') {
-                    // Prefer explicit handoff station from TRIN 5 (Art.20), otherwise fall back to legacy keys.
                     $arrSt = trim((string)($form['handoff_station'] ?? ''));
                     if ($arrSt === '') {
                         $arrSt = trim((string)($form['a20_arrival_station'] ?? ''));
@@ -411,6 +418,12 @@ $preview = round($tp * $rate * $share, 2);
                     }
                     if ($arrSt !== '' && $arrSt !== 'unknown') { $originDefault = $arrSt; }
                 }
+                if ($originDefault === '') {
+                    $scs = trim((string)($form['stranded_current_station'] ?? ''));
+                    if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
+                    if ($scs !== '' && $scs !== 'unknown') { $originDefault = $scs; }
+                }
+                if ($originDefault === '' && $missedDefault !== '' && $missedDefault !== 'unknown') { $originDefault = $missedDefault; }
                 if ($originDefault === '') { $originDefault = $depDefault; }
                 $mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
             ?>
@@ -464,6 +477,10 @@ $preview = round($tp * $rate * $share, 2);
                         $scs = trim((string)($form['stranded_current_station'] ?? ''));
                         if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
                         if ($scs !== '' && $scs !== 'unknown') { $handoff = $scs; }
+                    }
+                    if ($handoff === '') {
+                        $ms = trim((string)($form['missed_connection_station'] ?? ($meta['_auto']['missed_connection_station']['value'] ?? '')));
+                        if ($ms !== '' && $ms !== 'unknown') { $handoff = $ms; }
                     }
                     $fromVal = (string)($form['a18_from_station'] ?? '');
                     $fromOther = (string)($form['a18_from_station_other'] ?? '');
@@ -1512,7 +1529,11 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             });
         }
 
-        cb.addEventListener('change', updatePanel);
+        cb.addEventListener('change', function(){
+            // If Maps is enabled after station fields are already set, sync immediately.
+            if (cb.checked) { try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ } }
+            updatePanel();
+        });
         originEl.dataset.manual = originEl.dataset.manual || '0';
         destEl.dataset.manual = destEl.dataset.manual || '0';
         originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });

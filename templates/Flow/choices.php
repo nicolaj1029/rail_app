@@ -141,8 +141,11 @@ try {
             $depDefault = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
             $destDefault = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
             $missedDefault = trim((string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? '')));
-            // TRIN 5 is track-only; we do not depend on station-scoped fields here.
-            $originDefault = $missedDefault !== '' ? $missedDefault : $depDefault;
+            // For MAP start-point: prefer stranded station (TRIN 4) when present, else missed connection, else departure.
+            $scs = trim((string)($form['stranded_current_station'] ?? ''));
+            if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
+            if ($scs === 'unknown') { $scs = ''; }
+            $originDefault = $scs !== '' ? $scs : ($missedDefault !== '' ? $missedDefault : $depDefault);
             $mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
         ?>
         <div class="card mt12" id="mapsCardTrin5" style="background:#f8f9fb;" data-show-if="is_stranded_trin5:yes">
@@ -565,7 +568,11 @@ try {
             });
         }
 
-        cb.addEventListener('change', updatePanel);
+        cb.addEventListener('change', function(){
+            // If Maps is enabled after the user already answered "Hvor endte du?", sync origin immediately.
+            if (cb.checked) { try { syncMapsOriginFromResolution(); } catch(e) {} }
+            updatePanel();
+        });
         originEl.dataset.manual = originEl.dataset.manual || '0';
         originEl.addEventListener('input', function(){
             originEl.dataset.manual = '1';
