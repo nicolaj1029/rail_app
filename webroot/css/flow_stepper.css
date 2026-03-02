@@ -144,3 +144,18 @@
   color: var(--flow-stepper-warn);
 }
 
+/* -----------------------------------------------------------
+   Read-only preview mode (locked steps opened with ?preview=1)
+
+   In preview mode we want the user to *see* what the step contains,
+   even when normal reveal conditions (data-show-if) would hide blocks.
+   Inputs are already disabled via <fieldset disabled> in the templates.
+----------------------------------------------------------- */
+.flow-preview [data-show-if]{
+  display: block !important;
+}
+
+/* Some templates also toggle the HTML `hidden` attribute. */
+.flow-preview [hidden][data-show-if]{
+  display: block !important;
+}

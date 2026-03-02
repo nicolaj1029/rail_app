@@ -185,7 +185,7 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
     </div>
 <?php endif; ?>
 
-<div id="coreAfterArt18" class="<?= $hideArt18Flow ? 'hidden' : '' ?>">
+<div id="coreAfterArt18" class="<?= ($hideArt18Flow && !$isPreview) ? 'hidden' : '' ?>">
 <?php
 // Downgrade preview context (server-side): ticket price from controller or fallback
 $tp = isset($ticketPrice) ? (float)$ticketPrice : (float)preg_replace('/[^0-9.]/','', (string)($form['price'] ?? '0'));
@@ -210,7 +210,7 @@ $preview = round($tp * $rate * $share, 2);
     if ($refundOnly) { $remedy = 'refund_return'; }
     $ri100 = (string)($form['reroute_info_within_100min'] ?? '');
 ?>
-    <div id="art18Wrapper" class="<?= $art18Active ? '' : 'hidden' ?>">
+    <div id="art18Wrapper" class="<?= ($art18Active || $isPreview) ? '' : 'hidden' ?>">
         <div id="art18Flow">
     <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)">
         <div class="card-title"><span class="icon">&#127919;</span><span><?= h($art18Title) ?></span></div>

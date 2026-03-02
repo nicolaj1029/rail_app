@@ -168,10 +168,10 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
-<div id="art20Core" class="<?= $art20Active ? '' : 'hidden' ?>">
+<div id="art20Core" class="<?= ($art20Active || $isPreview) ? '' : 'hidden' ?>">
 
 <!-- Måltider / drikke -->
-<div class="card mt12 <?= $assistMealsOff ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
+<div class="card mt12 <?= ($assistMealsOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
   <strong>🍽️ Måltider og drikke (Art.20)</strong>
   <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.</p>
   <div class="mt8">
@@ -240,7 +240,7 @@ $hintText = function (string $key) use ($priceHints): string {
 </div>
 <!-- Hotel / overnatning -->
 
-<div class="card mt12 <?= $assistHotelOff ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
+<div class="card mt12 <?= ($assistHotelOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
 
   <strong>
     <span class="icon-badge hotel" title="Hotel / indkvartering">

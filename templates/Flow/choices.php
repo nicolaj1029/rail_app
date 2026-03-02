@@ -123,7 +123,7 @@ try {
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
 <div id="coreAfterArt20">
-    <div id="art20Wrapper" class="card mt12 <?= $art20Disabled ? 'hidden' : '' ?>" data-art="20" data-art20-disabled="<?= $art20Disabled ? '1' : '0' ?>">
+    <div id="art20Wrapper" class="card mt12 <?= ($art20Disabled && !$isPreview) ? 'hidden' : '' ?>" data-art="20" data-art20-disabled="<?= $art20Disabled ? '1' : '0' ?>">
         <div class="card-title"><span class="icon">&#128652;</span><span>Transport til/fra (Art.20)</span></div>
         <p class="small muted"><?= h($transportHint) ?></p>
 
@@ -216,7 +216,7 @@ try {
             // We do NOT rely on posting `stranded_location` from this step (controller derives it on submit).
             $showTrackFlow = ($showTrack && $isStrandedTrin5 === 'yes');
         ?>
-        <div class="<?= $showTrackFlow ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
+        <div class="<?= ($showTrackFlow || $isPreview) ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
             <div class="mt4">
                 <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
                 <?php $bt = $v('blocked_train_alt_transport'); ?>

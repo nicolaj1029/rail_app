@@ -27,7 +27,8 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
     <?= $this->fetch('css') ?>
     <?= $this->fetch('script') ?>
 </head>
-<body>
+<?php $bodyClass = !empty($flowPreview) ? 'flow-preview' : ''; ?>
+<body<?= $bodyClass !== '' ? ' class="' . h($bodyClass) . '"' : '' ?>>
     <nav class="top-nav">
         <div class="top-nav-title">
             <a href="<?= $this->Url->build('/') ?>"><span>Cake</span>PHP</a>
