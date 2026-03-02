@@ -190,12 +190,6 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 
     <?php $exc = (string)($form['operatorExceptionalCircumstances'] ?? ''); ?>
     <div class="mt8">
-      <span class="fm-badge" title="Force majeure / ekstraordinaere forhold">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path fill="#8a6d3b" d="M7 18a5 5 0 0 1 0-10a6 6 0 0 1 11.3 1.7A4.5 4.5 0 0 1 18.5 18H7z"/>
-          <path fill="#8a6d3b" d="M12.2 21l2.7-5.2h-2.1l1.5-4.3l-4.6 6.6h2.2L9.6 21z"/>
-        </svg>
-      </span>
       Henviser operatoeren til ekstraordinaere forhold (Art. 19(10))?
     </div>
     <label><input type="radio" name="operatorExceptionalCircumstances" value="yes" <?= $exc==='yes'?'checked':'' ?> /> Ja</label>
@@ -364,6 +358,13 @@ function updateStep4State(){
   var missed60 = getRadioValue('missed_expected_delay_60');
   var missedAnswered = (missed === 'yes' || missed === 'no');
 
+  // Live (client-side) force-majeure evaluation: if user says "yes", we hide national fallback entirely.
+  // This avoids confusing the user with national bands when compensation is likely excluded anyway.
+  var fm = getRadioValue('operatorExceptionalCircumstances');
+  var fmTypeSel = document.querySelector('select[name="operatorExceptionalType"]');
+  var fmType = fmTypeSel ? (fmTypeSel.value || '') : '';
+  var fmBlocksComp = (fm === 'yes') && (fmType === '' || fmType !== 'own_staff_strike');
+
   // EU gate can be satisfied either by the main incident (delay>=60 or cancellation),
   // or (only when EU gate is not already satisfied) by missed-connection implying >=60 to final destination.
   var euGateFromMain = false;
@@ -381,7 +382,7 @@ function updateStep4State(){
   // National fallback is shown when EU gate is not met. Cutoff is optional (we still show the card
   // to explain why we can't determine national thresholds yet).
   // UX: "last chance" – do not show national fallback until the user has answered the missed-connection question.
-  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered;
+  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered && !fmBlocksComp;
   showById('nationalFallbackWrap', showNat);
   // If missed>=60 is required but unanswered, keep the fallback visible (so layout stays stable),
   // but block the minutes input until the user answers the missed>=60 question.
