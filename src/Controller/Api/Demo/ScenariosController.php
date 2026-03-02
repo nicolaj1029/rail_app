@@ -29,6 +29,11 @@ class ScenariosController extends AppController
             || (string)$this->request->getQuery('eval') === '1';
         $id = (string)$this->request->getQuery('id') ?: null;
         $compact = (string)$this->request->getQuery('compact') === '1';
+        // Optional: include where wizard fields originated (which TRIN/step set them).
+        // Useful for debugging "station" fields across Art.20(3) vs Art.18 flows.
+        $withProvenance = (string)$this->request->getQuery('provenance') === '1'
+            || (string)$this->request->getQuery('withProvenance') === '1'
+            || (string)$this->request->getQuery('debug') === '1';
 
         $repo = new FixtureRepository();
         $fixtures = $repo->getAll($id);
@@ -46,10 +51,22 @@ class ScenariosController extends AppController
             if ($withEval) {
                 $eval = $runner->evaluateFixture($fx);
                 $actual = $eval['actual'];
+                $origin = $withProvenance ? $this->buildWizardFieldOrigin($fx) : null;
                 if ($compact) {
                     $row['wizard_compact'] = $this->buildWizardCompact($fx);
                     $row['computeOverrides_compact'] = $this->buildComputeOverridesCompact($fx);
                     $actual = $this->buildActualCompact($actual) + ['_compact' => true];
+                }
+                if ($withProvenance && is_array($origin)) {
+                    $row['wizard_field_origin'] = $origin;
+                    // Attach compact per-module hints when available (keep it lightweight).
+                    if (isset($actual['art20_assistance']['hooks']) && is_array($actual['art20_assistance']['hooks'])) {
+                        $actual['art20_assistance']['hooks']['_origin_step'] = $this->pickOriginForFields($origin, (array)$actual['art20_assistance']['hooks']);
+                    }
+                    if (isset($actual['art12']['hooks']) && is_array($actual['art12']['hooks'])) {
+                        $actual['art12']['hooks']['_origin_step'] = $this->pickOriginForFields($origin, (array)$actual['art12']['hooks']);
+                    }
+                    $actual['_origin_note'] = 'wizard_field_origin maps form keys to the TRIN/step where they are set. Actual modules may reuse the same key.';
                 }
                 $row['actual'] = $actual;
                 $row['match'] = $eval['match'];
@@ -325,6 +342,11 @@ class ScenariosController extends AppController
                     '_active',
                     'art20_expected_delay_60',
                     'stranded_location',
+                    // Station context (Art.20(3) + resolution endpoint)
+                    'stranded_current_station',
+                    'a20_where_ended',
+                    'a20_arrival_station',
+                    'handoff_station',
                     'blocked_train_alt_transport',
                      'alt_transport_provided',
                      'a20_3_solution_offered',
@@ -390,6 +412,66 @@ class ScenariosController extends AppController
             if ($v === null) { continue; }
             $out[$k] = $v;
         }
+        return $out;
+    }
+
+    /**
+     * Build a compact "field -> step" provenance map from the fixture wizard sections.
+     *
+     * @return array<string,string|array<int,string>>
+     */
+    private function buildWizardFieldOrigin(array $fx): array
+    {
+        $w = (array)($fx['wizard'] ?? []);
+        $steps = [
+            'step1_start',
+            'step2_entitlements',
+            'step3_journey',
+            'step4_station',
+            'step5_incident',
+            'step6_choices',
+            'step7_remedies',
+            'step8_assistance',
+            'step9_downgrade',
+            'step10_compensation',
+        ];
+
+        $origin = [];
+        foreach ($steps as $step) {
+            $payload = (array)($w[$step] ?? []);
+            foreach (array_keys($payload) as $k) {
+                if ($k === '') { continue; }
+                if (!array_key_exists($k, $origin)) {
+                    $origin[$k] = $step;
+                    continue;
+                }
+                // Same form key can appear in multiple wizard steps across versions; keep both.
+                $prev = $origin[$k];
+                if (is_string($prev)) { $prev = [$prev]; }
+                if (is_array($prev) && !in_array($step, $prev, true)) { $prev[] = $step; }
+                $origin[$k] = $prev;
+            }
+        }
+
+        ksort($origin, SORT_NATURAL | SORT_FLAG_CASE);
+        return $origin;
+    }
+
+    /**
+     * Pick provenance entries for a set of fields (same key names).
+     *
+     * @param array<string,string|array<int,string>> $origin
+     * @param array<string,mixed> $fields
+     * @return array<string,string|array<int,string>>
+     */
+    private function pickOriginForFields(array $origin, array $fields): array
+    {
+        $out = [];
+        foreach (array_keys($fields) as $k) {
+            if ($k === '_origin_step') { continue; }
+            if (array_key_exists($k, $origin)) { $out[$k] = $origin[$k]; }
+        }
+        ksort($out, SORT_NATURAL | SORT_FLAG_CASE);
         return $out;
     }
 }
