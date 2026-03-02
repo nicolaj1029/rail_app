@@ -460,6 +460,11 @@ $preview = round($tp * $rate * $share, 2);
                 <div class="small muted mt4">TRIN 7 er uafhaengigt af TRIN 6. Brug evt. stationen fra Art.20 som udgangspunkt.</div>
                 <?php
                     $handoff = trim((string)($form['handoff_station'] ?? ''));
+                    if ($handoff === '') {
+                        $scs = trim((string)($form['stranded_current_station'] ?? ''));
+                        if ($scs === 'other') { $scs = trim((string)($form['stranded_current_station_other'] ?? '')); }
+                        if ($scs !== '' && $scs !== 'unknown') { $handoff = $scs; }
+                    }
                     $fromVal = (string)($form['a18_from_station'] ?? '');
                     $fromOther = (string)($form['a18_from_station_other'] ?? '');
                     $fromPref = $fromVal !== '' ? $fromVal : ($handoff !== '' ? $handoff : '');
@@ -1508,7 +1513,10 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         }
 
         cb.addEventListener('change', updatePanel);
-        originEl.addEventListener('input', setOpenLink);
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        destEl.dataset.manual = destEl.dataset.manual || '0';
+        originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });
+        destEl.addEventListener('input', function(){ destEl.dataset.manual = '1'; setOpenLink(); });
         destEl.addEventListener('input', setOpenLink);
 
         btn.addEventListener('click', async function(){
@@ -1549,6 +1557,58 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 renderRoutes(initialPayload, { title: 'Seneste forslag (gemt i session)' });
             }
         } catch(e) { /* ignore */ }
+    }
+
+    // Keep MAP inputs in sync with the "Stationsvalg (omlaegning)" fields.
+    // Only auto-sync when the user has not manually edited the MAP inputs.
+    function syncMapsTrin6FromStations(){
+        var originEl = document.getElementById('mapsOriginTrin6');
+        var destEl = document.getElementById('mapsDestTrin6');
+        var open = document.getElementById('mapsOpenTrin6');
+        if (!originEl || !destEl || !open) return;
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        destEl.dataset.manual = destEl.dataset.manual || '0';
+
+        function valSelect(name){
+            var sel = document.querySelector('select[name=\"' + name + '\"]');
+            return sel ? (sel.value || '') : '';
+        }
+        function valInput(name){
+            var inp = document.querySelector('input[name=\"' + name + '\"]');
+            return inp ? (inp.value || '') : '';
+        }
+
+        // Origin: a18_from_station (or other input)
+        if (originEl.dataset.manual !== '1') {
+            var fromSel = valSelect('a18_from_station');
+            var fromOther = valInput('a18_from_station_other');
+            var origin = '';
+            if (fromSel === 'other') { origin = fromOther; }
+            else if (fromSel && fromSel !== 'unknown') { origin = fromSel; }
+            else if (fromOther) { origin = fromOther; }
+            origin = (origin || '').trim();
+            if (origin) { originEl.value = origin; }
+        }
+
+        // Destination: depends on reroute endpoint.
+        if (destEl.dataset.manual !== '1') {
+            var endpoint = (valSelect('a18_reroute_endpoint') || '').trim();
+            var dest = '';
+            if (endpoint === 'nearest_station' || endpoint === 'other_departure_point') {
+                var endSel = valSelect('a18_reroute_arrival_station');
+                var endOther = valInput('a18_reroute_arrival_station_other');
+                if (endSel === 'other') { dest = endOther; }
+                else if (endSel && endSel !== 'unknown') { dest = endSel; }
+                else if (endOther) { dest = endOther; }
+            }
+            dest = (dest || '').trim();
+            if (dest) { destEl.value = dest; }
+        }
+
+        // Update open link immediately.
+        var o = encodeURIComponent((originEl.value || '').trim());
+        var d = encodeURIComponent((destEl.value || '').trim());
+        open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
     }
 
     // Optional: offline station autocomplete for the MAP inputs too (so ticketless works without Google Places).
@@ -1809,6 +1869,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         initStationAutocomplete();
         initMapsStationAutocompleteTrin6();
         mapsInitTrin6(savedMapsTrin6);
+        try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ }
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
@@ -1833,6 +1894,10 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             handleResets(e.target);
             updateReveal();
             s7Update();
+            // Keep MAP helper aligned with station selection where possible.
+            if (e.target.name.indexOf('a18_') === 0 || e.target.name.indexOf('handoff') === 0 || e.target.name.indexOf('stranded_current_station') === 0) {
+                try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ }
+            }
         });
     });
 })();

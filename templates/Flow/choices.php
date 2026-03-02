@@ -386,6 +386,35 @@ try {
             clearFields(['a20_where_ended','a20_arrival_station','a20_arrival_station_other']);
         }
     }
+
+    // If TRIN 6 ends at a station, the most useful MAP start-point is that station (not the original departure).
+    // Only auto-sync if the user hasn't manually edited the MAP origin field.
+    function syncMapsOriginFromResolution(){
+        var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin5"]');
+        var originEl = document.getElementById('mapsOriginTrin5');
+        var destEl = document.getElementById('mapsDestTrin5');
+        var open = document.getElementById('mapsOpenTrin5');
+        if (!cb || !cb.checked || !originEl || !destEl || !open) return;
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        if (originEl.dataset.manual === '1') return;
+
+        var stranded = getVal('is_stranded_trin5');
+        if (stranded !== 'yes') return;
+        var ended = getVal('a20_where_ended');
+        if (!(ended === 'nearest_station' || ended === 'other_departure_point')) return;
+
+        var sel = document.querySelector('select[name="a20_arrival_station"]');
+        var other = document.querySelector('input[name="a20_arrival_station_other"]');
+        if (!sel) return;
+        var st = (sel.value || '').trim();
+        if (st === 'other') st = (other && other.value ? String(other.value).trim() : '');
+        if (!st || st === 'unknown') return;
+
+        originEl.value = st;
+        var o = encodeURIComponent((originEl.value || '').trim());
+        var d = encodeURIComponent((destEl.value || '').trim());
+        open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+    }
     function handleResets(target) {
         var name = target.name || '';
         if (name === 'is_stranded_trin5') {
@@ -537,7 +566,11 @@ try {
         }
 
         cb.addEventListener('change', updatePanel);
-        originEl.addEventListener('input', setOpenLink);
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        originEl.addEventListener('input', function(){
+            originEl.dataset.manual = '1';
+            setOpenLink();
+        });
 
         btn.addEventListener('click', async function(){
             var origin = getOrigin();
@@ -570,6 +603,8 @@ try {
         });
 
         updatePanel();
+        setOpenLink();
+        try { syncMapsOriginFromResolution(); } catch(e) {}
     }
 	    function initStationAutocomplete(){
 	        if (!stationsSearchUrl) return;
@@ -711,12 +746,14 @@ try {
         initStationAutocomplete();
         mapsInit();
         updateResolutionVisibility();
+        try { syncMapsOriginFromResolution(); } catch(e) {}
     });
     document.addEventListener('change', function(e){
         if (!e.target || !e.target.name) return;
         handleResets(e.target);
         updateReveal();
         updateResolutionVisibility();
+        syncMapsOriginFromResolution();
     });
 })();
 </script>

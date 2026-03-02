@@ -223,6 +223,7 @@ class FlowController extends AppController
         $form = (array)$sess->read('flow.form') ?: [];
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
+        $maps = (array)$sess->read('flow.maps') ?: [];
 
         // TRIN 4 prereq: TRIN 3 completed (read-only preview allowed via ?preview=1).
         [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step3_done'], 'journey');
@@ -340,7 +341,7 @@ class FlowController extends AppController
 
         $sess->write('flow.journey', $journey);
         $sess->write('flow.meta', $meta);
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','maps'));
         return null;
     }
 
@@ -4926,8 +4927,10 @@ class FlowController extends AppController
         $form = (array)$session->read('flow.form') ?: [];
 
         $context = (string)($this->request->getData('context') ?? '');
-        if (!in_array($context, ['trin5','trin6'], true)) {
-            $context = 'trin6';
+        // Context is used only for per-step opt-in + storing the last suggestions in session.
+        // Keep legacy contexts (trin5/trin6) for backwards compatibility.
+        if (!in_array($context, ['trin4','trin5','trin6','trin7'], true)) {
+            $context = 'trin7';
         }
 
         $origin = trim((string)($this->request->getData('origin') ?? ''));
@@ -4937,7 +4940,13 @@ class FlowController extends AppController
         // Persist opt-in per step to avoid TRIN 5 "popping" when user only enabled Maps in TRIN 6 (and vice versa).
         // Keep legacy 'maps_opt_in' as read-only fallback for older sessions, but do not write it anymore.
         $legacyOptIn = $this->truthy($this->request->getData('maps_opt_in') ?? null);
-        $optInKey = $context === 'trin5' ? 'maps_opt_in_trin5' : 'maps_opt_in_trin6';
+        $optInKey = match ($context) {
+            'trin4' => 'maps_opt_in_trin4',
+            'trin5' => 'maps_opt_in_trin5', // legacy: choices track-flow
+            'trin6' => 'maps_opt_in_trin6', // legacy: remedies reroute-flow
+            'trin7' => 'maps_opt_in_trin7',
+            default => 'maps_opt_in_trin7',
+        };
         $optIn = $this->truthy($this->request->getData($optInKey) ?? null) || $legacyOptIn;
         if ($optIn) { $form[$optInKey] = '1'; }
         else { unset($form[$optInKey]); }

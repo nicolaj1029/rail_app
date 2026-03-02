@@ -63,6 +63,17 @@ $arrEndOther = $v('a20_arrival_station_other');
 
 $art20StationOff = ($articles['art20_3'] ?? true) === false;
 $isPreview = !empty($flowPreview);
+$maps = $maps ?? [];
+$mapsOptIn = !empty($form['maps_opt_in_trin4']);
+$mapsTrin4 = (is_array($maps) && isset($maps['trin4']) && is_array($maps['trin4'])) ? $maps['trin4'] : null;
+$mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
+
+// MAP defaults: stranded station -> ticket destination.
+$depDefault = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
+$destDefault = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
+$mapsOriginDefault = $scs;
+if ($mapsOriginDefault === 'other') { $mapsOriginDefault = trim((string)$scsOther); }
+if ($mapsOriginDefault === '' || $mapsOriginDefault === 'unknown') { $mapsOriginDefault = $depDefault; }
 ?>
 
 <style>
@@ -150,6 +161,47 @@ $isPreview = !empty($flowPreview);
             <input type="hidden" name="stranded_current_station_other_source" value="<?= h($v('stranded_current_station_other_source')) ?>" />
             <div class="station-suggest" data-for="stranded_current_station_other" style="display:none;"></div>
           </label>
+        </div>
+      </div>
+
+      <div class="card mt12" style="background:#f8f9fb;" data-show-if="a20_station_stranded:yes">
+        <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
+        <div class="small muted mt4">Bruges som hj&aelig;lp til at finde ruter fra din strandings-station til din destination.</div>
+        <input type="hidden" name="maps_opt_in_trin4" value="0" />
+        <label class="mt8"><input type="checkbox" name="maps_opt_in_trin4" value="1" <?= $mapsOptIn ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
+
+        <div id="mapsPanelTrin4" class="mt8 <?= $mapsOptIn ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>">
+          <div class="grid-2">
+            <label class="station-autocomplete">Fra (station)
+              <input type="text" id="mapsOriginTrin4" value="<?= h($mapsOriginDefault) ?>" />
+              <div class="station-suggest" id="mapsOriginSuggestTrin4" style="display:none;"></div>
+              <div class="small muted mt4">Tip: Du kan rette start, hvis du er flyttet til en anden station.</div>
+            </label>
+            <label class="station-autocomplete">Til (destination)
+              <input
+                type="text"
+                id="mapsDestTrin4"
+                value="<?= h($destDefault) ?>"
+                <?= ($destDefault === '') ? '' : 'readonly' ?>
+                placeholder="<?= h($destDefault === '' ? 'Soeg destination' : '') ?>"
+              />
+              <div class="station-suggest" id="mapsDestSuggestTrin4" style="display:none;"></div>
+              <?php if ($destDefault === ''): ?>
+                <div class="small muted mt4">Angiv destination (ticketless/ukendt destination).</div>
+              <?php else: ?>
+                <div class="small muted mt4">Hentes fra billetten (destination).</div>
+              <?php endif; ?>
+            </label>
+          </div>
+          <div class="mt8" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="button" id="mapsFetchTrin4" <?= $mapsConfigured ? '' : 'disabled' ?>>Hent forslag</button>
+            <a class="button" id="mapsOpenTrin4" target="_blank" rel="noopener">Aabn i Google Maps</a>
+            <span class="small muted" id="mapsStatusTrin4"></span>
+          </div>
+          <div id="mapsRoutesTrin4" class="mt8"></div>
+          <?php if (!$mapsConfigured): ?>
+            <div class="small muted mt8">Bemaerk: Google Routes er ikke konfigureret (mangler server API key). "Aabn i Google Maps" virker stadig.</div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -313,6 +365,160 @@ function updateStationResolutionVisibility() {
   setBlockVisible(wrap, shouldShow);
 }
 
+function mapsInitTrin4(initialPayload){
+  var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin4"]');
+  var panel = document.getElementById('mapsPanelTrin4');
+  var originEl = document.getElementById('mapsOriginTrin4');
+  var destEl = document.getElementById('mapsDestTrin4');
+  var btn = document.getElementById('mapsFetchTrin4');
+  var open = document.getElementById('mapsOpenTrin4');
+  var out = document.getElementById('mapsRoutesTrin4');
+  var status = document.getElementById('mapsStatusTrin4');
+  if (!cb || !panel || !originEl || !destEl || !btn || !open || !out) return;
+
+  originEl.dataset.manual = originEl.dataset.manual || '0';
+  destEl.dataset.manual = destEl.dataset.manual || '0';
+
+  function getOrigin(){ return (originEl.value || '').trim(); }
+  function getDest(){ return (destEl.value || '').trim(); }
+  function setOpenLink(){
+    var o = encodeURIComponent(getOrigin());
+    var d = encodeURIComponent(getDest());
+    open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+  }
+  function updatePanel(){
+    panel.classList.toggle('hidden', !cb.checked);
+    panel.hidden = !cb.checked;
+    setOpenLink();
+  }
+  function renderRoutes(payload){
+    out.innerHTML = '';
+    if (!payload || !payload.ok) {
+      var msg = (payload && payload.error) ? String(payload.error) : 'Kunne ikke hente ruter.';
+      if (/HTTP\\s*403/i.test(msg) || /IP address restriction/i.test(msg) || /violates this restriction/i.test(msg)) {
+        msg = 'Google Routes fejler (HTTP 403): Din API key er IP-restricted. Whitelist serverens IP i Google Cloud Console (eller fjern IP restriction), og sikre at Routes API er enabled.';
+      }
+      out.innerHTML = '<div class="small muted">' + msg.replace(/</g,'&lt;') + '</div>';
+      return;
+    }
+    var routes = Array.isArray(payload.routes) ? payload.routes : [];
+    if (!routes.length) {
+      out.innerHTML = '<div class="small muted">Ingen forslag fundet.</div>';
+      return;
+    }
+    function vehicleLabel(v){
+      v = (v || '').toString().toUpperCase();
+      if (v.indexOf('TRAIN') >= 0 || v === 'RAIL') return 'Tog';
+      if (v.indexOf('BUS') >= 0) return 'Bus';
+      if (v.indexOf('SUBWAY') >= 0) return 'Metro';
+      if (v.indexOf('LIGHT_RAIL') >= 0 || v.indexOf('TRAM') >= 0) return 'Letbane';
+      if (v.indexOf('FERRY') >= 0) return 'Faerge';
+      return v || 'Transit';
+    }
+    function hhmm(ts){
+      if (!ts) return '';
+      var m = /T(\\d{2}:\\d{2})/.exec(ts.toString());
+      return m ? m[1] : '';
+    }
+    function segText(s){
+      s = s || {};
+      var mode = vehicleLabel(s.vehicle);
+      var line = (s.line || '').toString().trim();
+      var from = (s.from || '').toString().trim();
+      var to = (s.to || '').toString().trim();
+      var dep = hhmm(s.dep_time);
+      var arr = hhmm(s.arr_time);
+      var head = (mode + (line ? (' ' + line) : '')).trim();
+      var parts = [];
+      if (from || to) parts.push((from || '?') + ' -> ' + (to || '?'));
+      if (dep || arr) parts.push((dep || '') + (arr ? ('-' + arr) : ''));
+      return head + (parts.length ? (': ' + parts.join(' / ')) : '');
+    }
+    routes.slice(0, 6).forEach(function(r){
+      var box = document.createElement('div');
+      box.style.cssText = 'padding:8px;border:1px solid #ddd;border-radius:6px;background:#fff;margin-top:8px;';
+      var title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.textContent = r.summary || '';
+      box.appendChild(title);
+      var segs = Array.isArray(r.segments) ? r.segments : [];
+      if (segs.length) {
+        var ul = document.createElement('ul');
+        ul.className = 'small muted mt4';
+        segs.forEach(function(s){
+          var li = document.createElement('li');
+          li.textContent = segText(s);
+          ul.appendChild(li);
+        });
+        box.appendChild(ul);
+      }
+      out.appendChild(box);
+    });
+  }
+
+  cb.addEventListener('change', updatePanel);
+  originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });
+  destEl.addEventListener('input', function(){ destEl.dataset.manual = '1'; setOpenLink(); });
+
+  btn.addEventListener('click', async function(){
+    var origin = getOrigin();
+    var dest = getDest();
+    setOpenLink();
+    if (!origin || !dest) {
+      if (status) status.textContent = 'Vaelg start og destination foerst.';
+      return;
+    }
+    if (status) status.textContent = 'Henter...';
+    try {
+      var csrf = (document.querySelector('input[name="_csrfToken"]') || {}).value || '';
+      var res = await fetch(panel.getAttribute('data-endpoint'), {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded', ...(csrf ? {'X-CSRF-Token': csrf} : {})},
+        body: new URLSearchParams({
+          context: 'trin4',
+          maps_opt_in_trin4: '1',
+          origin: origin,
+          destination: dest
+        })
+      });
+      var js = await res.json();
+      renderRoutes(js);
+      if (status) status.textContent = (js && js.ok) ? '' : 'Fejl';
+    } catch(e) {
+      if (status) status.textContent = 'Fejl';
+      renderRoutes({ ok:false, error: 'Netvaerksfejl.' });
+    }
+  });
+
+  updatePanel();
+  setOpenLink();
+  try {
+    if (initialPayload && initialPayload.ok && Array.isArray(initialPayload.routes) && initialPayload.routes.length) {
+      renderRoutes(initialPayload);
+    }
+  } catch(e) {}
+}
+
+function syncMapsOriginFromStationTrin4(){
+  var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin4"]');
+  var originEl = document.getElementById('mapsOriginTrin4');
+  var destEl = document.getElementById('mapsDestTrin4');
+  var open = document.getElementById('mapsOpenTrin4');
+  if (!cb || !cb.checked || !originEl || !destEl || !open) return;
+  if ((originEl.dataset.manual || '0') === '1') return;
+
+  var sel = document.querySelector('select[name="stranded_current_station"]');
+  var other = document.querySelector('input[name="stranded_current_station_other"]');
+  if (!sel) return;
+  var v = (sel.value || '').trim();
+  if (v === 'other') v = (other && other.value ? String(other.value).trim() : '');
+  if (!v || v === 'unknown') return;
+  originEl.value = v;
+  var o = encodeURIComponent((originEl.value || '').trim());
+  var d = encodeURIComponent((destEl.value || '').trim());
+  open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+}
+
 function initStationAutocomplete(){
   var stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
   var stationCountryDefault = <?= json_encode((string)$stationCountryDefault, JSON_UNESCAPED_SLASHES) ?>;
@@ -441,10 +647,15 @@ document.addEventListener('change', function(e) {
   if (!e.target || !e.target.name) return;
   updateReveal();
   updateStationResolutionVisibility();
+  if (e.target.name === 'stranded_current_station' || e.target.name === 'stranded_current_station_other') {
+    syncMapsOriginFromStationTrin4();
+  }
 });
 document.addEventListener('DOMContentLoaded', function(){
   updateReveal();
   initStationAutocomplete();
   updateStationResolutionVisibility();
+  mapsInitTrin4(<?= json_encode($mapsTrin4, JSON_UNESCAPED_SLASHES) ?>);
+  syncMapsOriginFromStationTrin4();
 });
 </script>
