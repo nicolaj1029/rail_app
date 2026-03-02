@@ -238,7 +238,24 @@ class FlowController extends AppController
 
         if ($this->request->is('post')) {
             $data = (array)$this->request->getData();
-            $form = array_merge($form, $data);
+            // IMPORTANT: Do not overwrite previously saved session values with empty strings.
+            // This step has conditional UI blocks; hidden/unselected <select> fields will POST "" and would otherwise
+            // reset the session value on every submit.
+            foreach ($data as $k => $v) {
+                if (!is_string($k) || $k === '' || $k[0] === '_') { continue; } // ignore framework/meta fields
+                if ($k === 'a20_3_self_paid_receipt') { continue; } // handled via UploadedFile below
+
+                if (is_array($v)) {
+                    // Keep arrays as-is (rare in this step), but avoid accidentally persisting huge/empty arrays.
+                    if ($v !== []) { $form[$k] = $v; }
+                    continue;
+                }
+
+                // Scalars: skip empty string (but keep "0", "no", etc.)
+                $sv = is_string($v) ? trim($v) : (string)$v;
+                if ($sv === '') { continue; }
+                $form[$k] = $sv;
+            }
 
             // Keep TRIN 6's "is_stranded_trin5" independent by using a separate flag here.
             $a20StationStranded = strtolower(trim((string)($data['a20_station_stranded'] ?? ($form['a20_station_stranded'] ?? 'no'))));
