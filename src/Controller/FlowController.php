@@ -376,6 +376,7 @@ class FlowController extends AppController
         [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step4_done'], 'station');
         if ($resp) { return $resp; }
 
+        $didPost = false;
         if ($this->request->is('post')) {
             $data = (array)$this->request->getData();
             $form = array_merge($form, $data);
@@ -473,7 +474,7 @@ class FlowController extends AppController
             $sess->write('flow.incident', $incident);
             $sess->write('flow.meta', $meta);
             $sess->write('flow.flags', $flags);
-            return $this->redirect(['action' => 'choices']);
+            $didPost = true;
         }
 
         // Fallbacks to improve scope inference when extractor missed stations
@@ -553,6 +554,56 @@ class FlowController extends AppController
                 'country' => $countryCtx,'scope' => $scopeCtx,'operator' => $opCtx,'product' => $prodCtx,'delayMin' => $delayCtx,'profile' => $profile,
             ]);
         } catch (\Throwable $e) { $formDecision = ['form'=>'eu_standard_claim','reason'=>'Fallback','notes'=>['err:'.$e->getMessage()]]; }
+
+        // ------------------------------------------------------
+        // Gate flags for downstream steps (Trin 6-8)
+        // ------------------------------------------------------
+        // These live in flow.flags so the stepper can mark steps as locked (preview-only)
+        // when Art. 18/20 is not active yet.
+        $articles = (array)($profile['articles'] ?? []);
+        $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
+
+        $reasonCancellation = (!empty($incident['main']) && $incident['main'] === 'cancellation');
+        $reasonMissed = !empty($incident['missed']);
+
+        // Mirrors FlowController::remedies() Art. 18 activation logic (split-flow variant)
+        $gateArt18 = $reasonCancellation || $reasonMissed;
+        if (!$gateArt18 && ((string)($form['art18_expected_delay_60'] ?? '') === 'yes')) { $gateArt18 = true; }
+        if (!$gateArt18 && (($pmrBikeGate['pmr_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt18 = true; }
+
+        // Mirrors FlowController::assistance() Art. 20 activation logic (split-flow variant)
+        $gateArt20 = $reasonCancellation;
+        if (!$gateArt20 && ((string)($form['art20_expected_delay_60'] ?? '') === 'yes')) { $gateArt20 = true; }
+        if (!$gateArt20 && (($pmrBikeGate['pmr_full_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt20 = true; }
+
+        $gateArt20_2c = $gateArt20 && !$art20TrackOff;
+
+        $flags['gate_art18'] = $gateArt18 ? '1' : '';
+        $flags['gate_art20'] = $gateArt20 ? '1' : '';
+        $flags['gate_art20_2c'] = $gateArt20_2c ? '1' : '';
+        $sess->write('flow.flags', $flags);
+
+        // After POST: decide where to send the user next.
+        // If gates are not met yet, keep the user in TRIN 5 (national fallback / waiting for >=60).
+        if ($didPost) {
+            if ($gateArt20_2c) {
+                return $this->redirect(['action' => 'choices']);
+            }
+
+            // If TRIN 6 isn't applicable, mark it done so TRIN 7 can be previewed without a hard stop.
+            // (TRIN 7 is still gated by gate_art18 in the stepper/controller prereqs.)
+            if (((string)($flags['step6_done'] ?? '')) !== '1') {
+                $flags['step6_done'] = '1';
+                $sess->write('flow.flags', $flags);
+            }
+
+            if ($gateArt18) {
+                return $this->redirect(['action' => 'remedies']);
+            }
+
+            // Stay on gating step (shows national fallback UI)
+            return $this->redirect(['action' => 'incident']);
+        }
 
         $sess->write('flow.journey', $journey);
         $sess->write('flow.meta', $meta);
@@ -4749,8 +4800,8 @@ class FlowController extends AppController
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
 
-        // TRIN 6 prereq: TRIN 5 completed (read-only preview allowed via ?preview=1).
-        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step5_done'], 'incident');
+        // TRIN 6 prereq: TRIN 5 completed + Art. 20 gate for track-stranding (read-only preview via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step5_done','gate_art20_2c'], 'incident');
         if ($resp) { return $resp; }
 
         $main = (string)($incident['main'] ?? '');
@@ -5046,6 +5097,10 @@ class FlowController extends AppController
             $session->write('flow.flags', $flags);
             return $this->redirect(['action' => 'assistance']);
         }
+
+        // TRIN 7 prereq: TRIN 6 completed + Art. 18 gate (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step6_done','gate_art18'], 'choices');
+        if ($resp) { return $resp; }
 
         if ($this->request->is('post')) {
             foreach ([
@@ -5461,8 +5516,8 @@ class FlowController extends AppController
         $flags = (array)$session->read('flow.flags') ?: [];
         $incident = (array)$session->read('flow.incident') ?: [];
 
-        // TRIN 8 prereq: TRIN 7 completed (read-only preview allowed via ?preview=1).
-        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step7_done'], 'remedies');
+        // TRIN 8 prereq: TRIN 7 completed + Art. 20 gate (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step7_done','gate_art20'], 'remedies');
         if ($resp) { return $resp; }
 
         if ($this->request->is('post')) {

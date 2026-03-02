@@ -25,9 +25,11 @@ final class FlowStepsService
         ['id' => 'journey',     'num' => 3,  'title' => 'Rejseplan + Kontrakt (Art. 12) + PMR/Cykel',    'action' => 'journey',     'doneFlag' => 'step3_done',  'prereqFlags' => ['step2_done']],
         ['id' => 'station',     'num' => 4,  'title' => 'Strandet paa station? (Art. 20(3))',            'action' => 'station',     'doneFlag' => 'step4_done',  'prereqFlags' => ['step3_done']],
         ['id' => 'incident',    'num' => 5,  'title' => 'Haendelse + Gating (Art. 18/20 + national)',    'action' => 'incident',    'doneFlag' => 'step5_done',  'prereqFlags' => ['step4_done']],
-        ['id' => 'choices',     'num' => 6,  'title' => 'Strandet paa sporet? + Hvor endte du (Art. 20(2)(c))', 'action' => 'choices', 'doneFlag' => 'step6_done',  'prereqFlags' => ['step5_done']],
-        ['id' => 'remedies',    'num' => 7,  'title' => 'Refusion / Omlaegning (Art. 18)',               'action' => 'remedies',    'doneFlag' => 'step7_done',  'prereqFlags' => ['step6_done']],
-        ['id' => 'assistance',  'num' => 8,  'title' => 'Udgifter: Mad, Hotel (Art. 20)',                'action' => 'assistance',  'doneFlag' => 'step8_done',  'prereqFlags' => ['step7_done']],
+        // Gate flags are written by TRIN 5 (incident) to prevent users from editing downstream steps
+        // when Art. 18/20 is not active. Locked steps can still be previewed via ?preview=1.
+        ['id' => 'choices',     'num' => 6,  'title' => 'Strandet paa sporet? + Hvor endte du (Art. 20(2)(c))', 'action' => 'choices', 'doneFlag' => 'step6_done',  'prereqFlags' => ['step5_done', 'gate_art20_2c']],
+        ['id' => 'remedies',    'num' => 7,  'title' => 'Refusion / Omlaegning (Art. 18)',               'action' => 'remedies',    'doneFlag' => 'step7_done',  'prereqFlags' => ['step6_done', 'gate_art18']],
+        ['id' => 'assistance',  'num' => 8,  'title' => 'Udgifter: Mad, Hotel (Art. 20)',                'action' => 'assistance',  'doneFlag' => 'step8_done',  'prereqFlags' => ['step7_done', 'gate_art20']],
         ['id' => 'downgrade',   'num' => 9,  'title' => 'Nedgradering: Klasse/Reservation (Annex II)',    'action' => 'downgrade',   'doneFlag' => 'step9_done',  'prereqFlags' => ['step8_done']],
         ['id' => 'compensation','num' => 10, 'title' => 'Beregning & Resultat (Art. 19)',                'action' => 'compensation','doneFlag' => 'step10_done', 'prereqFlags' => ['step9_done']],
         ['id' => 'applicant',   'num' => 11, 'title' => 'Ansoeger & Udbetaling',                          'action' => 'applicant',   'doneFlag' => 'step11_done', 'prereqFlags' => ['step10_done']],

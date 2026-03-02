@@ -50,7 +50,7 @@ class FlowControllerTest extends TestCase
 
         // TRIN 6 has strict gating: requires TRIN 3-5 to be completed.
         $this->session([
-            'flow.flags' => ['step3_done' => '1', 'step4_done' => '1', 'step5_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.flags' => ['step3_done' => '1', 'step4_done' => '1', 'step5_done' => '1', 'gate_art20_2c' => '1', 'travel_state' => 'ongoing'],
             'flow.incident' => ['main' => 'cancellation', 'missed' => '', 'missed_source' => 'incident_form'],
         ]);
 
@@ -91,7 +91,7 @@ class FlowControllerTest extends TestCase
     {
         // Seed session so Art. 20 is active (cancellation) and hotel_offered = no
         $this->session([
-            'flow.flags' => ['step7_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.flags' => ['step7_done' => '1', 'gate_art20' => '1', 'travel_state' => 'ongoing'],
             'flow.incident' => ['main' => 'cancellation'],
             'flow.form' => [
                 'hotel_offered' => 'no',
