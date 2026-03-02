@@ -176,12 +176,19 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 
   <!-- Form & exemptions (moved from TRIN 9) -->
   <div class="card mt12">
-    <div class="widget-title"><span class="step-badge">3</span><span>Form og undtagelser</span></div>
+    <div class="widget-title">
+      <span class="fm-badge" title="Force majeure / ekstraordinaere forhold">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="#8a6d3b" d="M7 18a5 5 0 0 1 0-10a6 6 0 0 1 11.3 1.7A4.5 4.5 0 0 1 18.5 18H7z"/>
+          <path fill="#8a6d3b" d="M12.2 21l2.7-5.2h-2.1l1.5-4.3l-4.6 6.6h2.2L9.6 21z"/>
+        </svg>
+      </span>
+      <span>Force majeure</span>
+    </div>
     <div class="small mt4">Udbetaling sker som udgangspunkt kontant. Vouchers accepteres ikke i denne loesning.</div>
     <input type="hidden" name="voucherAccepted" value="no" />
 
     <?php $exc = (string)($form['operatorExceptionalCircumstances'] ?? ''); ?>
-    <input type="hidden" id="fmTouched" name="operatorExceptionalCircumstances_touched" value="<?= $exc !== '' ? '1' : '0' ?>" />
     <div class="mt8">
       <span class="fm-badge" title="Force majeure / ekstraordinaere forhold">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -310,10 +317,6 @@ function getVal(name) {
 }
 document.addEventListener('change', function(e) {
   if (!e.target || !e.target.name) return;
-  if (e.target.name === 'operatorExceptionalCircumstances' || e.target.name === 'operatorExceptionalType') {
-    var fmTouchedEl = document.getElementById('fmTouched');
-    if (fmTouchedEl) fmTouchedEl.value = '1';
-  }
   updateReveal();
   updateStep4State();
 });
@@ -360,8 +363,6 @@ function updateStep4State(){
   var missed = getRadioValue('incident_missed');
   var missed60 = getRadioValue('missed_expected_delay_60');
   var missedAnswered = (missed === 'yes' || missed === 'no');
-  var fmTouchedEl = document.getElementById('fmTouched');
-  var fmTouched = fmTouchedEl ? String(fmTouchedEl.value || '') : '';
 
   // EU gate can be satisfied either by the main incident (delay>=60 or cancellation),
   // or (only when EU gate is not already satisfied) by missed-connection implying >=60 to final destination.
@@ -380,8 +381,7 @@ function updateStep4State(){
   // National fallback is shown when EU gate is not met. Cutoff is optional (we still show the card
   // to explain why we can't determine national thresholds yet).
   // UX: "last chance" – do not show national fallback until the user has answered the missed-connection question.
-  // Additionally: require that the user has interacted with the force majeure section.
-  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered && (fmTouched === '1');
+  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered;
   showById('nationalFallbackWrap', showNat);
   // If missed>=60 is required but unanswered, keep the fallback visible (so layout stays stable),
   // but block the minutes input until the user answers the missed>=60 question.
