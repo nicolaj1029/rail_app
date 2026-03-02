@@ -147,56 +147,6 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
     </div>
   </div>
 
-  <!-- National fallback (shown only when EU 60-min gate is NOT met; cutoff is optional) -->
-  <div id="nationalFallbackWrap" class="card mt12 hidden" style="border-color:#ffe8cc;background:#fff8e6">
-    <strong>National ordning (fallback)<?= (!empty($nationalPolicy['name']) ? (': ' . h((string)$nationalPolicy['name'])) : '') ?></strong>
-    <div class="small mt4">
-      EU: Art. 18/20 udloeses typisk ved <strong>&ge;60 min</strong> forsinkelse (eller aflysning).
-    </div>
-    <div class="small mt4">
-      National ordning:
-      <?php if ($nationalCutoff !== null && $nationalCutoff > 0 && $nationalCutoff < 60): ?>
-        kompensation fra <strong><?= (int)$nationalCutoff ?> min</strong><?= ($nationalThr50 !== null && $nationalThr50 > 0) ? (' (naeste band: ' . (int)$nationalThr50 . ' min)') : '' ?>.
-      <?php else: ?>
-        <span class="muted">ukendt (kraever land + scope).</span>
-      <?php endif; ?>
-    </div>
-    <?php if ($compBlockedByFM): ?>
-      <div class="small mt8" style="background:#fff;border:1px solid #f5c2c7;border-radius:6px;padding:8px;">
-        <strong>Bemaerk:</strong> Du har angivet ekstraordinaere forhold (Art. 19(10)). Kompensation kan vaere udelukket (EU + national),
-        men Art. 18/20 kan stadig blive relevant ved <strong>&ge;60 min</strong> eller aflysning.
-      </div>
-    <?php endif; ?>
-
-    <div class="mt8">
-      <label class="small">Hvor mange minutter var/er du forsinket?
-        <input id="nationalDelayMinutes" type="number" name="national_delay_minutes" min="0" step="1" value="<?= h($v('national_delay_minutes')) ?>" placeholder="minutter" />
-      </label>
-      <input type="hidden" id="nationalDelayReportedAt" name="national_delay_reported_at" value="<?= h($v('national_delay_reported_at')) ?>" />
-      <div class="small muted mt4">Denne oplysning bruges kun til national fallback - den aktiverer ikke Art. 18/20.</div>
-    </div>
-
-    <div id="euReminderWrap" class="mt12 hidden">
-      <div class="small"><strong>Reminder (igangvaerende rejse)</strong></div>
-      <div class="small mt4">
-        Hvis forsinkelsen stiger til <strong>60 min</strong>, kan EU-rettigheder (Art. 18/20) blive relevante.
-        <span id="euReminderInfo"></span>
-      </div>
-      <div class="mt8" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button type="button" class="button" id="startEuReminder" style="background:#eee;color:#333;">Start reminder</button>
-        <span class="small muted" id="euReminderStatus"></span>
-      </div>
-      <div id="euReminderPrompt" class="card mt8 hidden" style="border-color:#cfe0ff;background:#f1f8ff">
-        <div class="small"><strong>Reminder</strong></div>
-        <div class="small mt4">Du kan nu vaere >=60 min forsinket. Er du det?</div>
-        <div class="mt8" style="display:flex;gap:8px;align-items:center;">
-          <button type="button" class="button" id="euReminderYes">Ja</button>
-          <button type="button" class="button" id="euReminderNo" style="background:#eee;color:#333;">Nej</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Mistet forbindelse -->
   <div class="card mt12">
     <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
@@ -231,6 +181,7 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
     <input type="hidden" name="voucherAccepted" value="no" />
 
     <?php $exc = (string)($form['operatorExceptionalCircumstances'] ?? ''); ?>
+    <input type="hidden" id="fmTouched" name="operatorExceptionalCircumstances_touched" value="<?= $exc !== '' ? '1' : '0' ?>" />
     <div class="mt8">
       <span class="fm-badge" title="Force majeure / ekstraordinaere forhold">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -261,6 +212,61 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 
     <div class="mt8">
       <label><input type="checkbox" name="minThresholdApplies" value="1" <?= !empty($form['minThresholdApplies']) ? 'checked' : '' ?> /> Anvend min. taerskel <= 4 EUR (Art. 19(8))</label>
+    </div>
+  </div>
+
+  <!-- National fallback (shown only when EU 60-min gate is NOT met; displayed after "last chance" + force majeure) -->
+  <div id="nationalFallbackWrap" class="card mt12 hidden" style="border-color:#ffe8cc;background:#fff8e6">
+    <strong>National ordning (fallback)<?= (!empty($nationalPolicy['name']) ? (': ' . h((string)$nationalPolicy['name'])) : '') ?></strong>
+    <div class="small mt4">
+      EU: Art. 18/20 udloeses typisk ved <strong>&ge;60 min</strong> forsinkelse (eller aflysning).
+    </div>
+    <div class="small mt4">
+      National ordning:
+      <?php if ($nationalCutoff !== null && $nationalCutoff > 0 && $nationalCutoff < 60): ?>
+        kompensation fra <strong><?= (int)$nationalCutoff ?> min</strong><?= ($nationalThr50 !== null && $nationalThr50 > 0) ? (' (naeste band: ' . (int)$nationalThr50 . ' min)') : '' ?>.
+      <?php else: ?>
+        <span class="muted">ukendt (kraever land + scope).</span>
+      <?php endif; ?>
+    </div>
+
+    <div id="nationalFallbackBlockedHint" class="small mt8 hidden" style="background:#fff;border:1px solid #cfe0ff;border-radius:6px;padding:8px;">
+      <strong>Foer vi gaar til national ordning:</strong> Svar paa spoergsmaalet ovenfor om det missede skift giver <strong>&ge;60 min</strong> til din endelige destination.
+    </div>
+
+    <?php if ($compBlockedByFM): ?>
+      <div class="small mt8" style="background:#fff;border:1px solid #f5c2c7;border-radius:6px;padding:8px;">
+        <strong>Bemaerk:</strong> Du har angivet ekstraordinaere forhold (Art. 19(10)). Kompensation kan vaere udelukket (EU + national),
+        men Art. 18/20 kan stadig blive relevant ved <strong>&ge;60 min</strong> eller aflysning.
+      </div>
+    <?php endif; ?>
+
+    <div id="nationalFallbackInputs" class="mt8">
+      <label class="small">Hvor mange minutter var/er du forsinket?
+        <input id="nationalDelayMinutes" type="number" name="national_delay_minutes" min="0" step="1" value="<?= h($v('national_delay_minutes')) ?>" placeholder="minutter" />
+      </label>
+      <input type="hidden" id="nationalDelayReportedAt" name="national_delay_reported_at" value="<?= h($v('national_delay_reported_at')) ?>" />
+      <div class="small muted mt4">Denne oplysning bruges kun til national fallback - den aktiverer ikke Art. 18/20.</div>
+    </div>
+
+    <div id="euReminderWrap" class="mt12 hidden">
+      <div class="small"><strong>Reminder (igangvaerende rejse)</strong></div>
+      <div class="small mt4">
+        Hvis forsinkelsen stiger til <strong>60 min</strong>, kan EU-rettigheder (Art. 18/20) blive relevante.
+        <span id="euReminderInfo"></span>
+      </div>
+      <div class="mt8" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button type="button" class="button" id="startEuReminder" style="background:#eee;color:#333;">Start reminder</button>
+        <span class="small muted" id="euReminderStatus"></span>
+      </div>
+      <div id="euReminderPrompt" class="card mt8 hidden" style="border-color:#cfe0ff;background:#f1f8ff">
+        <div class="small"><strong>Reminder</strong></div>
+        <div class="small mt4">Du kan nu vaere >=60 min forsinket. Er du det?</div>
+        <div class="mt8" style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="button" id="euReminderYes">Ja</button>
+          <button type="button" class="button" id="euReminderNo" style="background:#eee;color:#333;">Nej</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="mt12" style="display:flex; gap:8px; align-items:center;">
@@ -304,6 +310,10 @@ function getVal(name) {
 }
 document.addEventListener('change', function(e) {
   if (!e.target || !e.target.name) return;
+  if (e.target.name === 'operatorExceptionalCircumstances' || e.target.name === 'operatorExceptionalType') {
+    var fmTouchedEl = document.getElementById('fmTouched');
+    if (fmTouchedEl) fmTouchedEl.value = '1';
+  }
   updateReveal();
   updateStep4State();
 });
@@ -350,6 +360,8 @@ function updateStep4State(){
   var missed = getRadioValue('incident_missed');
   var missed60 = getRadioValue('missed_expected_delay_60');
   var missedAnswered = (missed === 'yes' || missed === 'no');
+  var fmTouchedEl = document.getElementById('fmTouched');
+  var fmTouched = fmTouchedEl ? String(fmTouchedEl.value || '') : '';
 
   // EU gate can be satisfied either by the main incident (delay>=60 or cancellation),
   // or (only when EU gate is not already satisfied) by missed-connection implying >=60 to final destination.
@@ -368,16 +380,22 @@ function updateStep4State(){
   // National fallback is shown when EU gate is not met. Cutoff is optional (we still show the card
   // to explain why we can't determine national thresholds yet).
   // UX: "last chance" – do not show national fallback until the user has answered the missed-connection question.
-  // If missed=yes and the missed>=60 question is visible, require an answer to that too before showing fallback.
-  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered;
-  if (showNat && showMissed60 && missed60 === '') { showNat = false; }
+  // Additionally: require that the user has interacted with the force majeure section.
+  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered && (fmTouched === '1');
   showById('nationalFallbackWrap', showNat);
+  // If missed>=60 is required but unanswered, keep the fallback visible (so layout stays stable),
+  // but block the minutes input until the user answers the missed>=60 question.
+  var natBlocked = showNat && showMissed60 && missed60 === '';
+  showById('nationalFallbackBlockedHint', natBlocked);
+  var natInputs = document.getElementById('nationalFallbackInputs');
+  if (natInputs) { natInputs.classList.toggle('disabled-block', natBlocked); }
+  var minsField = document.getElementById('nationalDelayMinutes');
+  if (minsField) { minsField.disabled = !!natBlocked; }
 
   // Reminder UI: only useful in ongoing journeys when national fallback is visible.
-  var minsField = document.getElementById('nationalDelayMinutes');
   var mins = minsField ? parseInt(String(minsField.value || '').trim(), 10) : NaN;
   // Also show reminder when compensation is blocked by force majeure (Art. 19(10)) and EU gate isn't met yet.
-  var canRemind = euFlowSupported && isOngoing && showNat && !isNaN(mins) && mins > 0 && mins < 60;
+  var canRemind = euFlowSupported && isOngoing && showNat && !natBlocked && !isNaN(mins) && mins > 0 && mins < 60;
   if (!canRemind && euFlowSupported && isOngoing && compBlockedByFM && !euGate && missedAnswered && !isNaN(mins) && mins > 0 && mins < 60) {
     canRemind = true;
   }
