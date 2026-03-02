@@ -177,7 +177,7 @@ if ($mapsOriginDefault === '' || $mapsOriginDefault === 'unknown') { $mapsOrigin
               <div class="station-suggest" id="mapsOriginSuggestTrin4" style="display:none;"></div>
               <div class="small muted mt4">Tip: Du kan rette start, hvis du er flyttet til en anden station.</div>
             </label>
-            <label class="station-autocomplete">Til (destination)
+          <label class="station-autocomplete">Til (destination)
               <input
                 type="text"
                 id="mapsDestTrin4"
@@ -187,9 +187,9 @@ if ($mapsOriginDefault === '' || $mapsOriginDefault === 'unknown') { $mapsOrigin
               />
               <div class="station-suggest" id="mapsDestSuggestTrin4" style="display:none;"></div>
               <?php if ($destDefault === ''): ?>
-                <div class="small muted mt4">Angiv destination (ticketless/ukendt destination).</div>
+                <div class="small muted mt4" id="mapsDestHintTrin4">Angiv destination (ticketless/ukendt destination).</div>
               <?php else: ?>
-                <div class="small muted mt4">Hentes fra billetten (destination).</div>
+                <div class="small muted mt4" id="mapsDestHintTrin4">Hentes fra billetten (destination).</div>
               <?php endif; ?>
             </label>
           </div>
@@ -370,6 +370,7 @@ function mapsInitTrin4(initialPayload){
   var panel = document.getElementById('mapsPanelTrin4');
   var originEl = document.getElementById('mapsOriginTrin4');
   var destEl = document.getElementById('mapsDestTrin4');
+  var destHint = document.getElementById('mapsDestHintTrin4');
   var btn = document.getElementById('mapsFetchTrin4');
   var open = document.getElementById('mapsOpenTrin4');
   var out = document.getElementById('mapsRoutesTrin4');
@@ -378,6 +379,8 @@ function mapsInitTrin4(initialPayload){
 
   originEl.dataset.manual = originEl.dataset.manual || '0';
   destEl.dataset.manual = destEl.dataset.manual || '0';
+  // Remember the ticket destination (rendered by PHP) as a stable fallback.
+  destEl.dataset.ticket = (destEl.value || '').trim();
 
   function getOrigin(){ return (originEl.value || '').trim(); }
   function getDest(){ return (destEl.value || '').trim(); }
@@ -457,9 +460,12 @@ function mapsInitTrin4(initialPayload){
   }
 
   cb.addEventListener('change', function(){
-    // When Maps is enabled after selecting a stranded station, sync origin immediately.
-    if (cb.checked) { try { syncMapsOriginFromStationTrin4(); } catch(e) {} }
     updatePanel();
+    // When Maps is enabled after selecting a stranded station/endpoint, sync immediately.
+    if (cb.checked) {
+      try { syncMapsOriginFromStationTrin4(); } catch(e) {}
+      try { syncMapsDestFromEndedTrin4(); } catch(e) {}
+    }
   });
   originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });
   destEl.addEventListener('input', function(){ destEl.dataset.manual = '1'; setOpenLink(); });
@@ -518,6 +524,45 @@ function syncMapsOriginFromStationTrin4(){
   if (v === 'other') v = (other && other.value ? String(other.value).trim() : '');
   if (!v || v === 'unknown') return;
   originEl.value = v;
+  var o = encodeURIComponent((originEl.value || '').trim());
+  var d = encodeURIComponent((destEl.value || '').trim());
+  open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+}
+
+function syncMapsDestFromEndedTrin4(){
+  var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin4"]');
+  var originEl = document.getElementById('mapsOriginTrin4');
+  var destEl = document.getElementById('mapsDestTrin4');
+  var open = document.getElementById('mapsOpenTrin4');
+  var hint = document.getElementById('mapsDestHintTrin4');
+  if (!cb || !cb.checked || !originEl || !destEl || !open) return;
+  destEl.dataset.manual = destEl.dataset.manual || '0';
+  if ((destEl.dataset.manual || '0') === '1') return;
+
+  var endedSel = document.querySelector('select[name="a20_where_ended"]');
+  var ended = endedSel ? (endedSel.value || '') : '';
+  var stSel = document.querySelector('select[name="a20_arrival_station"]');
+  var stOther = document.querySelector('input[name="a20_arrival_station_other"]');
+
+  var dest = '';
+  if (ended === 'nearest_station' || ended === 'other_departure_point') {
+    if (stSel) {
+      dest = (stSel.value || '').trim();
+      if (dest === 'other') { dest = (stOther && stOther.value ? String(stOther.value).trim() : ''); }
+      if (dest === 'unknown') { dest = ''; }
+    }
+  }
+  if (!dest) { dest = (destEl.dataset.ticket || '').trim(); }
+  if (dest) { destEl.value = dest; }
+
+  if (hint) {
+    var ticket = (destEl.dataset.ticket || '').trim();
+    var usingEnded = (ended === 'nearest_station' || ended === 'other_departure_point') && dest !== '' && dest !== ticket;
+    if (usingEnded) { hint.textContent = 'Bruger “Hvor endte du?” som destination (station).'; }
+    else if (ticket === '') { hint.textContent = 'Angiv destination (ticketless/ukendt destination).'; }
+    else { hint.textContent = 'Hentes fra billetten (destination).'; }
+  }
+
   var o = encodeURIComponent((originEl.value || '').trim());
   var d = encodeURIComponent((destEl.value || '').trim());
   open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
@@ -654,6 +699,9 @@ document.addEventListener('change', function(e) {
   if (e.target.name === 'stranded_current_station' || e.target.name === 'stranded_current_station_other') {
     syncMapsOriginFromStationTrin4();
   }
+  if (e.target.name === 'a20_where_ended' || e.target.name === 'a20_arrival_station' || e.target.name === 'a20_arrival_station_other') {
+    syncMapsDestFromEndedTrin4();
+  }
 });
 document.addEventListener('DOMContentLoaded', function(){
   updateReveal();
@@ -661,5 +709,6 @@ document.addEventListener('DOMContentLoaded', function(){
   updateStationResolutionVisibility();
   mapsInitTrin4(<?= json_encode($mapsTrin4, JSON_UNESCAPED_SLASHES) ?>);
   syncMapsOriginFromStationTrin4();
+  syncMapsDestFromEndedTrin4();
 });
 </script>
