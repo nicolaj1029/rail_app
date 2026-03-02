@@ -213,11 +213,11 @@ try {
 
         <?php
             // IMPORTANT: Only ask follow-up questions when the user explicitly answered "Ja" to being stranded on track.
-            // Otherwise `stranded_location=track` remains truthy (hidden input), and reveal logic would wrongly show the sub-flow.
+            // We do NOT rely on posting `stranded_location` from this step (controller derives it on submit).
             $showTrackFlow = ($showTrack && $isStrandedTrin5 === 'yes');
         ?>
         <div class="<?= $showTrackFlow ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
-            <div class="mt4" data-show-if="stranded_location:track">
+            <div class="mt4">
                 <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
                 <?php $bt = $v('blocked_train_alt_transport'); ?>
                 <label class="ml8"><input type="radio" name="blocked_train_alt_transport" value="yes" <?= $bt==='yes'?'checked':'' ?> /> Ja</label>
