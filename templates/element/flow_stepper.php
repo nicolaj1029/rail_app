@@ -7,12 +7,14 @@ $flowSteps = $flowSteps ?? [];
 $flowCurrentAction = (string)($flowCurrentAction ?? '');
 $iconOf = static function (string $state): string {
     return match ($state) {
-        'completed' => '✓',
-        'current', 'current_done' => '▶',
-        'locked' => '🔒',
-        default => '⚠',
+        // Use unicode escapes to avoid mojibake when files are saved as ANSI/CP1252.
+        'completed' => "\u{2713}",               // ?
+        'current', 'current_done' => "\u{25B6}", // ?
+        'locked' => "\u{1F512}",                 // ??
+        default => "\u{26A0}",                  // ?
     };
 };
+
 $classOf = static function (string $state): string {
     return match ($state) {
         'completed' => 'flow-step-completed',

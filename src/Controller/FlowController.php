@@ -6645,16 +6645,24 @@ class FlowController extends AppController
     {
         $session = $this->request->getSession();
         $form = (array)$session->read('flow.form') ?: [];
+        $flags = (array)$session->read('flow.flags') ?: [];
+
+        // TRIN 11 prereq: TRIN 10 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step10_done'], 'compensation');
+        if ($resp) { return $resp; }
+
         if ($this->request->is('post')) {
             $keys = ['firstName','lastName','address_street','address_no','address_country','address_postalCode','address_city','contact_email','contact_phone','payoutPreference','iban','bic','accountHolderName','otherPaymentUsed'];
             foreach ($keys as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
             }
+            $flags['step11_done'] = '1';
             $session->write('flow.form', $form);
+            $session->write('flow.flags', $flags);
             return $this->redirect(['action' => 'consent']);
         }
-        $this->set(compact('form'));
+        $this->set(compact('form','flags'));
         return null;
     }
 
@@ -6665,16 +6673,24 @@ class FlowController extends AppController
     {
         $session = $this->request->getSession();
         $form = (array)$session->read('flow.form') ?: [];
+        $flags = (array)$session->read('flow.flags') ?: [];
+
+        // TRIN 12 prereq: TRIN 11 completed (read-only preview allowed via ?preview=1).
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step11_done'], 'applicant');
+        if ($resp) { return $resp; }
+
         if ($this->request->is('post')) {
             foreach (['gdprConsent','additionalInfo'] as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
             }
+            $flags['step12_done'] = '1';
             $session->write('flow.form', $form);
+            $session->write('flow.flags', $flags);
             return $this->redirect(['action' => 'summary']);
         }
         $gdpr_ok = isset($form['gdprConsent']) ? (bool)$this->truthy($form['gdprConsent']) : false;
-        $this->set(compact('form','gdpr_ok'));
+        $this->set(compact('form','gdpr_ok','flags'));
         return null;
     }
 
