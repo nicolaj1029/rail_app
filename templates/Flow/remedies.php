@@ -10,6 +10,9 @@ $art18Blocked = $art18Blocked ?? false;
 $maps = $maps ?? [];
 $mapsOptIn = !empty($form['maps_opt_in_trin6']);
 $mapsTrin6 = (is_array($maps) && isset($maps['trin6']) && is_array($maps['trin6'])) ? $maps['trin6'] : null;
+$mapsOptInRefund = !empty($form['maps_opt_in_trin7']);
+$mapsTrin7 = (is_array($maps) && isset($maps['trin7']) && is_array($maps['trin7'])) ? $maps['trin7'] : null;
+$mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
 $ticketMode = (string)($form['ticket_upload_mode'] ?? '');
 $hasTickets = !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']) || !empty($meta['_ticket_files']);
 $isTicketless = ($ticketMode === 'ticketless' && !$hasTickets);
@@ -359,6 +362,61 @@ $preview = round($tp * $rate * $share, 2);
                 <?php endif; ?>
             </div>
 
+            <?php
+                // MAP helper for refund: route from current station -> return-to station.
+                $mapsConfiguredRefund = $mapsConfigured;
+                $mapOriginRefund = '';
+                if ($fromSel === 'other') { $mapOriginRefund = trim((string)$fromOther); }
+                elseif ($fromSel !== '' && $fromSel !== 'unknown') { $mapOriginRefund = trim((string)$fromSel); }
+                elseif ($fromOther !== '' && $fromOther !== 'unknown') { $mapOriginRefund = trim((string)$fromOther); }
+                if ($mapOriginRefund === '' && $handoff !== '' && $handoff !== 'unknown') { $mapOriginRefund = $handoff; }
+                if ($mapOriginRefund === '') { $mapOriginRefund = $depDefault0; }
+
+                $mapDestRefund = '';
+                if ($retSel === 'other') { $mapDestRefund = trim((string)$retOther); }
+                elseif ($retSel !== '' && $retSel !== 'unknown') { $mapDestRefund = trim((string)$retSel); }
+                elseif ($retOther !== '' && $retOther !== 'unknown') { $mapDestRefund = trim((string)$retOther); }
+                if ($mapDestRefund === '') { $mapDestRefund = $depDefault0; }
+            ?>
+            <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:refund_return">
+                <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
+                <div class="small muted mt4">Bruges som hj&aelig;lp til at finde ruter for returtransport (fra din nuv&aelig;rende station til stationen du skal tilbage til).</div>
+                <input type="hidden" name="maps_opt_in_trin7" value="0" />
+                <label class="mt8"><input type="checkbox" name="maps_opt_in_trin7" value="1" <?= $mapsOptInRefund ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
+
+                <div id="mapsPanelTrin7" class="mt8 <?= $mapsOptInRefund ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>" data-origin="<?= h($mapOriginRefund) ?>" data-destination="<?= h($mapDestRefund) ?>">
+                    <div class="grid-2">
+                        <label class="station-autocomplete">Fra (station)
+                            <input type="text" id="mapsOriginTrin7" value="<?= h($mapOriginRefund) ?>" />
+                            <div class="station-suggest" id="mapsOriginSuggestTrin7" style="display:none;"></div>
+                        </label>
+                        <label class="station-autocomplete">Til (destination)
+                            <input type="text" id="mapsDestTrin7" value="<?= h($mapDestRefund) ?>" />
+                            <div class="station-suggest" id="mapsDestSuggestTrin7" style="display:none;"></div>
+                        </label>
+                    </div>
+                    <div class="mt8" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="button" id="mapsFetchTrin7" <?= $mapsConfiguredRefund ? '' : 'disabled' ?>>Hent forslag</button>
+                        <a class="button" id="mapsOpenTrin7" target="_blank" rel="noopener">Aabn i Google Maps</a>
+                        <span class="small muted" id="mapsStatusTrin7"></span>
+                    </div>
+                    <div id="mapsRoutesTrin7" class="mt8"></div>
+                    <?php if (!$mapsConfiguredRefund): ?>
+                        <div class="small muted mt8">Bemaerk: Google Routes er ikke konfigureret (mangler server API key).</div>
+                    <?php endif; ?>
+
+                    <?php if (is_array($mapsTrin7) && !empty($mapsTrin7['routes'])): ?>
+                        <div class="mt8 small muted">Seneste forslag (gemt i session):</div>
+                        <ul class="small">
+                            <?php foreach ((array)$mapsTrin7['routes'] as $r): ?>
+                                <?php if (!is_array($r)) { continue; } ?>
+                                <li><strong><?= h((string)($r['summary'] ?? '')) ?></strong></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="mt4"><?= h($returnQuestion) ?></div>
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
             <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
@@ -425,7 +483,6 @@ $preview = round($tp * $rate * $share, 2);
                 }
                 if ($originDefault === '' && $missedDefault !== '' && $missedDefault !== 'unknown') { $originDefault = $missedDefault; }
                 if ($originDefault === '') { $originDefault = $depDefault; }
-                $mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
             ?>
             <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
                 <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
@@ -762,6 +819,10 @@ $preview = round($tp * $rate * $share, 2);
      // Embed as safe JS literal (avoid U+2028/U+2029 breaking scripts; also protect against script-tag injection)
      const savedMapsTrin6 = <?= json_encode(
          (is_array($mapsTrin6) ? $mapsTrin6 : null),
+         JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+     ) ?>;
+     const savedMapsTrin7 = <?= json_encode(
+         (is_array($mapsTrin7) ? $mapsTrin7 : null),
          JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
      ) ?>;
       function updateReveal() {
@@ -1580,6 +1641,113 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         } catch(e) { /* ignore */ }
     }
 
+    function mapsInitTrin7Refund(initialPayload){
+        var cb = document.querySelector('input[type="checkbox"][name="maps_opt_in_trin7"]');
+        var panel = document.getElementById('mapsPanelTrin7');
+        var originEl = document.getElementById('mapsOriginTrin7');
+        var destEl = document.getElementById('mapsDestTrin7');
+        var btn = document.getElementById('mapsFetchTrin7');
+        var open = document.getElementById('mapsOpenTrin7');
+        var out = document.getElementById('mapsRoutesTrin7');
+        var status = document.getElementById('mapsStatusTrin7');
+        if (!cb || !panel || !originEl || !destEl || !btn || !open || !out) { return; }
+
+        function getOrigin(){ return (originEl.value || '').trim(); }
+        function getDest(){ return (destEl.value || '').trim(); }
+        function setOpenLink(){
+            var o = encodeURIComponent(getOrigin());
+            var d = encodeURIComponent(getDest());
+            open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+        }
+        function updatePanel(){
+            panel.classList.toggle('hidden', !cb.checked);
+            panel.hidden = !cb.checked;
+            setOpenLink();
+        }
+
+        function renderRoutes(payload, opts){
+            opts = opts || {};
+            out.innerHTML = '';
+            if (!payload || !payload.ok) {
+                var msg = (payload && payload.error) ? String(payload.error) : 'Kunne ikke hente ruter.';
+                if (/HTTP\\s*403/i.test(msg) || /IP address restriction/i.test(msg) || /violates this restriction/i.test(msg)) {
+                    msg = 'Google Routes fejler (HTTP 403): Din API key er IP-restricted. Whitelist serverens IP i Google Cloud Console (eller fjern IP restriction), og sikre at Routes API er enabled.';
+                }
+                out.innerHTML = '<div class="small muted">' + ('' + msg).replace(/</g,'&lt;') + '</div>';
+                return;
+            }
+            var routes = Array.isArray(payload.routes) ? payload.routes.slice() : [];
+            if (!routes.length) {
+                out.innerHTML = '<div class="small muted">Ingen forslag fundet.</div>';
+                return;
+            }
+            var titleText = (opts && opts.title) ? String(opts.title) : '';
+            if (titleText) {
+                var title = document.createElement('div');
+                title.className = 'maps-routes-title small muted';
+                title.textContent = titleText;
+                out.appendChild(title);
+            }
+            var ul = document.createElement('ul');
+            ul.className = 'small';
+            routes.slice(0, 8).forEach(function(r){
+                if (!r || typeof r !== 'object') return;
+                var li = document.createElement('li');
+                li.innerHTML = '<strong>' + String(r.summary || '').replace(/</g,'&lt;') + '</strong>';
+                ul.appendChild(li);
+            });
+            out.appendChild(ul);
+        }
+
+        cb.addEventListener('change', function(){
+            if (cb.checked) { try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ } }
+            updatePanel();
+        });
+
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        destEl.dataset.manual = destEl.dataset.manual || '0';
+        originEl.addEventListener('input', function(){ originEl.dataset.manual = '1'; setOpenLink(); });
+        destEl.addEventListener('input', function(){ destEl.dataset.manual = '1'; setOpenLink(); });
+
+        btn.addEventListener('click', async function(){
+            var origin = getOrigin();
+            var dest = getDest();
+            setOpenLink();
+            if (!origin || !dest) {
+                if (status) status.textContent = 'Angiv start og destination foerst.';
+                return;
+            }
+            if (status) status.textContent = 'Henter...';
+            try {
+                var csrf = (document.querySelector('input[name="_csrfToken"]') || {}).value || '';
+                var res = await fetch(panel.getAttribute('data-endpoint'), {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/x-www-form-urlencoded', ...(csrf ? {'X-CSRF-Token': csrf} : {})},
+                    body: new URLSearchParams({
+                        context: 'trin7',
+                        maps_opt_in_trin7: '1',
+                        origin: origin,
+                        destination: dest
+                    })
+                });
+                var j = await res.json();
+                renderRoutes(j, { title: 'Forslag (Google Routes)' });
+                if (status) status.textContent = j && j.ok ? 'OK' : 'Fejl';
+            } catch(e) {
+                if (status) status.textContent = 'Fejl';
+                renderRoutes({ok:false, error: (e && e.message) ? e.message : 'Fejl'});
+            }
+        });
+
+        updatePanel();
+        setOpenLink();
+        try {
+            if (initialPayload && initialPayload.ok && Array.isArray(initialPayload.routes) && initialPayload.routes.length) {
+                renderRoutes(initialPayload, { title: 'Seneste forslag (gemt i session)' });
+            }
+        } catch(e) { /* ignore */ }
+    }
+
     // Keep MAP inputs in sync with the "Stationsvalg (omlaegning)" fields.
     // Only auto-sync when the user has not manually edited the MAP inputs.
     function syncMapsTrin6FromStations(){
@@ -1632,6 +1800,52 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
     }
 
+    // Keep MAP inputs in sync with the refund (return transport) station fields.
+    // Only auto-sync when the user has not manually edited the MAP inputs.
+    function syncMapsTrin7RefundFromStations(){
+        var originEl = document.getElementById('mapsOriginTrin7');
+        var destEl = document.getElementById('mapsDestTrin7');
+        var open = document.getElementById('mapsOpenTrin7');
+        if (!originEl || !destEl || !open) return;
+        originEl.dataset.manual = originEl.dataset.manual || '0';
+        destEl.dataset.manual = destEl.dataset.manual || '0';
+
+        function valSelect(name){
+            var sel = document.querySelector('select[name=\"' + name + '\"]');
+            return sel ? (sel.value || '') : '';
+        }
+        function valInput(name){
+            var inp = document.querySelector('input[name=\"' + name + '\"]');
+            return inp ? (inp.value || '') : '';
+        }
+
+        if (originEl.dataset.manual !== '1') {
+            var fromSel = valSelect('a18_from_station');
+            var fromOther = valInput('a18_from_station_other');
+            var origin = '';
+            if (fromSel === 'other') { origin = fromOther; }
+            else if (fromSel && fromSel !== 'unknown') { origin = fromSel; }
+            else if (fromOther) { origin = fromOther; }
+            origin = (origin || '').trim();
+            if (origin) { originEl.value = origin; }
+        }
+
+        if (destEl.dataset.manual !== '1') {
+            var retSel = valSelect('a18_return_to_station');
+            var retOther = valInput('a18_return_to_station_other');
+            var dest = '';
+            if (retSel === 'other') { dest = retOther; }
+            else if (retSel && retSel !== 'unknown') { dest = retSel; }
+            else if (retOther) { dest = retOther; }
+            dest = (dest || '').trim();
+            if (dest) { destEl.value = dest; }
+        }
+
+        var o = encodeURIComponent((originEl.value || '').trim());
+        var d = encodeURIComponent((destEl.value || '').trim());
+        open.href = 'https://www.google.com/maps/dir/?api=1&origin=' + o + '&destination=' + d + '&travelmode=transit';
+    }
+
     // Optional: offline station autocomplete for the MAP inputs too (so ticketless works without Google Places).
     function initMapsStationAutocompleteTrin6(){
         if (!stationsSearchUrl) return;
@@ -1639,6 +1853,112 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         var destEl = document.getElementById('mapsDestTrin6');
         var originBox = document.getElementById('mapsOriginSuggest');
         var destBox = document.getElementById('mapsDestSuggest');
+        if (!originEl || !destEl || !originBox || !destBox) return;
+
+        function niceType(t){
+            var s = (t || '').toString().toLowerCase();
+            if (s === 'station') return 'Station';
+            if (s === 'halt') return 'Stopested';
+            return s;
+        }
+
+        function setup(input, box){
+            var timer = null;
+            var ctrl = null;
+
+            function hide(){
+                box.style.display = 'none';
+                box.innerHTML = '';
+            }
+
+            function render(stations){
+                box.innerHTML = '';
+                if (!stations || !stations.length) { hide(); return; }
+
+                // Prefer "station" results to reduce noise for city-level queries.
+                var stStations = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() === 'station'; });
+                var stOthers = stations.filter(function(st){ return String((st && st.type) || '').toLowerCase() !== 'station'; });
+                var shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
+
+                shown.slice(0, 10).forEach(function(st){
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    var nm = (st && st.name) ? String(st.name) : '';
+                    var cc = (st && st.country) ? String(st.country) : '';
+                    var tp = (st && st.type) ? String(st.type) : '';
+                    btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+                    if (cc || tp) {
+                        var meta = document.createElement('div');
+                        meta.className = 'muted';
+                        meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' \\u00b7 ');
+                        btn.appendChild(document.createElement('br'));
+                        btn.appendChild(meta);
+                    }
+                    btn.addEventListener('click', function(){
+                        if (nm) input.value = nm;
+                        hide();
+                        input.dispatchEvent(new Event('input', { bubbles:true }));
+                    });
+                    box.appendChild(btn);
+                });
+                box.style.display = 'block';
+            }
+
+            async function fetchStations(){
+                var q = (input.value || '').trim();
+                if (q.length < 2) { hide(); return; }
+                var cc = (stationCountryDefault || '').trim().toUpperCase();
+                if (!cc && q.length < 4) { hide(); return; }
+
+                var buildUrl = function(country){
+                    var u = new URL(stationsSearchUrl, window.location.origin);
+                    u.searchParams.set('q', q);
+                    if (country) u.searchParams.set('country', country);
+                    u.searchParams.set('limit', '10');
+                    return u.toString();
+                };
+
+                if (ctrl) { try { ctrl.abort(); } catch(e) {} }
+                ctrl = new AbortController();
+                try {
+                    var res = await fetch(buildUrl(cc), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) { hide(); return; }
+                    var js = await res.json();
+                    var stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                    if ((!stations || stations.length === 0) && cc) {
+                        res = await fetch(buildUrl(''), { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                        if (res.ok) {
+                            js = await res.json();
+                            stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+                        }
+                    }
+                    render(stations);
+                } catch(e) {
+                    // ignore abort/network
+                }
+            }
+
+            input.addEventListener('input', function(){
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(fetchStations, 200);
+            });
+            input.addEventListener('focus', function(){
+                if (box.innerHTML.trim() !== '') { box.style.display = 'block'; }
+            });
+            input.addEventListener('blur', function(){ setTimeout(hide, 180); });
+            box.addEventListener('mousedown', function(e){ e.preventDefault(); });
+        }
+
+        setup(originEl, originBox);
+        setup(destEl, destBox);
+    }
+
+    function initMapsStationAutocompleteTrin7(){
+        if (!stationsSearchUrl) return;
+        var originEl = document.getElementById('mapsOriginTrin7');
+        var destEl = document.getElementById('mapsDestTrin7');
+        var originBox = document.getElementById('mapsOriginSuggestTrin7');
+        var destBox = document.getElementById('mapsDestSuggestTrin7');
         if (!originEl || !destEl || !originBox || !destBox) return;
 
         function niceType(t){
@@ -1889,8 +2209,11 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         s7Update();
         initStationAutocomplete();
         initMapsStationAutocompleteTrin6();
+        initMapsStationAutocompleteTrin7();
         mapsInitTrin6(savedMapsTrin6);
+        mapsInitTrin7Refund(savedMapsTrin7);
         try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ }
+        try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ }
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
@@ -1918,6 +2241,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             // Keep MAP helper aligned with station selection where possible.
             if (e.target.name.indexOf('a18_') === 0 || e.target.name.indexOf('handoff') === 0 || e.target.name.indexOf('stranded_current_station') === 0) {
                 try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ }
+                try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ }
             }
         });
     });
