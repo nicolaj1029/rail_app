@@ -38,6 +38,12 @@ try {
         $nationalThr50 = (int)$nationalPolicy['thresholds']['50'];
     }
 } catch (\Throwable $e) { $nationalCutoff = null; }
+
+// Force majeure / extraordinary circumstances (Art. 19(10)) – affects compensation only (Art. 19).
+// In ClaimCalculator: operator's own staff strikes do NOT remove compensation rights.
+$exc0 = strtolower(trim((string)($form['operatorExceptionalCircumstances'] ?? '')));
+$excType0 = trim((string)($form['operatorExceptionalType'] ?? ''));
+$compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_staff_strike');
 ?>
 
 <style>
@@ -145,42 +151,22 @@ try {
   <div id="nationalFallbackWrap" class="card mt12 hidden" style="border-color:#ffe8cc;background:#fff8e6">
     <strong>National ordning (fallback)<?= (!empty($nationalPolicy['name']) ? (': ' . h((string)$nationalPolicy['name'])) : '') ?></strong>
     <div class="small mt4">
-      EU 60-min graensen ser ikke ud til at vaere opfyldt ud fra dine svar.
+      EU: Art. 18/20 udloeses typisk ved <strong>&ge;60 min</strong> forsinkelse (eller aflysning).
+    </div>
+    <div class="small mt4">
+      National ordning:
       <?php if ($nationalCutoff !== null && $nationalCutoff > 0 && $nationalCutoff < 60): ?>
-        Vi tjekker nu nationale regler (fx 25% fra <?= (int)$nationalCutoff ?> min).
+        kompensation fra <strong><?= (int)$nationalCutoff ?> min</strong><?= ($nationalThr50 !== null && $nationalThr50 > 0) ? (' (naeste band: ' . (int)$nationalThr50 . ' min)') : '' ?>.
       <?php else: ?>
-        Der er ikke registreret en lavere national graense for denne kontekst (maaske mangler land/scope).
+        <span class="muted">ukendt (kraever land + scope).</span>
       <?php endif; ?>
     </div>
-
-    <div class="small mt8">
-      <div><strong>Regler (minutter)</strong></div>
-      <div class="mt4">
-        <span class="badge" style="background:#eef;border:1px solid #ccd;border-radius:999px;padding:2px 8px;font-size:12px;">EU baseline</span>
-        <span class="ml8">Art. 18/20 aktiveres typisk ved <strong>&ge;60 min</strong> (eller aflysning).</span>
+    <?php if ($compBlockedByFM): ?>
+      <div class="small mt8" style="background:#fff;border:1px solid #f5c2c7;border-radius:6px;padding:8px;">
+        <strong>Bemaerk:</strong> Du har angivet ekstraordinaere forhold (Art. 19(10)). Kompensation kan vaere udelukket (EU + national),
+        men Art. 18/20 kan stadig blive relevant ved <strong>&ge;60 min</strong> eller aflysning.
       </div>
-      <div class="mt4">
-        <span class="badge" style="background:#eef;border:1px solid #ccd;border-radius:999px;padding:2px 8px;font-size:12px;">National</span>
-        <?php if ($nationalCutoff !== null && $nationalCutoff > 0): ?>
-          <span class="ml8">Kompensation fra <strong><?= (int)$nationalCutoff ?> min</strong><?= ($nationalThr50 !== null && $nationalThr50 > 0) ? (' (naeste band: ' . (int)$nationalThr50 . ' min)') : '' ?>.</span>
-        <?php else: ?>
-          <span class="ml8 muted">Ukendt (kraever land + scope).</span>
-        <?php endif; ?>
-      </div>
-      <?php if (!empty($nationalPolicy['notes'])): ?>
-        <div class="mt4 muted"><?= h((string)$nationalPolicy['notes']) ?></div>
-      <?php endif; ?>
-      <?php if (!$euFlowSupported): ?>
-        <div class="mt8" style="background:#fff;border:1px solid #f5c2c7;border-radius:6px;padding:8px;">
-          <strong>Bemaerk:</strong> EU-flowet (Art. 18/20) ser ud til at vaere undtaget for denne rejse/scope i app'en. Vi viser derfor primaert national/operatoer-ordning.
-        </div>
-      <?php endif; ?>
-      <?php if (!empty($pmrBikeGate) && (!empty($pmrBikeGate['pmr_gate']) || !empty($pmrBikeGate['bike_gate']))): ?>
-        <div class="mt8" style="background:#fff;border:1px solid #ffe8cc;border-radius:6px;padding:8px;">
-          <strong>Bemaerk:</strong> Art. 18 kan vaere aktiv pga. PMR/cykel (TRIN 3) selv uden 60-min graensen.
-        </div>
-      <?php endif; ?>
-    </div>
+    <?php endif; ?>
 
     <div class="mt8">
       <label class="small">Hvor mange minutter var/er du forsinket?
@@ -356,12 +342,14 @@ function updateStep4State(){
   var isOngoing = <?= json_encode((bool)$isOngoing) ?>;
   var euFlowSupported = <?= json_encode((bool)$euFlowSupported) ?>;
   var cutoff = <?= json_encode($nationalCutoff) ?>;
+  var compBlockedByFM = <?= json_encode((bool)$compBlockedByFM) ?>;
 
   var main = getRadioValue('incident_main');
   var exp60 = getRadioValue('expected_delay_60');
   var already60 = getRadioValue('delay_already_60');
   var missed = getRadioValue('incident_missed');
   var missed60 = getRadioValue('missed_expected_delay_60');
+  var missedAnswered = (missed === 'yes' || missed === 'no');
 
   // EU gate can be satisfied either by the main incident (delay>=60 or cancellation),
   // or (only when EU gate is not already satisfied) by missed-connection implying >=60 to final destination.
@@ -379,13 +367,20 @@ function updateStep4State(){
 
   // National fallback is shown when EU gate is not met. Cutoff is optional (we still show the card
   // to explain why we can't determine national thresholds yet).
-  var showNat = (!euGate) && (main === 'delay' || missed === 'yes');
+  // UX: "last chance" – do not show national fallback until the user has answered the missed-connection question.
+  // If missed=yes and the missed>=60 question is visible, require an answer to that too before showing fallback.
+  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered;
+  if (showNat && showMissed60 && missed60 === '') { showNat = false; }
   showById('nationalFallbackWrap', showNat);
 
   // Reminder UI: only useful in ongoing journeys when national fallback is visible.
   var minsField = document.getElementById('nationalDelayMinutes');
   var mins = minsField ? parseInt(String(minsField.value || '').trim(), 10) : NaN;
+  // Also show reminder when compensation is blocked by force majeure (Art. 19(10)) and EU gate isn't met yet.
   var canRemind = euFlowSupported && isOngoing && showNat && !isNaN(mins) && mins > 0 && mins < 60;
+  if (!canRemind && euFlowSupported && isOngoing && compBlockedByFM && !euGate && missedAnswered && !isNaN(mins) && mins > 0 && mins < 60) {
+    canRemind = true;
+  }
   showById('euReminderWrap', canRemind);
 
   var info = document.getElementById('euReminderInfo');
