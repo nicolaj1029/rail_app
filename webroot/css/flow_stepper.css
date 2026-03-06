@@ -119,6 +119,11 @@
   color: var(--flow-stepper-muted);
 }
 
+.flow-stepper__canon{
+  color: var(--flow-stepper-muted);
+  font-style: italic;
+}
+
 .flow-step-completed .flow-stepper__dot{
   border-color: rgba(15,138,59,.35);
   color: var(--flow-stepper-ok);

@@ -36,6 +36,8 @@ $classOf = static function (string $state): string {
             <?php
                 $action = (string)($s['action'] ?? '');
                 $num = (int)($s['num'] ?? 0);
+                $uiNum = isset($s['ui_num']) ? (int)$s['ui_num'] : $num;
+                $uiTotal = isset($s['ui_total']) ? (int)$s['ui_total'] : 0;
                 $title = (string)($s['title'] ?? '');
                 $state = (string)($s['state'] ?? '');
                 $visible = !array_key_exists('visible', $s) || (bool)$s['visible'];
@@ -54,13 +56,15 @@ $classOf = static function (string $state): string {
                 >
                     <span class="flow-stepper__dot" aria-hidden="true"><?= h($iconOf($state)) ?></span>
                     <span class="flow-stepper__txt">
-                        <span class="flow-stepper__name">Trin <?= h((string)$num) ?>: <?= h($title) ?></span>
+                        <span class="flow-stepper__name">Trin <?= h((string)$uiNum) ?><?= $uiTotal > 0 ? '/' . h((string)$uiTotal) : '' ?>: <?= h($title) ?></span>
                         <?php if ($isLocked && !empty($s['missing']) && is_array($s['missing'])): ?>
                             <span class="flow-stepper__meta">Mangler: <?= h(implode(', ', array_map('strval', $s['missing']))) ?></span>
                         <?php elseif ($state === 'completed'): ?>
                             <span class="flow-stepper__meta">Udfyldt</span>
                         <?php elseif ($state === 'needs'): ?>
                             <span class="flow-stepper__meta">Mangler input</span>
+                        <?php elseif ($uiNum !== $num): ?>
+                            <span class="flow-stepper__meta"><span class="flow-stepper__canon">Juridisk: TRIN <?= h((string)$num) ?></span></span>
                         <?php else: ?>
                             <span class="flow-stepper__meta">&nbsp;</span>
                         <?php endif; ?>

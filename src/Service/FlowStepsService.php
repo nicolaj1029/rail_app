@@ -118,6 +118,22 @@ final class FlowStepsService
                 'visible' => $visible,
             ];
         }
+
+        // UI renumbering for dynamic visibility: avoid "missing" step numbers when optional steps are hidden.
+        // Keep canonical `num` intact (used in headings/docs), but provide `ui_num/ui_total` for the stepper display.
+        $visibleCount = 0;
+        foreach ($out as $s) {
+            $isVisible = !array_key_exists('visible', $s) || (bool)$s['visible'];
+            if ($isVisible) { $visibleCount++; }
+        }
+        $ui = 0;
+        foreach ($out as $i => $s) {
+            $isVisible = !array_key_exists('visible', $s) || (bool)$s['visible'];
+            if ($isVisible) { $ui++; }
+            $out[$i]['ui_num'] = $isVisible ? $ui : null;
+            $out[$i]['ui_total'] = $visibleCount;
+        }
+
         return $out;
     }
 
