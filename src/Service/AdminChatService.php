@@ -726,6 +726,7 @@ final class AdminChatService
             ];
 
             $actions = $this->derivePreviewActions($flow, $actual, $previewSummary);
+            $blockingFields = $this->deriveBlockingFields($flow, $actual, $previewSummary);
 
             return [
                 'status' => 'ok',
@@ -734,6 +735,8 @@ final class AdminChatService
                     : 'Pipeline-preview koerer paa delvist input. Udfyld TRIN 5 for et mere stabilt resultat.',
                 'summary' => $previewSummary,
                 'actions' => $actions,
+                'blocking_fields' => $blockingFields,
+                'blocking_count' => count($blockingFields),
                 'raw' => $actual,
             ];
         } catch (\Throwable $e) {
@@ -742,6 +745,8 @@ final class AdminChatService
                 'message' => 'Pipeline-preview kunne ikke bygges: ' . $e->getMessage(),
                 'summary' => [],
                 'actions' => [],
+                'blocking_fields' => [],
+                'blocking_count' => 0,
                 'raw' => null,
             ];
         }
@@ -880,6 +885,125 @@ final class AdminChatService
         }
 
         return array_values($deduped);
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @param array<string,mixed> $actual
+     * @param array<string,mixed> $summary
+     * @return array<int,array<string,string>>
+     */
+    private function deriveBlockingFields(array $flow, array $actual, array $summary): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $flags = (array)($flow['flags'] ?? []);
+        $items = [];
+
+        $add = function (string $key, string $label, string $detail, string $href, string $group) use (&$items): void {
+            $id = $group . '|' . $key;
+            if (isset($items[$id])) {
+                return;
+            }
+            $items[$id] = [
+                'key' => $key,
+                'label' => $label,
+                'detail' => $detail,
+                'href' => $href,
+                'group' => $group,
+            ];
+        };
+
+        if (((string)($flags['step2_done'] ?? '')) !== '1') {
+            $add('confirm_step2', 'Fuldfør TRIN 2', 'Operatør og billetgrundlag er ikke markeret som afsluttet endnu.', '/flow/entitlements', 'foundation');
+        }
+        if (((string)($flags['step5_done'] ?? '')) !== '1') {
+            $add('incident_main', 'Angiv hændelse', 'Incident-type mangler stadig.', '/flow/incident', 'foundation');
+            $add('delay_minutes', 'Angiv forsinkelse', 'Forsinkelsesminutter mangler stadig.', '/flow/incident', 'foundation');
+        }
+        if (($form['ticket_upload_mode'] ?? '') === 'seasonpass' && trim((string)($form['operator_product'] ?? '')) === '') {
+            $add('operator_product', 'Angiv season-produkt', 'Pendler/season-produkt mangler for data-pack og policy-match.', '/flow/entitlements', 'season');
+        }
+
+        $art12Labels = [
+            'separate_contract_notice' => ['Afklar separate kontrakter', 'Notits om separate kontrakter mangler.', '/flow/entitlements'],
+            'through_ticket_disclosure' => ['Afklar kontraktoplysning', 'Disclosure om kontraktstruktur mangler.', '/flow/entitlements'],
+        ];
+        foreach ((array)(Hash::get($actual, 'art12.missing') ?? []) as $key) {
+            if (!isset($art12Labels[$key])) {
+                continue;
+            }
+            [$label, $detail, $href] = $art12Labels[$key];
+            $add((string)$key, $label, $detail, $href, 'art12');
+        }
+
+        $art20Labels = [
+            'meal_offered' => ['Afklar måltider', 'Det er uklart om måltider eller forfriskninger blev tilbudt.', '/flow/assistance'],
+            'hotel_offered' => ['Afklar hotel', 'Det er uklart om hotel/overnatning blev tilbudt.', '/flow/assistance'],
+            'a20_3_solution_offered' => ['Afklar Art. 20(3)-løsning', 'Det er uklart om operatøren tilbød alternativ løsning fra stationen.', '/flow/station'],
+            'a20_3_self_paid' => ['Afklar selvbetalt transport', 'Det er uklart om passageren selv betalte alternativ transport.', '/flow/station'],
+            'alt_transport_provided' => ['Afklar alternativ transport', 'Det er uklart om alternativ transport blev stillet til rådighed.', '/flow/assistance'],
+        ];
+        foreach ((array)(Hash::get($actual, 'art20_assistance.missing') ?? []) as $key) {
+            if (!isset($art20Labels[$key])) {
+                continue;
+            }
+            [$label, $detail, $href] = $art20Labels[$key];
+            $add((string)$key, $label, $detail, $href, 'art20');
+        }
+
+        if (($form['meal_offered'] ?? '') === 'no' && trim((string)($form['meal_self_paid_amount'] ?? '')) === '') {
+            $add('meal_self_paid_amount', 'Angiv måltidsbeløb', 'Selvbetalte måltider mangler beløb.', '/flow/assistance', 'art20');
+        }
+        if (($form['hotel_offered'] ?? '') === 'no' && trim((string)($form['hotel_self_paid_amount'] ?? '')) === '') {
+            $add('hotel_self_paid_amount', 'Angiv hotelbeløb', 'Selvbetalt hotel/overnatning mangler beløb.', '/flow/assistance', 'art20');
+        }
+        if (($form['a20_3_self_paid'] ?? '') === 'yes' && trim((string)($form['a20_3_self_paid_amount'] ?? '')) === '') {
+            $add('a20_3_self_paid_amount', 'Angiv transportbeløb', 'Selvbetalt alternativ transport mangler beløb.', '/flow/station', 'art20');
+        }
+
+        if (((string)($flags['gate_art18'] ?? '')) === '1') {
+            $remedyChoice = (string)($form['remedyChoice'] ?? '');
+            if ($remedyChoice === '') {
+                $add('remedyChoice', 'Vælg Art. 18-retning', 'Refusion/omlægning er ikke afklaret endnu.', '/flow/remedies', 'art18');
+            }
+            if ($remedyChoice === 'refund_return' && ($form['refund_requested'] ?? '') === '') {
+                $add('refund_requested', 'Afklar refusion', 'Det er uklart om refusion er valgt eller anmodet.', '/flow/remedies', 'art18');
+            }
+            if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === '') {
+                $add('return_to_origin_expense', 'Afklar returudgift', 'Det er uklart om der var udgifter til at vende tilbage til udgangspunktet.', '/flow/remedies', 'art18');
+            }
+            if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === 'yes' && trim((string)($form['return_to_origin_amount'] ?? '')) === '') {
+                $add('return_to_origin_amount', 'Angiv returbeløb', 'Retur til udgangspunkt mangler beløb.', '/flow/remedies', 'art18');
+            }
+            if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
+                $rerouteTri = [
+                    'reroute_same_conditions_soonest' => ['Afklar omlægning snarest', 'Det er uklart om sammenlignelig omlægning blev tilbudt snarest muligt.'],
+                    'reroute_later_at_choice' => ['Afklar senere omlægning', 'Det er uklart om senere omlægning efter passagerens valg blev tilbudt.'],
+                    'reroute_info_within_100min' => ['Afklar 100-minuttersregel', 'Det er uklart om brugbar information kom inden 100 minutter.'],
+                    'reroute_extra_costs' => ['Afklar ekstra omlægningsomkostninger', 'Det er uklart om omlægningen gav ekstra omkostninger.'],
+                ];
+                foreach ($rerouteTri as $key => [$label, $detail]) {
+                    if (($form[$key] ?? '') === '') {
+                        $add($key, $label, $detail, '/flow/remedies', 'art18');
+                    }
+                }
+                if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
+                    $add('reroute_later_outcome', 'Afklar senere udfald', 'Det er uklart hvad der skete ved senere omlægning.', '/flow/remedies', 'art18');
+                }
+                if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === 'self_bought' && trim((string)($form['reroute_later_self_paid_amount'] ?? '')) === '') {
+                    $add('reroute_later_self_paid_amount', 'Angiv senere omlægningsbeløb', 'Selvkøbt senere omlægning mangler beløb.', '/flow/remedies', 'art18');
+                }
+                if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
+                    $add('reroute_extra_costs_amount', 'Angiv ekstra omlægningsbeløb', 'Ekstra omlægningsomkostninger mangler beløb.', '/flow/remedies', 'art18');
+                }
+            }
+        }
+
+        if (($summary['gross_claim'] ?? null) === null && (($summary['partial'] ?? false) === false)) {
+            $add('claim_export', 'Gennemgå claim-beregning', 'Claim-preview mangler stadig et stabilt resultat til eksport.', '/flow/compensation', 'claim');
+        }
+
+        return array_values($items);
     }
 
     /**

@@ -31,6 +31,9 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   .admin-action-list { display:grid; gap:8px; margin-top:10px; }
   .admin-action-item { border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; }
   .admin-action-item strong { display:block; color:#111; margin-bottom:4px; }
+  .admin-blocker-list { display:grid; gap:8px; margin-top:10px; }
+  .admin-blocker-item { border:1px solid #fde68a; border-radius:8px; padding:10px; background:#fffbeb; }
+  .admin-blocker-item strong { display:block; color:#111; margin-bottom:4px; }
   @media (max-width: 980px) {
     .admin-chat-page { grid-template-columns: 1fr; }
     .admin-chat-log { height:420px; }
@@ -78,6 +81,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
       <div data-chat-preview-message class="admin-muted">Ingen preview endnu.</div>
       <dl class="admin-kv" data-chat-preview></dl>
       <div class="admin-action-list" data-chat-preview-actions></div>
+      <div class="admin-blocker-list" data-chat-preview-blockers></div>
     </div>
 
     <div class="admin-chat-card">
@@ -105,6 +109,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   const previewMessageEl = root.querySelector('[data-chat-preview-message]');
   const previewEl = root.querySelector('[data-chat-preview]');
   const previewActionsEl = root.querySelector('[data-chat-preview-actions]');
+  const previewBlockersEl = root.querySelector('[data-chat-preview-blockers]');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
@@ -225,17 +230,26 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     )).join('');
 
     const actions = preview?.actions || [];
-    if (!actions.length) {
-      previewActionsEl.innerHTML = '<div class="admin-muted">Ingen konkrete next actions endnu.</div>';
-      return;
-    }
-    previewActionsEl.innerHTML = actions.map((action) => (
+    previewActionsEl.innerHTML = actions.length ? actions.map((action) => (
       '<div class="admin-action-item">' +
         '<strong>' + escapeHtml(action.label || '') + '</strong>' +
         '<div class="admin-muted">' + escapeHtml(action.detail || '') + '</div>' +
         (action.href ? ('<div style="margin-top:8px;"><a class="admin-chip" href="' + escapeHtml(action.href) + '" target="_blank">Aabn relevant trin</a></div>') : '') +
       '</div>'
-    )).join('');
+    )).join('') : '<div class="admin-muted">Ingen konkrete next actions endnu.</div>';
+
+    const blockers = preview?.blocking_fields || [];
+    previewBlockersEl.innerHTML = blockers.length ? (
+      '<div class="admin-muted">Mangler stadig disse felter før claim/export bliver mere robust:</div>' +
+      blockers.map((item) => (
+        '<div class="admin-blocker-item">' +
+          '<strong>' + escapeHtml(item.label || item.key || '') + '</strong>' +
+          '<div class="admin-muted">' + escapeHtml(item.detail || '') + '</div>' +
+          '<div class="admin-muted" style="margin-top:4px;">Gruppe: ' + escapeHtml(item.group || '-') + '</div>' +
+          (item.href ? ('<div style="margin-top:8px;"><a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a></div>') : '') +
+        '</div>'
+      )).join('')
+    ) : '<div class="admin-muted">Ingen kendte blocker-felter lige nu.</div>';
   }
 
   function renderSteps(steps) {
