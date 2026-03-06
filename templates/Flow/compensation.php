@@ -223,6 +223,36 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <?= $this->Form->create(null) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
+<?php
+  $instantPayoutEligible = (bool)($instantPayoutEligible ?? false);
+  $instantPayoutReason = (string)($instantPayoutReason ?? 'Not enabled');
+  $datapackUrl = $this->Url->build(['controller' => 'Flow', 'action' => 'compensation', '?' => ['datapack' => '1', 'pretty' => '1']]);
+?>
+
+<div class="card mt12" style="border-color:#cfe8ff;background:#f3f8ff">
+  <strong>B. Claim-assist / data-pack</strong>
+  <div class="small mt4 muted">
+    Data-pack er et maskinlÃ¦sbart resume af dine facts (ikke et juridisk dokument). Brug det til at sende en claim,
+    eller gem sagen og vend tilbage senere.
+  </div>
+  <div class="mt8">
+    <a class="btn btn-primary" href="<?= h($datapackUrl) ?>">Download data-pack (JSON)</a>
+  </div>
+</div>
+
+<div class="card mt12" style="border-color:#e5e7eb;background:#fafafa">
+  <strong>C. Instant payout</strong>
+  <?php if ($instantPayoutEligible): ?>
+    <div class="ok small mt8">
+      Instant payout er mulig for denne sag (feature-flag/risikomodel skal stadig kobles pÃ¥).
+    </div>
+  <?php else: ?>
+    <div class="hl small mt8">
+      Ikke aktiveret endnu. Status: <?= h($instantPayoutReason) ?>
+    </div>
+  <?php endif; ?>
+</div>
+
 <?php if (!empty($seasonMode)): ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong><?= __('Abonnement/Periodekort (Art. 19, stk. 2)') ?></strong>

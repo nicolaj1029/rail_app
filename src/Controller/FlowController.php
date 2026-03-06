@@ -6521,6 +6521,107 @@ class FlowController extends AppController
         $step5Done = ((string)($flags['step5_done'] ?? '')) === '1';
         $seasonUnlocked = ((string)($flags['step2_done'] ?? '')) === '1' && ((string)($flags['gate_season_pass'] ?? '')) === '1';
 
+        // Data-pack export (claim-assist baseline artifact).
+        // Allowed after TRIN 5 for everyone, and after TRIN 2 for season/pendler setup.
+        if ($this->truthy($this->request->getQuery('datapack'))) {
+            if (!$step5Done && !$seasonUnlocked) {
+                return $this->response
+                    ->withStatus(403)
+                    ->withType('application/json')
+                    ->withStringBody(json_encode(['ok' => false, 'error' => 'Datapack not available yet.'], JSON_UNESCAPED_SLASHES));
+            }
+
+            $opName = trim((string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')));
+            $opCountry = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
+            $ticketMode = (string)($form['ticket_upload_mode'] ?? 'ticket');
+
+            $seasonMode = $seasonUnlocked;
+            try {
+                if (!$seasonMode) {
+                    $fft = strtolower((string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? '')));
+                    $sp = (array)($meta['season_pass'] ?? []);
+                    if (array_key_exists('has', $sp)) { $seasonMode = (bool)$sp['has']; }
+                    else { $seasonMode = ($fft === 'pass'); }
+                }
+            } catch (\Throwable $e) { /* ignore */ }
+
+            $seasonPolicy = null;
+            if ($seasonMode && $opName !== '' && $opCountry !== '') {
+                try {
+                    $seasonPolicy = (new \App\Service\SeasonPolicyCatalog())->find($opName, $opCountry);
+                } catch (\Throwable $e) { $seasonPolicy = null; }
+            }
+
+            $delayEu = isset($compute['delayMinEU']) ? (int)$compute['delayMinEU'] : null;
+            $delayWhole = isset($form['delayAtFinalMinutes'])
+                ? (int)$form['delayAtFinalMinutes']
+                : (isset($compute['delayAtFinalMinutes']) ? (int)$compute['delayAtFinalMinutes'] : null);
+            $delayNational = null;
+            try {
+                $raw = trim((string)($form['national_delay_minutes'] ?? ''));
+                if ($raw !== '') { $delayNational = (int)$raw; }
+            } catch (\Throwable $e) { $delayNational = null; }
+
+            $policyOut = null;
+            if (is_array($seasonPolicy)) {
+                $policyOut = [
+                    'operator' => (string)($seasonPolicy['operator'] ?? ''),
+                    'country' => (string)($seasonPolicy['country'] ?? ''),
+                    'coverage_status' => (string)($seasonPolicy['coverage_status'] ?? ''),
+                    'verified' => (bool)($seasonPolicy['verified'] ?? false),
+                    'last_verified' => (string)($seasonPolicy['last_verified'] ?? ''),
+                    'source_url' => (string)($seasonPolicy['source_url'] ?? ''),
+                    'claim_channel' => $seasonPolicy['claim_channel'] ?? null,
+                    'products' => $seasonPolicy['products'] ?? null,
+                ];
+            }
+
+            $pack = [
+                'ok' => true,
+                'generated_at' => gmdate('c'),
+                'flow' => [
+                    'mode' => 'split',
+                    'step5_done' => $step5Done,
+                ],
+                'ticket' => [
+                    'ticket_upload_mode' => $ticketMode,
+                    'season_mode' => $seasonMode,
+                ],
+                'operator' => [
+                    'name' => $opName,
+                    'country' => $opCountry,
+                    'product' => (string)($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')),
+                ],
+                'journey' => [
+                    'from' => (string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')),
+                    'to' => (string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')),
+                    'date' => (string)($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')),
+                    'sched_dep_time' => (string)($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')),
+                    'sched_arr_time' => (string)($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')),
+                    'train_no' => (string)($form['train_no'] ?? ($meta['_auto']['train_no']['value'] ?? '')),
+                ],
+                'incident' => [
+                    'main' => (string)($incident['main'] ?? ''),
+                    'missed_connection' => (bool)($incident['missed'] ?? false),
+                    'cancellation' => (bool)((string)($incident['main'] ?? '') === 'cancellation'),
+                ],
+                'delay' => [
+                    'minutes_eu' => $delayEu,
+                    'minutes_whole_trip' => $delayWhole,
+                    'minutes_national_reported' => $delayNational,
+                ],
+                'season_policy' => $policyOut,
+            ];
+
+            $pretty = $this->truthy($this->request->getQuery('pretty'));
+            $jsonFlags = JSON_UNESCAPED_SLASHES | ($pretty ? JSON_PRETTY_PRINT : 0);
+            $fname = 'claim_datapack_' . ($opCountry !== '' ? $opCountry . '_' : '') . ($opName !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '_', $opName) : 'operator') . '_' . gmdate('Ymd_His') . '.json';
+            return $this->response
+                ->withType('application/json')
+                ->withDownload($fname)
+                ->withStringBody((string)json_encode($pack, $jsonFlags));
+        }
+
         // TRIN 10 is normally gated by TRIN 5, but season/pendler setup should unlock TRIN 10 right after TRIN 2
         // (rendered as "tom intelligent" until TRIN 5 is completed).
         if (!$step5Done && $seasonUnlocked) {
@@ -6539,7 +6640,9 @@ class FlowController extends AppController
             } catch (\Throwable $e) { $seasonPolicy = null; }
 
             $step10Ready = false;
-            $this->set(compact('form','flags','journey','meta','compute','incident','seasonMode','seasonPolicy','step10Ready'));
+            $instantPayoutEligible = false;
+            $instantPayoutReason = 'Not enabled';
+            $this->set(compact('form','flags','journey','meta','compute','incident','seasonMode','seasonPolicy','step10Ready','instantPayoutEligible','instantPayoutReason'));
             return null;
         }
 
@@ -6949,7 +7052,10 @@ class FlowController extends AppController
         } catch (\Throwable $e) { $formDecision = ['form' => 'eu_standard_claim', 'reason' => 'Resolver error; default to EU']; }
 
         $nationalCountryCode = strtolower((string)($journeyCountry ?? ''));
-        $this->set(compact('form','flags','compute','incident','profile','delayAtFinal','bandAuto','refundChosen','preinformed','rerouteUnder60','art19Allowed','claim','selectedBand','ticketPriceAmount','currency','liableParty','liableBasis','seasonMode','seasonSummary','seasonPolicy','nationalCountryCode','formDecision','meta','nationalPolicy'));
+        // Placeholder for later "instant payout" overlay. Keep explicit vars so TRIN 10 can render B/C split.
+        $instantPayoutEligible = false;
+        $instantPayoutReason = 'Not enabled';
+        $this->set(compact('form','flags','compute','incident','profile','delayAtFinal','bandAuto','refundChosen','preinformed','rerouteUnder60','art19Allowed','claim','selectedBand','ticketPriceAmount','currency','liableParty','liableBasis','seasonMode','seasonSummary','seasonPolicy','nationalCountryCode','formDecision','meta','nationalPolicy','instantPayoutEligible','instantPayoutReason'));
         return null;
     }
     /**
