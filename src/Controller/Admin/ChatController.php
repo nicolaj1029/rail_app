@@ -34,6 +34,16 @@ final class ChatController extends AppController
         return $this->json($payload);
     }
 
+    public function focus(): Response
+    {
+        $this->request->allowMethod(['post']);
+
+        $key = trim((string)($this->request->getData('key') ?? ''));
+        $payload = (new AdminChatService())->focusQuestion($this->request->getSession(), $key);
+
+        return $this->json($payload);
+    }
+
     /**
      * @param array<string,mixed> $payload
      */

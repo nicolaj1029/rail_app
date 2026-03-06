@@ -47,6 +47,7 @@ final class AdminChatService
             'flow.flags',
             'flow.incident',
             'flow.journey',
+            'admin.chat_focus_key',
             'admin.chat_history',
         ] as $key) {
             $session->delete($key);
@@ -61,6 +62,7 @@ final class AdminChatService
     public function handleMessage(Session $session, string $rawInput): array
     {
         $input = trim($rawInput);
+        $session->delete('admin.chat_focus_key');
         if ($input === '') {
             return $this->buildPayload($session, 'Tom besked. Svar paa spoergsmaalet eller brug en quick reply.');
         }
@@ -107,17 +109,38 @@ final class AdminChatService
     }
 
     /**
+     * @return array<string,mixed>
+     */
+    public function focusQuestion(Session $session, string $key): array
+    {
+        $focusKey = trim($key);
+        if ($focusKey === '') {
+            return $this->buildPayload($session, 'Ingen blocker-noegle modtaget.');
+        }
+
+        $session->write('admin.chat_focus_key', $focusKey);
+        $payload = $this->buildPayload($session, 'Fokus sat til blocker: ' . $focusKey);
+        $question = (array)($payload['question'] ?? []);
+        if (($question['key'] ?? null) !== $focusKey) {
+            $payload['notice'] = 'Blocker valgt, men spoergsmaalet er ikke aktivt endnu. Udfyld de tidligere afhængigheder først.';
+        }
+
+        return $payload;
+    }
+
+    /**
      * @param array<string,mixed> $flow
      * @return array<string,mixed>|null
      */
-    private function currentQuestion(array $flow, ?array $preview = null): ?array
+    private function currentQuestion(array $flow, ?array $preview = null, ?string $preferredKey = null): ?array
     {
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
         $incident = (array)($flow['incident'] ?? []);
+        $candidates = [];
 
         if (((string)($flags['step1_done'] ?? '')) !== '1') {
-            return [
+            $candidates[] = [
                 'key' => 'travel_state',
                 'prompt' => 'Hvad er rejse-status? Vae lg completed, ongoing eller before_start.',
                 'choices' => [
@@ -131,7 +154,7 @@ final class AdminChatService
         }
 
         if (($form['ticket_upload_mode'] ?? '') === '') {
-            return [
+            $candidates[] = [
                 'key' => 'ticket_upload_mode',
                 'prompt' => 'Hvilken billettype? Vae lg ticket, ticketless eller seasonpass.',
                 'choices' => [
@@ -145,7 +168,7 @@ final class AdminChatService
         }
 
         if (trim((string)($form['operator'] ?? '')) === '') {
-            return [
+            $candidates[] = [
                 'key' => 'operator',
                 'prompt' => 'Hvilken operatoer rejste passageren med?',
                 'choices' => [],
@@ -155,7 +178,7 @@ final class AdminChatService
         }
 
         if (trim((string)($form['operator_country'] ?? '')) === '') {
-            return [
+            $candidates[] = [
                 'key' => 'operator_country',
                 'prompt' => 'Hvilket land hoerer operatoeren til? Brug helst ISO2, fx DK, DE, FR.',
                 'choices' => [],
@@ -165,7 +188,7 @@ final class AdminChatService
         }
 
         if (($form['ticket_upload_mode'] ?? '') === 'seasonpass' && trim((string)($form['operator_product'] ?? '')) === '') {
-            return [
+            $candidates[] = [
                 'key' => 'operator_product',
                 'prompt' => 'Hvilket pendler- eller season-produkt drejer det sig om?',
                 'choices' => [],
@@ -175,7 +198,7 @@ final class AdminChatService
         }
 
         if (((string)($flags['step2_done'] ?? '')) !== '1') {
-            return [
+            $candidates[] = [
                 'key' => 'confirm_step2',
                 'prompt' => 'Vil du markere TRIN 2 som udfyldt? Svar ja eller nej.',
                 'choices' => [
@@ -188,7 +211,7 @@ final class AdminChatService
         }
 
         if (trim((string)($form['dep_station'] ?? '')) === '') {
-            return [
+            $candidates[] = [
                 'key' => 'dep_station',
                 'prompt' => 'Hvad var afgangsstationen?',
                 'choices' => [],
@@ -198,7 +221,7 @@ final class AdminChatService
         }
 
         if (trim((string)($form['arr_station'] ?? '')) === '') {
-            return [
+            $candidates[] = [
                 'key' => 'arr_station',
                 'prompt' => 'Hvad var destinationsstationen?',
                 'choices' => [],
@@ -208,7 +231,7 @@ final class AdminChatService
         }
 
         if ((string)($incident['main'] ?? '') === '') {
-            return [
+            $candidates[] = [
                 'key' => 'incident_main',
                 'prompt' => 'Hvad skete der? Vae lg delay, cancellation, missed_connection eller stranded.',
                 'choices' => [
@@ -224,7 +247,7 @@ final class AdminChatService
 
         $delayKnown = trim((string)($form['delayAtFinalMinutes'] ?? '')) !== '' || trim((string)($form['national_delay_minutes'] ?? '')) !== '';
         if (!$delayKnown) {
-            return [
+            $candidates[] = [
                 'key' => 'delay_minutes',
                 'prompt' => 'Hvor mange minutters forsinkelse ved destinationen eller forventet samlet forsinkelse?',
                 'choices' => [],
@@ -233,7 +256,16 @@ final class AdminChatService
             ];
         }
 
-        return $this->followupQuestion($flow, $preview);
+        $candidates = array_merge($candidates, $this->buildFollowupQuestions($flow, $preview));
+        if ($preferredKey !== null && $preferredKey !== '') {
+            foreach ($candidates as $candidate) {
+                if ((string)($candidate['key'] ?? '') === $preferredKey) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return $candidates[0] ?? null;
     }
 
     /**
@@ -446,7 +478,9 @@ final class AdminChatService
     {
         $flow = $this->readFlow($session);
         $preview = $this->buildPipelinePreview($flow);
-        $question = $this->currentQuestion($flow, $preview);
+        $preferredKey = trim((string)$session->read('admin.chat_focus_key'));
+        $question = $this->currentQuestion($flow, $preview, $preferredKey !== '' ? $preferredKey : null);
+        $session->delete('admin.chat_focus_key');
         $history = (array)$session->read('admin.chat_history') ?: [];
         $summary = $this->buildSummary($flow);
         $citations = $this->buildCitations($question);
@@ -481,12 +515,13 @@ final class AdminChatService
     /**
      * @param array<string,mixed> $flow
      * @param array<string,mixed>|null $preview
-     * @return array<string,mixed>|null
+     * @return array<int,array<string,mixed>>
      */
-    private function followupQuestion(array $flow, ?array $preview = null): ?array
+    private function buildFollowupQuestions(array $flow, ?array $preview = null): array
     {
         $form = (array)($flow['form'] ?? []);
         $raw = (array)(($preview['raw'] ?? null) ?: []);
+        $questions = [];
 
         $askTri = function (string $key, string $prompt, string $query, string $path): array {
             return [
@@ -513,7 +548,7 @@ final class AdminChatService
 
         $art12Missing = (array)(Hash::get($raw, 'art12.missing') ?? []);
         if (in_array('separate_contract_notice', $art12Missing, true) && ($form['separate_contract_notice'] ?? '') === '') {
-            return $askTri(
+            $questions[] = $askTri(
                 'separate_contract_notice',
                 'Var der en tydelig notits om saerskilte kontrakter foer koeb?',
                 'Artikel 12 separate contracts notice',
@@ -521,7 +556,7 @@ final class AdminChatService
             );
         }
         if (in_array('through_ticket_disclosure', $art12Missing, true) && ($form['through_ticket_disclosure'] ?? '') === '') {
-            return $askTri(
+            $questions[] = $askTri(
                 'through_ticket_disclosure',
                 'Blev kontraktstrukturen tydeligt oplyst foer koeb?',
                 'Artikel 12 through ticket disclosure',
@@ -539,12 +574,12 @@ final class AdminChatService
         ];
         foreach ($orderedArt20 as $key => [$prompt, $query, $path]) {
             if (in_array($key, $art20Missing, true) && ($form[$key] ?? '') === '') {
-                return $askTri($key, $prompt, $query, $path);
+                $questions[] = $askTri($key, $prompt, $query, $path);
             }
         }
 
         if (($form['meal_offered'] ?? '') === 'no' && trim((string)($form['meal_self_paid_amount'] ?? '')) === '') {
-            return $askAmount(
+            $questions[] = $askAmount(
                 'meal_self_paid_amount',
                 'Hvor meget betalte passageren selv for maaltider eller forfriskninger?',
                 'Artikel 20 2 a maaltider udgifter',
@@ -552,7 +587,7 @@ final class AdminChatService
             );
         }
         if (($form['hotel_offered'] ?? '') === 'no' && trim((string)($form['hotel_self_paid_amount'] ?? '')) === '') {
-            return $askAmount(
+            $questions[] = $askAmount(
                 'hotel_self_paid_amount',
                 'Hvor meget betalte passageren selv for hotel eller overnatning?',
                 'Artikel 20 2 b hotel udgifter',
@@ -560,7 +595,7 @@ final class AdminChatService
             );
         }
         if (($form['a20_3_self_paid'] ?? '') === 'yes' && trim((string)($form['a20_3_self_paid_amount'] ?? '')) === '') {
-            return $askAmount(
+            $questions[] = $askAmount(
                 'a20_3_self_paid_amount',
                 'Hvor meget betalte passageren selv for alternativ transport fra stationen?',
                 'Artikel 20 3 selvbetalt transport belob',
@@ -570,7 +605,7 @@ final class AdminChatService
 
         $flags = (array)($flow['flags'] ?? []);
         if (((string)($flags['gate_art18'] ?? '')) === '1' && trim((string)($form['remedyChoice'] ?? '')) === '') {
-            return [
+            $questions[] = [
                 'key' => 'remedy_choice',
                 'prompt' => 'Hvilken Art. 18-retning passer bedst lige nu? Vae lg refund_return, reroute_soonest eller reroute_later.',
                 'choices' => [
@@ -585,7 +620,7 @@ final class AdminChatService
 
         $remedyChoice = (string)($form['remedyChoice'] ?? '');
         if ($remedyChoice === 'refund_return' && ($form['refund_requested'] ?? '') === '') {
-            return $askTri(
+            $questions[] = $askTri(
                 'refund_requested',
                 'Er refusion eksplicit anmodet eller valgt?',
                 'Artikel 18 refund requested',
@@ -593,7 +628,7 @@ final class AdminChatService
             );
         }
         if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === '') {
-            return $askTri(
+            $questions[] = $askTri(
                 'return_to_origin_expense',
                 'Havde passageren udgifter til at komme tilbage til udgangspunktet?',
                 'Artikel 18 return to origin expense',
@@ -601,7 +636,7 @@ final class AdminChatService
             );
         }
         if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === 'yes' && trim((string)($form['return_to_origin_amount'] ?? '')) === '') {
-            return $askAmount(
+            $questions[] = $askAmount(
                 'return_to_origin_amount',
                 'Hvor meget betalte passageren for at komme tilbage til udgangspunktet?',
                 'Artikel 18 return to origin amount',
@@ -618,11 +653,11 @@ final class AdminChatService
             ];
             foreach ($rerouteMap as $key => [$prompt, $query, $path]) {
                 if (($form[$key] ?? '') === '') {
-                    return $askTri($key, $prompt, $query, $path);
+                    $questions[] = $askTri($key, $prompt, $query, $path);
                 }
             }
             if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
-                return [
+                $questions[] = [
                     'key' => 'reroute_later_outcome',
                     'prompt' => 'Hvad skete der med den senere omlaegning? Vae lg operator_offered, self_bought eller no_solution.',
                     'choices' => [
@@ -635,7 +670,7 @@ final class AdminChatService
                 ];
             }
             if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === 'self_bought' && trim((string)($form['reroute_later_self_paid_amount'] ?? '')) === '') {
-                return $askAmount(
+                $questions[] = $askAmount(
                     'reroute_later_self_paid_amount',
                     'Hvor meget betalte passageren selv for den senere omlaegning?',
                     'Artikel 18 later reroute self bought amount',
@@ -643,7 +678,7 @@ final class AdminChatService
                 );
             }
             if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
-                return $askAmount(
+                $questions[] = $askAmount(
                     'reroute_extra_costs_amount',
                     'Hvor store var de ekstra omlaegningsomkostninger?',
                     'Artikel 18 2 reroute extra costs amount',
@@ -652,7 +687,7 @@ final class AdminChatService
             }
         }
 
-        return null;
+        return $questions;
     }
 
     /**

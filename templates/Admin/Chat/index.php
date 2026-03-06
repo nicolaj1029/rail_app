@@ -44,6 +44,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
      data-chat-root
      data-message-url="<?= h($this->Url->build(['action' => 'message'])) ?>"
      data-reset-url="<?= h($this->Url->build(['action' => 'reset'])) ?>"
+     data-focus-url="<?= h($this->Url->build(['action' => 'focus'])) ?>"
      data-initial='<?= h($payloadJson) ?>'>
   <section class="admin-chat-card">
     <h1 style="margin-top:0;">Admin Chat</h1>
@@ -117,6 +118,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   const resetEl = root.querySelector('[data-chat-reset]');
   const messageUrl = root.dataset.messageUrl;
   const resetUrl = root.dataset.resetUrl;
+  const focusUrl = root.dataset.focusUrl;
 
   let payload = JSON.parse(root.dataset.initial || '{}');
 
@@ -246,7 +248,10 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
           '<strong>' + escapeHtml(item.label || item.key || '') + '</strong>' +
           '<div class="admin-muted">' + escapeHtml(item.detail || '') + '</div>' +
           '<div class="admin-muted" style="margin-top:4px;">Gruppe: ' + escapeHtml(item.group || '-') + '</div>' +
-          (item.href ? ('<div style="margin-top:8px;"><a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a></div>') : '') +
+          '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+            '<button type="button" class="admin-chip" data-blocker-focus="' + escapeHtml(item.key || '') + '">Fokusér i chat</button>' +
+            (item.href ? ('<a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a>') : '') +
+          '</div>' +
         '</div>'
       )).join('')
     ) : '<div class="admin-muted">Ingen kendte blocker-felter lige nu.</div>';
@@ -333,6 +338,20 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
       inputEl.focus();
     } catch (error) {
       window.alert('Kunne ikke nulstille chatten: ' + error.message);
+    }
+  });
+
+  previewBlockersEl.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-blocker-focus]');
+    if (!button) return;
+    const key = button.getAttribute('data-blocker-focus') || '';
+    if (!key) return;
+    try {
+      const nextPayload = await post(focusUrl, {key});
+      render(nextPayload);
+      inputEl.focus();
+    } catch (error) {
+      window.alert('Kunne ikke fokusere blocker i chatten: ' + error.message);
     }
   });
 
