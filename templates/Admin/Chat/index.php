@@ -273,7 +273,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
                 '<div class="admin-muted">' + escapeHtml(item.detail || '') + '</div>' +
                 '<div class="admin-muted" style="margin-top:4px;">Gruppe: ' + escapeHtml(item.group || '-') + '</div>' +
                 '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
-                  '<button type="button" class="admin-chip" data-blocker-focus="' + escapeHtml(item.key || '') + '">Fokusér i chat</button>' +
+                  ((item.can_focus && (item.focus_key || item.key)) ? ('<button type="button" class="admin-chip" data-blocker-focus="' + escapeHtml(item.focus_key || item.key || '') + '">Fokusér i chat</button>') : '') +
                   (item.href ? ('<a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a>') : '') +
                 '</div>' +
               '</div>'

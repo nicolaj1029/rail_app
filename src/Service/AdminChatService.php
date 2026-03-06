@@ -113,7 +113,7 @@ final class AdminChatService
      */
     public function focusQuestion(Session $session, string $key): array
     {
-        $focusKey = trim($key);
+        $focusKey = $this->normalizeQuestionKey(trim($key));
         if ($focusKey === '') {
             return $this->buildPayload($session, 'Ingen blocker-noegle modtaget.');
         }
@@ -257,9 +257,10 @@ final class AdminChatService
         }
 
         $candidates = array_merge($candidates, $this->buildFollowupQuestions($flow, $preview));
-        if ($preferredKey !== null && $preferredKey !== '') {
+        $normalizedPreferredKey = $this->normalizeQuestionKey((string)$preferredKey);
+        if ($normalizedPreferredKey !== '') {
             foreach ($candidates as $candidate) {
-                if ((string)($candidate['key'] ?? '') === $preferredKey) {
+                if ($this->normalizeQuestionKey((string)($candidate['key'] ?? '')) === $normalizedPreferredKey) {
                     return $candidate;
                 }
             }
@@ -478,7 +479,10 @@ final class AdminChatService
     {
         $flow = $this->readFlow($session);
         $preview = $this->buildPipelinePreview($flow);
-        $preferredKey = trim((string)$session->read('admin.chat_focus_key'));
+        $preferredKey = $this->normalizeQuestionKey(trim((string)$session->read('admin.chat_focus_key')));
+        if ($preferredKey === '') {
+            $preferredKey = $this->preferredQuestionKeyFromPreview($preview);
+        }
         $question = $this->currentQuestion($flow, $preview, $preferredKey !== '' ? $preferredKey : null);
         $session->delete('admin.chat_focus_key');
         $history = (array)$session->read('admin.chat_history') ?: [];
@@ -926,7 +930,7 @@ final class AdminChatService
      * @param array<string,mixed> $flow
      * @param array<string,mixed> $actual
      * @param array<string,mixed> $summary
-     * @return array<int,array<string,string>>
+     * @return array<int,array<string,mixed>>
      */
     private function deriveBlockingFields(array $flow, array $actual, array $summary): array
     {
@@ -939,6 +943,7 @@ final class AdminChatService
             if (isset($items[$id])) {
                 return;
             }
+            $focusKey = $this->normalizeQuestionKey($key);
             $items[$id] = [
                 'key' => $key,
                 'label' => $label,
@@ -946,6 +951,8 @@ final class AdminChatService
                 'href' => $href,
                 'group' => $group,
                 'priority' => $priority,
+                'focus_key' => $focusKey,
+                'can_focus' => $focusKey !== '',
             ];
         };
 
@@ -1054,6 +1061,41 @@ final class AdminChatService
         });
 
         return array_values($items);
+    }
+
+    /**
+     * @param array<string,mixed> $preview
+     */
+    private function preferredQuestionKeyFromPreview(array $preview): string
+    {
+        $blockingFields = (array)($preview['blocking_fields'] ?? []);
+        foreach ($blockingFields as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if (!(bool)($item['can_focus'] ?? false)) {
+                continue;
+            }
+            $focusKey = $this->normalizeQuestionKey((string)($item['focus_key'] ?? $item['key'] ?? ''));
+            if ($focusKey !== '') {
+                return $focusKey;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeQuestionKey(string $key): string
+    {
+        $trimmed = trim($key);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        return match ($trimmed) {
+            'remedyChoice' => 'remedy_choice',
+            default => $trimmed,
+        };
     }
 
     /**
