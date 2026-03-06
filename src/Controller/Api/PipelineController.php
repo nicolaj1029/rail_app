@@ -32,8 +32,9 @@ class PipelineController extends AppController
         $wizard = (array)($payload['wizard'] ?? []);
         // Split flow: step2_entitlements contains ticket price/operator and can be needed for claim totals.
         $wizardStep2 = (array)($wizard['step2_entitlements'] ?? []);
-        $wizardStep3 = (array)($wizard['step3_journey'] ?? []);
-        $wizardStation = (array)($wizard['step4_station'] ?? []);
+        // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures (step3_journey + step4_station).
+        $wizardStep3Station = (array)($wizard['step3_station'] ?? ($wizard['step4_station'] ?? []));
+        $wizardStep4Journey = (array)($wizard['step4_journey'] ?? ($wizard['step3_journey'] ?? []));
         // Back-compat: older fixtures used step4_incident for incident gating (before station step existed)
         $wizardIncident = (array)($wizard['step5_incident'] ?? ($wizard['step4_incident'] ?? []));
         // Back-compat: old fixtures used step5_choices for transport; new split flow uses step6_choices
@@ -46,7 +47,7 @@ class PipelineController extends AppController
         $wizardComp = (array)($wizard['step10_compensation'] ?? ($wizard['step9_compensation'] ?? ($wizard['step7_compensation'] ?? [])));
         $meta = (array)($payload['meta'] ?? []);
         // Wizard answers should take precedence over bare meta
-        $meta = array_merge($meta, $wizardStep2, $wizardStep3, $wizardStation, $wizardIncident, $wizardTransport, $wizardRemedies, $wizardAssistance, $wizardDowngrade, $wizardComp);
+        $meta = array_merge($meta, $wizardStep2, $wizardStep3Station, $wizardStep4Journey, $wizardIncident, $wizardTransport, $wizardRemedies, $wizardAssistance, $wizardDowngrade, $wizardComp);
         $logs = [];
         // Normalize per-leg class/reservation into segments + derive hooks when available
         try {

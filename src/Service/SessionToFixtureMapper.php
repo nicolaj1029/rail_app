@@ -14,8 +14,8 @@ class SessionToFixtureMapper
     public function mapSessionToFixture(array $flow): array
     {
         [$journeyBasic, $segments] = $this->buildJourneyParts($flow);
-        $step3 = $this->mergeStep3($flow);
-        $step4Station = $this->extractStep4Station($flow);
+        $step4Journey = $this->mergeStep3($flow);
+        $step3Station = $this->extractStep4Station($flow);
         $step5Incident = $this->extractStep5Incident($flow);
         $step6Choices = $this->extractStep6Choices($flow);
         $step7Remedies = $this->extractStep7Remedies($flow);
@@ -33,11 +33,11 @@ class SessionToFixtureMapper
             // Persist selected meta hooks (multi-ticket / guardian etc.) for QA fixtures
             'meta' => $this->extractMeta($flow),
             'wizard' => [
-                // Split flow order: start -> entitlements -> journey -> station -> incident -> choices -> remedies -> assistance -> downgrade -> compensation
+                // Split flow order: start -> entitlements -> station -> journey -> incident -> choices -> remedies -> assistance -> downgrade -> compensation
                 'step1_start' => $this->extractStep1Start($flow),
                 'step2_entitlements' => $this->extractStep2Entitlements($flow),
-                'step3_journey' => $step3,
-                'step4_station' => $step4Station,
+                'step3_station' => $step3Station,
+                'step4_journey' => $step4Journey,
                 'step5_incident' => $step5Incident,
                 'step6_choices' => $step6Choices,
                 'step7_remedies' => $step7Remedies,
@@ -114,7 +114,7 @@ class SessionToFixtureMapper
         // Merge in additional step3 fields if present
         $extraStep3 = $this->extractStep3Extras($flow);
         if (!empty($extraStep3)) {
-            $base['wizard']['step3_journey'] = (array)($base['wizard']['step3_journey'] ?? []) + $extraStep3;
+            $base['wizard']['step4_journey'] = (array)($base['wizard']['step4_journey'] ?? []) + $extraStep3;
         }
 
         // Art.12 minimal meta injection (only hints; exception pair left unknown)
@@ -149,6 +149,11 @@ class SessionToFixtureMapper
             'ticket_upload_count',
             'ticket_multi_passenger',
             'claimant_is_legal_representative',
+            // Season/period pass (Art. 19(2)) + minimal ticket-type hooks for QA fixtures.
+            'season_pass',
+            'season_pass_files',
+            'fare_flex_type',
+            'train_specificity',
             // Downgrade: keep per-ticket bundles so fixtures can represent multi-ticket correctly.
             'saved_leg_by_file',
             'downgrade_by_file',
@@ -778,10 +783,11 @@ class SessionToFixtureMapper
             return $toYesNoUnknown($arr);
         };
 
-        $deniedBoarding = $flowMeta['bike_denied_boarding'] ?? ($form['bike_denied_boarding'] ?? null);
-        $refusalProvided = $flowMeta['bike_refusal_reason_provided'] ?? ($form['bike_refusal_reason_provided'] ?? null);
-        $refusalType = $flowMeta['bike_refusal_reason_type'] ?? ($form['bike_refusal_reason_type'] ?? null);
-        $refusalOtherText = $flowMeta['bike_refusal_reason_other_text'] ?? ($form['bike_refusal_reason_other_text'] ?? null);
+        // Prefer explicit user input (form) over meta/auto defaults when exporting fixtures.
+        $deniedBoarding = $form['bike_denied_boarding'] ?? ($flowMeta['bike_denied_boarding'] ?? null);
+        $refusalProvided = $form['bike_refusal_reason_provided'] ?? ($flowMeta['bike_refusal_reason_provided'] ?? null);
+        $refusalType = $form['bike_refusal_reason_type'] ?? ($flowMeta['bike_refusal_reason_type'] ?? null);
+        $refusalOtherText = $form['bike_refusal_reason_other_text'] ?? ($flowMeta['bike_refusal_reason_other_text'] ?? null);
 
         $bikeDeniedReason = 'unknown';
         if ($toYesNoUnknown($deniedBoarding) === 'Ja') {
@@ -790,22 +796,22 @@ class SessionToFixtureMapper
             $bikeDeniedReason = 'unspecified';
         }
 
-        $rtSeen = $flowMeta['realtime_info_seen'] ?? ($form['realtime_info_seen'] ?? []);
+        $rtSeen = $form['realtime_info_seen'] ?? ($flowMeta['realtime_info_seen'] ?? []);
         $pmrDeliveredMeta = $flowMeta['pmr_delivered_status'] ?? null;
 
-        $bikeResMade = $toYesNoUnknown($flowMeta['bike_reservation_made'] ?? ($form['bike_reservation_made'] ?? null));
-        $bikeResReq = $toYesNoUnknown($flowMeta['bike_reservation_required'] ?? ($form['bike_reservation_required'] ?? null));
+        $bikeResMade = $toYesNoUnknown($form['bike_reservation_made'] ?? ($flowMeta['bike_reservation_made'] ?? null));
+        $bikeResReq = $toYesNoUnknown($form['bike_reservation_required'] ?? ($flowMeta['bike_reservation_required'] ?? null));
         $bikeDenied = $toYesNoUnknown($deniedBoarding);
         $bikeReasonProvided = $toYesNoUnknown($refusalProvided);
         $bikeReasonType = is_string($refusalType) ? trim($refusalType) : '';
 
-        $pmrUser = $toYesNoUnknown($flowMeta['pmr_user'] ?? ($form['pmr_user'] ?? null));
-        $pmrBooked = $toYesNoUnknown($flowMeta['pmr_booked'] ?? ($form['pmr_booked'] ?? null));
-        $pmrPromisedMissing = $toYesNoUnknown($flowMeta['pmr_promised_missing'] ?? ($form['pmr_promised_missing'] ?? null));
-        $pmrDelivered = (string)($pmrDeliveredMeta ?? ($form['pmrQDelivered'] ?? 'unknown'));
+        $pmrUser = $toYesNoUnknown($form['pmr_user'] ?? ($flowMeta['pmr_user'] ?? null));
+        $pmrBooked = $toYesNoUnknown($form['pmr_booked'] ?? ($flowMeta['pmr_booked'] ?? null));
+        $pmrPromisedMissing = $toYesNoUnknown($form['pmr_promised_missing'] ?? ($flowMeta['pmr_promised_missing'] ?? null));
+        $pmrDelivered = $toYesNoUnknown($form['pmr_delivered_status'] ?? $pmrDeliveredMeta ?? ($form['pmrQDelivered'] ?? 'unknown'));
 
-        $preinformed = $toYesNoUnknown($flowMeta['preinformed_disruption'] ?? ($form['preinformed_disruption'] ?? 'unknown'));
-        $preinfoChannel = (string)($flowMeta['preinfo_channel'] ?? ($form['preinfo_channel'] ?? ''));
+        $preinformed = $toYesNoUnknown($form['preinformed_disruption'] ?? ($flowMeta['preinformed_disruption'] ?? 'unknown'));
+        $preinfoChannel = (string)($form['preinfo_channel'] ?? ($flowMeta['preinfo_channel'] ?? ''));
         $realtimeSeen = $arrToYesNoUnknown($rtSeen);
 
         return [

@@ -39,11 +39,11 @@ $isPreview = !empty($flowPreview);
 </style>
 
 <?php if ($isOngoing): ?>
-  <h1>TRIN 3 - Bekraeft rejse og forsinkelse (igangvaerende rejse)</h1>
+  <h1>TRIN 4 - Bekraeft rejse og forsinkelse (igangvaerende rejse)</h1>
 <?php elseif ($isCompleted): ?>
-  <h1>TRIN 3 - Bekraeft hvad der skete paa rejsen</h1>
+  <h1>TRIN 4 - Bekraeft hvad der skete paa rejsen</h1>
 <?php else: ?>
-  <h1>TRIN 3 - Bekraeft rejse og forsinkelse</h1>
+  <h1>TRIN 4 - Bekraeft rejse og forsinkelse</h1>
 <?php endif; ?>
 <?php if (!empty($contractWarning ?? '')): ?>
   <div class="card hl" style="border:1px solid #f5c2c7; background:#fff5f5; margin-bottom:8px;">
@@ -54,9 +54,9 @@ $isPreview = !empty($flowPreview);
 <?= $this->Form->create(null, ['novalidate' => true]) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
-<!-- TRIN 3a – Cykel -->
+<!-- TRIN 4a – Cykel -->
 <div class="card mt12">
-  <strong>🚲 TRIN 3a – Cykel og bagage (Art.6)</strong>
+  <strong>🚲 TRIN 4a – Cykel og bagage (Art.6)</strong>
   <p class="small muted">Svarene her aktiverer Art.18/20 ved cykel-problemer.<?= ($bikeHint !== '') ? (' ' . h($bikeHint)) : '' ?></p>
   <?php if ($bikeAutoDetected): ?>
     <div class="small muted mt4">Auto-note: Billet/OCR ser ud til at nævne cykel. Valget er stadig sat til “Nej” som udgangspunkt – ret hvis det er forkert.</div>
@@ -116,9 +116,9 @@ $isPreview = !empty($flowPreview);
   </div>
 </div>
 
-<!-- TRIN 3b – PMR -->
+<!-- TRIN 4b – PMR -->
 <div class="card mt12">
-  <strong>♿ TRIN 3b – PMR / handicap</strong>
+  <strong>♿ TRIN 4b – PMR / handicap</strong>
   <p class="small muted">Hvis bestilt hjælp ikke blev leveret, kan Art.18/20 aktiveres automatisk.</p>
   <?php if ($pmrAutoDetected): ?>
     <div class="small muted mt4">Auto-note: Billet/OCR ser ud til at nævne handicap/PMR. Valget er stadig sat til “Nej” som udgangspunkt – ret hvis det er forkert.</div>
@@ -155,7 +155,7 @@ $isPreview = !empty($flowPreview);
 
 
 <div class="mt12" style="display:flex; gap:8px; align-items:center;">
-  <?= $this->Html->link('← Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Html->link('← Tilbage', ['action' => 'station'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
   <?= $this->Form->button('Næste trin →', ['class' => 'button']) ?>
 </div>
 

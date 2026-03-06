@@ -26,6 +26,47 @@ $art19Allowed = (bool)($art19Allowed ?? true);
 $articles = (array)($profile['articles'] ?? []);
 $art19Enabled = !isset($articles['art19']) || $articles['art19'] !== false;
 $isPreview = !empty($flowPreview);
+$step10Ready = array_key_exists('step10Ready', get_defined_vars()) ? (bool)$step10Ready : true;
+$seasonMode = (bool)($seasonMode ?? false);
+$seasonPolicy = $seasonPolicy ?? null;
+
+if (!$step10Ready) {
+    $opName = (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? ''));
+    $opCountry = (string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''));
+    $policyUrl = is_array($seasonPolicy) ? (string)($seasonPolicy['source_url'] ?? '') : '';
+    $claimUrl = '';
+    if (is_array($seasonPolicy) && !empty($seasonPolicy['claim_channel']) && is_array($seasonPolicy['claim_channel'])) {
+        if ((string)($seasonPolicy['claim_channel']['type'] ?? '') === 'url') {
+            $claimUrl = (string)($seasonPolicy['claim_channel']['value'] ?? '');
+        }
+    }
+    $incidentUrl = $this->Url->build(['controller' => 'Flow', 'action' => 'incident']);
+    ?>
+    <section class="panel">
+        <h2><?= h($compTitle) ?></h2>
+        <p>
+            Season/pendler-mode er aktiv. Udfyld TRIN 5 (hændelse + forsinkelse) for at få beregning/resultat.
+        </p>
+        <?php if ($opName !== '' || $opCountry !== ''): ?>
+            <p><strong>Operatør:</strong> <?= h(trim($opName . ($opCountry !== '' ? ' (' . $opCountry . ')' : ''))) ?></p>
+        <?php endif; ?>
+        <p><a class="btn btn-primary" href="<?= h($incidentUrl) ?>">Gå til TRIN 5</a></p>
+        <?php if ($policyUrl !== '' || $claimUrl !== ''): ?>
+            <div class="mt12">
+                <div><strong>Operatørens policy/claim</strong></div>
+                <ul>
+                    <?php if ($policyUrl !== ''): ?><li><a target="_blank" rel="noopener" href="<?= h($policyUrl) ?>">Policy-side</a></li><?php endif; ?>
+                    <?php if ($claimUrl !== ''): ?><li><a target="_blank" rel="noopener" href="<?= h($claimUrl) ?>">Claim-kanal</a></li><?php endif; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+        <p class="muted mt12">
+            TRIN 10 er åbent tidligt for pendlere, men vi viser først et egentligt resultat når hændelsen er registreret.
+        </p>
+    </section>
+    <?php
+    return;
+}
 
 $priceFromTicket = (float)($ticketPriceAmount ?? 0);
 $priceCurrency = (string)($currency ?? 'EUR');
@@ -182,92 +223,6 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <?= $this->Form->create(null) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
-<?php if (!empty($claim)): ?>
-  <?php
-    $br = (array)($claim['breakdown'] ?? []);
-    $tot = (array)($claim['totals'] ?? []);
-    $art18Br = (array)($br['art18'] ?? []);
-    $art18RerouteExtra = isset($art18Br['reroute_extra_costs']) ? (float)$art18Br['reroute_extra_costs'] : 0.0;
-    $art18Downgrade = isset($art18Br['downgrade_annexii']) ? (float)$art18Br['downgrade_annexii'] : 0.0;
-    $bandLabel = $bandAuto === '50' ? '50%' : ($bandAuto === '25' ? '25%' : '<60');
-    $compPct = isset($br['compensation']['pct']) ? (int)$br['compensation']['pct'] : 0;
-    $compAmount = isset($br['compensation']['amount']) ? (float)$br['compensation']['amount'] : 0.0;
-    $compBasis = (string)($br['compensation']['basis'] ?? '');
-    $compCur = (string)($tot['currency'] ?? 'EUR');
-    $refundAmount = isset($br['refund']['amount']) ? (float)$br['refund']['amount'] : 0.0;
-    $refundCur = (string)($tot['currency'] ?? 'EUR');
-    $expCur = (string)($tot['currency'] ?? $priceCurrency);
-    $expVal = isset($br['expenses']['total']) ? (float)$br['expenses']['total'] : 0.0;
-    $expToTicket = $fxConv && $expCur !== $priceCurrency ? $fxConv($expVal, $expCur, $priceCurrency) : null;
-    $expToEur = $fxConv && $expCur !== 'EUR' ? $fxConv($expVal, $expCur, 'EUR') : null;
-  ?>
-  <div class="card" style="border-color:#cce5ff;background:#f3f6ff;">
-    <strong><?= __('Hurtigt overblik') ?></strong>
-    <div class="small mt4"><?= __('Kernefelter fra denne sag - opdateres live.') ?></div>
-    <div class="mt8" style="display:flex;flex-wrap:wrap;gap:8px;">
-      <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
-        <div><strong><?= __('Rejse & grundlag') ?></strong></div>
-        <div class="mt4"><?= __('Endelig forsinkelse:') ?> <strong><?= (int)($delayAtFinal ?? 0) ?> <?= __('min') ?></strong> (<?= __('b?nd:') ?> <?= h($bandLabel) ?>)</div>
-        <?php if ($remedyChoice === 'refund_return'): ?>
-          <div class="mt4"><?= __('Billetpris (Trin 3):') ?> <strong><?= number_format($priceFromTicket,2) ?> <?= h($priceCurrency) ?></strong><br><span class="muted"><?= __('Refunderes jf. Art. 18(1)(1); kompensation udelukkes for samme tjeneste.') ?></span></div>
-        <?php else: ?>
-          <div class="mt4"><?= __('Prisgrundlag (Trin 3):') ?> <strong><?= number_format($priceFromTicket,2) ?> <?= h($priceCurrency) ?></strong><br><span class="muted"><?= __('Kompensation efter Art. 19.') ?></span></div>
-        <?php endif; ?>
-      </div>
-      <div class="card small" style="flex:1;min-width:200px;border-color:#e5e9f0;background:#fff;">
-        <div><strong><?= __('Art. 19 ? Kompensation') ?></strong></div>
-        <div class="mt4"><?= __('Kompensation pct:') ?> <strong><?= $compPct ?>%</strong><?= $compBasis ? ' ? ' . h($compBasis) : '' ?></div>
-        <div class="mt4"><?= __('Bel?b kompensation:') ?> <strong><?= number_format($compAmount,2) ?> <?= h($compCur) ?></strong></div>
-        <?php if (!$art19Allowed || $remedyChoice === 'refund_return'): ?>
-          <div class="small hl mt4">
-            <?= h((string)($art19Reason ?? __('Art. 19 udelukkes for denne sag.'))) ?>
-            <br><span class="muted"><?= __('Art. 18 (refusion) og Art. 20 (assistance/udgifter) kan stadig g�lde.') ?></span>
-          </div>
-        <?php endif; ?>
-      </div>
-      <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
-        <div><strong><?= __('Art. 18 ? Refusion') ?></strong></div>
-        <div class="mt4"><?= __('Refusion (stk. 1):') ?> <strong><?= number_format($refundAmount,2) ?> <?= h($refundCur) ?></strong></div>
-        <div class="mt4"><?= __('Ekstra omkostninger:') ?> <strong><?= $art18RerouteExtra > 0 ? number_format($art18RerouteExtra,2) : '0.00' ?> <?= h($refundCur) ?></strong></div>
-        <div class="mt4"><?= __('Forholdsm?ssigt afslag nedgradering (stk. 3):') ?> <strong><?= $art18Downgrade > 0 ? number_format($art18Downgrade,2) : '0.00' ?> <?= h($refundCur) ?></strong></div>
-      </div>
-      <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
-        <div><strong><?= __('Art. 20 ? Udgifter') ?></strong></div>
-        <?php
-          $expMeals = (float)($br['expenses']['meals'] ?? 0);
-          $expHotel = (float)($br['expenses']['hotel'] ?? 0);
-          $expAlt = (float)($br['expenses']['alt_transport'] ?? 0);
-          $expOther = (float)($br['expenses']['other'] ?? 0);
-          $expA202 = max(0.0, $expMeals + $expHotel + $expOther);
-          $expA203 = max(0.0, $expAlt);
-          $altLabel = (string)($br['expenses']['alt_transport_label'] ?? '');
-        ?>
-        <div class="mt4"><?= __('Udgifter (indsendt):') ?> <strong><?= number_format($expVal,2) ?> <?= h($expCur) ?></strong></div>
-        <div class="mt4"><?= __('Ophold/forplejning (Art. 20(2)):' ) ?> <strong><?= number_format($expA202,2) ?> <?= h($expCur) ?></strong></div>
-        <div class="mt4"><?= __('Transport (Art. 20(3)):' ) ?> <strong><?= number_format($expA203,2) ?> <?= h($expCur) ?></strong><?= $altLabel !== '' && $expA203 > 0 ? ' - ' . h($altLabel) : '' ?></div>
-        <?php if ($expToTicket !== null): ?>
-          <div class="mt4"><?= __('Udgifter i billetvaluta:') ?> <strong><?= number_format($expToTicket,2) ?> <?= h($priceCurrency) ?></strong></div>
-        <?php endif; ?>
-        <?php if ($expToEur !== null): ?>
-          <div class="mt4"><?= __('Udgifter i EUR:') ?> <strong><?= number_format($expToEur,2) ?> EUR</strong></div>
-        <?php endif; ?>
-      </div>
-      <div class="card small" style="flex:1;min-width:220px;border-color:#e5e9f0;background:#fff;">
-        <div><strong><?= __('Total & udbetaling') ?></strong></div>
-        <div class="mt4"><?= __('Samlet krav (brutto, inkl. Art.18 stk.3):') ?> <strong><?= number_format($grossAdjusted, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
-        <div class="mt4"><?= __('Servicefee {0}%:', $serviceFeePct) ?> <strong><?= number_format($serviceFee, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
-        <div class="mt4"><?= __('Udbetaling inden 24t (netto):') ?> <strong><?= number_format($netPayout, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></strong></div>
-      </div>
-    </div>
-    <?php if (!empty($claim['flags']['retailer_75'])): ?>
-      <div class="small mt8 hl"><?= __('Retlig basis: Art. 12(4) 75% anvendes.') ?></div>
-    <?php endif; ?>
-    <?php if (!empty($seasonMode) && !empty($seasonSummary['cum_minutes_lt60'])): ?>
-      <div class="small mt8 muted"><?= __('Periodekort: akkumulerede sub-60 min:') ?> <strong><?= (int)$seasonSummary['cum_minutes_lt60'] ?></strong></div>
-    <?php endif; ?>
-  </div>
-<?php endif; ?>
-
 <?php if (!empty($seasonMode)): ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong><?= __('Abonnement/Periodekort (Art. 19, stk. 2)') ?></strong>
@@ -279,6 +234,29 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <?php if (!empty($seasonMeta['type'])): ?><span><?= __('Type:') ?> <strong><?= h((string)$seasonMeta['type']) ?></strong></span><?php endif; ?>
       <?php if (!empty($seasonMeta['valid_from']) || !empty($seasonMeta['valid_to'])): ?>
         <span><?= __('Gyldighed:') ?> <strong><?= h((string)($seasonMeta['valid_from'] ?? '')) ?></strong> - <strong><?= h((string)($seasonMeta['valid_to'] ?? '')) ?></strong></span>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+  <?php if (!empty($seasonPolicy) && is_array($seasonPolicy)): ?>
+    <?php $spol = (array)$seasonPolicy; ?>
+    <?php
+      $cov = (string)($spol['coverage_status'] ?? '');
+      $verified = !empty($spol['verified']);
+      $lv = (string)($spol['last_verified'] ?? '');
+      $src = (string)($spol['source_url'] ?? '');
+      $ch = (array)($spol['claim_channel'] ?? []);
+      $chUrl = (string)($ch['value'] ?? '');
+    ?>
+    <div class="small mt8">
+      <div><?= __('OperatÃ¸r-ordning (matrix):') ?> <strong><?= h($verified ? 'verified' : ($cov !== '' ? $cov : 'stub')) ?></strong><?= $lv !== '' ? (' · ' . __('sidst tjekket:') . ' ' . h($lv)) : '' ?>.</div>
+      <?php if ($chUrl !== ''): ?>
+        <div><?= __('Claim-kanal:') ?> <a href="<?= h($chUrl) ?>" target="_blank" rel="noopener"><?= h($chUrl) ?></a></div>
+      <?php endif; ?>
+      <?php if ($src !== ''): ?>
+        <div><?= __('Kilde:') ?> <a href="<?= h($src) ?>" target="_blank" rel="noopener"><?= h($src) ?></a></div>
+      <?php endif; ?>
+      <?php if ($chUrl === '' && $src === ''): ?>
+        <div class="muted"><?= __('Ikke onboardet endnu â€“ brug upload/link i Trin 2 og opgradÃ©r senere i policy-matrix.') ?></div>
       <?php endif; ?>
     </div>
   <?php endif; ?>
@@ -366,77 +344,117 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <?php endif; ?>
 </div>
 
-<div class="card mt12">
-  <strong><?= __('1) Endelig ankomstforsinkelse') ?></strong>
-  <?php $knownDelay = (int)($form['delayAtFinalMinutes'] ?? $delayAtFinal); ?>
-  <?php if ($knownDelay > 0): ?>
-    <div class="small mt4"><?= __('Vi har beregnet den endelige forsinkelse ved bestemmelsesstedet:') ?></div>
-    <div class="ok mt8"><strong><?= h($knownDelay) ?> <?= __('min') ?></strong> (<?= __('EU-filter anvendes kun på forsinkelsesminutter, ikke prisgrundlaget.') ?>)</div>
-    <input type="hidden" name="delayAtFinalMinutes" value="<?= h($knownDelay) ?>" />
-  <?php else: ?>
-    <div class="small mt4"><?= __('Udfyld kun hvis vi ikke allerede kender den. Brug faktiske ankomsttider ved endeligt bestemmelsessted.') ?></div>
-    <label class="mt8"><?= __('Forsinkelse (minutter)') ?>
-      <input type="number" name="delayAtFinalMinutes" min="0" step="1" value="<?= h($form['delayAtFinalMinutes'] ?? '') ?>" />
-    </label>
-  <?php endif; ?>
-  <?php $thr25 = isset($nationalPolicy['thresholds']['25']) ? (int)$nationalPolicy['thresholds']['25'] : 60; ?>
-  <div class="small mt4"><?= __('Auto-beregnet bånd:') ?> <strong><?= $bandAuto === '50' ? '50%' : ($bandAuto === '25' ? '25%' : __('0% (under {0} min)', (int)$thr25)) ?></strong></div>
-</div>
+<?php
+  $gateArt18 = ((string)($flags['gate_art18'] ?? '')) === '1';
+  $natDelayRaw = trim((string)($form['national_delay_minutes'] ?? ''));
+  $hasNatDelay = ($natDelayRaw !== '');
+  $knownDelay = (int)($form['delayAtFinalMinutes'] ?? $delayAtFinal);
+  // EU UI is relevant when EU-gate is active OR the user has already entered >=60 minutes.
+  $showEuUi = $gateArt18 || $knownDelay >= 60;
+?>
 
-<div class="card mt12">
-  <strong><?= __('2) Vælg bånd (hvis relevant)') ?></strong>
-  <div class="small mt4">
+<?php if ($showEuUi): ?>
+  <div class="card mt12">
+    <strong><?= __('1) Var forsinkelsen ved endelig destination mindst {0} min?', (int)$thr50) ?></strong>
+    <div class="small mt4"><?= __('Hvis ja: 50%. Hvis nej (men mindst {0} min): 25%.', (int)$thr25) ?></div>
+
     <?php
-      $thr25Txt = 60;
-      if (!empty($nationalPolicy) && is_array($nationalPolicy) && !empty($nationalPolicy['thresholds']['25'])) {
-          $thr25Txt = (int)$nationalPolicy['thresholds']['25'];
+      // Prefer explicit override / saved value; otherwise use minutes; otherwise default to 25% when EU is active.
+      $sel = (string)($selectedBand ?? ($form['compensationBand'] ?? ''));
+      if ($sel === '') {
+        if ($knownDelay >= (int)$thr50) { $sel = '50'; }
+        elseif ($knownDelay >= (int)$thr25) { $sel = '25'; }
+      }
+
+      $label50 = __('Ja (>= {0} min -> 50%)', (int)$thr50);
+      if ((int)$thr50 > (int)$thr25) {
+        $label25 = __('Nej ({0}-{1} min -> 25%)', (int)$thr25, (int)$thr50 - 1);
+      } else {
+        $label25 = __('Nej (>= {0} min -> 25%)', (int)$thr25);
       }
     ?>
-    <?= __('Hvis forsinkelsen er ≥ {0} min: vælg bånd for beregning. (Vi foreslår automatisk ud fra minutter.)', (int)$thr25Txt) ?>
-    <?php if (!empty($nationalPolicy) && is_array($nationalPolicy) && !empty($nationalPolicy['thresholds']['25'])): ?>
-      <br /><span class="muted"><?= __('Nationalt hint: {0} anvender 25% allerede fra {1} min.', (string)$nationalPolicy['name'], (int)$nationalPolicy['thresholds']['25']) ?></span>
+
+    <label class="mt8"><input type="radio" name="compensationBand" value="50" <?= $sel==='50'?'checked':'' ?> /> <?= $label50 ?></label>
+    <label class="ml8"><input type="radio" name="compensationBand" value="25" <?= $sel==='25'?'checked':'' ?> /> <?= $label25 ?></label>
+    <label class="ml8"><input type="radio" name="compensationBand" value="" <?= $sel===''?'checked':'' ?> /> <?= __('Ved ikke (foreloebig)') ?></label>
+
+    <?php if ($knownDelay > 0): ?>
+      <div class="small muted mt8"><?= __('Beregnet endelig forsinkelse:') ?> <strong><?= h((string)$knownDelay) ?> <?= __('min') ?></strong></div>
+      <input type="hidden" name="delayAtFinalMinutes" value="<?= h((string)$knownDelay) ?>" />
+    <?php elseif ($sel === '50'): ?>
+      <input type="hidden" name="delayAtFinalMinutes" value="<?= h((string)(int)$thr50) ?>" />
+    <?php elseif ($sel === '25'): ?>
+      <input type="hidden" name="delayAtFinalMinutes" value="<?= h((string)(int)$thr25) ?>" />
+    <?php endif; ?>
+
+    <details class="mt8">
+      <summary class="small"><?= __('Avanceret: indtast minutter manuelt') ?></summary>
+      <div class="small muted mt4"><?= __('Udfyld kun hvis vi ikke allerede kender den. Brug faktiske ankomsttider ved endeligt bestemmelsessted.') ?></div>
+      <label class="mt8 small"><?= __('Forsinkelse (minutter)') ?>
+        <input type="number" name="delayAtFinalMinutes" min="0" step="1" value="<?= h($form['delayAtFinalMinutes'] ?? '') ?>" />
+      </label>
+    </details>
+
+    <script>
+      // Live preview: skift baand og reload med ?band=.. for at re-beregne kompensation uden at poste videre
+      (function(){
+        var radios = document.querySelectorAll('input[name="compensationBand"]');
+        radios.forEach(function(r){
+          r.addEventListener('change', function(){
+            var url = new URL(window.location.href);
+            url.searchParams.set('band', this.value);
+            window.location.href = url.toString();
+          });
+        });
+      })();
+    </script>
+  </div>
+<?php else: ?>
+  <div class="card mt12" style="border-color:#ffe8cc;background:#fff8e6">
+    <strong><?= __('National beregning (preview)') ?></strong>
+    <div class="small mt4"><?= __('EU-kompensation (Art. 19) udloeses typisk ved mindst 60 min (eller aflysning).') ?></div>
+
+    <?php if (!empty($nationalPolicy) && is_array($nationalPolicy) && !empty($nationalPolicy['thresholds'])): ?>
+      <?php
+        $thr25 = isset($nationalPolicy['thresholds']['25']) ? (int)$nationalPolicy['thresholds']['25'] : null;
+        $thr50 = isset($nationalPolicy['thresholds']['50']) ? (int)$nationalPolicy['thresholds']['50'] : null;
+      ?>
+      <div class="small mt8">
+        <?= __('National ordning:') ?> <strong><?= h((string)($nationalPolicy['name'] ?? '')) ?></strong>
+        <?php if ($thr25 !== null): ?> - <?= __('25% fra {0} min', (int)$thr25) ?><?php endif; ?>
+        <?php if ($thr50 !== null): ?> (<?= __('50% fra {0} min', (int)$thr50) ?>)<?php endif; ?>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($hasNatDelay): ?>
+      <div class="small mt8"><?= __('Forsinkelse (oplyst i Trin 5):') ?> <strong><?= h($natDelayRaw) ?> <?= __('min') ?></strong></div>
+    <?php else: ?>
+      <div class="small mt8 muted"><?= __('Angiv forsinkelse i Trin 5 (national fallback) for at faa et bedre preview.') ?></div>
     <?php endif; ?>
   </div>
-  <?php
-    $sel = (string)($selectedBand ?? ($form['compensationBand'] ?? ($bandAuto === '0' ? '' : $bandAuto)));
-    $thr25 = null; $thr50 = null;
-    if (!empty($nationalPolicy) && is_array($nationalPolicy) && !empty($nationalPolicy['thresholds'])) {
-      $thr25 = isset($nationalPolicy['thresholds']['25']) ? (int)$nationalPolicy['thresholds']['25'] : null;
-      $thr50 = isset($nationalPolicy['thresholds']['50']) ? (int)$nationalPolicy['thresholds']['50'] : null;
-    }
-    $label25 = ($thr25 !== null && $thr25 !== 60) ? __('25 % (≥ {0} min)', (int)$thr25) : __('25 % (60–119 min)');
-    $label50 = ($thr50 !== null && $thr50 !== 120) ? __('50 % (≥ {0} min)', (int)$thr50) : __('50 % (≥120 min)');
-    $labelNone = ($thr25 !== null && $thr25 !== 60) ? __('Ikke relevant / under {0} min', (int)$thr25) : __('Ikke relevant / under 60 min');
-  ?>
-  <label class="mt8"><input type="radio" name="compensationBand" value="25" <?= $sel==='25'?'checked':'' ?> /> <?= h($label25) ?></label>
-  <label class="ml8"><input type="radio" name="compensationBand" value="50" <?= $sel==='50'?'checked':'' ?> /> <?= h($label50) ?></label>
-  <label class="ml8"><input type="radio" name="compensationBand" value="" <?= $sel===''?'checked':'' ?> /> <?= h($labelNone) ?></label>
-  <script>
-    // Live preview: skift bånd og reload med ?band=.. for at re-beregne kompensation uden at poste videre
-    (function(){
-      var radios = document.querySelectorAll('input[name="compensationBand"]');
-      radios.forEach(function(r){
-        r.addEventListener('change', function(){
-          var url = new URL(window.location.href);
-          url.searchParams.set('band', this.value);
-          window.location.href = url.toString();
-        });
-      });
-    })();
-  </script>
-</div>
-
+<?php endif; ?>
 <?php if (!empty($claim)): ?>
 <div class="card mt12" style="display:grid;gap:8px;">
-  <strong><?= __('Beløb pr. artikel (live)') ?></strong>
+  <strong><?= __('Økonomi (live)') ?></strong>
   <?php $br = (array)($claim['breakdown'] ?? []); $tot = (array)($claim['totals'] ?? []); ?>
   <?php
+    // Expenses: show totals in the canonical (single) summary below.
+    $expVal = isset($br['expenses']['total']) ? (float)$br['expenses']['total'] : 0.0;
+    $expCur = (string)($tot['currency'] ?? $priceCurrency);
+    $expToTicket = ($fxConv && $expCur !== '' && $expCur !== $priceCurrency) ? $fxConv($expVal, $expCur, $priceCurrency) : null;
+    $expToEur = ($fxConv && $expCur !== '' && $expCur !== 'EUR') ? $fxConv($expVal, $expCur, 'EUR') : null;
+
+    $refundHeuristicDowngrade = (float)($br['refund']['downgrade_component'] ?? 0);
     $refundDisplay = (float)($br['refund']['amount'] ?? 0);
     $refundBasis = (string)($br['refund']['basis'] ?? '');
+    $usedWholeFareFallback = false;
     if ($remedyChoice === 'refund_return' && $refundDisplay <= 0 && $priceFromTicket > 0) {
         $refundDisplay = $priceFromTicket;
         $refundBasis = $refundBasis !== '' ? $refundBasis : 'Art. 18(1)(1)';
+        $usedWholeFareFallback = true;
+        $refundHeuristicDowngrade = 0.0;
     }
+    $refundBaseOnly = max(0.0, $refundDisplay - $refundHeuristicDowngrade);
     $returnFlag = (string)($form['return_to_origin_expense'] ?? '');
     $returnAmt = is_numeric($form['return_to_origin_amount'] ?? null)
       ? (float)$form['return_to_origin_amount']
@@ -445,17 +463,12 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     if ($returnCur === '') { $returnCur = $priceCurrency; }
   ?>
   <div class="small mt4">
-    <?= __('Pris fanget i trin 3:') ?> <strong><?= number_format($priceFromTicket, 2) ?> <?= h($priceCurrency) ?></strong>
-    <?php if ($remedyChoice === 'refund_return'): ?>
-      - <?= __('Refunderes jf. Art. 18(1)(1) (kompensation udelukket for samme tjeneste).') ?>
-    <?php else: ?>
-      (<?= __('basis:') ?> <?= h($br['compensation']['basis'] ?? '-') ?>)
-    <?php endif; ?>
+    <?= __('Billetpris:') ?> <strong><?= number_format($priceFromTicket, 2) ?> <?= h($priceCurrency) ?></strong>
   </div>
   <div style="display:grid;gap:6px;">
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-      <div class="small"><strong><?= __('Art. 18 stk. 1') ?></strong></div>
-      <div class="small"><?= __('Refusion (Art. 18 stk. 1):') ?> <?= number_format($refundDisplay, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?><?= $refundBasis ? ' - ' . h($refundBasis) : '' ?><?php if (isset($br['refund']['downgrade_component']) && (float)$br['refund']['downgrade_component']>0): ?> (<?= __('inkl. nedgradering:') ?> <?= number_format((float)$br['refund']['downgrade_component'], 2) ?>)<?php endif; ?></div>
+      <div class="small"><strong><?= __('Art. 18(1) – Refusion') ?></strong></div>
+      <div class="small"><?= __('Refusion:') ?> <?= number_format($refundBaseOnly, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?><?= $refundBasis ? ' - ' . h($refundBasis) : '' ?></div>
       <div class="small"><?= __('Returtransport til udgangspunktet:') ?> <?= $returnAmt > 0 ? number_format($returnAmt, 2) : '0.00' ?> <?= h($returnCur) ?>
         <?php if ($returnAmt > 0 && $fxConv && $returnCur !== $priceCurrency): ?>
           (<?= __('= {0} {1}', number_format($fxConv($returnAmt, $returnCur, $priceCurrency),2), h($priceCurrency)) ?>)
@@ -464,10 +477,9 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
           (<?= __('= {0} EUR', number_format($fxConv($returnAmt, $returnCur, 'EUR'),2)) ?>)
         <?php endif; ?>
       </div>
-      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= $downgradeAmount > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if ($downgradeAmount > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
     </div>
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-      <div class="small"><strong><?= __('Art. 18 stk. 2 og 3') ?></strong></div>
+      <div class="small"><strong><?= __('Art. 18(2)-(3) – Omlægning') ?></strong></div>
       <div class="small"><?= __('Ekstra omkostninger:') ?> <?= $rerouteExtraAmount > 0 ? number_format($rerouteExtraAmount, 2) : '0.00' ?> <?= h($rerouteExtraCur) ?>
         <?php if ($rerouteExtraAmount > 0 && $fxConv && $rerouteExtraCur !== $priceCurrency): ?>
           (<?= __('= {0} {1}', number_format($fxConv($rerouteExtraAmount, $rerouteExtraCur, $priceCurrency),2), h($priceCurrency)) ?>)
@@ -476,14 +488,38 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
           (<?= __('= {0} EUR', number_format($fxConv($rerouteExtraAmount, $rerouteExtraCur, 'EUR'),2)) ?>)
         <?php endif; ?>
       </div>
-      <div class="small"><?= __('Nedgradering (CIV/Bilag II):') ?> <?= $downgradeAmount > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if ($downgradeAmount > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
     </div>
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-      <div class="small"><strong><?= __('Art. 19') ?></strong></div>
-      <div class="small"><?= __('Kompensation:') ?> <?= isset($br['compensation']['amount']) ? number_format((float)$br['compensation']['amount'], 2) : '0.00' ?> <?= h($tot['currency'] ?? 'EUR') ?> - <?= h($br['compensation']['pct'] ?? 0) ?>% - <?= h($br['compensation']['basis'] ?? '') ?></div>
+      <div class="small"><strong><?= __('Bilag II (CIV) – Nedgradering') ?></strong></div>
+      <div class="small"><?= __('Nedgradering (Bilag II):') ?> <?= $downgradeAmount > 0 ? number_format($downgradeAmount,2) : '0.00' ?> <?= h($priceCurrency) ?><?php if ($downgradeAmount > 0 && $priceCurrency !== 'EUR' && $fxConv): ?> (<?= __('= {0} EUR', number_format($fxConv($downgradeAmount, $priceCurrency, 'EUR'),2)) ?>)<?php endif; ?></div>
+      <?php if ($refundHeuristicDowngrade > 0): ?>
+        <div class="small muted"><?= __('Auto (heuristik, hvis Bilag II ikke er udfyldt):') ?> <?= number_format($refundHeuristicDowngrade, 2) ?> <?= h($tot['currency'] ?? $priceCurrency) ?></div>
+      <?php endif; ?>
     </div>
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-      <div class="small"><strong><?= __('Art. 20') ?></strong></div>
+      <div class="small"><strong><?= __('Art. 19 – Kompensation') ?></strong></div>
+      <div class="small"><?= __('Kompensation:') ?> <?= isset($br['compensation']['amount']) ? number_format((float)$br['compensation']['amount'], 2) : '0.00' ?> <?= h($tot['currency'] ?? 'EUR') ?> - <?= h($br['compensation']['pct'] ?? 0) ?>%<?= !empty($br['compensation']['basis']) ? ' - ' . h($br['compensation']['basis']) : '' ?></div>
+      <?php
+        $compEligible = (bool)($br['compensation']['eligible'] ?? false);
+        $compReasons = [];
+        if (!$compEligible || !$art19Enabled || !$art19Allowed) {
+            if (!$art19Enabled) { $compReasons[] = __('Art. 19 er undtaget for denne rejse.'); }
+            if (!$art19Allowed) { $compReasons[] = __('Art. 19 er slået fra af gates i denne sag (fx refusion valgt eller national undtagelse).'); }
+            if ($refundChosen) { $compReasons[] = __('Refusion er valgt — der kan ikke ydes kompensation for samme tjeneste.'); }
+            if ($preinformed) { $compReasons[] = __('Forsinkelsen var oplyst før køb (Art. 19(9)).'); }
+            if ($rerouteUnder60) { $compReasons[] = __('Omlægning gav endelig forsinkelse under 60 min (Art. 19(9)).'); }
+            if (!empty($claim['flags']['extraordinary'])) { $compReasons[] = __('Ekstraordinære forhold (force majeure) er angivet.'); }
+        }
+      ?>
+      <?php if (!empty($compReasons)): ?>
+        <div class="small muted mt4"><?= __('Art. 19 er 0, fordi:') ?></div>
+        <ul class="small muted" style="margin:6px 0 0 18px;">
+          <?php foreach ($compReasons as $r): ?><li><?= h((string)$r) ?></li><?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+      <div class="small"><strong><?= __('Art. 20 – Udgifter') ?></strong></div>
       <?php
         $pick = function(array $keys) use ($form) {
             foreach ($keys as $k) {
@@ -578,3 +614,4 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 
 </fieldset>
 <?= $this->Form->end() ?>
+

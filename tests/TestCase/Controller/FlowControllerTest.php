@@ -87,11 +87,75 @@ class FlowControllerTest extends TestCase
         $this->assertStringContainsString('name="bike_was_present" value="no" checked', $body);
     }
 
+    public function testEntitlementsTicketlessDisablesJourneyFieldsToPreventOverwrite(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => ['ticket_upload_mode' => 'ticketless'],
+        ]);
+
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('id="journeyFieldsFieldset" disabled', $body);
+        $this->assertStringNotContainsString('id="ticketlessFieldset" disabled', $body);
+    }
+
+    public function testEntitlementsTicketModeDisablesTicketlessFieldsToPreventOverwrite(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => ['ticket_upload_mode' => 'ticket'],
+        ]);
+
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('id="ticketlessFieldset" disabled', $body);
+        $this->assertStringNotContainsString('id="journeyFieldsFieldset" disabled', $body);
+    }
+
+    public function testEntitlementsAlwaysRendersArt12Block(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+        ]);
+
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('id="art12MinimalBlock"', $body);
+        $this->assertStringContainsString('id="a12Questions"', $body);
+    }
+
+    public function testJourneyShowsArt9PricingCardInHooksPanel(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'step3_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.journey' => [
+                'country' => ['value' => 'DK'],
+                'segments' => [
+                    ['country' => 'DK'],
+                ],
+            ],
+        ]);
+
+        $this->get('/flow/journey');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Billetpriser', $body);
+        $this->assertStringContainsString('Art. 9(1)', $body);
+    }
+
     public function testAssistanceHotelSelfPaidFieldsVisibleWhenHotelNotOffered(): void
     {
         // Seed session so Art. 20 is active (cancellation) and hotel_offered = no
         $this->session([
-            'flow.flags' => ['step7_done' => '1', 'gate_art20' => '1', 'travel_state' => 'ongoing'],
+            'flow.flags' => ['step5_done' => '1', 'gate_art20' => '1', 'travel_state' => 'ongoing'],
             'flow.incident' => ['main' => 'cancellation'],
             'flow.form' => [
                 'hotel_offered' => 'no',

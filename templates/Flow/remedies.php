@@ -744,8 +744,15 @@ $preview = round($tp * $rate * $share, 2);
             </fieldset>
 
             <div id="ri100PastWrap" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)" style="display:none;">
-                <div>Fik du besked om mulighederne for oml&aelig;gning inden for 100 minutter? (Art. 18(3))
-                    <span class="small muted">Vi bruger planlagt afgang + f&oslash;rste oml&aelig;gnings-besked til at vurdere 100-min-reglen.</span>
+                <div>Fik du besked om en alternativ rejse inden 100 minutter efter planlagt afgang? (Art. 18(3))
+                    <?php if (!empty($art183BaseLabel) && !empty($art183DeadlineLabel)): ?>
+                        <div class="small muted">
+                            100-min frist: <strong><?= h($art183DeadlineLabel) ?></strong> (m&aring;lt fra planlagt afgang: <?= h($art183BaseLabel) ?>).
+                            <?php if (!empty($art183BaseExplain)): ?><span class="ml8"><?= h($art183BaseExplain) ?></span><?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="small muted">100-min fristen m&aring;les fra planlagt afgangstidspunkt. (Vi kunne ikke udlede tidspunktet automatisk i denne sag.)</div>
+                    <?php endif; ?>
                 </div>
                 <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
                 <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>

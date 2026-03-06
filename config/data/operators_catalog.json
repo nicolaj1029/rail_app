@@ -216,6 +216,239 @@
       "products": [
         "Thalys"
       ]
+    },
+    {
+      "name": "BDZ",
+      "aliases": [
+        "bdz",
+        "bulgarian state railways"
+      ],
+      "country": "BG",
+      "products": [
+        "IC",
+        "IR",
+        "Regional"
+      ]
+    },
+    {
+      "name": "HŽPP",
+      "aliases": [
+        "hzpp",
+        "hžpp",
+        "croatian railways"
+      ],
+      "country": "HR",
+      "products": [
+        "IC",
+        "EC",
+        "Regional"
+      ]
+    },
+    {
+      "name": "Elron",
+      "aliases": [
+        "elron"
+      ],
+      "country": "EE",
+      "products": [
+        "Regional"
+      ]
+    },
+    {
+      "name": "Hellenic Train",
+      "aliases": [
+        "hellenic train",
+        "trainose"
+      ],
+      "country": "GR",
+      "products": [
+        "InterCity",
+        "Regional",
+        "Proastiakos"
+      ]
+    },
+    {
+      "name": "MAV-START",
+      "aliases": [
+        "mav",
+        "mav-start",
+        "máv-start"
+      ],
+      "country": "HU",
+      "products": [
+        "IC",
+        "EC",
+        "Railjet",
+        "Regional"
+      ]
+    },
+    {
+      "name": "Iarnrod Eireann",
+      "aliases": [
+        "iarnrod eireann",
+        "irish rail"
+      ],
+      "country": "IE",
+      "products": [
+        "InterCity",
+        "DART",
+        "Commuter"
+      ]
+    },
+    {
+      "name": "CFL",
+      "aliases": [
+        "cfl",
+        "chemins de fer luxembourgeois"
+      ],
+      "country": "LU",
+      "products": [
+        "Regional",
+        "IC"
+      ]
+    },
+    {
+      "name": "LTG Link",
+      "aliases": [
+        "ltg",
+        "ltg link",
+        "lietuvos gelezinkeliai"
+      ],
+      "country": "LT",
+      "products": [
+        "Regional",
+        "IC"
+      ]
+    },
+    {
+      "name": "Vivi",
+      "aliases": [
+        "vivi",
+        "pasazieru vilciens",
+        "pasažieru vilciens",
+        "pv"
+      ],
+      "country": "LV",
+      "products": [
+        "Regional"
+      ]
+    },
+    {
+      "name": "CFR Calatori",
+      "aliases": [
+        "cfr",
+        "cfr calatori",
+        "cfr călători"
+      ],
+      "country": "RO",
+      "products": [
+        "IR",
+        "IC",
+        "R"
+      ]
+    },
+    {
+      "name": "CP",
+      "aliases": [
+        "cp",
+        "comboios de portugal"
+      ],
+      "country": "PT",
+      "products": [
+        "Alfa Pendular",
+        "Intercidades",
+        "Regional",
+        "Urbanos"
+      ]
+    },
+    {
+      "name": "Slovenske zeleznice",
+      "aliases": [
+        "sz",
+        "sž",
+        "slovenske zeleznice",
+        "slovenske železnice"
+      ],
+      "country": "SI",
+      "products": [
+        "IC",
+        "Regional"
+      ]
+    },
+    {
+      "name": "Italo",
+      "aliases": [
+        "italo",
+        "ntv",
+        "italo ntv"
+      ],
+      "country": "IT",
+      "products": [
+        "Italo"
+      ]
+    },
+    {
+      "name": "FlixTrain",
+      "aliases": [
+        "flixtrain",
+        "flix train"
+      ],
+      "country": "DE",
+      "products": [
+        "FlixTrain"
+      ]
+    },
+    {
+      "name": "WESTbahn",
+      "aliases": [
+        "westbahn"
+      ],
+      "country": "AT",
+      "products": [
+        "Westbahn"
+      ]
+    },
+    {
+      "name": "RegioJet",
+      "aliases": [
+        "regiojet",
+        "rj"
+      ],
+      "country": "CZ",
+      "products": [
+        "RegioJet"
+      ]
+    },
+    {
+      "name": "LEO Express",
+      "aliases": [
+        "leo express",
+        "leoexpress"
+      ],
+      "country": "CZ",
+      "products": [
+        "LEO"
+      ]
+    },
+    {
+      "name": "Polregio",
+      "aliases": [
+        "polregio"
+      ],
+      "country": "PL",
+      "products": [
+        "Regional"
+      ]
+    },
+    {
+      "name": "iryo",
+      "aliases": [
+        "iryo"
+      ],
+      "country": "ES",
+      "products": [
+        "iryo"
+      ]
     }
   ],
   "product_aliases": {

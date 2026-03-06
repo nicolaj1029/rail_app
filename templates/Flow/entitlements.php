@@ -6,8 +6,12 @@ $incident = $incident ?? [];
 $meta = $meta ?? [];
 $groupedTickets = $groupedTickets ?? [];
 $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
-$ticketMode = (string)($form['ticket_upload_mode'] ?? 'ticket');
-if ($ticketMode !== 'ticketless') { $ticketMode = 'ticket'; }
+$seasonMeta0 = (array)($meta['season_pass'] ?? []);
+$fftSeason0 = strtolower((string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? '')));
+$hasSeason0 = array_key_exists('has', $seasonMeta0) ? (bool)$seasonMeta0['has'] : ($fftSeason0 === 'pass');
+$ticketMode = (string)($form['ticket_upload_mode'] ?? '');
+if (!in_array($ticketMode, ['ticket','ticketless','seasonpass'], true)) { $ticketMode = ''; }
+if ($ticketMode === '') { $ticketMode = $hasSeason0 ? 'seasonpass' : 'ticket'; }
 $isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
@@ -106,6 +110,63 @@ $isPreview = !empty($flowPreview);
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> Ja, jeg kan uploade billet</label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
+    </div>
+  </div>
+
+  <?php
+    // Season/period pass (Art. 19(2)) is a top-level entitlement choice in TRIN 2
+    $fftSeason = strtolower((string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? '')));
+    $season = (array)($meta['season_pass'] ?? []);
+    $seasonHas = ($ticketMode === 'seasonpass');
+    $seasonType = (string)($season['type'] ?? '');
+    $seasonOp = (string)($season['operator'] ?? ($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')));
+    $seasonFrom = (string)($season['valid_from'] ?? '');
+    $seasonTo = (string)($season['valid_to'] ?? '');
+  ?>
+  <div class="card" id="seasonPassCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $seasonHas ? '' : ' display:none;' ?>">
+    <div class="section-title">Pendler-/periodekort (abonnement)</div>
+    <div class="small muted" style="margin-top:6px;">Hvis ja, bruger vi operatørens egen ordning (Art. 19, stk. 2). Små forsinkelser (&lt; 60 min) kan typisk kumuleres i gyldighedsperioden.</div>
+    <input type="hidden" name="season_pass_has" id="seasonPassHas" value="<?= $seasonHas ? '1' : '0' ?>" />
+    <fieldset id="seasonPassFieldset" style="border:0; padding:0; margin:0;" <?= $seasonHas ? '' : 'disabled' ?>>
+      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+        <label>Type (valgfri)
+          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="Pendler / Periode / årskort" />
+        </label>
+        <label>Operatør (valgfri)
+          <input type="text" name="season_pass_operator" list="operatorSuggestions" value="<?= h($seasonOp) ?>" placeholder="DSB / DB / SNCF …" />
+        </label>
+        <label>Gyldig fra (valgfri)
+          <input type="date" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" />
+        </label>
+        <label>Gyldig til (valgfri)
+          <input type="date" name="season_pass_valid_to" value="<?= h($seasonTo) ?>" />
+        </label>
+      </div>
+    </fieldset>
+
+    <?php $spFiles = (array)($meta['season_pass_files'] ?? []); ?>
+    <div class="mt8" style="margin-top:12px;">
+      <div class="small"><strong>Upload pendlerkort/abonnement (valgfrit)</strong></div>
+      <div class="small muted" style="margin-top:4px;">Brug fx screenshot fra operatør-app, PDF, eller billede af kort. Understøtter PDF, JPG, PNG, PKPASS, TXT.</div>
+      <div class="upload-actions" style="margin-top:8px;">
+        <button type="button" id="addSeasonPassFilesBtn" class="button">Tilføj filer</button>
+        <button type="button" id="clearSeasonPassFilesBtn" class="button button-outline">Fjern alle</button>
+      </div>
+      <input type="file" id="seasonPassFilesInput" name="season_pass_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
+      <?php if (!empty($spFiles)): ?>
+        <ul class="small file-list" style="list-style:none; padding-left:0; margin:10px 0 0 0;">
+          <?php foreach ($spFiles as $f): $fn = (string)($f['file'] ?? ''); $orig = (string)($f['original'] ?? ''); ?>
+            <?php if ($fn === '') { continue; } ?>
+            <li style="display:flex; gap:8px; align-items:center; justify-content:space-between;">
+              <span><?= h($orig !== '' ? $orig : $fn) ?></span>
+              <button type="button" class="small remove-seasonpass-btn" data-file="<?= h($fn) ?>">Fjern</button>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php else: ?>
+        <div class="small muted" style="margin-top:8px;">Ingen filer uploadet endnu.</div>
+      <?php endif; ?>
     </div>
   </div>
   <?php $pcVal = (string)($form['purchaseChannel'] ?? ''); ?>
@@ -118,7 +179,7 @@ $isPreview = !empty($flowPreview);
       <label class="mr8"><input type="radio" name="purchaseChannel" value="other" <?= $pcVal==='other'?'checked':'' ?> /> Andet</label>
     </div>
   </div>
-  <div class="card" id="ticketUploadCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">
+  <div class="card" id="ticketUploadCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= ($ticketMode==='ticketless' || $ticketMode==='seasonpass')?' display:none;':'' ?>">
     <div class="section-title">Billetter</div>
   <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
       <div class="upload-title">Slip filer her eller klik for at tilføje</div>
@@ -137,6 +198,7 @@ $isPreview = !empty($flowPreview);
   <div class="card" id="ticketlessCard" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?'':' display:none;' ?>">
     <div class="section-title">Ticketless (minimum)</div>
     <div class="small muted" style="margin-top:6px;">Udfyld det du ved. Pris er valgfri (procent beregnes altid).</div>
+    <fieldset id="ticketlessFieldset" <?= $ticketMode==='ticketless' ? '' : 'disabled' ?> style="border:0; padding:0; margin:0;">
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <label>Land (ISO2)
         <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
@@ -241,6 +303,7 @@ $isPreview = !empty($flowPreview);
       </div>
       <div class="small muted" style="margin-top:4px;">Hvis prisen er ukendt, viser vi kun kompensation i procent.</div>
     </div>
+    </fieldset>
   </div>
   <?php
     // Lightweight status so users see that parsing happened even when no choices are shown
@@ -298,6 +361,7 @@ $isPreview = !empty($flowPreview);
 
   <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1–3.5)</button>
   <div id="journeyFields" style="display:none;">
+  <fieldset id="journeyFieldsFieldset" <?= $ticketMode==='ticketless' ? 'disabled' : '' ?> style="border:0; padding:0; margin:0;">
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>3.1. Name of railway undertaking:</strong>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
@@ -455,7 +519,6 @@ $isPreview = !empty($flowPreview);
         <?= $this->element('missed_connection_block', compact('meta','form','journeyRowsInline','mcChoicesInline','changeBullets')) ?>
       </div>
       </div>
-    </div>
       <?php if (!empty($journeyRowsInline)): ?>
       <div class="missed-connection-section" style="display:none;">
       <?php
@@ -514,6 +577,7 @@ $isPreview = !empty($flowPreview);
       </div>
     <?php endif; ?>
   </div>
+  </fieldset>
   </div><!-- /journeyFields -->
 
 
@@ -695,37 +759,6 @@ $isPreview = !empty($flowPreview);
       <option value="other" <?= $curFft==='other'?'selected':'' ?>>Andet</option>
     </select>
 
-    <?php
-      // Season/period pass details (Art. 19(2)) – shown when "Abonnement/Periodekort" is selected
-      $season = (array)($meta['season_pass'] ?? []);
-      $seasonHas = ($curFft === 'pass') || !empty($season['has']);
-      $seasonType = (string)($season['type'] ?? '');
-      $seasonOp = (string)($season['operator'] ?? ($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')));
-      $seasonFrom = (string)($season['valid_from'] ?? '');
-      $seasonTo = (string)($season['valid_to'] ?? '');
-    ?>
-    <div id="seasonPassBlock" class="mt8" style="display:<?= $seasonHas ? 'block' : 'none' ?>;">
-      <div class="small" style="margin-bottom:6px;">
-        💳 Abonnement/Periodekort (Art. 19, stk. 2) – gentagne forsinkelser i gyldighedsperioden kan udløse kompensation efter operatørens ordning.
-      </div>
-      <input type="hidden" name="season_pass_has" value="<?= $seasonHas ? '1' : '' ?>" />
-      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <label>Type
-          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="Pendler / Periode / årskort" />
-        </label>
-        <label>Operatør
-          <input type="text" name="season_pass_operator" value="<?= h($seasonOp) ?>" placeholder="DSB / DB / SNCF …" />
-        </label>
-        <label>Gyldig fra (YYYY-MM-DD)
-          <input type="text" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" placeholder="YYYY-MM-DD" />
-        </label>
-        <label>Gyldig til (YYYY-MM-DD)
-          <input type="text" name="season_pass_valid_to" value="<?= h($seasonTo) ?>" placeholder="YYYY-MM-DD" />
-        </label>
-      </div>
-      <div class="small muted" style="margin-top:6px;">Tip: Små forsinkelser (&lt; 60 min) kan kumuleres i perioden efter operatørens ordning.</div>
-    </div>
-
     <div id="pricingQ2" class="mt8" style="display:none;">
       <div class="small">2. Gælder billetten kun for specifikt tog?</div>
       <?php $curTs = strtolower($tsVal ?: 'unknown'); ?>
@@ -859,10 +892,10 @@ $isPreview = !empty($flowPreview);
   <?php
     // Vis altid Art.12-blokken (også når auto vurderer, at intet mangler), så brugeren kan redigere.
   ?>
-  <?php if ($needA12): ?>
+  <?php $a12Open = (bool)$needA12; ?>
   <div class="card" style="margin-top:12px; padding:16px; border:1px solid #e5e7eb; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <strong>📄 Art. 12 – Kontraktoplysninger (TRIN 3)</strong>
+      <strong>📄 Art. 12 – Kontraktoplysninger</strong>
       <button type="button" id="a12EditSellerBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
     </div>
     <?php
@@ -870,15 +903,22 @@ $isPreview = !empty($flowPreview);
       $showSeller = true;
       $showThrough = true;
       $showSeparate = true;
+      $sellerLabel = ($sellerInf === 'operator') ? 'Operatør (jernbane)' : (($sellerInf === 'retailer') ? 'Forhandler/rejsebureau' : 'Ukendt');
+      $throughLabel = ($ttdVal === 'yes') ? 'Ja' : (($ttdVal === 'no') ? 'Nej' : 'Ukendt');
+      $separateLabel = ($scnVal === 'yes') ? 'Ja' : (($scnVal === 'no') ? 'Nej' : 'Ukendt');
     ?>
     <div class="small muted" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
       <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-      <span>Sælger: <?= h($sellerInf==='operator' ? 'Operatør (jernbane)' : 'Forhandler/rejsebureau') ?></span>
-      <span>• Gennemgående billet: <?= h($ttdVal==='yes'?'Ja':($ttdVal==='no'?'Nej':'')) ?></span>
-      <span>• Separate kontrakter oplyst: <?= h($scnVal==='yes'?'Ja':($scnVal==='no'?'Nej':'')) ?></span>
+      <span>Sælger: <?= h($sellerLabel) ?></span>
+      <span>• Gennemgående billet: <?= h($throughLabel) ?></span>
+      <span>• Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
     </div>
+    <?php if (!$a12Open): ?>
+      <div class="small muted" style="margin-top:6px;">(Art. 12 ser ud til at være dækket af AUTO. Klik “Rediger” hvis du vil ændre svarene.)</div>
+    <?php endif; ?>
 
-    <div id="a12Q1" class="small" style="margin-top:6px; display:<?= $showSeller ? 'block' : 'none' ?>;">
+    <div id="a12Questions" style="display:<?= $a12Open ? 'block' : 'none' ?>;">
+    <div id="a12Q1" class="small" style="margin-top:10px; display:<?= $showSeller ? 'block' : 'none' ?>;">
       Hvem solgte dig hele rejsen?
       <div class="small" style="margin-top:4px;">
         <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> Operatør (jernbane)</label>
@@ -918,8 +958,8 @@ $isPreview = !empty($flowPreview);
     </div>
     <?php endif; ?>
     <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
+    </div><!-- /a12Questions -->
   </div>
-  <?php endif; ?>
 
   
 
@@ -942,7 +982,6 @@ $isPreview = !empty($flowPreview);
     <div class="small" style="margin-top:8px;">
       <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk værge/ansvarlig for andre på billetten</label>
     </div>
-  </div>
   </div>
   <?php endif; ?>
 
@@ -968,7 +1007,7 @@ $isPreview = !empty($flowPreview);
   
 
   <div class="actions-row" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
-    <a href="<?= $this->Url->build(['action' => 'journey']) ?>" class="button" style="background:#eee; color:#333;">Tilbage</a>
+    <a href="<?= $this->Url->build(['action' => 'start']) ?>" class="button" style="background:#eee; color:#333;">Tilbage</a>
     <button type="submit" name="continue" value="1" class="button">Fortsæt</button>
     <!-- Removed duplicate 'Kendt før køb?' checkbox; use Section 7 radios above (preinformed_disruption) -->
   </div>
@@ -1296,7 +1335,13 @@ if ($a12Applies === false && !empty($contractsView)) {
     if (!form) return;
     const uploadCard = document.getElementById('ticketUploadCard');
     const ticketlessCard = document.getElementById('ticketlessCard');
+    const seasonCard = document.getElementById('seasonPassCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
+    const ticketlessFs = document.getElementById('ticketlessFieldset');
+    const seasonFs = document.getElementById('seasonPassFieldset');
+    const seasonHas = document.getElementById('seasonPassHas');
+    const journeyFieldsFs = document.getElementById('journeyFieldsFieldset');
+    const a12Qs = document.getElementById('a12Questions');
 
     function radioVal(name){
       const nodes = form.querySelectorAll('input[name="'+name+'"]');
@@ -1307,8 +1352,18 @@ if ($a12Applies === false && !empty($contractsView)) {
     function updateTicketMode(){
       const mode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = mode === 'ticketless';
-      show(uploadCard, !isTicketless);
+      const isSeason = mode === 'seasonpass';
+      show(uploadCard, mode === 'ticket');
       show(ticketlessCard, isTicketless);
+      show(seasonCard, isSeason);
+      // Prevent duplicate-name inputs from overwriting each other on submit.
+      // Also keep the currently visible mode editable without requiring a round-trip.
+      if (ticketlessFs) { ticketlessFs.disabled = !isTicketless; }
+      if (seasonFs) { seasonFs.disabled = !isSeason; }
+      if (seasonHas) { seasonHas.value = isSeason ? '1' : '0'; }
+      if (journeyFieldsFs) { journeyFieldsFs.disabled = isTicketless; }
+      // In ticketless mode we always want Art.12 questions available, even before the first submit.
+      if (a12Qs && (isTicketless || isSeason)) { a12Qs.style.display = 'block'; }
     }
     function updatePriceKnown(){
       if (!priceBlock) return;
@@ -1335,13 +1390,30 @@ if ($a12Applies === false && !empty($contractsView)) {
   const toggleBtn = document.getElementById('toggleJourneyFields');
   const jf = document.getElementById('journeyFields');
   const openJourneyFields = () => { if (jf) { jf.style.display = 'block'; } };
+  const closeJourneyFields = () => { if (jf) { jf.style.display = 'none'; } };
+  const updateJourneyToggleUi = () => {
+    if (!toggleBtn || !jf) return;
+    const isOpen = (jf.style.display !== 'none' && jf.style.display !== '');
+    toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggleBtn.textContent = isOpen
+      ? 'Vis/skjul rejsefelter (3.1â€“3.5) â€“ skjul'
+      : 'Vis/skjul rejsefelter (3.1â€“3.5) â€“ vis';
+  };
   const hasTickets = !!(toggleBtn && toggleBtn.dataset.hasTickets === '1');
   if (toggleBtn && jf) {
     toggleBtn.addEventListener('click', function(){
-      jf.style.display = (jf.style.display === 'none' || jf.style.display === '') ? 'block' : 'none';
+      const opening = (jf.style.display === 'none' || jf.style.display === '');
+      if (opening) {
+        openJourneyFields();
+      } else {
+        closeJourneyFields();
+        try { toggleBtn.scrollIntoView({ block: 'start' }); } catch (e) { /* ignore */ }
+      }
+      updateJourneyToggleUi();
     });
   }
   if (hasTickets) { openJourneyFields(); }
+  updateJourneyToggleUi();
   const panel = document.getElementById('hooksPanel');
   if (!form || !panel) return;
   // Upload UI wiring
@@ -1490,22 +1562,8 @@ if ($a12Applies === false && !empty($contractsView)) {
   form.addEventListener('change', (e)=>{
     const nm = (e.target && (e.target.name||'')) || '';
     if (nm === 'fare_class_purchased' || nm === 'berth_seat_type') updateClassUI();
-    if (nm === 'fare_flex_type') updateSeasonUI();
   }, { passive:true });
   updateClassUI();
-
-  // Season/period pass: show details block when dropdown is "pass"
-  function updateSeasonUI(){
-    const sel = form.querySelector('select[name="fare_flex_type"]');
-    const block = document.getElementById('seasonPassBlock');
-    const has = sel && sel.value === 'pass';
-    if (block) block.style.display = has ? 'block' : 'none';
-    // Maintain a hidden flag so server can persist even on AJAX refreshes
-    let hid = form.querySelector('input[name="season_pass_has"]');
-    if (!hid) { hid = document.createElement('input'); hid.type = 'hidden'; hid.name = 'season_pass_has'; form.appendChild(hid); }
-    hid.value = has ? '1' : '';
-  }
-  updateSeasonUI();
 
   // Pricing block: show Q2 only after user changes Q1 (fare_flex_type)
   (function(){
@@ -1555,6 +1613,49 @@ if ($a12Applies === false && !empty($contractsView)) {
       });
     });
   }
+
+  // Season pass file removal
+  const spRmBtns = Array.from(document.querySelectorAll('.remove-seasonpass-btn'));
+  if (spRmBtns.length) {
+    spRmBtns.forEach(btn => {
+      btn.addEventListener('click', (e)=>{
+        e.preventDefault();
+        const v = btn.getAttribute('data-file') || '';
+        if (!v) return;
+        const hid = document.createElement('input');
+        hid.type = 'hidden';
+        hid.name = 'remove_season_pass_file';
+        hid.value = v;
+        form.appendChild(hid);
+        form.submit();
+      });
+    });
+  }
+
+  // Season pass upload buttons
+  (function(){
+    const add = document.getElementById('addSeasonPassFilesBtn');
+    const clear = document.getElementById('clearSeasonPassFilesBtn');
+    const inp = document.getElementById('seasonPassFilesInput');
+    if (!add || !inp) return;
+    add.addEventListener('click', (e)=>{ e.preventDefault(); inp.click(); });
+    inp.addEventListener('change', ()=>{
+      if (inp.files && inp.files.length) {
+        setTimeout(()=>form.submit(), 0);
+      }
+    });
+    if (clear) {
+      clear.addEventListener('click', (e)=>{
+        e.preventDefault();
+        const hid = document.createElement('input');
+        hid.type = 'hidden';
+        hid.name = 'clear_season_pass_files';
+        hid.value = '1';
+        form.appendChild(hid);
+        setTimeout(()=>form.submit(), 0);
+      });
+    }
+  })();
 
   // PMR client-side visibility
   function valRadio(name){
@@ -1619,6 +1720,8 @@ if ($a12Applies === false && !empty($contractsView)) {
   if (a12EditBtn) {
     a12EditBtn.addEventListener('click', function(){
       a12EditClicked = true;
+      const qs = document.getElementById('a12Questions');
+      if (qs) { qs.style.display = 'block'; }
       const q1 = document.getElementById('a12Q1');
       if (q1) { q1.style.display = 'block'; q1.scrollIntoView({ behavior:'smooth', block:'center' }); }
       updateA12();

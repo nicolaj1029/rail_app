@@ -30,6 +30,7 @@ class ScenarioRunner
         if (!isset($fixture['version']) || (int)$fixture['version'] < 2) {
             $fixture = $this->migrateV1toV2($fixture);
         }
+        $fixture = $this->normalizeStep34WizardKeys($fixture);
 
         $payload = [
             'journey' => $fixture['journey'] ?? [],
@@ -70,6 +71,36 @@ class ScenarioRunner
             'match' => empty($diff),
             'diff' => $diff,
         ];
+    }
+
+    /**
+     * Normalize the split-flow step 3/4 wizard keys so older fixtures keep working.
+     *
+     * New: step3_station + step4_journey
+     * Legacy: step3_journey + step4_station
+     */
+    private function normalizeStep34WizardKeys(array $fixture): array
+    {
+        $fixture['wizard'] = (array)($fixture['wizard'] ?? []);
+        $w = (array)$fixture['wizard'];
+
+        if (!array_key_exists('step3_station', $w)) {
+            $w['step3_station'] = (array)($w['step4_station'] ?? []);
+        }
+        if (!array_key_exists('step4_journey', $w)) {
+            $w['step4_journey'] = (array)($w['step3_journey'] ?? ($w['step3_entitlements'] ?? []));
+        }
+
+        // Default journey info helpers (used by multiple evaluators); keep values if already present.
+        $w['step4_journey'] = (array)($w['step4_journey'] ?? []);
+        $w['step4_journey'] += [
+            'preinformed_disruption' => $w['step4_journey']['preinformed_disruption'] ?? 'Ved ikke',
+            'preinfo_channel' => $w['step4_journey']['preinfo_channel'] ?? 'Ved ikke',
+            'realtime_info_seen' => $w['step4_journey']['realtime_info_seen'] ?? [],
+        ];
+
+        $fixture['wizard'] = $w;
+        return $fixture;
     }
 
     /**

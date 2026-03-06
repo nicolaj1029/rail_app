@@ -188,6 +188,28 @@ class ProjectController extends AppController
     public function flowQa(): void
     {
         $this->set('baseUrl', $this->request->getUri()->getScheme() . '://' . $this->request->getUri()->getHost() . ($this->request->getUri()->getPort() ? ':' . $this->request->getUri()->getPort() : '') . $this->request->getAttribute('webroot'));
+        try {
+            $opCat = new \App\Service\OperatorCatalog();
+            $seasonCat = new \App\Service\SeasonPolicyCatalog();
+            $seasonCoverage = $seasonCat->coverageReport($opCat, true);
+            $seasonPolicies = $seasonCat->all();
+            usort($seasonPolicies, static function ($a, $b): int {
+                $a = is_array($a) ? $a : [];
+                $b = is_array($b) ? $b : [];
+                $aC = strtoupper((string)($a['country'] ?? ''));
+                $bC = strtoupper((string)($b['country'] ?? ''));
+                if ($aC !== $bC) {
+                    return $aC <=> $bC;
+                }
+                $aO = (string)($a['operator'] ?? '');
+                $bO = (string)($b['operator'] ?? '');
+                return strnatcasecmp($aO, $bO);
+            });
+            $this->set(compact('seasonCoverage', 'seasonPolicies'));
+        } catch (\Throwable $e) {
+            $this->set('seasonCoverage', null);
+            $this->set('seasonPolicies', null);
+        }
         $this->viewBuilder()->setTemplate('flow_qa');
     }
 

@@ -38,6 +38,10 @@ $classOf = static function (string $state): string {
                 $num = (int)($s['num'] ?? 0);
                 $title = (string)($s['title'] ?? '');
                 $state = (string)($s['state'] ?? '');
+                $visible = !array_key_exists('visible', $s) || (bool)$s['visible'];
+                if (!$visible) {
+                    continue;
+                }
                 $isLocked = $state === 'locked';
                 $qs = $isLocked ? ['preview' => '1'] : [];
                 $url = $this->Url->build(['controller' => 'Flow', 'action' => $action, '?' => $qs]);

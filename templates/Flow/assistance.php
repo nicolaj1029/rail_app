@@ -108,6 +108,8 @@ $hintText = function (string $key) use ($priceHints): string {
   .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 
   [data-show-if] { display:none; }
+  /* Locked preview should not expand conditional branches based on previous answers. */
+  .flow-preview [data-show-if] { display:none !important; }
 
   /* Inline icon badges to avoid emoji encoding issues in headings */
   .icon-badge { width:26px; height:26px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; margin-right:8px; border:1px solid #d0d7de; background:#f8f9fb; }

@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use Cake\Controller\Controller;
+use Cake\Core\Configure;
 use Cake\Event\EventInterface;
 
 /**
@@ -54,6 +55,12 @@ class AppController extends Controller
     public function beforeRender(EventInterface $event)
     {
         parent::beforeRender($event);
+
+        // Ensure UTF-8 output consistently. Some environments default to ISO-8859-1 which breaks Danish characters.
+        $enc = (string)Configure::read('App.encoding') ?: 'UTF-8';
+        if (method_exists($this->response, 'getCharset') && $this->response->getCharset() !== $enc) {
+            $this->response = $this->response->withCharset($enc);
+        }
 
         // Provide flow stepper state to all /flow/* pages (multi-page split-flow).
         try {

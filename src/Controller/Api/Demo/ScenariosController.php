@@ -29,11 +29,20 @@ class ScenariosController extends AppController
             || (string)$this->request->getQuery('eval') === '1';
         $id = (string)$this->request->getQuery('id') ?: null;
         $compact = (string)$this->request->getQuery('compact') === '1';
+        // Include the full wizard payload (step 1..N) in the output. Useful for admin/debug/operator handoff.
+        $withWizard = (string)$this->request->getQuery('withWizard') === '1'
+            || (string)$this->request->getQuery('wizard') === '1';
+        // Provide a readable "operator-facing" case summary string (for EU claim free-text / admin).
+        $operatorText = (string)$this->request->getQuery('operatorText') === '1'
+            || (string)$this->request->getQuery('operator') === '1';
         // Optional: include where wizard fields originated (which TRIN/step set them).
         // Useful for debugging "station" fields across Art.20(3) vs Art.18 flows.
         $withProvenance = (string)$this->request->getQuery('provenance') === '1'
             || (string)$this->request->getQuery('withProvenance') === '1'
             || (string)$this->request->getQuery('debug') === '1';
+        // Optional: include structured human-readable summaries for key articles (for admin/operator review).
+        $withExplain = (string)$this->request->getQuery('explain') === '1'
+            || (string)$this->request->getQuery('withExplain') === '1';
 
         $repo = new FixtureRepository();
         $fixtures = $repo->getAll($id);
@@ -56,6 +65,21 @@ class ScenariosController extends AppController
                     $row['wizard_compact'] = $this->buildWizardCompact($fx);
                     $row['computeOverrides_compact'] = $this->buildComputeOverridesCompact($fx);
                     $actual = $this->buildActualCompact($actual) + ['_compact' => true];
+                }
+                if ($withWizard) {
+                    $row['wizard'] = (array)($fx['wizard'] ?? []);
+                    $row['computeOverrides'] = (array)($fx['computeOverrides'] ?? []);
+                    $row['journeyBasic'] = (array)($fx['journeyBasic'] ?? []);
+                    $row['segments'] = (array)($fx['segments'] ?? []);
+                }
+                if ($operatorText) {
+                    $row['operator_case_text'] = $this->buildOperatorCaseText($fx, $compact ? [] : $actual);
+                }
+                if ($withExplain) {
+                    $row['explain'] = [
+                        'art18' => $this->buildArt18Explain($fx),
+                        'note' => 'Explain blocks are derived from wizard inputs + known timing rules. They are a summary for admin/operator use (not legal advice).',
+                    ];
                 }
                 if ($withProvenance && is_array($origin)) {
                     $row['wizard_field_origin'] = $origin;
@@ -90,13 +114,14 @@ class ScenariosController extends AppController
 
         $step1 = (array)($w['step1_start'] ?? []);
         $step2 = (array)($w['step2_entitlements'] ?? []);
-        $step3 = (array)($w['step3_journey'] ?? []);
-        $step4 = (array)($w['step4_station'] ?? []);
-        // Back-compat: older fixtures stored station-flow inside step4_incident before TRIN 4 existed.
-        if (empty($step4) && !empty($w['step4_incident']) && is_array($w['step4_incident'])) {
+        // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures (step3_journey + step4_station).
+        $step3Station = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
+        $step4Journey = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
+        // Back-compat: older fixtures stored station-flow inside step4_incident before a dedicated station step existed.
+        if (empty($step3Station) && !empty($w['step4_incident']) && is_array($w['step4_incident'])) {
             $legacy4 = (array)$w['step4_incident'];
             if (array_key_exists('a20_station_stranded', $legacy4) || array_key_exists('stranded_current_station', $legacy4)) {
-                $step4 = $legacy4;
+                $step3Station = $legacy4;
             }
         }
         $step5 = (array)($w['step5_incident'] ?? ($w['step4_incident'] ?? []));
@@ -123,19 +148,7 @@ class ScenariosController extends AppController
                 'train_no',
                 'price',
             ]),
-            'step3_journey' => $this->pick($step3, [
-                'pmr_user',
-                'pmr_booked',
-                'pmr_delivered_status',
-                'pmr_promised_missing',
-                'bike_was_present',
-                'bike_denied_boarding',
-                'bike_refusal_reason_provided',
-                'bike_refusal_reason_type',
-                'fare_class_purchased',
-                'berth_seat_type',
-            ]),
-            'step4_station' => $this->pick($step4, [
+            'step3_station' => $this->pick($step3Station, [
                 'a20_station_stranded',
                 'is_stranded',
                 'stranded_location',
@@ -154,6 +167,18 @@ class ScenariosController extends AppController
                 'a20_arrival_station_other',
                 'a20_where_ended_assumed',
                 'handoff_station',
+            ]),
+            'step4_journey' => $this->pick($step4Journey, [
+                'pmr_user',
+                'pmr_booked',
+                'pmr_delivered_status',
+                'pmr_promised_missing',
+                'bike_was_present',
+                'bike_denied_boarding',
+                'bike_refusal_reason_provided',
+                'bike_refusal_reason_type',
+                'fare_class_purchased',
+                'berth_seat_type',
             ]),
             'step5_incident' => $this->pick($step5, [
                 'incident_main',
@@ -255,6 +280,7 @@ class ScenariosController extends AppController
             ]),
             'step10_compensation' => $this->pick($step10, [
                 'delayAtFinalMinutes',
+                'compensationBand',
                 'delayMinEU',
                 'knownDelayBeforePurchase',
                 'voucherAccepted',
@@ -262,6 +288,369 @@ class ScenariosController extends AppController
                 'operatorExceptionalType',
                 'minThresholdApplies',
             ]),
+        ];
+    }
+
+    /**
+     * Build a readable summary of wizard inputs intended for the operator/admin.
+     * This is deliberately redundant and uses wizard values (not pipeline inference) so it matches user answers.
+     */
+    private function buildOperatorCaseText(array $fx, array $actual): string
+    {
+        $w = (array)($fx['wizard'] ?? []);
+        $jb = (array)($fx['journeyBasic'] ?? []);
+        // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures.
+        $s3Station = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
+        $s4Journey = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
+        $s5 = (array)($w['step5_incident'] ?? []);
+        $s6 = (array)($w['step6_choices'] ?? []);
+        $s7 = (array)($w['step7_remedies'] ?? []);
+        $s8 = (array)($w['step8_assistance'] ?? ($w['step6_assistance'] ?? []));
+        $s9 = (array)($w['step9_downgrade'] ?? []);
+        $s10 = (array)($w['step10_compensation'] ?? ($w['step7_compensation'] ?? []));
+
+        $lines = [];
+        $lines[] = 'Sagsresume (wizard input)';
+        if (!empty($jb)) {
+            $lines[] = 'Rejse: ' . trim(sprintf(
+                '%s %s %s %s → %s',
+                (string)($jb['operator'] ?? ''),
+                (string)($jb['operator_product'] ?? ''),
+                (string)($jb['dep_date'] ?? ''),
+                (string)($jb['dep_station'] ?? ''),
+                (string)($jb['arr_station'] ?? '')
+            ));
+            if (!empty($jb['ticket_no'])) { $lines[] = 'Bookingref: ' . (string)$jb['ticket_no']; }
+            if (!empty($jb['price'])) { $lines[] = 'Pris: ' . (string)$jb['price']; }
+        }
+
+        // PMR/cykel (step 4) – important context for Art.9 rights and potential Art.18/20 activation
+        if (!empty($s4Journey)) {
+            $pmrUser = (string)($s4Journey['pmr_user'] ?? '');
+            $pmrBooked = (string)($s4Journey['pmr_booked'] ?? '');
+            $pmrDelivered = (string)($s4Journey['pmr_delivered_status'] ?? '');
+            $pmrMissing = (string)($s4Journey['pmr_promised_missing'] ?? '');
+            $pmrDetails = trim((string)($s4Journey['pmr_facility_details'] ?? ''));
+
+            $hasPmrSignal = in_array($pmrUser, ['Ja', 'Nej'], true)
+                || in_array($pmrBooked, ['Ja', 'Nej'], true)
+                || in_array($pmrDelivered, ['Ja', 'Nej'], true)
+                || in_array($pmrMissing, ['Ja', 'Nej'], true);
+
+            if ($hasPmrSignal) {
+                $lines[] = 'PMR/handicap: bruger=' . ($pmrUser !== '' ? $pmrUser : 'unknown')
+                    . ', assistance bestilt=' . ($pmrBooked !== '' ? $pmrBooked : 'unknown')
+                    . ', leveret=' . ($pmrDelivered !== '' ? $pmrDelivered : 'unknown')
+                    . ', lovet faciliteter manglede=' . ($pmrMissing !== '' ? $pmrMissing : 'unknown');
+                if ($pmrDetails !== '') {
+                    $lines[] = 'PMR detaljer: ' . $pmrDetails;
+                }
+            }
+
+            $bikePresent = (string)($s4Journey['bike_was_present'] ?? '');
+            $bikeDenied = (string)($s4Journey['bike_denied_boarding'] ?? '');
+            $bikeReasonProvided = (string)($s4Journey['bike_refusal_reason_provided'] ?? '');
+            $bikeReasonType = trim((string)($s4Journey['bike_refusal_reason_type'] ?? ''));
+            $bikeResReq = (string)($s4Journey['bike_reservation_required'] ?? '');
+            $bikeResMade = (string)($s4Journey['bike_reservation_made'] ?? '');
+
+            $hasBikeSignal = in_array($bikePresent, ['Ja', 'Nej'], true)
+                || in_array($bikeDenied, ['Ja', 'Nej'], true)
+                || in_array($bikeResReq, ['Ja', 'Nej'], true)
+                || in_array($bikeResMade, ['Ja', 'Nej'], true);
+
+            if ($hasBikeSignal) {
+                $line = 'Cykel: medbragt=' . ($bikePresent !== '' ? $bikePresent : 'unknown')
+                    . ', reservation krævet=' . ($bikeResReq !== '' ? $bikeResReq : 'unknown')
+                    . ', reservation lavet=' . ($bikeResMade !== '' ? $bikeResMade : 'unknown')
+                    . ', afvist ombord=' . ($bikeDenied !== '' ? $bikeDenied : 'unknown');
+                if ($bikeReasonProvided !== '' || $bikeReasonType !== '') {
+                    $line .= ', begrundelse oplyst=' . ($bikeReasonProvided !== '' ? $bikeReasonProvided : 'unknown')
+                        . ($bikeReasonType !== '' ? ' (' . $bikeReasonType . ')' : '');
+                }
+                $lines[] = $line;
+            }
+        }
+
+        // Art.20(3) station flow (step 3)
+        if (!empty($s3Station)) {
+            $stranded = (string)($s3Station['a20_station_stranded'] ?? '');
+            if ($stranded !== '') {
+                $lines[] = 'Art.20(3) strandet på station: ' . $stranded;
+                if (!empty($s3Station['stranded_current_station'])) {
+                    $lines[] = 'Strandings-station: ' . (string)$s3Station['stranded_current_station'];
+                }
+                if (!empty($s3Station['a20_3_solution_offered'])) {
+                    $lines[] = 'Tilbudt løsning: ' . (string)$s3Station['a20_3_solution_offered']
+                        . (!empty($s3Station['a20_3_solution_type']) ? ' (' . (string)$s3Station['a20_3_solution_type'] . ')' : '');
+                }
+                if (!empty($s3Station['a20_where_ended'])) {
+                    $end = (string)$s3Station['a20_where_ended'];
+                    $lines[] = 'Hvor endte du (Art.20): ' . $end
+                        . (!empty($s3Station['a20_arrival_station']) ? ' → ' . (string)$s3Station['a20_arrival_station'] : '');
+                }
+            }
+        }
+
+        // Incident/gating (step 5)
+        if (!empty($s5)) {
+            $lines[] = 'Hændelse: ' . (string)($s5['incident_main'] ?? '');
+            if (!empty($s5['incident_missed'])) { $lines[] = 'Mistet forbindelse: ' . (string)$s5['incident_missed']; }
+            if (!empty($s5['expected_delay_60'])) { $lines[] = 'Varslet ≥60 min: ' . (string)$s5['expected_delay_60']; }
+            if (!empty($s5['delay_already_60'])) { $lines[] = 'Allerede ≥60 min: ' . (string)$s5['delay_already_60']; }
+            if (!empty($s5['missed_expected_delay_60'])) { $lines[] = 'Missed → forventet ≥60 min: ' . (string)$s5['missed_expected_delay_60']; }
+            if (array_key_exists('national_delay_minutes', $s5) && (string)($s5['national_delay_minutes'] ?? '') !== '') {
+                $lines[] = 'National forsinkelse (min): ' . (string)$s5['national_delay_minutes'];
+            }
+            if (!empty($s5['operatorExceptionalCircumstances'])) {
+                $lines[] = 'Force majeure (Art.19(10)): ' . (string)$s5['operatorExceptionalCircumstances']
+                    . (!empty($s5['operatorExceptionalType']) ? ' (' . (string)$s5['operatorExceptionalType'] . ')' : '');
+            }
+        }
+
+        // Art.20(2c) stuck / where ended (step 6)
+        if (!empty($s6)) {
+            if (!empty($s6['blocked_train_alt_transport'])) {
+                $lines[] = 'Art.20(2)(c) stuck: alt transport stillet: ' . (string)$s6['blocked_train_alt_transport']
+                    . (!empty($s6['assistance_alt_transport_type']) ? ' (' . (string)$s6['assistance_alt_transport_type'] . ')' : '');
+            }
+            if (!empty($s6['a20_where_ended'])) {
+                $lines[] = 'Hvor endte du (Art.20): ' . (string)$s6['a20_where_ended']
+                    . (!empty($s6['a20_arrival_station']) ? ' → ' . (string)$s6['a20_arrival_station'] : '');
+            }
+        }
+
+        // Remedies (step 7)
+        if (!empty($s7)) {
+            if (!empty($s7['remedyChoice'])) { $lines[] = 'Art.18 valg: ' . (string)$s7['remedyChoice']; }
+            if (!empty($s7['a18_from_station'])) { $lines[] = 'Station (Trin 7): ' . (string)$s7['a18_from_station']; }
+            if (!empty($s7['a18_reroute_mode'])) { $lines[] = 'Omlægning: ' . (string)$s7['a18_reroute_mode']; }
+            if (!empty($s7['a18_reroute_endpoint'])) { $lines[] = 'Hvor endte omlægningen: ' . (string)$s7['a18_reroute_endpoint']; }
+            if (!empty($s7['a18_reroute_arrival_station'])) { $lines[] = 'Omlagt til station: ' . (string)$s7['a18_reroute_arrival_station']; }
+            if (!empty($s7['reroute_info_within_100min'])) { $lines[] = 'Omlægning meddelt inden 100 min (Art.18(3)): ' . (string)$s7['reroute_info_within_100min']; }
+            if (!empty($s7['journey_no_longer_purpose'])) { $lines[] = 'Rejsen tjente ikke længere et formål (Art.18(1)(a)): ' . (string)$s7['journey_no_longer_purpose']; }
+        }
+
+        // Assistance/expenses (step 8)
+        if (!empty($s8)) {
+            if (!empty($s8['meal_offered'])) { $lines[] = 'Måltider tilbudt: ' . (string)$s8['meal_offered']; }
+            if (!empty($s8['hotel_offered'])) { $lines[] = 'Hotel tilbudt: ' . (string)$s8['hotel_offered']; }
+        }
+
+        // Downgrade (step 9)
+        if (!empty($s9) && array_key_exists('downgrade_occurred', $s9)) {
+            $lines[] = 'Nedgradering: ' . (string)($s9['downgrade_occurred'] ?? '');
+        }
+
+        // Compensation (step 10)
+        if (!empty($s10)) {
+            if (array_key_exists('delayAtFinalMinutes', $s10) && $s10['delayAtFinalMinutes'] !== null && $s10['delayAtFinalMinutes'] !== '') {
+                $lines[] = 'Forsinkelse ved slutdestination (min): ' . (string)$s10['delayAtFinalMinutes'];
+            }
+            if (array_key_exists('compensationBand', $s10) && $s10['compensationBand'] !== null && $s10['compensationBand'] !== '') {
+                $lines[] = 'Kompensationsbånd (valgt): ' . (string)$s10['compensationBand'];
+            }
+        }
+
+        // If actual claim exists, add one compact line.
+        if (isset($actual['claim']['totals']['gross_claim'])) {
+            $lines[] = 'Beregnet (pipeline): brutto ' . (string)$actual['claim']['totals']['gross_claim'] . ' ' . (string)($actual['claim']['totals']['currency'] ?? '');
+        }
+
+        return implode("\n", array_values(array_filter($lines, fn($x) => trim((string)$x) !== '')));
+    }
+
+    /**
+     * Structured Art.18 summary with short notes/conclusion.
+     *
+     * @return array<string,mixed>
+     */
+    private function buildArt18Explain(array $fx): array
+    {
+        $w = (array)($fx['wizard'] ?? []);
+        $jb = (array)($fx['journeyBasic'] ?? []);
+        // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures.
+        $s3Station = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
+        $s4Journey = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
+        $s5 = (array)($w['step5_incident'] ?? []);
+        $s7 = (array)($w['step7_remedies'] ?? []);
+        $segments = (array)($fx['segments'] ?? []);
+
+        $yn = static function ($v): string {
+            $s = strtolower(trim((string)$v));
+            return match ($s) {
+                'ja','yes','y','true','1' => 'yes',
+                'nej','no','n','false','0' => 'no',
+                '' => 'unknown',
+                default => $s,
+            };
+        };
+        $normStation = static function (?string $s): string {
+            $s = preg_replace('/\s+/u', ' ', trim((string)$s)) ?? trim((string)$s);
+            if (function_exists('mb_strtolower')) { return mb_strtolower($s, 'UTF-8'); }
+            return strtolower($s);
+        };
+
+        $incidentMain = (string)($s5['incident_main'] ?? '');
+        $incidentMissed = $yn($s5['incident_missed'] ?? '');
+        $expected60 = $yn($s5['expected_delay_60'] ?? '');
+        $already60 = $yn($s5['delay_already_60'] ?? '');
+        $missedExpected60 = $yn($s5['missed_expected_delay_60'] ?? '');
+        $cancellation = ($incidentMain === 'cancellation');
+
+        $pmrGate = ($yn($s4Journey['pmr_user'] ?? '') === 'yes') && (
+            ($yn($s4Journey['pmr_booked'] ?? '') === 'yes' && $yn($s4Journey['pmr_delivered_status'] ?? '') === 'no')
+            || ($yn($s4Journey['pmr_promised_missing'] ?? '') === 'yes')
+        );
+        $bikeGate = ($yn($s4Journey['bike_denied_boarding'] ?? '') === 'yes') && (
+            $yn($s4Journey['bike_refusal_reason_provided'] ?? '') !== 'yes' || trim((string)($s4Journey['bike_refusal_reason_type'] ?? '')) === ''
+        );
+
+        $activeReasons = [];
+        if ($cancellation) { $activeReasons[] = 'cancellation'; }
+        if ($expected60 === 'yes' || $already60 === 'yes') { $activeReasons[] = 'delay>=60'; }
+        if ($incidentMissed === 'yes') { $activeReasons[] = 'missed_connection'; }
+        if ($pmrGate) { $activeReasons[] = 'pmr_gate'; }
+        if ($bikeGate) { $activeReasons[] = 'bike_gate'; }
+
+        $active = !empty($activeReasons);
+        $remedy = (string)($s7['remedyChoice'] ?? '');
+
+        $purpose = (string)($s7['journey_no_longer_purpose'] ?? '');
+        $toDest = (string)($s3Station['a20_where_ended'] ?? '');
+        $assumed = (string)($s3Station['a20_where_ended_assumed'] ?? '0');
+        $arrivedFinalExplicit = ($toDest === 'final_destination' && $assumed !== '1');
+
+        // Art.18(3) 100-min clock: compute based on planned departure (affected service or missed connection leg).
+        $plannedDeparture = null;
+        $deadline100 = null;
+        $clockBasis = null;
+        try {
+            $baseDate = '';
+            $baseTime = '';
+            $baseFrom = '';
+            $baseTo = '';
+            $basis = 'scheduled_departure';
+
+            if ($incidentMissed === 'yes') {
+                $pick = (string)($s5['missed_connection_pick'] ?? ($s5['missed_connection_station'] ?? ''));
+                if ($pick !== '' && !empty($segments)) {
+                    $pickN = $normStation($pick);
+                    for ($i = 0; $i < count($segments) - 1; $i++) {
+                        $seg = (array)$segments[$i];
+                        if ($pickN !== '' && $normStation((string)($seg['to'] ?? '')) === $pickN) {
+                            $next = (array)$segments[$i + 1];
+                            $baseDate = (string)($next['depDate'] ?? '');
+                            $baseTime = (string)($next['schedDep'] ?? '');
+                            $baseFrom = (string)($next['from'] ?? '');
+                            $baseTo = (string)($next['to'] ?? '');
+                            $basis = 'missed_connection';
+                            break;
+                        }
+                    }
+                    if ($baseTime === '') {
+                        foreach ($segments as $seg0) {
+                            $seg = (array)$seg0;
+                            if ($pickN !== '' && $normStation((string)($seg['from'] ?? '')) === $pickN) {
+                                $baseDate = (string)($seg['depDate'] ?? '');
+                                $baseTime = (string)($seg['schedDep'] ?? '');
+                                $baseFrom = (string)($seg['from'] ?? '');
+                                $baseTo = (string)($seg['to'] ?? '');
+                                $basis = 'missed_connection';
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($baseTime === '') {
+                $baseDate = (string)($jb['dep_date'] ?? '');
+                $baseTime = (string)($jb['dep_time'] ?? '');
+                if ($baseTime === '' && !empty($segments)) {
+                    $seg0 = (array)$segments[0];
+                    $baseDate = (string)($seg0['depDate'] ?? $baseDate);
+                    $baseTime = (string)($seg0['schedDep'] ?? $baseTime);
+                    $baseFrom = (string)($seg0['from'] ?? '');
+                    $baseTo = (string)($seg0['to'] ?? '');
+                }
+            }
+
+            if ($baseDate !== '' && $baseTime !== '' && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $baseDate) && preg_match('/^\\d{1,2}:\\d{2}$/', $baseTime)) {
+                $dt = new \DateTimeImmutable($baseDate . ' ' . $baseTime);
+                $plannedDeparture = $dt->format('Y-m-d H:i');
+                $deadline100 = $dt->modify('+100 minutes')->format('Y-m-d H:i');
+                $route = trim(($baseFrom !== '' ? $baseFrom : '') . ($baseTo !== '' ? ' → ' . $baseTo : ''));
+                $clockBasis = $basis === 'missed_connection'
+                    ? 'Planlagt afgang for den missede forbindelse' . ($route !== '' ? ' (' . $route . ')' : '')
+                    : 'Planlagt afgang for den berørte tjeneste' . ($route !== '' ? ' (' . $route . ')' : '');
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+
+        $notes = [];
+        if (!$active) {
+            $notes[] = 'Art.18 er ikke tydeligt aktiveret ud fra wizard inputs (EU gate <60 og ingen cancellation/missed/PMR/cykel-signal).';
+        }
+        if ($incidentMissed === 'yes' && $missedExpected60 === 'no') {
+            $notes[] = 'Missed connection er markeret, men forventet endelig forsinkelse er ikke ≥60 min. National ordning kan stadig være relevant.';
+        }
+        if ($arrivedFinalExplicit && $purpose !== '') {
+            $notes[] = 'Endelig destination er nået via Art.20; Art.18-udfald afhænger af formål-spørgsmålet.';
+        }
+
+        $conclusion = [];
+        if ($remedy !== '') { $conclusion[] = 'Valgt Art.18-vej: ' . $remedy . '.'; }
+        $within100 = $yn($s7['reroute_info_within_100min'] ?? '');
+        $selfHelpRight = ($within100 === 'no'); // No info within 100 minutes => user may self-arrange public transport (Art.18(3)).
+        if ($within100 !== 'unknown') {
+            $conclusion[] = 'Art.18(3) 100-min svar: ' . ($within100 === 'yes' ? 'yes' : 'no') . '.';
+        } elseif ($plannedDeparture !== null && $deadline100 !== null) {
+            $conclusion[] = 'Art.18(3) 100-min frist (beregnet): ' . $deadline100 . ' (fra ' . $plannedDeparture . ').';
+        }
+        if ($arrivedFinalExplicit && $purpose !== '') { $conclusion[] = 'Formål efter ankomst: ' . $purpose . '.'; }
+
+        $effects = [];
+        if ($selfHelpRight) {
+            $effects[] = 'Art.18(3): selvhjælpsret kan være aktiveret (ingen meddelt omlægning inden 100 min).';
+        }
+        if ($arrivedFinalExplicit) {
+            $effects[] = 'Art.20: slutpunkt=final_destination (explicit). Trin 7/Art.18 kan ofte skippes, men refund kan stadig være relevant afhængigt af formål-spørgsmålet.';
+        }
+        if ($arrivedFinalExplicit && $purpose !== '') {
+            $p = strtolower(trim($purpose));
+            if ($p === 'ja' || $p === 'yes') {
+                $effects[] = 'Formål=ja: refusion/returtransport kan stadig være relevant selvom du nåede slutdestination.';
+            } elseif ($p === 'nej' || $p === 'no') {
+                $effects[] = 'Formål=nej: Art.18-refusion pga. “ikke længere noget formål” ser ikke ud til at være valgt.';
+            }
+        }
+
+        return [
+            'active' => $active,
+            'active_reasons' => $activeReasons,
+            'incident_main' => $incidentMain,
+            'remedyChoice' => $remedy,
+            'reroute' => [
+                'from_station' => $s7['a18_from_station'] ?? null,
+                'mode' => $s7['a18_reroute_mode'] ?? null,
+                'endpoint' => $s7['a18_reroute_endpoint'] ?? null,
+                'arrival_station' => $s7['a18_reroute_arrival_station'] ?? null,
+            ],
+            'refund' => [
+                'return_to_station' => $s7['a18_return_to_station'] ?? null,
+                'journey_no_longer_purpose' => $purpose !== '' ? $purpose : null,
+                'arrived_final_destination_explicit' => $arrivedFinalExplicit,
+            ],
+            'art18_3_100min' => [
+                'planned_departure' => $plannedDeparture,
+                'deadline_100min' => $deadline100,
+                'basis' => $clockBasis,
+                'answer' => $s7['reroute_info_within_100min'] ?? null,
+                'self_help_right' => $selfHelpRight,
+            ],
+            'effects' => $effects,
+            'notes' => $notes,
+            'conclusion' => $conclusion,
         ];
     }
 
@@ -423,11 +812,14 @@ class ScenariosController extends AppController
     private function buildWizardFieldOrigin(array $fx): array
     {
         $w = (array)($fx['wizard'] ?? []);
+        // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures.
+        $w['step3_station'] = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
+        $w['step4_journey'] = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
         $steps = [
             'step1_start',
             'step2_entitlements',
-            'step3_journey',
-            'step4_station',
+            'step3_station',
+            'step4_journey',
             'step5_incident',
             'step6_choices',
             'step7_remedies',

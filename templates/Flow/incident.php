@@ -142,7 +142,7 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
     <div class="mt8" data-show-if="incident_main:delay">
       <div>Er du allerede 60 minutter forsinket?</div>
       <label><input type="radio" name="delay_already_60" value="yes" <?= $v('delay_already_60')==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= ($v('delay_already_60')===''||$v('delay_already_60')==='no')?'checked':'' ?> /> Nej</label>
+      <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= $v('delay_already_60')==='no'?'checked':'' ?> /> Nej</label>
       <div class="small muted mt4">Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.</div>
     </div>
   </div>
@@ -168,7 +168,7 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
       <div id="missed60Wrap" class="mt8">
         <div>Betyder det missede skift, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?</div>
         <label><input type="radio" name="missed_expected_delay_60" value="yes" <?= $v('missed_expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= ($v('missed_expected_delay_60')===''||$v('missed_expected_delay_60')==='no')?'checked':'' ?> /> Nej / ved ikke</label>
+        <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= $v('missed_expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
         <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig vaere relevante afhaengigt af land.</div>
       </div>
     </div>
@@ -379,29 +379,31 @@ function updateStep4State(){
   var euGate = euGateFromMain;
   if (!euGateFromMain && missed === 'yes' && missed60 === 'yes') euGate = true;
 
-  // National fallback is shown when EU gate is not met. Cutoff is optional (we still show the card
-  // to explain why we can't determine national thresholds yet).
-  // UX: "last chance" – do not show national fallback until the user has answered the missed-connection question.
-  var showNat = (!euGate) && (main === 'delay' || missed === 'yes') && missedAnswered && !fmBlocksComp;
+  // National fallback is shown only when EU gate is NOT met, and only after the user has answered the
+  // relevant "last chance" questions. Important: selecting missed-connection (incident_missed=yes)
+  // must NOT be enough to trigger national fallback; the sub-question (missed_expected_delay_60) must be answered.
+  var delayLastChanceAnswered = (main === 'delay') && (exp60 !== '') && (already60 !== '');
+  var delayReadyForFallback = (!euGate) && (main === 'delay') && delayLastChanceAnswered;
+  var missedReadyForFallback = (!euGate) && showMissed60 && (missed60 !== '');
+  // If the user has enabled missed-connection, require the sub-question to be answered
+  // before we show national fallback (even if delay-branch is already answered).
+  var missedLastChanceUnanswered = showMissed60 && (missed60 === '');
+  var showNat = (!euGate) && !missedLastChanceUnanswered && (delayReadyForFallback || missedReadyForFallback) && !fmBlocksComp;
   showById('nationalFallbackWrap', showNat);
-  // If missed>=60 is required but unanswered, keep the fallback visible (so layout stays stable),
-  // but block the minutes input until the user answers the missed>=60 question.
-  var natBlocked = showNat && showMissed60 && missed60 === '';
-  showById('nationalFallbackBlockedHint', natBlocked);
-  var natInputs = document.getElementById('nationalFallbackInputs');
-  if (natInputs) { natInputs.classList.toggle('disabled-block', natBlocked); }
+  // We no longer keep the fallback visible-but-disabled. If the needed sub-question isn't answered yet,
+  // we hide the fallback entirely (cleaner UX and avoids the "red box shows too early" issue).
+  showById('nationalFallbackBlockedHint', false);
   var minsField = document.getElementById('nationalDelayMinutes');
-  if (minsField) { minsField.disabled = !!natBlocked; }
+  if (minsField) { minsField.disabled = false; }
 
   // Reminder UI: only useful in ongoing journeys when national fallback is visible.
   var mins = minsField ? parseInt(String(minsField.value || '').trim(), 10) : NaN;
   // Also show reminder when compensation is blocked by force majeure (Art. 19(10)) and EU gate isn't met yet.
-  var canRemind = euFlowSupported && isOngoing && showNat && !natBlocked && !isNaN(mins) && mins > 0 && mins < 60;
-  if (!canRemind && euFlowSupported && isOngoing && compBlockedByFM && !euGate && missedAnswered && !isNaN(mins) && mins > 0 && mins < 60) {
+  var canRemind = euFlowSupported && isOngoing && showNat && !isNaN(mins) && mins > 0 && mins < 60;
+  if (!canRemind && euFlowSupported && isOngoing && compBlockedByFM && !euGate && !isNaN(mins) && mins > 0 && mins < 60) {
     canRemind = true;
   }
   showById('euReminderWrap', canRemind);
-
   var info = document.getElementById('euReminderInfo');
   if (info && canRemind) {
     var m2 = 60 - mins;

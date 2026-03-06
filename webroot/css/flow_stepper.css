@@ -13,6 +13,16 @@
   gap: 1.6rem;
 }
 
+/* Prevent long/unbroken strings from blowing up the grid width (common CSS grid pitfall: min-width:auto). */
+.flow-stepper,
+.flow-content{
+  min-width: 0;
+}
+
+.flow-content{
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 980px){
   .flow-layout{
     grid-template-columns: 1fr;
@@ -144,18 +154,5 @@
   color: var(--flow-stepper-warn);
 }
 
-/* -----------------------------------------------------------
-   Read-only preview mode (locked steps opened with ?preview=1)
-
-   In preview mode we want the user to *see* what the step contains,
-   even when normal reveal conditions (data-show-if) would hide blocks.
-   Inputs are already disabled via <fieldset disabled> in the templates.
------------------------------------------------------------ */
-.flow-preview [data-show-if]{
-  display: block !important;
-}
-
-/* Some templates also toggle the HTML `hidden` attribute. */
-.flow-preview [hidden][data-show-if]{
-  display: block !important;
-}
+/* Read-only preview mode styles live here (no forced reveal).
+   Each step's template decides what to show in preview to avoid overwhelming users. */

@@ -1,0 +1,999 @@
+{
+    "schema_version": 1,
+    "updated_at": "2026-03-06",
+    "notes": [
+        "Art. 19(2) season/period passes follow each operator's compensation scheme; there is no EU-wide harmonized formula.",
+        "This file is a policy-matrix scaffold. Most entries should start as link-only stubs and be upgraded to verified over time.",
+        "Always store source_url + last_verified when you upgrade an entry to verified."
+    ],
+    "policies": [
+        {
+            "operator": "ÖBB",
+            "country": "AT",
+            "aliases": [
+                "oebb",
+                "öbb"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.oebb.at/fahrgastrechte",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.oebb.at/fahrgastrechte"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Zeitkarten (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld ÖBB Zeitkarte-ordning + evt. minimumsudbetaling + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "WESTbahn",
+            "country": "AT",
+            "aliases": [
+                "westbahn"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "SNCB/NMBS",
+            "country": "BE",
+            "aliases": [
+                "sncb",
+                "nmbs"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.belgiantrain.be/en/support/customer-service/compensation",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.belgiantrain.be/en/support/customer-service/compensation"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "BDZ",
+            "country": "BG",
+            "aliases": [
+                "bdz",
+                "bulgarian state railways"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.bdz.bg/en/a/claims-and-refunds",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.bdz.bg/en/a/claims-and-refunds"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "SBB CFF FFS",
+            "country": "CH",
+            "aliases": [
+                "sbb",
+                "cff",
+                "ffs"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "ČD",
+            "country": "CZ",
+            "aliases": [
+                "cd",
+                "ceske drahy",
+                "čd"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.cd.cz/en/info/passenger-indemnification/-30043/",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.cd.cz/en/info/passenger-indemnification/-30043/"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "LEO Express",
+            "country": "CZ",
+            "aliases": [
+                "leo express",
+                "leoexpress"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "RegioJet",
+            "country": "CZ",
+            "aliases": [
+                "regiojet",
+                "rj"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Deutsche Bahn",
+            "country": "DE",
+            "aliases": [
+                "db",
+                "deutsche bahn",
+                "db fernverkehr"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.bahn.de/service/informationen-buchung/fahrgastrechte/rechtliche-regelungen",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.bahn.de/service/informationen-buchung/fahrgastrechte"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Zeitkarten (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: DB Zeitkarten-ordning varierer (Nahverkehr/Fernverkehr/BahnCard 100). Udfyld pr. kategori."
+                }
+            ]
+        },
+        {
+            "operator": "FlixTrain",
+            "country": "DE",
+            "aliases": [
+                "flixtrain",
+                "flix train"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "DSB",
+            "country": "DK",
+            "aliases": [
+                "dsb",
+                "danske statsbaner"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.dsb.dk/find-produkter-og-services/dsb-rejsetidsgaranti/dsb-pendler-rejsetidsgaranti/",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.dsb.dk/find-produkter-og-services/dsb-rejsetidsgaranti/dsb-pendler-rejsetidsgaranti/"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld DSB's konkrete rejsetidsgaranti/pendler-ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Elron",
+            "country": "EE",
+            "aliases": [
+                "elron"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://elron.ee/en/compensation",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://elron.ee/en/compensation"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "iryo",
+            "country": "ES",
+            "aliases": [
+                "iryo"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Renfe",
+            "country": "ES",
+            "aliases": [
+                "renfe"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.renfe.com/es/en/viajar/informacion-util/compromiso-puntualidad",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.renfe.com/es/en/viajar/informacion-util/compromiso-puntualidad"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "VR",
+            "country": "FI",
+            "aliases": [
+                "vr"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.vr.fi/en/compensation-for-delay",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.vr.fi/en/compensation-for-delay"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "SNCF",
+            "country": "FR",
+            "aliases": [
+                "sncf",
+                "sncf connect",
+                "oui.sncf",
+                "inoui"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.ter.sncf.com/pays-de-la-loire/offres/tarifs/tickets-abonnements/garantie-ponctualite-abonnes",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.ter.sncf.com/pays-de-la-loire/offres/tarifs/tickets-abonnements/garantie-ponctualite-abonnes"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "TER abonnés (regionalt)",
+                    "policy_type": "regional_by_region",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: TER-ordninger er typisk regionsstyrede. Opret templates pr. region eller link-only fallback."
+                }
+            ]
+        },
+        {
+            "operator": "Thalys",
+            "country": "FR",
+            "aliases": [
+                "thalys"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Eurostar",
+            "country": "GB",
+            "aliases": [
+                "eurostar",
+                "es"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Hellenic Train",
+            "country": "GR",
+            "aliases": [
+                "hellenic train",
+                "trainose"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.hellenictrain.gr/en/reimbursements",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.hellenictrain.gr/en/reimbursements"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "HŽPP",
+            "country": "HR",
+            "aliases": [
+                "hzpp",
+                "hžpp",
+                "croatian railways"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.hzpp.hr/en/passenger-rights",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.hzpp.hr/en/passenger-rights"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "MAV-START",
+            "country": "HU",
+            "aliases": [
+                "mav",
+                "mav-start",
+                "máv-start"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.mavcsoport.hu/mav-szemelyszallitas/gyik/kesesigazolas-karterites",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.mavcsoport.hu/mav-szemelyszallitas/gyik/kesesigazolas-karterites"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Iarnrod Eireann",
+            "country": "IE",
+            "aliases": [
+                "iarnrod eireann",
+                "irish rail"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.irishrail.ie/en-ie/Passenger-Charter/Passenger-Charter-for-DART-and-Commuter",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.irishrail.ie/en-ie/Passenger-Charter/Passenger-Charter-for-DART-and-Commuter"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Italo",
+            "country": "IT",
+            "aliases": [
+                "italo",
+                "ntv",
+                "italo ntv"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Trenitalia",
+            "country": "IT",
+            "aliases": [
+                "trenitalia",
+                "fs"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.trenitalia.com/it/informazioni/indennita-per-ritardo.html",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.trenitalia.com/it/informazioni/indennita-per-ritardo.html"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "LTG Link",
+            "country": "LT",
+            "aliases": [
+                "ltg",
+                "ltg link",
+                "lietuvos gelezinkeliai"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://ltglink.lt/en/rules-for-the-carriage-of-passengers-baggage-and-animals",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://ltglink.lt/en/rules-for-the-carriage-of-passengers-baggage-and-animals"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "CFL",
+            "country": "LU",
+            "aliases": [
+                "cfl",
+                "chemins de fer luxembourgeois"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.cfl.lu/en-gb/service/client-service/passenger-rights",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.cfl.lu/en-gb/service/client-service/passenger-rights"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Vivi",
+            "country": "LV",
+            "aliases": [
+                "vivi",
+                "pasazieru vilciens",
+                "pasažieru vilciens",
+                "pv"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.vivi.lv/en/passengers/the-procedure-for-returning-and-rebooking-tickets",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.vivi.lv/en/passengers/the-procedure-for-returning-and-rebooking-tickets"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "NS",
+            "country": "NL",
+            "aliases": [
+                "ns",
+                "nederlandse spoorwegen"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.ns.nl/binaries/_ht_1699618256397/service-en-contact/geld-terug/vergoedingen-bij-vertraging/voorwaarden-geld-terug-bij-vertraging.pdf",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.ns.nl/service-en-contact/geld-terug/geld-terug-bij-vertraging"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Abonnement / season products (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: NS har ofte tabel/abonnement-afhængige beløb. Udfyld claim-link + regler pr. abonnementstype."
+                }
+            ]
+        },
+        {
+            "operator": "PKP Intercity",
+            "country": "PL",
+            "aliases": [
+                "pkp",
+                "pkp ic",
+                "intercity",
+                "pkp intercity"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://utk.gov.pl/pl/pasazerowie/skargi-i-reklamacje/reklamacje-i-rekompensa/15497,Jakie-sa-zasady-odszkodowania-dla-posiadaczy-biletow-okresowych.html",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://utk.gov.pl/pl/pasazerowie/skargi-i-reklamacje/reklamacje-i-rekompensa/15497,Jakie-sa-zasady-odszkodowania-dla-posiadaczy-biletow-okresowych.html"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Polregio",
+            "country": "PL",
+            "aliases": [
+                "polregio"
+            ],
+            "coverage_status": "stub",
+            "verified": false,
+            "last_verified": null,
+            "source_url": "",
+            "claim_channel": {
+                "type": "url",
+                "value": ""
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "CP",
+            "country": "PT",
+            "aliases": [
+                "cp",
+                "comboios de portugal"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.cp.pt/passageiros/en/how-to-use/purchase-and-claim/compensation-for-delays",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.cp.pt/passageiros/en/how-to-use/purchase-and-claim/compensation-for-delays"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "CFR Calatori",
+            "country": "RO",
+            "aliases": [
+                "cfr",
+                "cfr calatori",
+                "cfr călători"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.cfrcalatori.ro/wp-content/uploads/2024/11/Conditii-generale-de-transport-in-trafic-intern.pdf",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.cfrcalatori.ro/wp-content/uploads/2024/11/Conditii-generale-de-transport-in-trafic-intern.pdf"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "SJ",
+            "country": "SE",
+            "aliases": [
+                "sj ab",
+                "sj"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.sj.se/ersattning",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.sj.se/ersattning"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "Slovenske zeleznice",
+            "country": "SI",
+            "aliases": [
+                "sz",
+                "sž",
+                "slovenske zeleznice",
+                "slovenske železnice"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://potniski.sz.si/en/passenger-rights/",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://potniski.sz.si/en/passenger-rights/"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        },
+        {
+            "operator": "ZSSK",
+            "country": "SK",
+            "aliases": [
+                "zssk"
+            ],
+            "coverage_status": "link_only",
+            "verified": false,
+            "last_verified": "2026-03-06",
+            "source_url": "https://www.zssk.sk/en/terms-and-conditions/",
+            "claim_channel": {
+                "type": "url",
+                "value": "https://www.zssk.sk/en/terms-and-conditions/"
+            },
+            "products": [
+                {
+                    "product_type": "season_pass",
+                    "name": "Pendler-/periodekort (generelt)",
+                    "policy_type": "operator_scheme",
+                    "aggregation_window": "month",
+                    "qualifying_rules": [],
+                    "compensation_method": "operator_defined",
+                    "min_payout": null,
+                    "notes": "TO_VERIFY: udfyld operatørens konkrete ordning + claim-link."
+                }
+            ]
+        }
+    ]
+}

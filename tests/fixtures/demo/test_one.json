@@ -1,48 +1,14 @@
 {
   "fixture": {
-    "id": "session_20260227_204852",
+    "id": "session_20260304_145943",
     "version": 2,
-    "label": "Captured wizard session 2026-02-27T20:48:52+00:00",
+    "label": "Captured wizard session 2026-03-04T14:59:43+00:00",
     "journey": {
       "seller_type": "operator",
       "bookingRef": "55MPJ448",
       "segments": [
         {
-          "from": "København H",
-          "to": "Vejle St.",
-          "schedDep": "05:56",
-          "schedArr": "07:56",
-          "depDate": "2024-03-18",
-          "arrDate": "2024-03-18",
-          "trainNo": "",
-          "confidence": 1,
-          "source": "llm_primary",
-          "_orig_source": "pdf_text",
           "country": "DK"
-        },
-        {
-          "from": "Vejle St.",
-          "to": "Herning St.",
-          "schedDep": "08:03",
-          "schedArr": "08:57",
-          "depDate": "2024-03-18",
-          "arrDate": "2024-03-18",
-          "trainNo": "",
-          "confidence": 1,
-          "source": "llm_primary",
-          "_orig_source": "pdf_text"
-        },
-        {
-          "from": "Herning St.",
-          "to": "Herning Messecenter",
-          "schedDep": "09:02",
-          "schedArr": "09:04",
-          "depDate": "2024-03-18",
-          "arrDate": "2024-03-18",
-          "trainNo": "",
-          "confidence": 1,
-          "source": "llm_primary",
-          "_orig_source": "pdf_text"
         }
       ],
       "country": {
@@ -58,7 +24,7 @@
       "train_no": "DSB 1",
       "ticket_no": "55MPJ448",
       "operator": "DSB",
-      "operator_country": "Denmark",
+      "operator_country": "DK",
       "operator_product": "DSB Orange",
       "price": "139 kr."
     },
@@ -252,7 +218,7 @@
       },
       "downgrade_by_file": {
         "Udrejse-billet.pdf": {
-          "downgrade_occurred": "yes",
+          "downgrade_occurred": "no",
           "downgrade_comp_basis": "",
           "downgrade_segment_share": "0.318",
           "downgrade_segment_share_basis": "time_scope",
@@ -294,7 +260,7 @@
         "ticket_upload_mode": "ticket",
         "scope_choice": "",
         "operator": "DSB",
-        "operator_country": "Denmark",
+        "operator_country": "DK",
         "operator_product": "DSB Orange",
         "ticket_no": "55MPJ448",
         "dep_date": "2024-03-18",
@@ -323,78 +289,104 @@
         "train_specificity": null,
         "fare_class_purchased": null,
         "berth_seat_type": "couchette",
-        "eligible_under_18_3": "1",
+        "eligible_under_18_3": "0",
         "bike_was_present": "Nej",
         "bike_refusal_reason_type": "",
         "bike_refusal_reason_other_text": ""
       },
-      "step4_station": {},
-      "step5_incident": {
-        "incident_main": "cancellation",
-        "incident_missed": "yes",
-        "expected_delay_60": null,
-        "preinformed_disruption": "yes",
-        "preinfo_channel": "website",
-        "realtime_info_seen": "unknown",
-        "missed_connection_station": "Vejle St.",
-        "missed_connection_pick": "Vejle St.",
-        "voucherAccepted": "no",
-        "operatorExceptionalCircumstances": "yes",
-        "operatorExceptionalType": "weather",
-        "minThresholdApplies": null
-      },
-      "step6_choices": {
+      "step4_station": {
+        "a20_station_stranded": "no",
         "is_stranded": "yes",
-        "maps_opt_in_trin5": "0",
-        "stranded_current_station": "Vejle St.",
+        "stranded_location": "track",
+        "stranded_current_station": null,
         "stranded_current_station_other": null,
-        "stranded_location": "station",
-        "blocked_train_alt_transport": null,
-        "blocked_no_transport_action": null,
-        "assistance_alt_transport_type": null,
-        "a20_where_ended": null,
-        "a20_arrival_station": null,
-        "a20_arrival_station_other": null,
-        "a20_where_ended_assumed": null,
-        "handoff_station": null,
-        "blocked_self_paid_transport_type": null,
-        "blocked_self_paid_amount": null,
-        "blocked_self_paid_currency": null,
-        "blocked_self_paid_receipt": null,
+        "stranded_current_station_other_osm_id": null,
+        "stranded_current_station_other_lat": null,
+        "stranded_current_station_other_lon": null,
+        "stranded_current_station_other_country": null,
+        "stranded_current_station_other_type": null,
+        "stranded_current_station_other_source": null,
         "a20_3_solution_offered": null,
         "a20_3_solution_type": null,
+        "a20_3_solution_offered_by": null,
         "a20_3_self_paid": null,
         "a20_3_self_arranged_type": null,
         "a20_3_self_paid_direction": null,
         "a20_3_self_paid_amount": null,
         "a20_3_self_paid_currency": null,
-        "a20_3_self_paid_receipt": null
+        "a20_3_self_paid_receipt": null,
+        "a20_where_ended": "final_destination",
+        "a20_arrival_station": null,
+        "a20_arrival_station_other": null,
+        "a20_arrival_station_other_osm_id": null,
+        "a20_arrival_station_other_lat": null,
+        "a20_arrival_station_other_lon": null,
+        "a20_arrival_station_other_country": null,
+        "a20_arrival_station_other_type": null,
+        "a20_arrival_station_other_source": null,
+        "a20_where_ended_assumed": "0",
+        "handoff_station": null
+      },
+      "step5_incident": {
+        "incident_main": "delay",
+        "incident_missed": "yes",
+        "expected_delay_60": "yes",
+        "delay_already_60": "no",
+        "missed_expected_delay_60": null,
+        "national_delay_minutes": "",
+        "national_delay_reported_at": "",
+        "preinformed_disruption": "no",
+        "preinfo_channel": "",
+        "realtime_info_seen": null,
+        "missed_connection_station": "Vejle St.",
+        "missed_connection_pick": "Vejle St.",
+        "voucherAccepted": "no",
+        "operatorExceptionalCircumstances": "unknown",
+        "operatorExceptionalType": "",
+        "minThresholdApplies": null
+      },
+      "step6_choices": {
+        "is_stranded_trin5": "yes",
+        "maps_opt_in_trin5": "0",
+        "stranded_location": "track",
+        "blocked_train_alt_transport": "yes",
+        "blocked_no_transport_action": null,
+        "assistance_alt_transport_type": "bus",
+        "a20_where_ended": "final_destination",
+        "a20_arrival_station": null,
+        "a20_arrival_station_other": null,
+        "a20_where_ended_assumed": "0",
+        "handoff_station": null,
+        "blocked_self_paid_transport_type": null,
+        "blocked_self_paid_amount": null,
+        "blocked_self_paid_currency": null,
+        "blocked_self_paid_receipt": null
       },
       "step7_remedies": {
-        "art18_expected_delay_60": null,
-        "remedyChoice": "reroute_soonest",
+        "art18_expected_delay_60": "yes",
+        "remedyChoice": "refund_return",
         "a18_from_station": "Vejle St.",
         "a18_from_station_other": null,
-        "a18_return_to_station": null,
+        "a18_return_to_station": "København H",
         "a18_return_to_station_other": null,
-        "a18_reroute_mode": "rail",
-        "a18_reroute_endpoint": "final_destination",
+        "a18_reroute_mode": null,
+        "a18_reroute_endpoint": null,
         "a18_reroute_arrival_station": null,
         "a18_reroute_arrival_station_other": null,
-        "reroute_same_conditions_soonest": "yes",
+        "reroute_same_conditions_soonest": null,
         "reroute_later_at_choice": null,
-        "reroute_info_within_100min": "no",
-        "self_purchased_new_ticket": "yes",
-        "self_purchase_approved_by_operator": "no",
-        "reroute_extra_costs": "yes",
-        "reroute_extra_costs_amount": "250",
-        "reroute_extra_costs_currency": "DKK",
+        "reroute_info_within_100min": null,
+        "self_purchased_new_ticket": null,
+        "self_purchase_approved_by_operator": null,
+        "reroute_extra_costs": null,
+        "reroute_extra_costs_amount": null,
+        "reroute_extra_costs_currency": null,
         "reroute_later_ticket_upload": null,
         "reroute_later_ticket_file": null,
-        "trip_cancelled_return_to_origin": null,
-        "return_to_origin_expense": null,
-        "return_to_origin_amount": null,
-        "return_to_origin_currency": null,
+        "trip_cancelled_return_to_origin": "yes",
+        "return_to_origin_expense": "yes",
+        "return_to_origin_amount": "200",
+        "return_to_origin_currency": "DKK",
         "return_to_origin_receipt": null,
         "delay_confirmation_info": null,
         "delay_confirmation_received": null,
@@ -402,69 +394,59 @@
         "delay_confirmation_type": null
       },
       "step8_assistance": {
-        "meal_offered": "no",
-        "assistance_meals_unavailable_reason": "not_available",
-        "meal_self_paid_amount": "100.00",
-        "meal_self_paid_currency": "DKK",
+        "meal_offered": "yes",
+        "assistance_meals_unavailable_reason": null,
+        "meal_self_paid_amount": null,
+        "meal_self_paid_currency": null,
         "meal_self_paid_receipt": null,
-        "meal_self_paid_amount_items": [
-          "100"
-        ],
-        "meal_self_paid_receipt_items": [
-          ""
-        ],
-        "hotel_offered": "no",
+        "meal_self_paid_amount_items": null,
+        "meal_self_paid_receipt_items": null,
+        "hotel_offered": "irrelevant",
         "assistance_hotel_transport_included": null,
         "hotel_transport_self_paid_amount": null,
         "hotel_transport_self_paid_currency": null,
         "hotel_transport_self_paid_receipt": null,
-        "overnight_needed": "yes",
-        "hotel_self_paid_nights": "1",
-        "hotel_self_paid_amount": "700.00",
-        "hotel_self_paid_currency": "DKK",
+        "overnight_needed": null,
+        "hotel_self_paid_nights": null,
+        "hotel_self_paid_amount": null,
+        "hotel_self_paid_currency": null,
         "hotel_self_paid_receipt": null,
-        "hotel_self_paid_amount_items": [
-          "700"
-        ],
-        "hotel_self_paid_nights_items": [
-          "1"
-        ],
-        "hotel_self_paid_receipt_items": [
-          ""
-        ],
+        "hotel_self_paid_amount_items": null,
+        "hotel_self_paid_nights_items": null,
+        "hotel_self_paid_receipt_items": null,
         "assistance_pmr_priority_applied": null,
         "assistance_pmr_companion_supported": null,
         "price_hints": {
           "meals": {
-            "min": 8,
-            "max": 15,
-            "currency": "EUR"
+            "min": 60,
+            "max": 110,
+            "currency": "DKK"
           },
           "hotelPerNight": {
-            "min": 80,
-            "max": 130,
-            "currency": "EUR"
+            "min": 600,
+            "max": 970,
+            "currency": "DKK"
           },
           "taxi": {
-            "min": 10,
-            "max": 18,
-            "currency": "EUR"
+            "min": 75,
+            "max": 135,
+            "currency": "DKK"
           },
           "altTransport": {
-            "min": 5,
-            "max": 12,
-            "currency": "EUR"
+            "min": 35,
+            "max": 90,
+            "currency": "DKK"
           },
           "upgradeFirstClass": {
-            "min": 15,
-            "max": 35,
-            "currency": "EUR"
+            "min": 110,
+            "max": 260,
+            "currency": "DKK"
           }
         }
       },
       "step9_downgrade": {
         "downgrade_ticket_file": "Udrejse-billet.pdf",
-        "downgrade_occurred": "yes",
+        "downgrade_occurred": "no",
         "downgrade_comp_basis": null,
         "downgrade_segment_share": "0.318",
         "leg_class_purchased": [
@@ -497,8 +479,8 @@
         "delayAtFinalMinutes": null,
         "compensationBand": null,
         "voucherAccepted": "no",
-        "operatorExceptionalCircumstances": "yes",
-        "operatorExceptionalType": "weather",
+        "operatorExceptionalCircumstances": "unknown",
+        "operatorExceptionalType": "",
         "minThresholdApplies": null,
         "delayMinEU": null,
         "knownDelayBeforePurchase": false
@@ -531,20 +513,20 @@
         },
         "preinfo": {
           "art9_1": {
-            "preinformed_disruption": "Ja",
-            "preinfo_channel": "website"
+            "preinformed_disruption": "Nej",
+            "preinfo_channel": ""
           },
           "art9_2": {
             "realtime_info_seen": "unknown"
           },
           "art9_3": {
-            "preinfo_channel": "website",
+            "preinfo_channel": "",
             "realtime_info_seen": "unknown"
           }
         }
       },
-      "preinformed_disruption": "Ja",
-      "preinfo_channel": "website",
+      "preinformed_disruption": "Nej",
+      "preinfo_channel": "",
       "realtime_info_seen": "unknown",
       "pmr_user": "Nej",
       "pmr_booked": "Nej",

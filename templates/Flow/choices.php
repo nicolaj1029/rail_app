@@ -92,6 +92,13 @@ try {
     .station-suggest button:active { color: #111 !important; }
     .station-suggest button:focus { outline: none; background: #f1f3f5; color: #111 !important; }
     .station-suggest .muted { color: #666; font-size: 12px; }
+
+    /* Keep conditional blocks hidden unless reveal JS says otherwise (prevents "always visible" glitches). */
+    [data-show-if] { display:none; }
+
+    /* In locked preview mode we only show the top question, not the conditional branches. */
+    .flow-preview [data-show-if] { display:none !important; }
+    .flow-preview #resolutionWrapTrin5 { display:none !important; }
 </style>
 <div class="flow-wrapper">
 <h1><?= h($transportTitle) ?></h1>
@@ -216,7 +223,7 @@ try {
             // We do NOT rely on posting `stranded_location` from this step (controller derives it on submit).
             $showTrackFlow = ($showTrack && $isStrandedTrin5 === 'yes');
         ?>
-        <div class="<?= ($showTrackFlow || $isPreview) ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
+        <div class="<?= $showTrackFlow ? '' : 'hidden' ?>" data-show-if="is_stranded_trin5:yes" data-art="20(2c)">
             <div class="mt4">
                 <span>Blev der stillet transport til raadighed for at komme vaek/videre?</span>
                 <?php $bt = $v('blocked_train_alt_transport'); ?>

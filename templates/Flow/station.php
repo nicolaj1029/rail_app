@@ -13,8 +13,8 @@ $isCompleted = ($travelState === 'completed');
 $isBeforeStart = ($travelState === 'before_start');
 
 $title = $isOngoing
-    ? 'TRIN 4 - Transport fra station (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 4 - Transport fra station (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 4 - Transport fra station (rejsen starter senere)' : 'TRIN 4 - Transport fra station (Art.20(3))'));
+    ? 'TRIN 3 - Transport fra station (igangvaerende rejse)'
+    : ($isCompleted ? 'TRIN 3 - Transport fra station (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 3 - Transport fra station (rejsen starter senere)' : 'TRIN 3 - Transport fra station (Art.20(3))'));
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 
@@ -307,7 +307,7 @@ if ($mapsOriginDefault === '' || $mapsOriginDefault === 'unknown') { $mapsOrigin
     </div>
 
     <div class="mt12" style="display:flex; gap:8px; align-items:center;">
-      <?= $this->Html->link('<- Tilbage', ['action' => 'journey'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+      <?= $this->Html->link('<- Tilbage', ['action' => 'entitlements'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
       <?= $this->Form->button('Naeste trin ->', ['class' => 'button']) ?>
     </div>
 

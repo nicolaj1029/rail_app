@@ -225,3 +225,10 @@
 .error {
     color: #b33;
 }
+
+/* Defensive: prevent long/unbroken strings (filenames, refs) from creating horizontal scroll. */
+.fe-wrapper,
+.fe-wrapper * {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
