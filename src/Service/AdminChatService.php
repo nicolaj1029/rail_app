@@ -368,6 +368,24 @@ final class AdminChatService
                 }
                 $form[$key] = $value;
                 break;
+
+            case 'meal_self_paid_amount':
+            case 'hotel_self_paid_amount':
+            case 'a20_3_self_paid_amount':
+            case 'reroute_extra_costs_amount':
+                $currencyField = [
+                    'meal_self_paid_amount' => 'meal_self_paid_currency',
+                    'hotel_self_paid_amount' => 'hotel_self_paid_currency',
+                    'a20_3_self_paid_amount' => 'a20_3_self_paid_currency',
+                    'reroute_extra_costs_amount' => 'reroute_extra_costs_currency',
+                ][$key];
+                $parsed = $this->parseAmountInput($input);
+                if ($parsed === null) {
+                    return ['ok' => false, 'message' => 'Jeg kunne ikke laese et beloeb. Skriv fx 150 DKK eller 20.50 EUR.'];
+                }
+                $form[$key] = $parsed['amount'];
+                $form[$currencyField] = $parsed['currency'] ?? $this->defaultCurrencyForFlow($flow);
+                break;
         }
 
         $flow['form'] = $form;
@@ -470,6 +488,15 @@ final class AdminChatService
                 'flow_path' => $path,
             ];
         };
+        $askAmount = function (string $key, string $prompt, string $query, string $path) use ($flow): array {
+            return [
+                'key' => $key,
+                'prompt' => $prompt . ' Skriv fx 150 ' . $this->defaultCurrencyForFlow($flow) . '.',
+                'choices' => [],
+                'citation_query' => $query,
+                'flow_path' => $path,
+            ];
+        };
 
         $art12Missing = (array)(Hash::get($raw, 'art12.missing') ?? []);
         if (in_array('separate_contract_notice', $art12Missing, true) && ($form['separate_contract_notice'] ?? '') === '') {
@@ -501,6 +528,31 @@ final class AdminChatService
             if (in_array($key, $art20Missing, true) && ($form[$key] ?? '') === '') {
                 return $askTri($key, $prompt, $query, $path);
             }
+        }
+
+        if (($form['meal_offered'] ?? '') === 'no' && trim((string)($form['meal_self_paid_amount'] ?? '')) === '') {
+            return $askAmount(
+                'meal_self_paid_amount',
+                'Hvor meget betalte passageren selv for maaltider eller forfriskninger?',
+                'Artikel 20 2 a maaltider udgifter',
+                '/flow/assistance'
+            );
+        }
+        if (($form['hotel_offered'] ?? '') === 'no' && trim((string)($form['hotel_self_paid_amount'] ?? '')) === '') {
+            return $askAmount(
+                'hotel_self_paid_amount',
+                'Hvor meget betalte passageren selv for hotel eller overnatning?',
+                'Artikel 20 2 b hotel udgifter',
+                '/flow/assistance'
+            );
+        }
+        if (($form['a20_3_self_paid'] ?? '') === 'yes' && trim((string)($form['a20_3_self_paid_amount'] ?? '')) === '') {
+            return $askAmount(
+                'a20_3_self_paid_amount',
+                'Hvor meget betalte passageren selv for alternativ transport fra stationen?',
+                'Artikel 20 3 selvbetalt transport belob',
+                '/flow/station'
+            );
         }
 
         $flags = (array)($flow['flags'] ?? []);
@@ -539,6 +591,14 @@ final class AdminChatService
                 if (($form[$key] ?? '') === '') {
                     return $askTri($key, $prompt, $query, $path);
                 }
+            }
+            if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
+                return $askAmount(
+                    'reroute_extra_costs_amount',
+                    'Hvor store var de ekstra omlaegningsomkostninger?',
+                    'Artikel 18 2 reroute extra costs amount',
+                    '/flow/remedies'
+                );
             }
         }
 
@@ -974,6 +1034,56 @@ final class AdminChatService
         return max(0, (int)$m[1]);
     }
 
+    /**
+     * @return array{amount:string,currency:?string}|null
+     */
+    private function parseAmountInput(string $input): ?array
+    {
+        if (!preg_match('/(\d+(?:[.,]\d{1,2})?)/', $input, $m)) {
+            return null;
+        }
+
+        $amount = (float)str_replace(',', '.', $m[1]);
+        $currency = null;
+        if (preg_match('/\b([A-Za-z]{3})\b/', strtoupper($input), $currencyMatch)) {
+            $currency = strtoupper($currencyMatch[1]);
+        } elseif (str_contains($input, '€')) {
+            $currency = 'EUR';
+        } elseif (str_contains($input, '£')) {
+            $currency = 'GBP';
+        } elseif (str_contains($input, '$')) {
+            $currency = 'USD';
+        }
+
+        return [
+            'amount' => number_format($amount, 2, '.', ''),
+            'currency' => $currency,
+        ];
+    }
+
+    private function defaultCurrencyForFlow(array $flow): string
+    {
+        $form = (array)($flow['form'] ?? []);
+        $explicit = strtoupper(trim((string)($form['price_currency'] ?? '')));
+        if (preg_match('/^[A-Z]{3}$/', $explicit)) {
+            return $explicit;
+        }
+
+        return match (strtoupper(trim((string)($form['operator_country'] ?? '')))) {
+            'DK' => 'DKK',
+            'SE' => 'SEK',
+            'NO' => 'NOK',
+            'CH' => 'CHF',
+            'CZ' => 'CZK',
+            'HU' => 'HUF',
+            'PL' => 'PLN',
+            'RO' => 'RON',
+            'BG' => 'BGN',
+            'GB' => 'GBP',
+            default => 'EUR',
+        };
+    }
+
     private function normalizeCountry(string $input): string
     {
         try {
@@ -1006,12 +1116,16 @@ final class AdminChatService
             'alt_transport_provided' => 'Alternativ transport-oplysning gemt.',
             'a20_3_solution_offered' => 'Art. 20(3)-oplysning gemt.',
             'a20_3_self_paid' => 'Selvbetalt transport-oplysning gemt.',
+            'meal_self_paid_amount' => 'Maaltidsbeloeb gemt: ' . (string)($flow['form']['meal_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['meal_self_paid_currency'] ?? ''),
+            'hotel_self_paid_amount' => 'Hotelbeloeb gemt: ' . (string)($flow['form']['hotel_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['hotel_self_paid_currency'] ?? ''),
+            'a20_3_self_paid_amount' => 'Alternativ transport-beloeb gemt: ' . (string)($flow['form']['a20_3_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['a20_3_self_paid_currency'] ?? ''),
             'remedy_choice' => 'Art. 18-retning gemt.',
             'refund_requested' => 'Refusionsvalg gemt.',
             'reroute_same_conditions_soonest' => 'Omlaegning snarest-oplysning gemt.',
             'reroute_later_at_choice' => 'Omlaegning senere-oplysning gemt.',
             'reroute_info_within_100min' => '100-minutters-oplysning gemt.',
             'reroute_extra_costs' => 'Ekstra omlaegningsomkostninger gemt.',
+            'reroute_extra_costs_amount' => 'Ekstra omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_extra_costs_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_extra_costs_currency'] ?? ''),
             default => 'Svar gemt.',
         };
     }
