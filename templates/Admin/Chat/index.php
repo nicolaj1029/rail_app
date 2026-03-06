@@ -34,6 +34,9 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   .admin-blocker-list { display:grid; gap:8px; margin-top:10px; }
   .admin-blocker-item { border:1px solid #fde68a; border-radius:8px; padding:10px; background:#fffbeb; }
   .admin-blocker-item strong { display:block; color:#111; margin-bottom:4px; }
+  .admin-blocker-group { margin-top:12px; }
+  .admin-blocker-group:first-child { margin-top:10px; }
+  .admin-blocker-group-title { font-size:13px; font-weight:700; color:#111; margin:0 0 8px; text-transform:uppercase; letter-spacing:.03em; }
   @media (max-width: 980px) {
     .admin-chat-page { grid-template-columns: 1fr; }
     .admin-chat-log { height:420px; }
@@ -241,20 +244,42 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     )).join('') : '<div class="admin-muted">Ingen konkrete next actions endnu.</div>';
 
     const blockers = preview?.blocking_fields || [];
-    previewBlockersEl.innerHTML = blockers.length ? (
+    if (!blockers.length) {
+      previewBlockersEl.innerHTML = '<div class="admin-muted">Ingen kendte blocker-felter lige nu.</div>';
+      return;
+    }
+    const priorityLabels = {
+      required_now: 'Skal udfyldes nu',
+      important_before_export: 'Vigtigt før eksport',
+      review_before_export: 'Gennemgå før eksport'
+    };
+    const priorityOrder = ['required_now', 'important_before_export', 'review_before_export'];
+    const grouped = {};
+    blockers.forEach((item) => {
+      const priority = item.priority || 'review_before_export';
+      if (!grouped[priority]) grouped[priority] = [];
+      grouped[priority].push(item);
+    });
+    previewBlockersEl.innerHTML =
       '<div class="admin-muted">Mangler stadig disse felter før claim/export bliver mere robust:</div>' +
-      blockers.map((item) => (
-        '<div class="admin-blocker-item">' +
-          '<strong>' + escapeHtml(item.label || item.key || '') + '</strong>' +
-          '<div class="admin-muted">' + escapeHtml(item.detail || '') + '</div>' +
-          '<div class="admin-muted" style="margin-top:4px;">Gruppe: ' + escapeHtml(item.group || '-') + '</div>' +
-          '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
-            '<button type="button" class="admin-chip" data-blocker-focus="' + escapeHtml(item.key || '') + '">Fokusér i chat</button>' +
-            (item.href ? ('<a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a>') : '') +
-          '</div>' +
-        '</div>'
-      )).join('')
-    ) : '<div class="admin-muted">Ingen kendte blocker-felter lige nu.</div>';
+      priorityOrder
+        .filter((priority) => (grouped[priority] || []).length)
+        .map((priority) => (
+          '<div class="admin-blocker-group">' +
+            '<div class="admin-blocker-group-title">' + escapeHtml(priorityLabels[priority] || priority) + '</div>' +
+            grouped[priority].map((item) => (
+              '<div class="admin-blocker-item">' +
+                '<strong>' + escapeHtml(item.label || item.key || '') + '</strong>' +
+                '<div class="admin-muted">' + escapeHtml(item.detail || '') + '</div>' +
+                '<div class="admin-muted" style="margin-top:4px;">Gruppe: ' + escapeHtml(item.group || '-') + '</div>' +
+                '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+                  '<button type="button" class="admin-chip" data-blocker-focus="' + escapeHtml(item.key || '') + '">Fokusér i chat</button>' +
+                  (item.href ? ('<a class="admin-chip" href="' + escapeHtml(item.href) + '" target="_blank">Aabn relevant trin</a>') : '') +
+                '</div>' +
+              '</div>'
+            )).join('') +
+          '</div>'
+        )).join('');
   }
 
   function renderSteps(steps) {
