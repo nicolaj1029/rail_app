@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use Cake\Http\Session;
+use Cake\Utility\Hash;
 
 /**
  * Deterministic admin chat orchestration on top of the existing flow session.
@@ -363,6 +364,7 @@ final class AdminChatService
         $history = (array)$session->read('admin.chat_history') ?: [];
         $summary = $this->buildSummary($flow);
         $citations = $this->buildCitations($question);
+        $preview = $this->buildPipelinePreview($flow);
         $stepper = (new FlowStepsService())->buildSteps((array)($flow['flags'] ?? []), 'start');
         $visibleSteps = [];
         foreach ($stepper as $step) {
@@ -384,10 +386,95 @@ final class AdminChatService
             'history' => $history,
             'question' => $question,
             'summary' => $summary,
+            'preview' => $preview,
             'citations' => $citations,
             'visible_steps' => $visibleSteps,
             'flow' => $flow,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @return array<string,mixed>
+     */
+    private function buildPipelinePreview(array $flow): array
+    {
+        $flags = (array)($flow['flags'] ?? []);
+        $form = (array)($flow['form'] ?? []);
+
+        if (((string)($flags['step1_done'] ?? '')) !== '1') {
+            return [
+                'status' => 'idle',
+                'message' => 'Preview starter, naar TRIN 1 er udfyldt.',
+                'summary' => [],
+                'raw' => null,
+            ];
+        }
+
+        try {
+            $fixture = (new SessionToFixtureMapper())->mapSessionToFixtureEnriched($flow);
+            $result = (new ScenarioRunner())->evaluateFixture($fixture);
+            $actual = (array)($result['actual'] ?? []);
+
+            if (!empty($actual['error'])) {
+                return [
+                    'status' => 'error',
+                    'message' => 'Pipeline-preview fejlede: ' . (string)($actual['error'] ?? 'unknown'),
+                    'summary' => [],
+                    'raw' => $actual,
+                ];
+            }
+
+            $compPct = Hash::get($actual, 'compensation.pct');
+            if (is_numeric($compPct)) {
+                $compPct = (float)$compPct * 100;
+            } else {
+                $compPct = null;
+            }
+
+            $grossClaim = Hash::get($actual, 'claim.totals.gross_claim');
+            if (!is_numeric($grossClaim)) {
+                $grossClaim = Hash::get($actual, 'claim.gross');
+            }
+
+            $currency = (string)(Hash::get($actual, 'compensation.currency')
+                ?? Hash::get($actual, 'claim.currency')
+                ?? ($form['price_currency'] ?? 'EUR'));
+
+            $previewSummary = [
+                'scope' => (string)(Hash::get($actual, 'profile.scope') ?? ''),
+                'profile_blocked' => (bool)(Hash::get($actual, 'profile.blocked') ?? false),
+                'art12_applies' => Hash::get($actual, 'art12.art12_applies'),
+                'liable_party' => (string)(Hash::get($actual, 'art12.liable_party') ?? ''),
+                'compensation_minutes' => Hash::get($actual, 'compensation.minutes'),
+                'compensation_pct' => $compPct,
+                'compensation_amount' => Hash::get($actual, 'compensation.amount'),
+                'currency' => $currency,
+                'refund_eligible' => Hash::get($actual, 'refund.eligible'),
+                'refund_minutes' => Hash::get($actual, 'refund.minutes'),
+                'refusion_outcome' => (string)(Hash::get($actual, 'refusion.outcome') ?? ''),
+                'art20_compliance' => Hash::get($actual, 'art20_assistance.compliance_status'),
+                'gross_claim' => $grossClaim,
+                'claim_basis' => (string)(Hash::get($actual, 'claim.breakdown.compensation.basis') ?? ''),
+                'partial' => ((string)($flags['step5_done'] ?? '')) !== '1',
+            ];
+
+            return [
+                'status' => 'ok',
+                'message' => ((string)($flags['step5_done'] ?? '')) === '1'
+                    ? 'Pipeline-preview er opdateret fra aktuel flow-session.'
+                    : 'Pipeline-preview koerer paa delvist input. Udfyld TRIN 5 for et mere stabilt resultat.',
+                'summary' => $previewSummary,
+                'raw' => $actual,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Pipeline-preview kunne ikke bygges: ' . $e->getMessage(),
+                'summary' => [],
+                'raw' => null,
+            ];
+        }
     }
 
     /**

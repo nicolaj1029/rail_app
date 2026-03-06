@@ -71,6 +71,12 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     </div>
 
     <div class="admin-chat-card">
+      <h2 class="admin-section-title">Pipeline preview</h2>
+      <div data-chat-preview-message class="admin-muted">Ingen preview endnu.</div>
+      <dl class="admin-kv" data-chat-preview></dl>
+    </div>
+
+    <div class="admin-chat-card">
       <h2 class="admin-section-title">Synlige trin</h2>
       <ol class="admin-steps" data-chat-steps></ol>
     </div>
@@ -92,6 +98,8 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   const choicesEl = root.querySelector('[data-chat-choices]');
   const summaryEl = root.querySelector('[data-chat-summary]');
   const linksEl = root.querySelector('[data-chat-links]');
+  const previewMessageEl = root.querySelector('[data-chat-preview-message]');
+  const previewEl = root.querySelector('[data-chat-preview]');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
@@ -180,6 +188,38 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     linksEl.innerHTML = links.join('');
   }
 
+  function renderPreview(preview) {
+    const status = preview?.status || 'idle';
+    previewMessageEl.textContent = preview?.message || 'Ingen preview endnu.';
+    const summary = preview?.summary || {};
+    const boolOrUnknown = (value) => {
+      if (value === null || value === undefined || value === '') return '-';
+      if (value === true) return 'ja';
+      if (value === false) return 'nej';
+      return String(value);
+    };
+    const rows = [
+      ['status', status],
+      ['scope', summary.scope || '-'],
+      ['profile_blocked', boolOrUnknown(summary.profile_blocked)],
+      ['art12_applies', boolOrUnknown(summary.art12_applies)],
+      ['liable_party', summary.liable_party || '-'],
+      ['comp_minutes', boolOrUnknown(summary.compensation_minutes)],
+      ['comp_pct', summary.compensation_pct === null || summary.compensation_pct === undefined ? '-' : (String(summary.compensation_pct) + '%')],
+      ['comp_amount', summary.compensation_amount === null || summary.compensation_amount === undefined || summary.compensation_amount === '' ? '-' : (String(summary.compensation_amount) + ' ' + (summary.currency || 'EUR'))],
+      ['refund_eligible', boolOrUnknown(summary.refund_eligible)],
+      ['refund_minutes', boolOrUnknown(summary.refund_minutes)],
+      ['refusion_outcome', summary.refusion_outcome || '-'],
+      ['art20_compliance', boolOrUnknown(summary.art20_compliance)],
+      ['gross_claim', summary.gross_claim === null || summary.gross_claim === undefined || summary.gross_claim === '' ? '-' : (String(summary.gross_claim) + ' ' + (summary.currency || 'EUR'))],
+      ['claim_basis', summary.claim_basis || '-'],
+      ['partial', boolOrUnknown(summary.partial)]
+    ];
+    previewEl.innerHTML = rows.map(([key, value]) => (
+      '<dt>' + escapeHtml(key) + '</dt><dd>' + escapeHtml(value) + '</dd>'
+    )).join('');
+  }
+
   function renderSteps(steps) {
     stepsEl.innerHTML = '';
     (steps || []).forEach((step) => {
@@ -211,6 +251,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     renderHistory(payload.history || []);
     renderQuestion(payload.question || null);
     renderSummary(payload.summary || {}, payload.question || null);
+    renderPreview(payload.preview || {});
     renderSteps(payload.visible_steps || []);
     renderCitations(payload.citations || []);
     if (payload.notice) {
