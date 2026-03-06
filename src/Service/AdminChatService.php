@@ -164,6 +164,16 @@ final class AdminChatService
             ];
         }
 
+        if (($form['ticket_upload_mode'] ?? '') === 'seasonpass' && trim((string)($form['operator_product'] ?? '')) === '') {
+            return [
+                'key' => 'operator_product',
+                'prompt' => 'Hvilket pendler- eller season-produkt drejer det sig om?',
+                'choices' => [],
+                'citation_query' => 'Artikel 19 2 periodekort abonnement',
+                'flow_path' => '/flow/entitlements',
+            ];
+        }
+
         if (((string)($flags['step2_done'] ?? '')) !== '1') {
             return [
                 'key' => 'confirm_step2',
@@ -271,6 +281,10 @@ final class AdminChatService
                 $form['operator_country'] = $country;
                 break;
 
+            case 'operator_product':
+                $form['operator_product'] = trim($input);
+                break;
+
             case 'confirm_step2':
                 $value = $this->parseYesNo($input);
                 if ($value === null) {
@@ -328,6 +342,26 @@ final class AdminChatService
             case 'alt_transport_provided':
             case 'a20_3_solution_offered':
             case 'a20_3_self_paid':
+                $value = $this->parseTriChoice($input);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug ja, nej eller ved ikke.'];
+                }
+                $form[$key] = $value;
+                break;
+
+            case 'remedy_choice':
+                $value = $this->parseRemedyChoice($input);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug refund_return, reroute_soonest eller reroute_later.'];
+                }
+                $form['remedyChoice'] = $value;
+                break;
+
+            case 'refund_requested':
+            case 'reroute_same_conditions_soonest':
+            case 'reroute_later_at_choice':
+            case 'reroute_info_within_100min':
+            case 'reroute_extra_costs':
                 $value = $this->parseTriChoice($input);
                 if ($value === null) {
                     return ['ok' => false, 'message' => 'Brug ja, nej eller ved ikke.'];
@@ -466,6 +500,45 @@ final class AdminChatService
         foreach ($orderedArt20 as $key => [$prompt, $query, $path]) {
             if (in_array($key, $art20Missing, true) && ($form[$key] ?? '') === '') {
                 return $askTri($key, $prompt, $query, $path);
+            }
+        }
+
+        $flags = (array)($flow['flags'] ?? []);
+        if (((string)($flags['gate_art18'] ?? '')) === '1' && trim((string)($form['remedyChoice'] ?? '')) === '') {
+            return [
+                'key' => 'remedy_choice',
+                'prompt' => 'Hvilken Art. 18-retning passer bedst lige nu? Vae lg refund_return, reroute_soonest eller reroute_later.',
+                'choices' => [
+                    ['value' => 'refund_return', 'label' => 'refund_return'],
+                    ['value' => 'reroute_soonest', 'label' => 'reroute_soonest'],
+                    ['value' => 'reroute_later', 'label' => 'reroute_later'],
+                ],
+                'citation_query' => 'Artikel 18 refusion omlaegning',
+                'flow_path' => '/flow/remedies',
+            ];
+        }
+
+        $remedyChoice = (string)($form['remedyChoice'] ?? '');
+        if ($remedyChoice === 'refund_return' && ($form['refund_requested'] ?? '') === '') {
+            return $askTri(
+                'refund_requested',
+                'Er refusion eksplicit anmodet eller valgt?',
+                'Artikel 18 refund requested',
+                '/flow/remedies'
+            );
+        }
+
+        if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
+            $rerouteMap = [
+                'reroute_same_conditions_soonest' => ['Blev omlaegning paa sammenlignelige vilkaar tilbudt snarest muligt?', 'Artikel 18 1 b omlaegning', '/flow/remedies'],
+                'reroute_later_at_choice' => ['Blev omlaegning paa et senere tidspunkt efter passagerens valg tilbudt?', 'Artikel 18 1 c later at choice', '/flow/remedies'],
+                'reroute_info_within_100min' => ['Kom der brugbar omlaegningsinformation inden 100 minutter?', 'Artikel 18 3 100 minutes', '/flow/remedies'],
+                'reroute_extra_costs' => ['Havde passageren ekstra omlaegningsomkostninger?', 'Artikel 18 2 reroute extra costs', '/flow/remedies'],
+            ];
+            foreach ($rerouteMap as $key => [$prompt, $query, $path]) {
+                if (($form[$key] ?? '') === '') {
+                    return $askTri($key, $prompt, $query, $path);
+                }
             }
         }
 
@@ -877,6 +950,22 @@ final class AdminChatService
         return null;
     }
 
+    private function parseRemedyChoice(string $input): ?string
+    {
+        $value = strtolower(trim($input));
+        if (preg_match('/\b(refund|return|refusion)\b/', $value)) {
+            return 'refund_return';
+        }
+        if (preg_match('/\b(soonest|snarest|now|nu)\b/', $value)) {
+            return 'reroute_soonest';
+        }
+        if (preg_match('/\b(later|senere)\b/', $value)) {
+            return 'reroute_later';
+        }
+
+        return in_array($value, ['refund_return', 'reroute_soonest', 'reroute_later'], true) ? $value : null;
+    }
+
     private function parseMinutes(string $input): ?int
     {
         if (!preg_match('/(\d{1,4})/', $input, $m)) {
@@ -905,6 +994,7 @@ final class AdminChatService
             'ticket_upload_mode' => 'Billet-type sat til ' . (string)$summary['ticket_mode'],
             'operator' => 'Operatoer gemt: ' . (string)$summary['operator'],
             'operator_country' => 'Operatoer-land gemt: ' . (string)$summary['operator_country'],
+            'operator_product' => 'Produkt gemt: ' . (string)($flow['form']['operator_product'] ?? ''),
             'confirm_step2' => ((bool)$summary['step2_done']) ? 'TRIN 2 er nu markeret som udfyldt.' : 'TRIN 2 blev ikke markeret endnu.',
             'dep_station', 'arr_station' => 'Rute opdateret: ' . (string)$summary['route'],
             'incident_main' => 'Haendelse sat til ' . (string)$summary['incident_main'],
@@ -916,6 +1006,12 @@ final class AdminChatService
             'alt_transport_provided' => 'Alternativ transport-oplysning gemt.',
             'a20_3_solution_offered' => 'Art. 20(3)-oplysning gemt.',
             'a20_3_self_paid' => 'Selvbetalt transport-oplysning gemt.',
+            'remedy_choice' => 'Art. 18-retning gemt.',
+            'refund_requested' => 'Refusionsvalg gemt.',
+            'reroute_same_conditions_soonest' => 'Omlaegning snarest-oplysning gemt.',
+            'reroute_later_at_choice' => 'Omlaegning senere-oplysning gemt.',
+            'reroute_info_within_100min' => '100-minutters-oplysning gemt.',
+            'reroute_extra_costs' => 'Ekstra omlaegningsomkostninger gemt.',
             default => 'Svar gemt.',
         };
     }
