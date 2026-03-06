@@ -31,6 +31,11 @@
   <h2>Hvad der findes nu</h2>
   <div class="chatqa-cards">
     <div class="chatqa-card">
+      <h3>Admin chat panel</h3>
+      <p class="chatqa-note">Der er nu et faktisk admin-chat panel med session-state, whitelisted spoergsmaal, citations og links tilbage til flowet.</p>
+      <div><a href="<?= h($links['adminChat'] ?? '/admin/chat') ?>" target="_blank">Aabn /admin/chat</a></div>
+    </div>
+    <div class="chatqa-card">
       <h3>Regulation RAG</h3>
       <p class="chatqa-note">Chunked index af forordningen findes allerede lokalt og kan bruges til search/quote med citations.</p>
       <div><a href="<?= h($links['regulationSearch']) ?>" target="_blank">API: regulation/search</a></div>
@@ -97,8 +102,8 @@
 
   <h2>Afgrænsning</h2>
   <ul>
-    <li>Denne side starter ikke en egentlig chat-session endnu.</li>
-    <li>Der findes endnu ikke et <code>/api/chat</code>-endpoint eller en egentlig chat-controller i repoet.</li>
-    <li>Det nuvaerende fundament er bedst egnet til admin/QA foer passager-chat.</li>
+    <li>Chatten findes nu som intern admin-side paa <code>/admin/chat</code>.</li>
+    <li>Det er stadig ikke en passager-chat; den er beregnet til admin/QA og flow-verifikation.</li>
+    <li>Naeste udbygning kan vaere pipeline-preview efter hvert svar og derefter evt. Groq-stoettet forklaringslag.</li>
   </ul>
 </div>

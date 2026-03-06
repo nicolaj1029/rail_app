@@ -5,6 +5,7 @@ namespace App\Controller;
 
 use Cake\Http\Exception\NotFoundException;
 use Cake\Http\Response;
+use Cake\Routing\Router;
 
 class ProjectController extends AppController
 {
@@ -223,12 +224,13 @@ class ProjectController extends AppController
         $base = $this->request->getUri()->getScheme() . '://' . $this->request->getUri()->getHost() . ($this->request->getUri()->getPort() ? ':' . $this->request->getUri()->getPort() : '') . $this->request->getAttribute('webroot');
 
         $links = [
-            'flowQa' => $this->Url->build('/project/flow-qa', ['fullBase' => true]),
-            'audit' => $this->Url->build('/admin/audit', ['fullBase' => true]),
-            'regulationSearch' => $this->Url->build('/api/regulation/search?q=Artikel%2018&limit=5', ['fullBase' => true]),
-            'regulationQuote' => $this->Url->build('/api/regulation/quote?id=art18_p18_c1', ['fullBase' => true]),
-            'pipeline' => $this->Url->build('/api/pipeline/run', ['fullBase' => true]),
-            'scenarioEval' => $this->Url->build('/api/demo/v2/scenarios?withEval=1&compact=1', ['fullBase' => true]),
+            'flowQa' => Router::url('/project/flow-qa', true),
+            'adminChat' => Router::url('/admin/chat', true),
+            'audit' => Router::url('/admin/audit', true),
+            'regulationSearch' => Router::url('/api/regulation/search?q=Artikel%2018&limit=5', true),
+            'regulationQuote' => Router::url('/api/regulation/quote?id=art18_p18_c1', true),
+            'pipeline' => Router::url('/api/pipeline/run', true),
+            'scenarioEval' => Router::url('/api/demo/v2/scenarios?withEval=1&compact=1', true),
         ];
 
         $this->set(compact('base', 'links'));

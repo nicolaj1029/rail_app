@@ -126,6 +126,9 @@ return function (RouteBuilder $routes): void {
         // Admin panel for flow (session flag toggle & read-only inspection)
         $builder->connect('/admin/flow', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'index']);
         $builder->connect('/admin/flow/toggle', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'toggle']);
+        $builder->connect('/admin/chat', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'index']);
+        $builder->connect('/admin/chat/message', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'message']);
+        $builder->connect('/admin/chat/reset', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'reset']);
     // Cases admin (MVP)
     $builder->connect('/admin/cases', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'index']);
     $builder->connect('/admin/cases/view/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'view'])->setPass(['id']);

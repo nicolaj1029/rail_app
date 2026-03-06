@@ -37,6 +37,7 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
             <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
             <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
             <a href="<?= $this->Url->build('/project/chat-qa') ?>">Chat QA</a>
+            <a href="<?= $this->Url->build('/admin/chat') ?>">Admin Chat</a>
             <a href="<?= $this->Url->build('/admin/audit/latest') ?>">Audit</a>
             <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/">Docs</a>
             <a target="_blank" rel="noopener" href="https://api.cakephp.org/">API</a>
