@@ -358,6 +358,7 @@ final class AdminChatService
                 break;
 
             case 'refund_requested':
+            case 'return_to_origin_expense':
             case 'reroute_same_conditions_soonest':
             case 'reroute_later_at_choice':
             case 'reroute_info_within_100min':
@@ -372,11 +373,15 @@ final class AdminChatService
             case 'meal_self_paid_amount':
             case 'hotel_self_paid_amount':
             case 'a20_3_self_paid_amount':
+            case 'return_to_origin_amount':
+            case 'reroute_later_self_paid_amount':
             case 'reroute_extra_costs_amount':
                 $currencyField = [
                     'meal_self_paid_amount' => 'meal_self_paid_currency',
                     'hotel_self_paid_amount' => 'hotel_self_paid_currency',
                     'a20_3_self_paid_amount' => 'a20_3_self_paid_currency',
+                    'return_to_origin_amount' => 'return_to_origin_currency',
+                    'reroute_later_self_paid_amount' => 'reroute_later_self_paid_currency',
                     'reroute_extra_costs_amount' => 'reroute_extra_costs_currency',
                 ][$key];
                 $parsed = $this->parseAmountInput($input);
@@ -385,6 +390,14 @@ final class AdminChatService
                 }
                 $form[$key] = $parsed['amount'];
                 $form[$currencyField] = $parsed['currency'] ?? $this->defaultCurrencyForFlow($flow);
+                break;
+
+            case 'reroute_later_outcome':
+                $value = $this->parseRerouteLaterOutcome($input);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug operator_offered, self_bought eller no_solution.'];
+                }
+                $form['reroute_later_outcome'] = $value;
                 break;
         }
 
@@ -579,6 +592,22 @@ final class AdminChatService
                 '/flow/remedies'
             );
         }
+        if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === '') {
+            return $askTri(
+                'return_to_origin_expense',
+                'Havde passageren udgifter til at komme tilbage til udgangspunktet?',
+                'Artikel 18 return to origin expense',
+                '/flow/remedies'
+            );
+        }
+        if ($remedyChoice === 'refund_return' && ($form['return_to_origin_expense'] ?? '') === 'yes' && trim((string)($form['return_to_origin_amount'] ?? '')) === '') {
+            return $askAmount(
+                'return_to_origin_amount',
+                'Hvor meget betalte passageren for at komme tilbage til udgangspunktet?',
+                'Artikel 18 return to origin amount',
+                '/flow/remedies'
+            );
+        }
 
         if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
             $rerouteMap = [
@@ -591,6 +620,27 @@ final class AdminChatService
                 if (($form[$key] ?? '') === '') {
                     return $askTri($key, $prompt, $query, $path);
                 }
+            }
+            if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
+                return [
+                    'key' => 'reroute_later_outcome',
+                    'prompt' => 'Hvad skete der med den senere omlaegning? Vae lg operator_offered, self_bought eller no_solution.',
+                    'choices' => [
+                        ['value' => 'operator_offered', 'label' => 'operator_offered'],
+                        ['value' => 'self_bought', 'label' => 'self_bought'],
+                        ['value' => 'no_solution', 'label' => 'no_solution'],
+                    ],
+                    'citation_query' => 'Artikel 18 later reroute outcome',
+                    'flow_path' => '/flow/remedies',
+                ];
+            }
+            if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === 'self_bought' && trim((string)($form['reroute_later_self_paid_amount'] ?? '')) === '') {
+                return $askAmount(
+                    'reroute_later_self_paid_amount',
+                    'Hvor meget betalte passageren selv for den senere omlaegning?',
+                    'Artikel 18 later reroute self bought amount',
+                    '/flow/remedies'
+                );
             }
             if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
                 return $askAmount(
@@ -1026,6 +1076,22 @@ final class AdminChatService
         return in_array($value, ['refund_return', 'reroute_soonest', 'reroute_later'], true) ? $value : null;
     }
 
+    private function parseRerouteLaterOutcome(string $input): ?string
+    {
+        $value = strtolower(trim($input));
+        if (preg_match('/\b(operator|offered|tilboed)\b/', $value)) {
+            return 'operator_offered';
+        }
+        if (preg_match('/\b(self|bought|koebte|købte)\b/', $value)) {
+            return 'self_bought';
+        }
+        if (preg_match('/\b(no solution|ingen|none|ikke)\b/', $value)) {
+            return 'no_solution';
+        }
+
+        return in_array($value, ['operator_offered', 'self_bought', 'no_solution'], true) ? $value : null;
+    }
+
     private function parseMinutes(string $input): ?int
     {
         if (!preg_match('/(\d{1,4})/', $input, $m)) {
@@ -1121,8 +1187,12 @@ final class AdminChatService
             'a20_3_self_paid_amount' => 'Alternativ transport-beloeb gemt: ' . (string)($flow['form']['a20_3_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['a20_3_self_paid_currency'] ?? ''),
             'remedy_choice' => 'Art. 18-retning gemt.',
             'refund_requested' => 'Refusionsvalg gemt.',
+            'return_to_origin_expense' => 'Tilbage-til-udgangspunkt udgift gemt.',
+            'return_to_origin_amount' => 'Tilbage-til-udgangspunkt beloeb gemt: ' . (string)($flow['form']['return_to_origin_amount'] ?? '') . ' ' . (string)($flow['form']['return_to_origin_currency'] ?? ''),
             'reroute_same_conditions_soonest' => 'Omlaegning snarest-oplysning gemt.',
             'reroute_later_at_choice' => 'Omlaegning senere-oplysning gemt.',
+            'reroute_later_outcome' => 'Senere omlaegningsudfald gemt.',
+            'reroute_later_self_paid_amount' => 'Senere omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_later_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_later_self_paid_currency'] ?? ''),
             'reroute_info_within_100min' => '100-minutters-oplysning gemt.',
             'reroute_extra_costs' => 'Ekstra omlaegningsomkostninger gemt.',
             'reroute_extra_costs_amount' => 'Ekstra omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_extra_costs_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_extra_costs_currency'] ?? ''),
