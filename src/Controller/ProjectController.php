@@ -214,6 +214,28 @@ class ProjectController extends AppController
     }
 
     /**
+     * Chat / RAG / Groq QA hub.
+     * This is a documentation and entry page for the current chatbot foundation,
+     * not a public passenger chat UI.
+     */
+    public function chatQa(): void
+    {
+        $base = $this->request->getUri()->getScheme() . '://' . $this->request->getUri()->getHost() . ($this->request->getUri()->getPort() ? ':' . $this->request->getUri()->getPort() : '') . $this->request->getAttribute('webroot');
+
+        $links = [
+            'flowQa' => $this->Url->build('/project/flow-qa', ['fullBase' => true]),
+            'audit' => $this->Url->build('/admin/audit', ['fullBase' => true]),
+            'regulationSearch' => $this->Url->build('/api/regulation/search?q=Artikel%2018&limit=5', ['fullBase' => true]),
+            'regulationQuote' => $this->Url->build('/api/regulation/quote?id=art18_p18_c1', ['fullBase' => true]),
+            'pipeline' => $this->Url->build('/api/pipeline/run', ['fullBase' => true]),
+            'scenarioEval' => $this->Url->build('/api/demo/v2/scenarios?withEval=1&compact=1', ['fullBase' => true]),
+        ];
+
+        $this->set(compact('base', 'links'));
+        $this->viewBuilder()->setTemplate('chat_qa');
+    }
+
+    /**
      * Mobile QA: quick overview for Flutter app + shadow tracker endpoints.
      */
     public function mobileQa(): void
