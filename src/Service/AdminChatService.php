@@ -73,9 +73,10 @@ final class AdminChatService
         $session->write('admin.chat_history', $history);
 
         $flow = $this->readFlow($session);
-        $question = $this->currentQuestion($flow);
+        $preview = $this->buildPipelinePreview($flow);
+        $question = $this->currentQuestion($flow, $preview);
         if ($question === null) {
-            $history[] = $this->assistantMessage('Der er ikke flere basis-spoergsmaal lige nu. Brug flow-links eller nulstil chatten.');
+            $history[] = $this->assistantMessage('Der er ikke flere aktive spoergsmaal lige nu. Brug preview-actions eller nulstil chatten.');
             $session->write('admin.chat_history', $history);
             return $this->buildPayload($session);
         }
@@ -88,23 +89,28 @@ final class AdminChatService
         }
 
         $this->writeFlow($session, $flow);
-        $next = $this->currentQuestion($flow);
         $history[] = $this->assistantMessage((string)$result['message']);
-        if ($next !== null) {
-            $history[] = $this->assistantMessage((string)($next['prompt'] ?? ''));
-        } else {
-            $history[] = $this->assistantMessage('Basisflowet er udfyldt. Du kan nu bruge TRIN 5/10 i wizard eller hente preview/data-pack.');
-        }
         $session->write('admin.chat_history', $history);
 
-        return $this->buildPayload($session);
+        $payload = $this->buildPayload($session);
+        $history = (array)$session->read('admin.chat_history') ?: [];
+        $next = (array)($payload['question'] ?? []);
+        if ($next !== []) {
+            $history[] = $this->assistantMessage((string)($next['prompt'] ?? ''));
+        } else {
+            $history[] = $this->assistantMessage('Der er ikke flere aktive opfoelgningsspoergsmaal. Brug preview-actions eller aabn wizard-trinnene direkte.');
+        }
+        $session->write('admin.chat_history', $history);
+        $payload['history'] = $history;
+
+        return $payload;
     }
 
     /**
      * @param array<string,mixed> $flow
      * @return array<string,mixed>|null
      */
-    private function currentQuestion(array $flow): ?array
+    private function currentQuestion(array $flow, ?array $preview = null): ?array
     {
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
@@ -217,7 +223,7 @@ final class AdminChatService
             ];
         }
 
-        return null;
+        return $this->followupQuestion($flow, $preview);
     }
 
     /**
@@ -314,6 +320,20 @@ final class AdminChatService
                 $compute['delayMinEU'] = $minutes;
                 $flags['step5_done'] = '1';
                 break;
+
+            case 'separate_contract_notice':
+            case 'through_ticket_disclosure':
+            case 'meal_offered':
+            case 'hotel_offered':
+            case 'alt_transport_provided':
+            case 'a20_3_solution_offered':
+            case 'a20_3_self_paid':
+                $value = $this->parseTriChoice($input);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug ja, nej eller ved ikke.'];
+                }
+                $form[$key] = $value;
+                break;
         }
 
         $flow['form'] = $form;
@@ -360,11 +380,11 @@ final class AdminChatService
     private function buildPayload(Session $session, ?string $notice = null): array
     {
         $flow = $this->readFlow($session);
-        $question = $this->currentQuestion($flow);
+        $preview = $this->buildPipelinePreview($flow);
+        $question = $this->currentQuestion($flow, $preview);
         $history = (array)$session->read('admin.chat_history') ?: [];
         $summary = $this->buildSummary($flow);
         $citations = $this->buildCitations($question);
-        $preview = $this->buildPipelinePreview($flow);
         $stepper = (new FlowStepsService())->buildSteps((array)($flow['flags'] ?? []), 'start');
         $visibleSteps = [];
         foreach ($stepper as $step) {
@@ -395,6 +415,65 @@ final class AdminChatService
 
     /**
      * @param array<string,mixed> $flow
+     * @param array<string,mixed>|null $preview
+     * @return array<string,mixed>|null
+     */
+    private function followupQuestion(array $flow, ?array $preview = null): ?array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $raw = (array)(($preview['raw'] ?? null) ?: []);
+
+        $askTri = function (string $key, string $prompt, string $query, string $path): array {
+            return [
+                'key' => $key,
+                'prompt' => $prompt,
+                'choices' => [
+                    ['value' => 'yes', 'label' => 'ja'],
+                    ['value' => 'no', 'label' => 'nej'],
+                    ['value' => 'unknown', 'label' => 'ved ikke'],
+                ],
+                'citation_query' => $query,
+                'flow_path' => $path,
+            ];
+        };
+
+        $art12Missing = (array)(Hash::get($raw, 'art12.missing') ?? []);
+        if (in_array('separate_contract_notice', $art12Missing, true) && ($form['separate_contract_notice'] ?? '') === '') {
+            return $askTri(
+                'separate_contract_notice',
+                'Var der en tydelig notits om saerskilte kontrakter foer koeb?',
+                'Artikel 12 separate contracts notice',
+                '/flow/entitlements'
+            );
+        }
+        if (in_array('through_ticket_disclosure', $art12Missing, true) && ($form['through_ticket_disclosure'] ?? '') === '') {
+            return $askTri(
+                'through_ticket_disclosure',
+                'Blev kontraktstrukturen tydeligt oplyst foer koeb?',
+                'Artikel 12 through ticket disclosure',
+                '/flow/entitlements'
+            );
+        }
+
+        $art20Missing = (array)(Hash::get($raw, 'art20_assistance.missing') ?? []);
+        $orderedArt20 = [
+            'meal_offered' => ['Blev maaltider eller forfriskninger tilbudt?', 'Artikel 20 2 a maaltider', '/flow/assistance'],
+            'hotel_offered' => ['Blev hotel eller overnatning tilbudt?', 'Artikel 20 2 b hotel', '/flow/assistance'],
+            'a20_3_solution_offered' => ['Blev der tilbudt en loesning eller alternativ transport fra stationen?', 'Artikel 20 3 alternativ transport', '/flow/station'],
+            'a20_3_self_paid' => ['Maatte passageren selv betale den alternative transport?', 'Artikel 20 3 selvbetalt transport', '/flow/station'],
+            'alt_transport_provided' => ['Blev alternativ transport tilbudt?', 'Artikel 20 3 alternativ transport', '/flow/assistance'],
+        ];
+        foreach ($orderedArt20 as $key => [$prompt, $query, $path]) {
+            if (in_array($key, $art20Missing, true) && ($form[$key] ?? '') === '') {
+                return $askTri($key, $prompt, $query, $path);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $flow
      * @return array<string,mixed>
      */
     private function buildPipelinePreview(array $flow): array
@@ -413,6 +492,10 @@ final class AdminChatService
 
         try {
             $fixture = (new SessionToFixtureMapper())->mapSessionToFixtureEnriched($flow);
+            $fixture['art12_meta'] = array_merge(
+                (array)($fixture['art12_meta'] ?? []),
+                $this->buildArt12Overrides($flow)
+            );
             $result = (new ScenarioRunner())->evaluateFixture($fixture);
             $actual = (array)($result['actual'] ?? []);
 
@@ -479,6 +562,24 @@ final class AdminChatService
                 'raw' => null,
             ];
         }
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @return array<string,string>
+     */
+    private function buildArt12Overrides(array $flow): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $out = [];
+        foreach (['separate_contract_notice', 'through_ticket_disclosure', 'single_txn_operator', 'single_txn_retailer'] as $key) {
+            $value = trim((string)($form[$key] ?? ''));
+            if ($value !== '') {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -760,6 +861,22 @@ final class AdminChatService
         return null;
     }
 
+    private function parseTriChoice(string $input): ?string
+    {
+        $value = strtolower(trim($input));
+        if (in_array($value, ['ja', 'yes', 'y'], true)) {
+            return 'yes';
+        }
+        if (in_array($value, ['nej', 'no', 'n'], true)) {
+            return 'no';
+        }
+        if (in_array($value, ['ved ikke', 'unknown', 'dont know', "don't know", 'idk'], true)) {
+            return 'unknown';
+        }
+
+        return null;
+    }
+
     private function parseMinutes(string $input): ?int
     {
         if (!preg_match('/(\d{1,4})/', $input, $m)) {
@@ -792,6 +909,13 @@ final class AdminChatService
             'dep_station', 'arr_station' => 'Rute opdateret: ' . (string)$summary['route'],
             'incident_main' => 'Haendelse sat til ' . (string)$summary['incident_main'],
             'delay_minutes' => 'Forsinkelse gemt: ' . (string)$summary['delay_minutes'] . ' min.',
+            'separate_contract_notice' => 'Art. 12-notits gemt.',
+            'through_ticket_disclosure' => 'Art. 12-disclosure gemt.',
+            'meal_offered' => 'Maaltids-oplysning gemt.',
+            'hotel_offered' => 'Hotel-oplysning gemt.',
+            'alt_transport_provided' => 'Alternativ transport-oplysning gemt.',
+            'a20_3_solution_offered' => 'Art. 20(3)-oplysning gemt.',
+            'a20_3_self_paid' => 'Selvbetalt transport-oplysning gemt.',
             default => 'Svar gemt.',
         };
     }
