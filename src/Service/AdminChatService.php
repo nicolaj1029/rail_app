@@ -459,12 +459,15 @@ final class AdminChatService
                 'partial' => ((string)($flags['step5_done'] ?? '')) !== '1',
             ];
 
+            $actions = $this->derivePreviewActions($flow, $actual, $previewSummary);
+
             return [
                 'status' => 'ok',
                 'message' => ((string)($flags['step5_done'] ?? '')) === '1'
                     ? 'Pipeline-preview er opdateret fra aktuel flow-session.'
                     : 'Pipeline-preview koerer paa delvist input. Udfyld TRIN 5 for et mere stabilt resultat.',
                 'summary' => $previewSummary,
+                'actions' => $actions,
                 'raw' => $actual,
             ];
         } catch (\Throwable $e) {
@@ -472,9 +475,127 @@ final class AdminChatService
                 'status' => 'error',
                 'message' => 'Pipeline-preview kunne ikke bygges: ' . $e->getMessage(),
                 'summary' => [],
+                'actions' => [],
                 'raw' => null,
             ];
         }
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @param array<string,mixed> $actual
+     * @param array<string,mixed> $summary
+     * @return array<int,array<string,string>>
+     */
+    private function derivePreviewActions(array $flow, array $actual, array $summary): array
+    {
+        $flags = (array)($flow['flags'] ?? []);
+        $actions = [];
+
+        if (((string)($flags['step5_done'] ?? '')) !== '1') {
+            $actions[] = [
+                'label' => 'Udfyld TRIN 5',
+                'detail' => 'Haendelse og forsinkelse mangler stadig for et stabilt preview.',
+                'href' => '/flow/incident',
+            ];
+        }
+
+        if (!empty($summary['profile_blocked'])) {
+            $actions[] = [
+                'label' => 'Brug national procedure',
+                'detail' => 'Profilen er blokeret i EU-flowet; følg operatørens/national proces.',
+                'href' => '/flow/compensation',
+            ];
+        }
+
+        $art12Missing = (array)(Hash::get($actual, 'art12.missing') ?? []);
+        if ($art12Missing !== []) {
+            $actions[] = [
+                'label' => 'Afklar Art. 12',
+                'detail' => 'Manglende hooks: ' . implode(', ', array_slice($art12Missing, 0, 4)),
+                'href' => '/flow/journey',
+            ];
+        }
+
+        $refundEligible = $summary['refund_eligible'] ?? null;
+        if ($refundEligible === true) {
+            $actions[] = [
+                'label' => 'Gennemgaa refusion',
+                'detail' => 'Preview peger paa refusion efter Art. 18.',
+                'href' => '/flow/remedies',
+            ];
+        }
+
+        $refusionOutcome = trim((string)($summary['refusion_outcome'] ?? ''));
+        if ($refusionOutcome !== '' && stripos($refusionOutcome, 'Oml') !== false) {
+            $actions[] = [
+                'label' => 'Tjek omlaegning',
+                'detail' => 'Refusion-preview peger paa omlaegning/rerouting.',
+                'href' => '/flow/remedies',
+            ];
+        }
+
+        $art20Compliance = $summary['art20_compliance'] ?? null;
+        $art20Missing = (array)(Hash::get($actual, 'art20_assistance.missing') ?? []);
+        $art20Issues = (array)(Hash::get($actual, 'art20_assistance.issues') ?? []);
+        if ($art20Compliance === false || $art20Missing !== [] || $art20Issues !== []) {
+            $detailParts = [];
+            if ($art20Issues !== []) {
+                $detailParts[] = (string)$art20Issues[0];
+            }
+            if ($art20Missing !== []) {
+                $detailParts[] = 'Manglende hooks: ' . implode(', ', array_slice($art20Missing, 0, 3));
+            }
+            $actions[] = [
+                'label' => 'Tjek assistance',
+                'detail' => implode(' ', array_filter($detailParts)) ?: 'Art. 20-data skal afklares.',
+                'href' => '/flow/assistance',
+            ];
+        }
+
+        $compAmount = $summary['compensation_amount'] ?? null;
+        if (is_numeric($compAmount) && (float)$compAmount > 0) {
+            $actions[] = [
+                'label' => 'Se kompensation',
+                'detail' => 'Der er et positivt kompensationspreview i TRIN 10.',
+                'href' => '/flow/compensation',
+            ];
+        } elseif (((string)($flags['gate_season_pass'] ?? '')) === '1') {
+            $actions[] = [
+                'label' => 'Brug data-pack for season pass',
+                'detail' => 'Season/pendler-sager skal som udgangspunkt gennem claim-assist/data-pack.',
+                'href' => '/flow/compensation',
+            ];
+        }
+
+        $claimGross = $summary['gross_claim'] ?? null;
+        if (is_numeric($claimGross) && (float)$claimGross > 0) {
+            $actions[] = [
+                'label' => 'Aabn claim-resultat',
+                'detail' => 'Samlet claim-preview er positivt.',
+                'href' => '/flow/compensation',
+            ];
+        }
+
+        $profileBanners = (array)(Hash::get($actual, 'profile.ui_banners') ?? []);
+        if ($profileBanners !== []) {
+            $actions[] = [
+                'label' => 'Laes profiladvarsel',
+                'detail' => (string)$profileBanners[0],
+                'href' => '/flow/entitlements',
+            ];
+        }
+
+        $deduped = [];
+        foreach ($actions as $action) {
+            $key = ($action['label'] ?? '') . '|' . ($action['href'] ?? '');
+            if ($key === '|' || isset($deduped[$key])) {
+                continue;
+            }
+            $deduped[$key] = $action;
+        }
+
+        return array_values($deduped);
     }
 
     /**

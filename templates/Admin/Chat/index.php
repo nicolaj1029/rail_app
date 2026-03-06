@@ -28,6 +28,9 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   .admin-citation { border-top:1px solid #eee; padding-top:10px; margin-top:10px; }
   .admin-citation:first-child { margin-top:0; padding-top:0; border-top:0; }
   .admin-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .admin-action-list { display:grid; gap:8px; margin-top:10px; }
+  .admin-action-item { border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; }
+  .admin-action-item strong { display:block; color:#111; margin-bottom:4px; }
   @media (max-width: 980px) {
     .admin-chat-page { grid-template-columns: 1fr; }
     .admin-chat-log { height:420px; }
@@ -74,6 +77,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
       <h2 class="admin-section-title">Pipeline preview</h2>
       <div data-chat-preview-message class="admin-muted">Ingen preview endnu.</div>
       <dl class="admin-kv" data-chat-preview></dl>
+      <div class="admin-action-list" data-chat-preview-actions></div>
     </div>
 
     <div class="admin-chat-card">
@@ -100,6 +104,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   const linksEl = root.querySelector('[data-chat-links]');
   const previewMessageEl = root.querySelector('[data-chat-preview-message]');
   const previewEl = root.querySelector('[data-chat-preview]');
+  const previewActionsEl = root.querySelector('[data-chat-preview-actions]');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
@@ -217,6 +222,19 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
     ];
     previewEl.innerHTML = rows.map(([key, value]) => (
       '<dt>' + escapeHtml(key) + '</dt><dd>' + escapeHtml(value) + '</dd>'
+    )).join('');
+
+    const actions = preview?.actions || [];
+    if (!actions.length) {
+      previewActionsEl.innerHTML = '<div class="admin-muted">Ingen konkrete next actions endnu.</div>';
+      return;
+    }
+    previewActionsEl.innerHTML = actions.map((action) => (
+      '<div class="admin-action-item">' +
+        '<strong>' + escapeHtml(action.label || '') + '</strong>' +
+        '<div class="admin-muted">' + escapeHtml(action.detail || '') + '</div>' +
+        (action.href ? ('<div style="margin-top:8px;"><a class="admin-chip" href="' + escapeHtml(action.href) + '" target="_blank">Aabn relevant trin</a></div>') : '') +
+      '</div>'
     )).join('');
   }
 
