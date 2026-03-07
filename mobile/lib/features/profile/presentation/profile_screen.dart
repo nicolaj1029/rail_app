@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:mobile/config.dart';
 import 'package:mobile/features/profile/data/commuter_profile_store.dart';
+import 'package:mobile/services/stations_service.dart';
+import 'package:mobile/shared/widgets/station_lookup_field.dart';
 
 class ProfileScreen extends StatefulWidget {
   final CommuterProfile commuterProfile;
@@ -21,7 +24,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController operatorCtrl;
   late TextEditingController countryCtrl;
   late TextEditingController productCtrl;
-  late TextEditingController routeCtrl;
+  late TextEditingController routeFromCtrl;
+  late TextEditingController routeToCtrl;
+  late final StationsService _stationsService;
 
   @override
   void initState() {
@@ -36,7 +41,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     productCtrl = TextEditingController(
       text: widget.commuterProfile.productName,
     );
-    routeCtrl = TextEditingController(text: widget.commuterProfile.routeName);
+    final routeParts = _splitRoute(widget.commuterProfile.routeName);
+    routeFromCtrl = TextEditingController(text: routeParts.$1);
+    routeToCtrl = TextEditingController(text: routeParts.$2);
+    _stationsService = StationsService(baseUrl: apiBaseUrl);
   }
 
   @override
@@ -44,22 +52,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     operatorCtrl.dispose();
     countryCtrl.dispose();
     productCtrl.dispose();
-    routeCtrl.dispose();
+    routeFromCtrl.dispose();
+    routeToCtrl.dispose();
     super.dispose();
   }
 
   void _save() {
+    final routeName = _buildRouteName();
     final profile = CommuterProfile(
       enabled: enabled,
       operatorName: operatorCtrl.text.trim(),
       operatorCountry: countryCtrl.text.trim().toUpperCase(),
       productName: productCtrl.text.trim(),
-      routeName: routeCtrl.text.trim(),
+      routeName: routeName,
     );
     widget.onSaveProfile(profile);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Profil gemt')));
+  }
+
+  String _buildRouteName() {
+    final from = routeFromCtrl.text.trim();
+    final to = routeToCtrl.text.trim();
+    if (from.isNotEmpty && to.isNotEmpty) {
+      return '$from -> $to';
+    }
+    return from.isNotEmpty ? from : to;
+  }
+
+  (String, String) _splitRoute(String route) {
+    final trimmed = route.trim();
+    if (trimmed.isEmpty) {
+      return ('', '');
+    }
+
+    final separators = ['->', '→', '-', '–'];
+    for (final separator in separators) {
+      final parts = trimmed.split(separator);
+      if (parts.length >= 2) {
+        return (parts.first.trim(), parts.sublist(1).join(separator).trim());
+      }
+    }
+
+    return (trimmed, '');
   }
 
   @override
@@ -106,12 +142,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: routeCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Typisk rute',
-            hintText: 'Fx København → Roskilde',
-          ),
+        Text('Typisk rute', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        StationLookupField(
+          controller: routeFromCtrl,
+          label: 'Fra-station',
+          stationsService: _stationsService,
+          countryProvider: () => countryCtrl.text.trim(),
+        ),
+        StationLookupField(
+          controller: routeToCtrl,
+          label: 'Til-station',
+          stationsService: _stationsService,
+          countryProvider: () => countryCtrl.text.trim(),
         ),
         const SizedBox(height: 16),
         Card(
