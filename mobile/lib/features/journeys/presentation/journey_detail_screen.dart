@@ -65,17 +65,25 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
         deviceId: deviceId.isEmpty ? null : deviceId,
         limit: 50,
       );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         events = list;
       });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         error = '$e';
       });
     } finally {
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -125,6 +133,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
         : (dep.isEmpty && arr.isEmpty ? 'Ukendt rejse' : '$dep -> $arr');
     final statusText = _statusText(status);
     final nextAction = _nextActionText(status);
+    final recommendedAction = _recommendedActionText(status);
     final canShowReroute = deviceId.isNotEmpty && arr.isNotEmpty;
 
     return Scaffold(
@@ -166,15 +175,24 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      status == 'ended' ||
-                              status == 'review' ||
-                              status == 'ready'
-                          ? 'Rejsen ligner en sag, der skal gennemgås kort og derefter sendes videre.'
-                          : 'Hold denne side kort. Brug den til overblik og gå kun videre til næste relevante handling.',
-                    ),
+                    Text(recommendedAction),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              color: ['sent', 'submitted'].contains(status)
+                  ? Colors.green.shade50
+                  : Colors.blue.shade50,
+              child: ListTile(
+                leading: Icon(
+                  ['sent', 'submitted'].contains(status)
+                      ? Icons.check_circle_outline
+                      : Icons.flag_outlined,
+                ),
+                title: const Text('Anbefalet handling'),
+                subtitle: Text(recommendedAction),
               ),
             ),
             const SizedBox(height: 16),
@@ -326,6 +344,19 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
     return 'Næste trin: gennemgå rejseoplysninger';
   }
 
+  String _recommendedActionText(String status) {
+    if (['ended', 'review', 'ready'].contains(status)) {
+      return 'Rejsen er klar til claim review. Bekræft de sidste oplysninger og send videre.';
+    }
+    if (['active', 'in_progress', 'detected'].contains(status)) {
+      return 'Hold registreringen kort. Log kun hændelser, udgifter og ændringer, der påvirker udfaldet.';
+    }
+    if (['sent', 'submitted'].contains(status)) {
+      return 'Sagen er allerede sendt. Brug detail-siden til at følge op eller tilføje dokumentation.';
+    }
+    return 'Gennemgå rejsen og vælg den næste handling, der faktisk ændrer sagen.';
+  }
+
   Color _statusColor(String status) {
     if (['ended', 'review', 'ready'].contains(status)) {
       return Colors.orange.shade700;
@@ -340,22 +371,6 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   }
 }
 
-class _FactTile extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _FactTile({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      title: Text(label),
-      subtitle: Text(value.isEmpty ? 'Ikke registreret endnu' : value),
-    );
-  }
-}
-
 class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;
@@ -364,12 +379,16 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(label),
-      side: BorderSide(color: color.withValues(alpha: 0.25)),
-      backgroundColor: color.withValues(alpha: 0.12),
-      labelStyle: TextStyle(color: color),
-      visualDensity: VisualDensity.compact,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -390,7 +409,7 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 260,
+      width: 280,
       child: Card(
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -410,6 +429,22 @@ class _ActionTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FactTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _FactTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      title: Text(label),
+      subtitle: Text(value.isEmpty ? 'Ikke angivet endnu' : value),
     );
   }
 }

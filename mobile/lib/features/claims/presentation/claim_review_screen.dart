@@ -48,9 +48,10 @@ class ClaimReviewScreen extends StatelessWidget {
     return '$dep -> $arr';
   }
 
+  String get statusKey => _stringValue(['status']).toLowerCase();
+
   String get statusLabel {
-    final raw = _stringValue(['status']).toLowerCase();
-    switch (raw) {
+    switch (statusKey) {
       case 'ended':
       case 'ready':
       case 'review':
@@ -65,20 +66,37 @@ class ClaimReviewScreen extends StatelessWidget {
       case 'paid':
         return 'Afsluttet';
       default:
-        return raw.isEmpty ? 'Ukendt status' : raw;
+        return statusKey.isEmpty ? 'Ukendt status' : statusKey;
     }
   }
 
   String get nextStepLabel {
-    final raw = _stringValue(['status']).toLowerCase();
-    if (['ended', 'ready', 'review'].contains(raw)) {
-      return 'Gennemga og send';
+    if (['ended', 'ready', 'review'].contains(statusKey)) {
+      return 'Review og indsend';
     }
-    if (['active', 'in_progress', 'detected'].contains(raw)) {
-      return 'Fortsat registrering';
+    if (['active', 'in_progress', 'detected'].contains(statusKey)) {
+      return 'Fortsæt registrering';
+    }
+    if (['sent', 'submitted'].contains(statusKey)) {
+      return 'Afvent svar';
     }
     return 'Tjek detaljer';
   }
+
+  String get recommendedAction {
+    if (['ended', 'ready', 'review'].contains(statusKey)) {
+      return 'Åbn avanceret review og bekræft de sidste felter.';
+    }
+    if (['active', 'in_progress', 'detected'].contains(statusKey)) {
+      return 'Log kun hændelser og udgifter, som ændrer udfaldet.';
+    }
+    if (['sent', 'submitted', 'paid'].contains(statusKey)) {
+      return 'Sagen er allerede sendt. Tilføj kun mere, hvis der mangler dokumentation.';
+    }
+    return 'Gennemgå rejsen og vælg næste relevante handling.';
+  }
+
+  bool get isSubmitted => ['sent', 'submitted', 'paid'].contains(statusKey);
 
   List<String> get highlights {
     final items = <String>[];
@@ -140,7 +158,6 @@ class ClaimReviewScreen extends StatelessWidget {
     final delay = _intValue(['delay_minutes', 'delay']);
     final deviceId = _stringValue(['device_id']);
     final destination = _stringValue(['arr_station', 'end']);
-    final status = _stringValue(['status']).toLowerCase();
     final canSuggestReroute =
         [
           'active',
@@ -148,7 +165,7 @@ class ClaimReviewScreen extends StatelessWidget {
           'detected',
           'ended',
           'review',
-        ].contains(status) &&
+        ].contains(statusKey) &&
         destination.isNotEmpty &&
         deviceId.isNotEmpty;
 
@@ -186,11 +203,22 @@ class ClaimReviewScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Denne side samler det vigtigste. Brug avanceret review kun hvis du mangler juridiske detaljer eller bilag.',
-                  ),
+                  Text(recommendedAction),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            color: isSubmitted ? Colors.green.shade50 : Colors.blue.shade50,
+            child: ListTile(
+              leading: Icon(
+                isSubmitted ? Icons.check_circle_outline : Icons.flag_outlined,
+              ),
+              title: Text(
+                isSubmitted ? 'Sagen er allerede sendt' : 'Anbefalet handling',
+              ),
+              subtitle: Text(recommendedAction),
             ),
           ),
           const SizedBox(height: 16),
@@ -223,12 +251,13 @@ class ClaimReviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _openCaseClose(context),
-                    icon: const Icon(Icons.assignment_outlined),
-                    label: const Text('Review og udfyld sagen'),
-                  ),
-                  const SizedBox(height: 8),
+                  if (!isSubmitted)
+                    ElevatedButton.icon(
+                      onPressed: () => _openCaseClose(context),
+                      icon: const Icon(Icons.assignment_outlined),
+                      label: const Text('Review og udfyld sagen'),
+                    ),
+                  if (!isSubmitted) const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () => _openChatHint(context),
                     icon: const Icon(Icons.chat_bubble_outline),
