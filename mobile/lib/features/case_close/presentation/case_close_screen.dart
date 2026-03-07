@@ -288,7 +288,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     if (currentStep > 0) setState(() => currentStep -= 1);
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (submitting) return;
     final id = (widget.journey['id'] ?? '').toString();
     setState(() {
@@ -298,18 +298,21 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     });
     final svc = JourneysService(baseUrl: apiBaseUrl);
     final payload = _buildPayload();
-    svc
-        .submit(id, payload)
-        .then((res) {
-          setState(() => submitSuccess = 'Indsendt: ${res['data'] ?? res}');
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Indsendt (stub)')));
-        })
-        .catchError((e) {
-          setState(() => submitError = '$e');
-        })
-        .whenComplete(() => setState(() => submitting = false));
+    try {
+      final res = await svc.submit(id, payload);
+      if (!mounted) return;
+      setState(() => submitSuccess = 'Indsendt: ${res['data'] ?? res}');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Indsendt (stub)')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => submitError = '$e');
+    } finally {
+      if (mounted) {
+        setState(() => submitting = false);
+      }
+    }
   }
 
   String _assistSummary() {
@@ -404,8 +407,9 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Evaluering fejlede: $e')));
     } finally {
-      if (!mounted) return;
-      setState(() => evaluating = false);
+      if (mounted) {
+        setState(() => evaluating = false);
+      }
     }
   }
 
@@ -625,17 +629,15 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   isActive: currentStep >= 0,
                   content: Column(
                     children: [
-                      RadioListTile<String>(
-                        title: const Text('Rejsen er afsluttet'),
-                        value: 'completed',
-                        groupValue: travelStatus,
-                        onChanged: (v) => setState(() => travelStatus = v),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Rejsen er i gang'),
-                        value: 'in_progress',
-                        groupValue: travelStatus,
-                        onChanged: (v) => setState(() => travelStatus = v),
+                      _StringChoiceSection(
+                        label: 'Rejsestatus',
+                        value: travelStatus,
+                        options: const {
+                          'completed': 'Rejsen er afsluttet',
+                          'in_progress': 'Rejsen er i gang',
+                        },
+                        onChanged: (value) =>
+                            setState(() => travelStatus = value),
                       ),
                       const SizedBox(height: 8),
                       TextField(
@@ -678,17 +680,14 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                   content: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      RadioListTile<String>(
-                        title: const Text('Forsinkelse'),
-                        value: 'delay',
-                        groupValue: eventType,
-                        onChanged: (v) => setState(() => eventType = v),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Aflysning'),
-                        value: 'cancellation',
-                        groupValue: eventType,
-                        onChanged: (v) => setState(() => eventType = v),
+                      _StringChoiceSection(
+                        label: 'Hændelse',
+                        value: eventType,
+                        options: const {
+                          'delay': 'Forsinkelse',
+                          'cancellation': 'Aflysning',
+                        },
+                        onChanged: (value) => setState(() => eventType = value),
                       ),
                       CheckboxListTile(
                         title: const Text(
@@ -785,26 +784,16 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                       ),
                       const Divider(),
                       const Text('Refusion'),
-                      RadioListTile<String>(
-                        title: const Text('Anmodet om refusion: Ja'),
-                        value: 'yes',
-                        groupValue: refundRequested,
-                        onChanged: (v) =>
-                            setState(() => refundRequested = v ?? 'yes'),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Anmodet om refusion: Nej'),
-                        value: 'no',
-                        groupValue: refundRequested,
-                        onChanged: (v) =>
-                            setState(() => refundRequested = v ?? 'no'),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Anmodet om refusion: Ved ikke'),
-                        value: 'unknown',
-                        groupValue: refundRequested,
-                        onChanged: (v) =>
-                            setState(() => refundRequested = v ?? 'unknown'),
+                      _StringChoiceSection(
+                        label: 'Anmodet om refusion',
+                        value: refundRequested,
+                        options: const {
+                          'yes': 'Ja',
+                          'no': 'Nej',
+                          'unknown': 'Ved ikke',
+                        },
+                        onChanged: (value) =>
+                            setState(() => refundRequested = value),
                       ),
                       if (refundRequested == 'yes')
                         TextField(
@@ -952,15 +941,17 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                           ),
                           TextButton(
                             onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
                               _addReceipt();
                               if (receipts.isEmpty) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text('Scanner kvittering...'),
                                 ),
                               );
                               final parsed = await receiptService
                                   .scanAndParse();
+                              if (!mounted || receipts.isEmpty) return;
                               final r = receipts.last;
                               r.typeCtrl.text = (parsed['type'] ?? '')
                                   .toString();
@@ -970,7 +961,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                                   .toString();
                               r.dateCtrl.text = (parsed['date'] ?? '')
                                   .toString();
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text('OCR udfyldt (ML Kit)'),
                                 ),
@@ -1114,29 +1105,17 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                           'Kompensation (Art.18) kræver aflysning/missed eller forsinkelse ≥60 min.',
                           style: TextStyle(color: Colors.orange),
                         ),
-                      RadioListTile<String>(
-                        title: const Text('Refusion af billet'),
-                        value: 'refund',
-                        groupValue: compensationChoice,
-                        onChanged: artEligible
-                            ? (v) => setState(() => compensationChoice = v)
-                            : null,
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Omlægning nu'),
-                        value: 'reroute_now',
-                        groupValue: compensationChoice,
-                        onChanged: artEligible
-                            ? (v) => setState(() => compensationChoice = v)
-                            : null,
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Omlægning senere / voucher'),
-                        value: 'reroute_later',
-                        groupValue: compensationChoice,
-                        onChanged: artEligible
-                            ? (v) => setState(() => compensationChoice = v)
-                            : null,
+                      _StringChoiceSection(
+                        label: 'Kompensationsvalg',
+                        value: compensationChoice,
+                        enabled: artEligible,
+                        options: const {
+                          'refund': 'Refusion af billet',
+                          'reroute_now': 'Oml?gning nu',
+                          'reroute_later': 'Oml?gning senere / voucher',
+                        },
+                        onChanged: (value) =>
+                            setState(() => compensationChoice = value),
                       ),
                       TextField(
                         controller: refundAmountCtrl,
@@ -1350,6 +1329,45 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StringChoiceSection extends StatelessWidget {
+  final String label;
+  final String? value;
+  final Map<String, String> options;
+  final ValueChanged<String> onChanged;
+  final bool enabled;
+
+  const _StringChoiceSection({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.entries.map((entry) {
+            final selected = value == entry.key;
+            return ChoiceChip(
+              label: Text(entry.value),
+              selected: selected,
+              onSelected: enabled ? (_) => onChanged(entry.key) : null,
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

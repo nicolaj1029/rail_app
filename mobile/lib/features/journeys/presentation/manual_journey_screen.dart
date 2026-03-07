@@ -77,7 +77,9 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
         success = 'Indsendt: ${res['status'] ?? res}';
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Manuel rejse sendt')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Manuel rejse sendt')));
     } catch (e) {
       setState(() {
         error = '$e';
@@ -112,11 +114,15 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
               ),
               TextFormField(
                 controller: depCtrl,
-                decoration: const InputDecoration(labelText: 'Afgangstid (ISO)'),
+                decoration: const InputDecoration(
+                  labelText: 'Afgangstid (ISO)',
+                ),
               ),
               TextFormField(
                 controller: arrCtrl,
-                decoration: const InputDecoration(labelText: 'Ankomsttid (valgfri)'),
+                decoration: const InputDecoration(
+                  labelText: 'Ankomsttid (valgfri)',
+                ),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
@@ -124,34 +130,47 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
                 decoration: const InputDecoration(labelText: 'Billettype'),
                 items: const [
                   DropdownMenuItem(value: 'enkelt', child: Text('Enkelt')),
-                  DropdownMenuItem(value: 'periode', child: Text('Periodekort')),
-                  DropdownMenuItem(value: 'rejsekort', child: Text('Rejsekort')),
+                  DropdownMenuItem(
+                    value: 'periode',
+                    child: Text('Periodekort'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'rejsekort',
+                    child: Text('Rejsekort'),
+                  ),
                 ],
                 onChanged: (v) => setState(() => ticketType = v ?? 'enkelt'),
               ),
               const SizedBox(height: 8),
-              const Text('Hændelse'),
-              RadioListTile<String>(
-                title: const Text('Forsinkelse'),
-                value: 'delay',
-                groupValue: disruption,
-                onChanged: (v) => setState(() => disruption = v ?? 'delay'),
-              ),
-              RadioListTile<String>(
-                title: const Text('Aflysning'),
-                value: 'cancelled',
-                groupValue: disruption,
-                onChanged: (v) => setState(() => disruption = v ?? 'cancelled'),
-              ),
-              RadioListTile<String>(
-                title: const Text('Mistet forbindelse'),
-                value: 'missed_connection',
-                groupValue: disruption,
-                onChanged: (v) => setState(() => disruption = v ?? 'missed_connection'),
+              const Text('H?ndelse'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _ManualChoiceChip(
+                    label: 'Forsinkelse',
+                    selected: disruption == 'delay',
+                    onSelected: () => setState(() => disruption = 'delay'),
+                  ),
+                  _ManualChoiceChip(
+                    label: 'Aflysning',
+                    selected: disruption == 'cancelled',
+                    onSelected: () => setState(() => disruption = 'cancelled'),
+                  ),
+                  _ManualChoiceChip(
+                    label: 'Mistet forbindelse',
+                    selected: disruption == 'missed_connection',
+                    onSelected: () =>
+                        setState(() => disruption = 'missed_connection'),
+                  ),
+                ],
               ),
               TextFormField(
                 controller: delayCtrl,
-                decoration: const InputDecoration(labelText: 'Faktisk forsinkelse (min)'),
+                decoration: const InputDecoration(
+                  labelText: 'Faktisk forsinkelse (min)',
+                ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
@@ -166,13 +185,19 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
                   OutlinedButton.icon(
                     onPressed: () => _pickTicket(ImageSource.gallery),
                     icon: const Icon(Icons.file_upload),
-                    label: Text(ticketFile == null ? 'Vælg fil' : 'Valgt: ${ticketFile!.name}'),
+                    label: Text(
+                      ticketFile == null
+                          ? 'Vælg fil'
+                          : 'Valgt: ${ticketFile!.name}',
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
-              if (success != null) Text(success!, style: const TextStyle(color: Colors.green)),
+              if (error != null)
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              if (success != null)
+                Text(success!, style: const TextStyle(color: Colors.green)),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: submitting ? null : _submit,
@@ -182,6 +207,27 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ManualChoiceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _ManualChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
     );
   }
 }

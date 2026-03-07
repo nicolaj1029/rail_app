@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 class CaseDraftStorage {
   static final Map<String, Map<String, dynamic>> _drafts = {};
 
-  static Future<void> saveDraft(String journeyId, Map<String, dynamic> payload) async {
+  static Future<void> saveDraft(
+    String journeyId,
+    Map<String, dynamic> payload,
+  ) async {
     _drafts[journeyId] = Map.of(payload);
     // TODO: persist to SharedPreferences / secure storage to survive app restarts.
   }
 
-  static Map<String, dynamic>? loadDraft(String journeyId) => _drafts[journeyId];
+  static Map<String, dynamic>? loadDraft(String journeyId) =>
+      _drafts[journeyId];
 }
 
 class LiveClaimWizard extends StatefulWidget {
@@ -39,24 +43,31 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
   String informedWithin100 = 'unknown';
   bool extraCosts = false;
   final TextEditingController extraCostAmountCtrl = TextEditingController();
-  final TextEditingController extraCostCurrencyCtrl = TextEditingController(text: 'DKK');
+  final TextEditingController extraCostCurrencyCtrl = TextEditingController(
+    text: 'DKK',
+  );
 
   @override
   void initState() {
     super.initState();
-    final draft = widget.existingDraft ?? CaseDraftStorage.loadDraft(widget.journeyId);
+    final draft =
+        widget.existingDraft ?? CaseDraftStorage.loadDraft(widget.journeyId);
     if (draft != null) {
       travelStatus = draft['travelStatus'] as String?;
       eventType = draft['eventType'] as String?;
       expectsDelayOver60 = draft['delay60'] as bool? ?? false;
-      tripCancelReturn = draft['art18']?['trip_cancel_return'] as bool? ?? false;
-      refundRequested = draft['art18']?['refund_requested'] as String? ?? 'unknown';
+      tripCancelReturn =
+          draft['art18']?['trip_cancel_return'] as bool? ?? false;
+      refundRequested =
+          draft['art18']?['refund_requested'] as String? ?? 'unknown';
       rerouteNow = draft['art18']?['reroute_now'] as bool? ?? false;
       rerouteLater = draft['art18']?['reroute_later'] as bool? ?? false;
-      informedWithin100 = draft['art18']?['informed_within_100'] as String? ?? 'unknown';
+      informedWithin100 =
+          draft['art18']?['informed_within_100'] as String? ?? 'unknown';
       extraCosts = draft['art18']?['extra_costs'] as bool? ?? false;
       extraCostAmountCtrl.text = draft['art18']?['extra_cost_amount'] ?? '';
-      extraCostCurrencyCtrl.text = draft['art18']?['extra_cost_currency'] ?? 'DKK';
+      extraCostCurrencyCtrl.text =
+          draft['art18']?['extra_cost_currency'] ?? 'DKK';
     }
   }
 
@@ -87,7 +98,9 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
   }
 
   void _next() {
-    if (currentStep == 2 && !expectsDelayOver60 && eventType != 'cancellation') {
+    if (currentStep == 2 &&
+        !expectsDelayOver60 &&
+        eventType != 'cancellation') {
       // Skip Art.18 if no qualifying event
       _finish();
       return;
@@ -162,17 +175,11 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RadioListTile<String>(
-                  title: const Text('Afsluttet'),
-                  value: 'done',
-                  groupValue: travelStatus,
-                  onChanged: (v) => setState(() => travelStatus = v),
-                ),
-                RadioListTile<String>(
-                  title: const Text('I gang'),
-                  value: 'in_progress',
-                  groupValue: travelStatus,
-                  onChanged: (v) => setState(() => travelStatus = v),
+                _WizardChoiceSection(
+                  label: 'Rejsestatus',
+                  value: travelStatus,
+                  options: const {'done': 'Afsluttet', 'in_progress': 'I gang'},
+                  onChanged: (value) => setState(() => travelStatus = value),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -188,22 +195,20 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
             isActive: currentStep >= 1,
             content: Column(
               children: [
-                RadioListTile<String>(
-                  title: const Text('Forsinkelse'),
-                  value: 'delay',
-                  groupValue: eventType,
-                  onChanged: (v) => setState(() => eventType = v),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Aflysning'),
-                  value: 'cancellation',
-                  groupValue: eventType,
-                  onChanged: (v) => setState(() => eventType = v),
+                _WizardChoiceSection(
+                  label: 'H?ndelse',
+                  value: eventType,
+                  options: const {
+                    'delay': 'Forsinkelse',
+                    'cancellation': 'Aflysning',
+                  },
+                  onChanged: (value) => setState(() => eventType = value),
                 ),
                 CheckboxListTile(
                   title: const Text('Forventer forsinkelse ≥ 60 min'),
                   value: expectsDelayOver60,
-                  onChanged: (v) => setState(() => expectsDelayOver60 = v ?? false),
+                  onChanged: (v) =>
+                      setState(() => expectsDelayOver60 = v ?? false),
                 ),
               ],
             ),
@@ -222,63 +227,70 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
                       ),
                       const Divider(),
                       const Text('Refusion'),
-                      RadioListTile<String>(
-                        title: const Text('Ja'),
-                        value: 'yes',
-                        groupValue: refundRequested,
-                        onChanged: (v) => setState(() => refundRequested = v ?? 'yes'),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Nej'),
-                        value: 'no',
-                        groupValue: refundRequested,
-                        onChanged: (v) => setState(() => refundRequested = v ?? 'no'),
+                      _WizardChoiceSection(
+                        label: 'Anmodet om refusion',
+                        value: refundRequested,
+                        options: const {'yes': 'Ja', 'no': 'Nej'},
+                        onChanged: (value) =>
+                            setState(() => refundRequested = value),
                       ),
                       const Divider(),
                       const Text('Omlægning'),
                       SwitchListTile(
                         title: const Text('Ved første lejlighed'),
                         value: rerouteNow,
-                        onChanged: (v) => setState(() => rerouteNow = v ?? false),
+                        onChanged: (v) => setState(() => rerouteNow = v),
                       ),
                       SwitchListTile(
                         title: const Text('Senere tidspunkt'),
                         value: rerouteLater,
-                        onChanged: (v) => setState(() => rerouteLater = v ?? false),
+                        onChanged: (v) => setState(() => rerouteLater = v),
                       ),
                       DropdownButtonFormField<String>(
                         initialValue: informedWithin100,
-                        decoration: const InputDecoration(labelText: 'Informeret inden for 100 min?'),
+                        decoration: const InputDecoration(
+                          labelText: 'Informeret inden for 100 min?',
+                        ),
                         items: const [
                           DropdownMenuItem(value: 'yes', child: Text('Ja')),
                           DropdownMenuItem(value: 'no', child: Text('Nej')),
-                          DropdownMenuItem(value: 'unknown', child: Text('Ved ikke')),
+                          DropdownMenuItem(
+                            value: 'unknown',
+                            child: Text('Ved ikke'),
+                          ),
                         ],
-                        onChanged: (v) => setState(() => informedWithin100 = v ?? 'unknown'),
+                        onChanged: (v) =>
+                            setState(() => informedWithin100 = v ?? 'unknown'),
                       ),
                       const Divider(),
                       SwitchListTile(
                         title: const Text('Ekstra udgifter ved omlægning'),
                         value: extraCosts,
-                        onChanged: (v) => setState(() => extraCosts = v ?? false),
+                        onChanged: (v) => setState(() => extraCosts = v),
                       ),
                       if (extraCosts)
                         Column(
                           children: [
                             TextField(
                               controller: extraCostAmountCtrl,
-                              decoration: const InputDecoration(labelText: 'Beløb'),
+                              decoration: const InputDecoration(
+                                labelText: 'Beløb',
+                              ),
                               keyboardType: TextInputType.number,
                             ),
                             TextField(
                               controller: extraCostCurrencyCtrl,
-                              decoration: const InputDecoration(labelText: 'Valuta'),
+                              decoration: const InputDecoration(
+                                labelText: 'Valuta',
+                              ),
                             ),
                           ],
                         ),
                     ],
                   )
-                : const Text('Art.18 spørgsmål aktiveres kun ved aflysning eller forsinkelse ≥ 60 minutter.'),
+                : const Text(
+                    'Art.18 spørgsmål aktiveres kun ved aflysning eller forsinkelse ≥ 60 minutter.',
+                  ),
           ),
           Step(
             title: const Text('4. Opsummering'),
@@ -298,6 +310,42 @@ class _LiveClaimWizardState extends State<LiveClaimWizard> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WizardChoiceSection extends StatelessWidget {
+  final String label;
+  final String? value;
+  final Map<String, String> options;
+  final ValueChanged<String> onChanged;
+
+  const _WizardChoiceSection({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.entries.map((entry) {
+            return ChoiceChip(
+              label: Text(entry.value),
+              selected: value == entry.key,
+              onSelected: (_) => onChanged(entry.key),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
