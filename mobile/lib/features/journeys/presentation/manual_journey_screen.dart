@@ -5,9 +5,11 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
 import 'package:mobile/features/journeys/data/manual_journeys_service.dart';
+import 'package:mobile/services/stations_service.dart';
 
 class ManualJourneyScreen extends StatefulWidget {
   final String deviceId;
+
   const ManualJourneyScreen({super.key, required this.deviceId});
 
   @override
@@ -20,13 +22,22 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
   final toCtrl = TextEditingController();
   final depCtrl = TextEditingController();
   final arrCtrl = TextEditingController();
+  final delayCtrl = TextEditingController();
+
   String ticketType = 'enkelt';
   String disruption = 'delay';
-  final delayCtrl = TextEditingController();
   XFile? ticketFile;
   bool submitting = false;
   String? error;
   String? success;
+
+  late final StationsService _stationsService;
+
+  @override
+  void initState() {
+    super.initState();
+    _stationsService = StationsService(baseUrl: apiBaseUrl);
+  }
 
   @override
   void dispose() {
@@ -40,21 +51,25 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
 
   Future<void> _pickTicket(ImageSource source) async {
     final picker = ImagePicker();
-    final f = await picker.pickImage(source: source, imageQuality: 85);
-    if (f != null) {
+    final file = await picker.pickImage(source: source, imageQuality: 85);
+    if (file != null) {
       setState(() {
-        ticketFile = f;
+        ticketFile = file;
       });
     }
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() {
       submitting = true;
       error = null;
       success = null;
     });
+
     try {
       final payload = <String, dynamic>{
         'device_id': widget.deviceId,
@@ -66,17 +81,22 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
         'disruption_type': disruption,
         'delay_minutes': delayCtrl.text.trim(),
       };
+
       if (ticketFile != null) {
         final bytes = await ticketFile!.readAsBytes();
         payload['ticket_image_base64'] = base64Encode(bytes);
         payload['ticket_filename'] = ticketFile!.name;
       }
-      final svc = ManualJourneysService(baseUrl: apiBaseUrl);
-      final res = await svc.submit(payload);
+
+      final service = ManualJourneysService(baseUrl: apiBaseUrl);
+      final res = await service.submit(payload);
       setState(() {
         success = 'Indsendt: ${res['status'] ?? res}';
       });
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Manuel rejse sendt')));
@@ -102,14 +122,16 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(
+              _StationLookupField(
                 controller: fromCtrl,
-                decoration: const InputDecoration(labelText: 'Fra-station'),
+                label: 'Fra-station',
+                stationsService: _stationsService,
                 validator: (v) => v == null || v.isEmpty ? 'Påkrævet' : null,
               ),
-              TextFormField(
+              _StationLookupField(
                 controller: toCtrl,
-                decoration: const InputDecoration(labelText: 'Til-station'),
+                label: 'Til-station',
+                stationsService: _stationsService,
                 validator: (v) => v == null || v.isEmpty ? 'Påkrævet' : null,
               ),
               TextFormField(
@@ -142,7 +164,7 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
                 onChanged: (v) => setState(() => ticketType = v ?? 'enkelt'),
               ),
               const SizedBox(height: 8),
-              const Text('H?ndelse'),
+              const Text('Hændelse'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -207,6 +229,123 @@ class _ManualJourneyScreenState extends State<ManualJourneyScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StationLookupField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final StationsService stationsService;
+  final String? Function(String?)? validator;
+
+  const _StationLookupField({
+    required this.controller,
+    required this.label,
+    required this.stationsService,
+    this.validator,
+  });
+
+  @override
+  State<_StationLookupField> createState() => _StationLookupFieldState();
+}
+
+class _StationLookupFieldState extends State<_StationLookupField> {
+  List<Map<String, dynamic>> _results = const [];
+  bool _loading = false;
+  String _lastQuery = '';
+
+  Future<void> _search(String value) async {
+    final query = value.trim();
+    _lastQuery = query;
+
+    if (query.length < 2) {
+      if (mounted) {
+        setState(() {
+          _results = const [];
+          _loading = false;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      final results = await widget.stationsService.searchStations(query);
+      if (!mounted || _lastQuery != query) {
+        return;
+      }
+      setState(() {
+        _results = results;
+      });
+    } catch (_) {
+      if (!mounted || _lastQuery != query) {
+        return;
+      }
+      setState(() {
+        _results = const [];
+      });
+    } finally {
+      if (mounted && _lastQuery == query) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  void _selectStation(Map<String, dynamic> station) {
+    widget.controller.text = (station['name'] ?? '').toString();
+    setState(() {
+      _results = const [];
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            suffixIcon: _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+          validator: widget.validator,
+          onChanged: _search,
+        ),
+        if (_results.isNotEmpty)
+          Card(
+            margin: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Column(
+              children: _results.take(6).map((station) {
+                final name = (station['name'] ?? '').toString();
+                final country = (station['country'] ?? '').toString();
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.location_on_outlined),
+                  title: Text(name),
+                  subtitle: country.isEmpty ? null : Text(country),
+                  onTap: () => _selectStation(station),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
     );
   }
 }
