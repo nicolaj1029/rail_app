@@ -10,7 +10,12 @@ import 'package:mobile/shared/services/tickets_service.dart';
 
 class JourneysListScreen extends StatefulWidget {
   final String deviceId;
-  const JourneysListScreen({super.key, required this.deviceId});
+  final bool embedded;
+  const JourneysListScreen({
+    super.key,
+    required this.deviceId,
+    this.embedded = false,
+  });
 
   @override
   State<JourneysListScreen> createState() => _JourneysListScreenState();
@@ -55,9 +60,7 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
 
   void _openCaseClose(Map<String, dynamic> journey) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CaseCloseScreen(journey: journey),
-      ),
+      MaterialPageRoute(builder: (_) => CaseCloseScreen(journey: journey)),
     );
   }
 
@@ -73,14 +76,20 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
   Future<void> _matchTicket() async {
     if (matching) return;
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
     if (file == null) return;
     setState(() {
       matching = true;
       error = null;
     });
     try {
-      final res = await _tickets.matchTicket(deviceId: widget.deviceId, file: file);
+      final res = await _tickets.matchTicket(
+        deviceId: widget.deviceId,
+        file: file,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Billet uploadet: ${res['status'] ?? 'ok'}')),
@@ -99,6 +108,115 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+          ? Center(child: Text('Error: $error'))
+          : journeys.isEmpty
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Vi fandt ingen rejser',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Opret en manuel rejse eller upload en billet, så forsøger vi at matche den.',
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _openManual,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Anmeld rejse manuelt'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: matching ? null : _matchTicket,
+                              icon: const Icon(Icons.upload),
+                              label: Text(
+                                matching ? 'Uploader...' : 'Upload billet',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              itemCount: journeys.length,
+              itemBuilder: (context, index) {
+                final j = journeys[index];
+                final id = (j['id'] ?? '').toString();
+                final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
+                final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
+                final delay = (j['delay_minutes'] ?? j['delay'] ?? '')
+                    .toString();
+                final status = (j['status'] ?? '').toString();
+                final ended = status.toLowerCase() == 'ended';
+                final statusColor = ended ? Colors.red : Colors.blue;
+                return Card(
+                  child: ListTile(
+                    title: Text('Journey $id'),
+                    subtitle: Text('$dep -> $arr  | delay: $delay min'),
+                    trailing: SizedBox(
+                      width: 120,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(color: statusColor),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () => _openCaseClose(j),
+                            child: Text(ended ? 'Case Close' : 'Open'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => JourneyDetailScreen(journey: j),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+
+    if (widget.embedded) {
+      return content;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Journeys'),
@@ -109,99 +227,7 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: loading
-            ? const Center(child: CircularProgressIndicator())
-            : error != null
-                ? Center(child: Text('Error: $error'))
-                : journeys.isEmpty
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Vi fandt ingen rejser', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 6),
-                                  const Text('Opret en manuel rejse eller upload en billet, så forsøger vi at matche den.'),
-                                  const SizedBox(height: 12),
-                                  Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      ElevatedButton.icon(
-                                        onPressed: _openManual,
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('Anmeld rejse manuelt'),
-                                      ),
-                                      OutlinedButton.icon(
-                                        onPressed: matching ? null : _matchTicket,
-                                        icon: const Icon(Icons.upload),
-                                        label: Text(matching ? 'Uploader...' : 'Upload billet'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    : ListView.builder(
-                        itemCount: journeys.length,
-                        itemBuilder: (context, index) {
-                          final j = journeys[index];
-                          final id = (j['id'] ?? '').toString();
-                          final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
-                          final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
-                          final delay = (j['delay_minutes'] ?? j['delay'] ?? '').toString();
-                          final status = (j['status'] ?? '').toString();
-                          final ended = status.toLowerCase() == 'ended';
-                          final statusColor = ended ? Colors.red : Colors.blue;
-                          return Card(
-                            child: ListTile(
-                              title: Text('Journey $id'),
-                              subtitle: Text('$dep -> $arr  | delay: $delay min'),
-                          trailing: SizedBox(
-                            width: 120,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    status,
-                                    style: TextStyle(color: statusColor),
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                TextButton(
-                                  onPressed: () => _openCaseClose(j),
-                                  child: Text(ended ? 'Case Close' : 'Open'),
-                                ),
-                              ],
-                            ),
-                          ),
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => JourneyDetailScreen(journey: j),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-      ),
+      body: content,
     );
   }
 }

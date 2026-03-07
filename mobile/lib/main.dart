@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:mobile/features/live_assist/presentation/live_assist_screen.dart';
+import 'package:mobile/app/app_shell.dart';
 
 void main() {
   runApp(const RailApp());
@@ -17,7 +17,7 @@ class RailApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const LiveAssistScreen(),
+      home: const AppShell(),
     );
   }
 }
