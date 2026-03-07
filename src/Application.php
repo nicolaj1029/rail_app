@@ -28,6 +28,7 @@ use Cake\ORM\Locator\TableLocator;
 use Cake\Routing\Middleware\AssetMiddleware;
 use Cake\Routing\Middleware\RoutingMiddleware;
 use App\Middleware\AdminBasicAuthMiddleware;
+use App\Middleware\ApiCorsMiddleware;
 
 /**
  * Application setup class.
@@ -78,6 +79,7 @@ class Application extends BaseApplication
             // caching in production could improve performance.
             // See https://github.com/CakeDC/cakephp-cached-routing
             ->add(new RoutingMiddleware($this))
+            ->add(new ApiCorsMiddleware())
             // Protect /admin with simple Basic Auth (can be replaced with full Auth later)
             ->add(new AdminBasicAuthMiddleware())
 

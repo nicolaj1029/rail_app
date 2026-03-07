@@ -207,6 +207,10 @@ return function (RouteBuilder $routes): void {
 
     // Unified pipeline (OCR ingest + all evaluators in one)
     $builder->connect('/pipeline/run', ['controller' => 'Pipeline', 'action' => 'run']);
+        $builder->connect('/chat/bootstrap', ['controller' => 'Chat', 'action' => 'bootstrap']);
+        $builder->connect('/chat/message', ['controller' => 'Chat', 'action' => 'message']);
+        $builder->connect('/chat/reset', ['controller' => 'Chat', 'action' => 'reset']);
+        $builder->connect('/chat/upload', ['controller' => 'Chat', 'action' => 'upload']);
 
         // Provider stubs for SNCF / DB / DSB / RNE / Open
         $builder->connect('/providers/sncf/booking/validate', ['controller' => 'Providers', 'action' => 'sncfBookingValidate']);
