@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
 import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
+import 'package:mobile/features/home/data/home_service.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
 import 'package:mobile/features/journeys/presentation/journeys_list_screen.dart';
 import 'package:mobile/services/api_client.dart';
@@ -26,6 +27,7 @@ class LiveAssistScreen extends StatefulWidget {
 
 class _LiveAssistScreenState extends State<LiveAssistScreen> {
   late final ApiClient api;
+  late final HomeService homeService;
   String? deviceId;
   ShadowTracker? tracker;
   bool tracking = false;
@@ -33,6 +35,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   int? stationCount;
   String? info;
   List<Map<String, dynamic>> journeys = [];
+  Map<String, dynamic> liveSummary = const {};
   String modeLabel = 'ukendt';
   bool _autoNavigated = false;
   final List<Map<String, dynamic>> localEvents = [];
@@ -48,6 +51,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   void initState() {
     super.initState();
     api = ApiClient(baseUrl: apiBaseUrl);
+    homeService = HomeService(baseUrl: apiBaseUrl);
     noti = NotificationsService();
     noti?.init();
     _bootstrap();
@@ -78,6 +82,21 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       });
     }
   }
+
+  int _summaryInt(String key) {
+    final summary =
+        (liveSummary['summary'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final value = summary[key];
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse('${value ?? ''}') ?? 0;
+  }
+
+  List<Map<String, dynamic>> get _nextActions =>
+      (liveSummary['next_actions'] as List?)?.cast<Map<String, dynamic>>() ??
+      const <Map<String, dynamic>>[];
 
   Future<void> _toggleTracking() async {
     if (tracker == null) {
@@ -220,8 +239,13 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     try {
       final svc = JourneysService(baseUrl: api.baseUrl);
       final list = await svc.list(deviceId!);
+      final summary = await homeService.load(deviceId);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         journeys = list;
+        liveSummary = summary;
       });
       _updateMode();
     } catch (_) {}
@@ -263,16 +287,15 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   }
 
   void _updateMode() {
-    var nextMode = 'in_progress';
-    for (final journey in journeys) {
-      final status = (journey['status'] ?? '').toString().toLowerCase();
-      if (status == 'ended') {
-        nextMode = 'ended';
-        break;
-      }
-    }
-    if (journeys.isEmpty) {
-      nextMode = tracking ? 'in_progress' : 'ukendt';
+    final readyCount = _summaryInt('ready_count');
+    final activeCount = _summaryInt('active_count');
+    var nextMode = 'ukendt';
+    if (readyCount > 0) {
+      nextMode = 'review_ready';
+    } else if (activeCount > 0 || tracking) {
+      nextMode = 'in_progress';
+    } else if (journeys.isNotEmpty) {
+      nextMode = 'tracking_ready';
     }
     setState(() {
       modeLabel = nextMode;
@@ -281,7 +304,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   }
 
   void _maybeAutoNavigate(String mode) {
-    if (!mounted || mode != 'ended' || _autoNavigated) {
+    if (!mounted || mode != 'review_ready' || _autoNavigated) {
       return;
     }
     final endedJourneys = journeys.where((journey) {
@@ -336,6 +359,93 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: journey)),
     );
+  }
+
+  String _friendlyModeLabel() {
+    switch (modeLabel) {
+      case 'review_ready':
+        return 'klar til review';
+      case 'in_progress':
+        return 'rejse i gang';
+      case 'tracking_ready':
+        return 'venter på aktivitet';
+      default:
+        return 'ukendt';
+    }
+  }
+
+  Color _modeColor() {
+    switch (modeLabel) {
+      case 'review_ready':
+        return Colors.orange;
+      case 'in_progress':
+        return Colors.green;
+      case 'tracking_ready':
+        return Colors.indigo;
+      default:
+        return Colors.blue;
+    }
+  }
+
+  String _journeyLabel(Map<String, dynamic> journey) {
+    final routeLabel = (journey['route_label'] ?? '').toString().trim();
+    if (routeLabel.isNotEmpty) {
+      return routeLabel;
+    }
+    final dep = (journey['dep_station'] ?? journey['start'] ?? '').toString();
+    final arr = (journey['arr_station'] ?? journey['end'] ?? '').toString();
+    if (dep.isNotEmpty || arr.isNotEmpty) {
+      return '$dep -> $arr'.trim();
+    }
+    return 'Rejse ${(journey['id'] ?? '').toString()}';
+  }
+
+  Map<String, dynamic>? _journeyById(String? id) {
+    if (id == null || id.trim().isEmpty) {
+      return null;
+    }
+    for (final journey in journeys) {
+      if ((journey['id'] ?? '').toString() == id) {
+        return journey;
+      }
+    }
+    return null;
+  }
+
+  void _openJourneys() {
+    if (deviceId == null || deviceId!.isEmpty) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => JourneysListScreen(deviceId: deviceId!),
+      ),
+    );
+  }
+
+  void _handleNextAction(Map<String, dynamic> action) {
+    final kind = (action['kind'] ?? '').toString();
+    final journeyId = (action['journey_id'] ?? '').toString();
+    switch (kind) {
+      case 'review_journey':
+        final journey = _journeyById(journeyId);
+        if (journey != null) {
+          _openJourneyReview(journey);
+          return;
+        }
+        _openJourneys();
+        return;
+      case 'continue_live':
+        if (!tracking && deviceId != null) {
+          _toggleTracking();
+        }
+        return;
+      case 'open_claims':
+        _openJourneys();
+        return;
+      default:
+        return;
+    }
   }
 
   void _showTicketOptions(BuildContext context) {
@@ -504,10 +614,14 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     if (tracking && modeLabel == 'in_progress') {
       nudges.add('Tracking aktiv - pings sendes til backend.');
     }
-    if (modeLabel == 'ended') {
+    if (modeLabel == 'review_ready') {
       nudges.add('Rejsen er afsluttet - gennemgå claim og send videre.');
     }
     nudges.addAll(_nudgeMessages.take(3));
+    final readyCount = _summaryInt('ready_count');
+    final activeCount = _summaryInt('active_count');
+    final submittedCount = _summaryInt('submitted_count');
+    final primaryAction = _nextActions.isNotEmpty ? _nextActions.first : null;
 
     final readyJourneys = journeys.where((journey) {
       final status = (journey['status'] ?? '').toString().toLowerCase();
@@ -550,10 +664,20 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                         color: tracking ? Colors.green : Colors.grey,
                       ),
                       _StatusPill(
-                        label: 'Mode: $modeLabel',
-                        color: modeLabel == 'ended'
-                            ? Colors.orange
-                            : Colors.blue,
+                        label: 'Mode: ${_friendlyModeLabel()}',
+                        color: _modeColor(),
+                      ),
+                      _StatusPill(
+                        label: 'Review: $readyCount',
+                        color: readyCount > 0 ? Colors.orange : Colors.grey,
+                      ),
+                      _StatusPill(
+                        label: 'Aktive: $activeCount',
+                        color: activeCount > 0 ? Colors.green : Colors.grey,
+                      ),
+                      _StatusPill(
+                        label: 'Sager: $submittedCount',
+                        color: submittedCount > 0 ? Colors.indigo : Colors.grey,
                       ),
                       if (stationCount != null)
                         _StatusPill(
@@ -567,6 +691,30 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                     Text(
                       'Device: $deviceId',
                       style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  if (primaryAction != null) ...[
+                    const SizedBox(height: 16),
+                    Card(
+                      color: Colors.blue.shade50,
+                      child: ListTile(
+                        leading: Icon(switch ((primaryAction['kind'] ?? '')
+                            .toString()) {
+                          'review_journey' => Icons.assignment_outlined,
+                          'continue_live' => Icons.play_circle_outline,
+                          'open_claims' => Icons.description_outlined,
+                          _ => Icons.chevron_right,
+                        }),
+                        title: Text(
+                          (primaryAction['title'] ?? 'Næste handling')
+                              .toString(),
+                        ),
+                        subtitle: Text(
+                          (primaryAction['subtitle'] ?? '').toString(),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _handleNextAction(primaryAction),
+                      ),
                     ),
                   ],
                 ],
@@ -629,16 +777,7 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
                 title: 'Se rejser',
                 subtitle: 'Åbn registrerede eller detekterede rejser.',
                 icon: Icons.timeline,
-                onTap: deviceId == null
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                JourneysListScreen(deviceId: deviceId!),
-                          ),
-                        );
-                      },
+                onTap: deviceId == null ? null : _openJourneys,
               ),
               _ActionCard(
                 title: 'Upload billet',
@@ -696,14 +835,17 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
             ),
             const SizedBox(height: 8),
             ...readyJourneys.take(3).map((journey) {
-              final id = (journey['id'] ?? '').toString();
               final start = (journey['start'] ?? '').toString();
               final end = (journey['end'] ?? '').toString();
               return Card(
                 child: ListTile(
                   leading: const Icon(Icons.assignment_outlined),
-                  title: Text('Rejse $id'),
-                  subtitle: Text('$start -> $end'),
+                  title: Text(_journeyLabel(journey)),
+                  subtitle: Text(
+                    start.isNotEmpty || end.isNotEmpty
+                        ? '$start -> $end'
+                        : 'Klar til review',
+                  ),
                   trailing: const Text('Review'),
                   onTap: () => _openJourneyReview(journey),
                 ),
@@ -724,8 +866,12 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
               return Card(
                 child: ListTile(
                   leading: const Icon(Icons.train_outlined),
-                  title: Text('Rejse $id'),
-                  subtitle: Text('$start -> $end'),
+                  title: Text(_journeyLabel(journey)),
+                  subtitle: Text(
+                    start.isNotEmpty || end.isNotEmpty
+                        ? '$start -> $end'
+                        : 'Aktiv rejse',
+                  ),
                   trailing: TextButton(
                     onPressed: deviceId == null
                         ? null
