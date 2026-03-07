@@ -48,7 +48,7 @@ final class AdminChatExplanationService
                 'status' => 'disabled',
                 'provider' => 'groq',
                 'model' => null,
-                'message' => 'Groq-forklaring er deaktiveret. Sæt `GROQ_API_KEY` for at aktivere read-only forklaringer.',
+                'message' => 'Groq-forklaring er deaktiveret. Sæt `GROQ_API_KEY` eller brug OpenAI-kompatibel Groq-konfiguration for at aktivere read-only forklaringer.',
                 'text' => null,
             ];
         }
@@ -226,7 +226,17 @@ final class AdminChatExplanationService
 
     private function resolveApiKey(): string
     {
-        return $this->envAny(['GROQ_API_KEY', 'GROQ_KEY', 'GROQ_TOKEN', 'GROQ_API_TOKEN']);
+        $groqKey = $this->envAny(['GROQ_API_KEY', 'GROQ_KEY', 'GROQ_TOKEN', 'GROQ_API_TOKEN']);
+        if ($groqKey !== '') {
+            return $groqKey;
+        }
+
+        $openAiBase = $this->envAny(['OPENAI_BASE_URL']);
+        if ($openAiBase !== '' && stripos($openAiBase, 'groq.com') !== false) {
+            return $this->envAny(['OPENAI_API_KEY', 'OPENAI_KEY']);
+        }
+
+        return '';
     }
 
     private function resolveModel(): string
