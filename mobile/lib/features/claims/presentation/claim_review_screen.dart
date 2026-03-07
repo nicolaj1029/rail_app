@@ -36,6 +36,10 @@ class ClaimReviewScreen extends StatelessWidget {
   }
 
   String get routeLabel {
+    final provided = _stringValue(['route_label']);
+    if (provided.isNotEmpty) {
+      return provided;
+    }
     final dep = _stringValue(['dep_station', 'start']);
     final arr = _stringValue(['arr_station', 'end']);
     if (dep.isEmpty && arr.isEmpty) {

@@ -5,6 +5,8 @@ use App\Controller\AppController;
 
 class ShadowJourneysController extends AppController
 {
+    private const JOURNEY_GAP_SECONDS = 900;
+
     public function initialize(): void
     {
         parent::initialize();
@@ -42,7 +44,7 @@ class ShadowJourneysController extends AppController
                     }
                 }
                 usort($pings, fn($a, $b) => strcmp($a['t'], $b['t']));
-                $gapSeconds = 900; // 15 min
+                $gapSeconds = self::JOURNEY_GAP_SECONDS;
                 $current = null;
                 foreach ($pings as $p) {
                     $t = strtotime($p['t']);
@@ -57,7 +59,7 @@ class ShadowJourneysController extends AppController
                     }
                     $prevT = strtotime($current['end']);
                     if (($t - $prevT) > $gapSeconds) {
-                        $journeys[] = $this->summarizeJourney($current);
+                        $journeys[] = $this->summarizeJourney($current, $deviceId, false);
                         $current = [
                             'id' => 'j-' . dechex($t),
                             'start' => gmdate('c', $t),
@@ -70,7 +72,7 @@ class ShadowJourneysController extends AppController
                     }
                 }
                 if ($current !== null) {
-                    $journeys[] = $this->summarizeJourney($current);
+                    $journeys[] = $this->summarizeJourney($current, $deviceId, (time() - strtotime($current['end'])) <= $gapSeconds);
                 }
             }
         }
@@ -81,19 +83,47 @@ class ShadowJourneysController extends AppController
         ]);
     }
 
-    private function summarizeJourney(array $j): array
+    private function summarizeJourney(array $j, string $deviceId, bool $active = false): array
     {
         $points = $j['points'] ?? [];
         $from = $points[0] ?? null;
         $to = $points[count($points)-1] ?? null;
+        $depLabel = $this->formatPointLabel($from);
+        $arrLabel = $this->formatPointLabel($to);
+
         return [
             'id' => $j['id'],
+            'device_id' => $deviceId,
             'start' => $j['start'],
             'end' => $j['end'],
+            'dep_time' => $j['start'],
+            'arr_time' => $j['end'],
+            'dep_station' => $depLabel,
+            'arr_station' => $arrLabel,
+            'route_label' => trim($depLabel . ' -> ' . $arrLabel, ' ->'),
+            'status' => $active ? 'active' : 'review',
+            'delay_minutes' => null,
+            'ticket_type' => '',
             'from' => $from,
             'to' => $to,
             'count' => count($points),
         ];
+    }
+
+    private function formatPointLabel(?array $point): string
+    {
+        if (!$point) {
+            return '';
+        }
+
+        $lat = isset($point['lat']) ? number_format((float)$point['lat'], 4, '.', '') : null;
+        $lon = isset($point['lon']) ? number_format((float)$point['lon'], 4, '.', '') : null;
+
+        if ($lat === null || $lon === null) {
+            return '';
+        }
+
+        return $lat . ', ' . $lon;
     }
 
     /**
@@ -101,7 +131,6 @@ class ShadowJourneysController extends AppController
      */
     public function confirm($id)
     {
-        $id = (int)$id;
         // TODO: Mark journey confirmed and create a case; return case_id
         $caseId = random_int(1000, 9999);
 
@@ -121,19 +150,25 @@ class ShadowJourneysController extends AppController
      */
     public function submit($id)
     {
-        $id = (int)$id;
+        $journeyId = (string)$id;
         $payload = (array)$this->request->getData();
         $dir = ROOT . DS . 'tmp' . DS . 'shadow_cases';
         if (!is_dir($dir)) {
             @mkdir($dir, 0777, true);
         }
-        $file = $dir . DS . 'case_' . $id . '_' . time() . '.json';
-        @file_put_contents($file, json_encode($payload, JSON_PRETTY_PRINT));
+        $safeJourneyId = preg_replace('/[^a-zA-Z0-9_-]/', '_', $journeyId) ?: 'journey';
+        $storedPayload = [
+            'journey_id' => $journeyId,
+            'submitted_at' => gmdate('c'),
+            'payload' => $payload,
+        ];
+        $file = $dir . DS . 'case_' . $safeJourneyId . '_' . time() . '.json';
+        @file_put_contents($file, json_encode($storedPayload, JSON_PRETTY_PRINT));
 
         $this->set([
             'success' => true,
             'data' => [
-                'journey_id' => $id,
+                'journey_id' => $journeyId,
                 'stored' => basename($file),
             ],
         ]);

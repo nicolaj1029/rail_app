@@ -162,6 +162,7 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                 final j = journeys[index];
                 final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
                 final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
+                final routeLabel = (j['route_label'] ?? '').toString();
                 final delay = (j['delay_minutes'] ?? j['delay'] ?? '')
                     .toString();
                 final status = (j['status'] ?? '').toString();
@@ -177,9 +178,11 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                 return Card(
                   child: ListTile(
                     title: Text(
-                      dep.isEmpty && arr.isEmpty
-                          ? 'Ukendt rejse'
-                          : '$dep -> $arr',
+                      routeLabel.isNotEmpty
+                          ? routeLabel
+                          : (dep.isEmpty && arr.isEmpty
+                                ? 'Ukendt rejse'
+                                : '$dep -> $arr'),
                     ),
                     subtitle: Text(
                       delay.isEmpty

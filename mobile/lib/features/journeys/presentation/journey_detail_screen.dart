@@ -116,12 +116,13 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   Widget build(BuildContext context) {
     final dep = _stringValue(['dep_station', 'start']);
     final arr = _stringValue(['arr_station', 'end']);
+    final providedRoute = _stringValue(['route_label']);
     final delay = _intValue(['delay_minutes', 'delay']);
     final status = _stringValue(['status']).toLowerCase();
     final deviceId = _stringValue(['device_id']);
-    final routeLabel = dep.isEmpty && arr.isEmpty
-        ? 'Ukendt rejse'
-        : '$dep -> $arr';
+    final routeLabel = providedRoute.isNotEmpty
+        ? providedRoute
+        : (dep.isEmpty && arr.isEmpty ? 'Ukendt rejse' : '$dep -> $arr');
     final statusText = _statusText(status);
     final nextAction = _nextActionText(status);
     final canShowReroute = deviceId.isNotEmpty && arr.isNotEmpty;
