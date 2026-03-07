@@ -8,6 +8,8 @@ import 'package:mobile/config.dart';
 import 'package:mobile/features/case_close/data/evaluation_service.dart';
 import 'package:mobile/features/case_close/data/receipt_service.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
+import 'package:mobile/services/stations_service.dart';
+import 'package:mobile/shared/widgets/station_lookup_field.dart';
 import 'package:mobile/shared/services/tickets_service.dart';
 
 class CaseCloseScreen extends StatefulWidget {
@@ -48,6 +50,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
   final ImagePicker _picker = ImagePicker();
   late final TicketsService ticketsService;
   late final EvaluationService evaluationService;
+  late final StationsService stationsService;
   final ReceiptService receiptService = ReceiptService();
 
   // Step 5: assistance flags
@@ -118,6 +121,7 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     ticketTypeCtrl.text = (j['ticket_type'] ?? '').toString();
     ticketsService = TicketsService(baseUrl: apiBaseUrl);
     evaluationService = EvaluationService(baseUrl: apiBaseUrl);
+    stationsService = StationsService(baseUrl: apiBaseUrl);
   }
 
   @override
@@ -640,17 +644,15 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                             setState(() => travelStatus = value),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
+                      StationLookupField(
                         controller: depCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Afgang station',
-                        ),
+                        label: 'Afgang station',
+                        stationsService: stationsService,
                       ),
-                      TextField(
+                      StationLookupField(
                         controller: arrCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Ankomst station',
-                        ),
+                        label: 'Ankomst station',
+                        stationsService: stationsService,
                       ),
                       TextField(
                         controller: depTimeCtrl,
@@ -699,11 +701,10 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                       if (missedConnection)
-                        TextField(
+                        StationLookupField(
                           controller: connectingStationCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Station for den missede forbindelse',
-                          ),
+                          label: 'Station for den missede forbindelse',
+                          stationsService: stationsService,
                         ),
                       if (travelStatus == 'completed')
                         TextField(
