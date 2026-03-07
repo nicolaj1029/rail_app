@@ -2,10 +2,12 @@
 namespace App\Controller\Api;
 
 use App\Controller\AppController;
+use App\Service\StationGeocoder;
 
 class ShadowJourneysController extends AppController
 {
     private const JOURNEY_GAP_SECONDS = 900;
+    private ?StationGeocoder $stationGeocoder = null;
 
     public function initialize(): void
     {
@@ -116,6 +118,14 @@ class ShadowJourneysController extends AppController
             return '';
         }
 
+        $nearest = $this->stationGeocoder()->nearest(
+            (float)($point['lat'] ?? 0.0),
+            (float)($point['lon'] ?? 0.0),
+        );
+        if ($nearest !== null) {
+            return (string)$nearest['name'];
+        }
+
         $lat = isset($point['lat']) ? number_format((float)$point['lat'], 4, '.', '') : null;
         $lon = isset($point['lon']) ? number_format((float)$point['lon'], 4, '.', '') : null;
 
@@ -124,6 +134,11 @@ class ShadowJourneysController extends AppController
         }
 
         return $lat . ', ' . $lon;
+    }
+
+    private function stationGeocoder(): StationGeocoder
+    {
+        return $this->stationGeocoder ??= new StationGeocoder();
     }
 
     /**

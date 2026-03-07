@@ -238,6 +238,7 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/shadow/cases', ['controller' => 'ShadowCases', 'action' => 'index']);
         // Stations endpoint for geofencing
         $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
+        $builder->connect('/stations/search', ['controller' => 'Stations', 'action' => 'search']);
         // Events logging
         $builder->connect('/events', ['controller' => 'Events', 'action' => 'index']);
         $builder->connect('/events/add', ['controller' => 'Events', 'action' => 'add']);
