@@ -14,7 +14,7 @@ final class ApiCorsMiddleware implements MiddlewareInterface
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $path = $request->getUri()->getPath();
-        if (!str_starts_with($path, '/api/')) {
+        if (!$this->isApiPath($path)) {
             return $handler->handle($request);
         }
 
@@ -22,7 +22,7 @@ final class ApiCorsMiddleware implements MiddlewareInterface
         $allowedOrigin = $this->allowedOrigin($origin);
 
         if (strtoupper($request->getMethod()) === 'OPTIONS') {
-            return $this->withCorsHeaders(new Response(204), $allowedOrigin);
+            return $this->withCorsHeaders(new Response(['status' => 204]), $allowedOrigin);
         }
 
         $response = $handler->handle($request);
@@ -41,6 +41,11 @@ final class ApiCorsMiddleware implements MiddlewareInterface
         }
 
         return '';
+    }
+
+    private function isApiPath(string $path): bool
+    {
+        return (bool)preg_match('#(?:^|/)api(?:/|$)#', $path);
     }
 
     private function withCorsHeaders(ResponseInterface $response, string $allowedOrigin): ResponseInterface

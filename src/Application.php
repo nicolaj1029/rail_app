@@ -98,7 +98,7 @@ class Application extends BaseApplication
                 // Skip CSRF for any /api/* path
                 $csrf->skipCheckCallback(function ($request) {
                     $path = $request->getUri()->getPath();
-                    return str_starts_with($path, '/api/');
+                    return (bool)preg_match('#(?:^|/)api(?:/|$)#', $path);
                 });
                 return $csrf;
             })());
