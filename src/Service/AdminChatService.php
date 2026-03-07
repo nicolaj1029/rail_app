@@ -530,6 +530,7 @@ final class AdminChatService
         $summary = $this->buildSummary($flow);
         $citations = $this->buildCitations($question);
         $explanation = (new AdminChatExplanationService())->build($session, $question, $summary, $preview, $citations);
+        $uploadHint = $this->buildUploadHint($flow, $question);
         $stepper = (new FlowStepsService())->buildSteps((array)($flow['flags'] ?? []), 'start');
         $visibleSteps = [];
         foreach ($stepper as $step) {
@@ -554,8 +555,45 @@ final class AdminChatService
             'preview' => $preview,
             'citations' => $citations,
             'explanation' => $explanation,
+            'upload_hint' => $uploadHint,
             'visible_steps' => $visibleSteps,
             'flow' => $flow,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @param array<string,mixed>|null $question
+     * @return array<string,mixed>|null
+     */
+    private function buildUploadHint(array $flow, ?array $question): ?array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $ticketMode = (string)($form['ticket_upload_mode'] ?? '');
+        $uploaded = trim((string)($form['_ticketOriginalName'] ?? '')) !== '';
+        if ($uploaded) {
+            return [
+                'tone' => 'done',
+                'title' => 'Upload registreret',
+                'text' => 'Billet/dokument er uploadet: ' . (string)$form['_ticketOriginalName'],
+            ];
+        }
+
+        if (!in_array($ticketMode, ['ticket', 'seasonpass'], true)) {
+            return null;
+        }
+
+        $questionKey = $this->normalizeQuestionKey((string)($question['key'] ?? ''));
+        if (!in_array($questionKey, ['', 'operator', 'operator_country', 'operator_product', 'confirm_step2'], true)) {
+            return null;
+        }
+
+        return [
+            'tone' => 'info',
+            'title' => $ticketMode === 'seasonpass' ? 'Upload season-dokument nu' : 'Upload billet nu',
+            'text' => $ticketMode === 'seasonpass'
+                ? 'Brug upload-feltet nedenfor, hvis du vil lade chatten forsøge at læse operatør, produkt og rejsefelter. Du kan også fortsætte manuelt.'
+                : 'Brug upload-feltet nedenfor, hvis du vil lade chatten forsøge at læse operatør, rute og billetfelter. Du kan også fortsætte manuelt.',
         ];
     }
 
@@ -1510,9 +1548,9 @@ final class AdminChatService
         return match ($key) {
             'travel_state' => 'TRIN 1 opdateret: travel_state=' . (string)$summary['travel_state'],
             'ticket_upload_mode' => match ((string)$summary['ticket_mode']) {
-                'ticket' => 'Sagsgrundlag sat til ticket. Det betyder almindelig billetsag; du kan nu uploade billet direkte i admin-chatten.',
+                'ticket' => 'Sagsgrundlag sat til ticket. Det betyder almindelig billetsag; upload billet via feltet nedenfor nu, eller fortsæt manuelt.',
                 'ticketless' => 'Sagsgrundlag sat til ticketless. Det betyder sag uden billetgrundlag.',
-                'seasonpass' => 'Sagsgrundlag sat til seasonpass. Det betyder pendler/abonnement; du kan nu uploade season-dokument direkte i admin-chatten.',
+                'seasonpass' => 'Sagsgrundlag sat til seasonpass. Det betyder pendler/abonnement; upload season-dokument via feltet nedenfor nu, eller fortsæt manuelt.',
                 default => 'Billet-type sat til ' . (string)$summary['ticket_mode'],
             },
             'operator' => 'Operatoer gemt: ' . (string)$summary['operator'],

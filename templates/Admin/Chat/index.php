@@ -25,6 +25,8 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
   .admin-muted { color:#666; font-size:13px; }
   .admin-section-title { margin:0 0 10px; font-size:16px; color:#111; }
   .admin-question { margin-top:12px; padding:12px; border-left:4px solid #0a6fd8; background:#f5faff; border-radius:8px; }
+  .admin-upload-hint { margin-top:12px; padding:12px; border-radius:8px; border:1px solid #bfdbfe; background:#eff6ff; }
+  .admin-upload-hint.done { border-color:#bbf7d0; background:#f0fdf4; }
   .admin-steps { margin:0; padding-left:18px; font-size:13px; }
   .admin-citation { border-top:1px solid #eee; padding-top:10px; margin-top:10px; }
   .admin-citation:first-child { margin-top:0; padding-top:0; border-top:0; }
@@ -68,6 +70,8 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
       <div data-chat-question class="admin-muted">Ingen aktivt spoergsmaal.</div>
       <div class="admin-chat-actions" data-chat-choices></div>
     </div>
+
+    <div class="admin-upload-hint" data-chat-upload-hint style="display:none;"></div>
 
     <form class="admin-chat-form" data-chat-form>
       <input type="text" name="message" placeholder="Skriv svar eller brug quick replies" autocomplete="off">
@@ -133,6 +137,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
   const previewActionsEl = root.querySelector('[data-chat-preview-actions]');
   const previewBlockersEl = root.querySelector('[data-chat-preview-blockers]');
   const explanationEl = root.querySelector('[data-chat-explanation]');
+  const uploadHintEl = root.querySelector('[data-chat-upload-hint]');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
@@ -328,6 +333,20 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
       '<div class="admin-explanation-body">' + escapeHtml(text || 'Ingen forklaring genereret endnu.') + '</div>';
   }
 
+  function renderUploadHint(uploadHint) {
+    if (!uploadHint || !uploadHint.text) {
+      uploadHintEl.style.display = 'none';
+      uploadHintEl.className = 'admin-upload-hint';
+      uploadHintEl.innerHTML = '';
+      return;
+    }
+    uploadHintEl.style.display = '';
+    uploadHintEl.className = 'admin-upload-hint' + ((uploadHint.tone === 'done') ? ' done' : '');
+    uploadHintEl.innerHTML =
+      '<strong>' + escapeHtml(uploadHint.title || 'Upload') + '</strong>' +
+      '<div class="admin-muted" style="margin-top:6px;">' + escapeHtml(uploadHint.text || '') + '</div>';
+  }
+
   function renderSteps(steps) {
     stepsEl.innerHTML = '';
     (steps || []).forEach((step) => {
@@ -361,6 +380,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     renderSummary(payload.summary || {}, payload.question || null);
     renderPreview(payload.preview || {});
     renderExplanation(payload.explanation || {});
+    renderUploadHint(payload.upload_hint || null);
     renderSteps(payload.visible_steps || []);
     renderCitations(payload.citations || []);
     if (payload.notice) {
