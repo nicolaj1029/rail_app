@@ -207,7 +207,7 @@ final class AdminChatService
         if (($form['ticket_upload_mode'] ?? '') === '') {
             $candidates[] = [
                 'key' => 'ticket_upload_mode',
-                'prompt' => 'Hvilket sagsgrundlag passer? Vae lg ticket (almindelig billetsag, upload sker uden for chatten), ticketless (ingen billetgrundlag) eller seasonpass (pendler/abonnement).',
+                'prompt' => 'Hvilket sagsgrundlag passer? Vae lg ticket (almindelig billetsag, upload kan ske direkte i chatten), ticketless (ingen billetgrundlag) eller seasonpass (pendler/abonnement).',
                 'choices' => [
                     ['value' => 'ticket', 'label' => 'ticket'],
                     ['value' => 'ticketless', 'label' => 'ticketless'],
