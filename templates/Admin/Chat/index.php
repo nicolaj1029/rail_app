@@ -3,6 +3,7 @@
 /** @var array<string,mixed> $chatPayload */
 
 $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
 ?>
 <style>
   .admin-chat-page { display:grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap:16px; align-items:start; }
@@ -48,6 +49,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
      data-message-url="<?= h($this->Url->build(['action' => 'message'])) ?>"
      data-reset-url="<?= h($this->Url->build(['action' => 'reset'])) ?>"
      data-focus-url="<?= h($this->Url->build(['action' => 'focus'])) ?>"
+     data-csrf-token="<?= h($csrfToken) ?>"
      data-initial='<?= h($payloadJson) ?>'>
   <section class="admin-chat-card">
     <h1 style="margin-top:0;">Admin Chat</h1>
@@ -122,6 +124,7 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
   const messageUrl = root.dataset.messageUrl;
   const resetUrl = root.dataset.resetUrl;
   const focusUrl = root.dataset.focusUrl;
+  const csrfToken = root.dataset.csrfToken || '';
 
   let payload = JSON.parse(root.dataset.initial || '{}');
 
@@ -328,7 +331,8 @@ $payloadJson = (string)json_encode($chatPayload, JSON_UNESCAPED_UNICODE | JSON_U
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(csrfToken ? {'X-CSRF-Token': csrfToken} : {})
       },
       body: new URLSearchParams(data)
     });
