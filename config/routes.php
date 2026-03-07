@@ -206,7 +206,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/compute/claim', ['controller' => 'Compute', 'action' => 'claim']);
 
     // Unified pipeline (OCR ingest + all evaluators in one)
-    $builder->connect('/pipeline/run', ['controller' => 'Pipeline', 'action' => 'run']);
+        $builder->connect('/pipeline/run', ['controller' => 'Pipeline', 'action' => 'run']);
+        $builder->connect('/mobile/home', ['controller' => 'MobileHome', 'action' => 'index']);
         $builder->connect('/chat/bootstrap', ['controller' => 'Chat', 'action' => 'bootstrap']);
         $builder->connect('/chat/message', ['controller' => 'Chat', 'action' => 'message']);
         $builder->connect('/chat/reset', ['controller' => 'Chat', 'action' => 'reset']);

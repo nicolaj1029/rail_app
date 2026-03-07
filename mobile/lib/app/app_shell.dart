@@ -4,6 +4,7 @@ import 'package:mobile/config.dart';
 import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/claims/presentation/claims_screen.dart';
+import 'package:mobile/features/home/data/home_service.dart';
 import 'package:mobile/features/home/presentation/home_screen.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
 import 'package:mobile/features/journeys/presentation/journeys_list_screen.dart';
@@ -26,11 +27,13 @@ class _AppShellState extends State<AppShell> {
   String? error;
   String? deviceId;
   List<Map<String, dynamic>> journeys = [];
+  Map<String, dynamic> homeSummary = const {};
   CommuterProfile commuterProfile = CommuterProfile.empty();
 
   late final ApiClient api;
   late final DeviceService deviceService;
   late final JourneysService journeysService;
+  late final HomeService homeService;
   late final CommuterProfileStore commuterProfileStore;
 
   bool get commuterMode =>
@@ -42,6 +45,7 @@ class _AppShellState extends State<AppShell> {
     api = ApiClient(baseUrl: apiBaseUrl);
     deviceService = DeviceService(api);
     journeysService = JourneysService(baseUrl: apiBaseUrl);
+    homeService = HomeService(baseUrl: apiBaseUrl);
     commuterProfileStore = CommuterProfileStore();
     _bootstrap();
   }
@@ -55,10 +59,12 @@ class _AppShellState extends State<AppShell> {
       final loadedProfile = await commuterProfileStore.load();
       final id = await deviceService.ensureRegistered();
       final list = await journeysService.list(id);
+      final summary = await homeService.load(id);
       setState(() {
         commuterProfile = loadedProfile;
         deviceId = id;
         journeys = list;
+        homeSummary = summary;
       });
     } catch (e) {
       setState(() {
@@ -87,8 +93,10 @@ class _AppShellState extends State<AppShell> {
     });
     try {
       final list = await journeysService.list(deviceId!);
+      final summary = await homeService.load(deviceId);
       setState(() {
         journeys = list;
+        homeSummary = summary;
       });
     } catch (e) {
       setState(() {
@@ -138,6 +146,7 @@ class _AppShellState extends State<AppShell> {
           error: error,
           deviceId: deviceId,
           journeys: journeys,
+          homeSummary: homeSummary,
           commuterProfile: commuterProfile,
           onRefresh: _bootstrap,
           onNavigate: (index) => setState(() => selectedIndex = index),

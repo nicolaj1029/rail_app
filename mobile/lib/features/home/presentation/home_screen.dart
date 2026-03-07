@@ -7,6 +7,7 @@ class HomeScreen extends StatelessWidget {
   final String? error;
   final String? deviceId;
   final List<Map<String, dynamic>> journeys;
+  final Map<String, dynamic> homeSummary;
   final CommuterProfile commuterProfile;
   final VoidCallback onRefresh;
   final ValueChanged<int> onNavigate;
@@ -19,6 +20,7 @@ class HomeScreen extends StatelessWidget {
     required this.error,
     required this.deviceId,
     required this.journeys,
+    required this.homeSummary,
     required this.commuterProfile,
     required this.onRefresh,
     required this.onNavigate,
@@ -26,17 +28,45 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenPrimaryReview,
   });
 
-  int get readyCount => journeys.where((journey) {
-    final status = (journey['status'] ?? '').toString().toLowerCase();
-    return status == 'ended' || status == 'review' || status == 'ready';
-  }).length;
+  int get readyCount => _summaryInt('ready_count');
+  int get inProgressCount => _summaryInt('active_count');
+  int get submittedCount => _summaryInt('submitted_count');
 
-  int get inProgressCount => journeys.where((journey) {
-    final status = (journey['status'] ?? '').toString().toLowerCase();
-    return status == 'in_progress' ||
-        status == 'detected' ||
-        status == 'active';
-  }).length;
+  int _summaryInt(String key) {
+    final summary =
+        (homeSummary['summary'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final value = summary[key];
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse('${value ?? ''}') ?? 0;
+  }
+
+  List<Map<String, dynamic>> get nextActions =>
+      (homeSummary['next_actions'] as List?)?.cast<Map<String, dynamic>>() ??
+      const <Map<String, dynamic>>[];
+
+  void _handleActionTap(Map<String, dynamic> action) {
+    final kind = (action['kind'] ?? '').toString();
+    switch (kind) {
+      case 'review_journey':
+        if (onOpenPrimaryReview != null) {
+          onOpenPrimaryReview!();
+          return;
+        }
+        onNavigate(1);
+        return;
+      case 'open_claims':
+        onNavigate(2);
+        return;
+      case 'continue_live':
+        onOpenLiveAssist();
+        return;
+      default:
+        onNavigate(1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,10 +132,43 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _MetricCard(
-              label: 'Device',
-              value: deviceId ?? 'ikke registreret',
-              icon: Icons.phone_android_outlined,
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Indsendte sager',
+                    value: submittedCount.toString(),
+                    icon: Icons.description_outlined,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _MetricCard(
+                    label: 'Device',
+                    value: deviceId ?? 'ikke registreret',
+                    icon: Icons.phone_android_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (nextActions.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text(
+              'Næste handling',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            ...nextActions.map(
+              (action) => Card(
+                child: ListTile(
+                  leading: Icon(_actionIcon((action['kind'] ?? '').toString())),
+                  title: Text((action['title'] ?? '').toString()),
+                  subtitle: Text((action['subtitle'] ?? '').toString()),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _handleActionTap(action),
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 20),
@@ -214,6 +277,19 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  IconData _actionIcon(String kind) {
+    switch (kind) {
+      case 'review_journey':
+        return Icons.assignment_outlined;
+      case 'open_claims':
+        return Icons.description_outlined;
+      case 'continue_live':
+        return Icons.play_circle_outline;
+      default:
+        return Icons.chevron_right;
+    }
   }
 }
 
