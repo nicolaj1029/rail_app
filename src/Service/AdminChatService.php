@@ -76,7 +76,8 @@ final class AdminChatService
 
         $flow = $this->readFlow($session);
         $preview = $this->buildPipelinePreview($flow);
-        $question = $this->currentQuestion($flow, $preview);
+        $preferredKey = $this->preferredQuestionKeyFromPreview($preview);
+        $question = $this->currentQuestion($flow, $preview, $preferredKey !== '' ? $preferredKey : null);
         if ($question === null) {
             $history[] = $this->assistantMessage('Der er ikke flere aktive spoergsmaal lige nu. Brug preview-actions eller nulstil chatten.');
             $session->write('admin.chat_history', $history);
