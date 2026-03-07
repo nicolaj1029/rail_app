@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
-import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
+import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
 import 'package:mobile/features/journeys/presentation/journeys_list_screen.dart';
 import 'package:mobile/services/api_client.dart';
@@ -57,35 +57,32 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
     try {
       final devSvc = DeviceService(api);
       final id = await devSvc.ensureRegistered();
-      // Fetch stations once for geofencing seeds
       int? count;
       try {
         final stationsSvc = StationsService(baseUrl: api.baseUrl);
         final stations = await stationsSvc.fetchStations();
         count = stations.length;
-      } catch (_) {
-        // ignore stations errors for now
-      }
+      } catch (_) {}
       setState(() {
         deviceId = id;
         tracker = ShadowTracker(api: api, deviceId: id);
         error = null;
         stationCount = count;
       });
-      // Fetch journeys once registered
       await _refreshJourneys();
       await _refreshEvents();
       _updateMode();
     } catch (e) {
-      // Keep UI alive even if backend is unreachable.
       setState(() {
-        error = 'Kunne ikke naa backend: $e';
+        error = 'Kunne ikke nå backend: $e';
       });
     }
   }
 
   Future<void> _toggleTracking() async {
-    if (tracker == null) return;
+    if (tracker == null) {
+      return;
+    }
     if (tracking) {
       await tracker!.stop();
       _cancelNudges();
@@ -113,20 +110,24 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
         'payload': payload,
       });
       setState(() {
-        info = 'Event sent: $type';
+        info = 'Event sendt: $type';
       });
     } catch (e) {
       setState(() {
-        error = 'Event error: $e';
+        error = 'Event-fejl: $e';
       });
     }
   }
 
   Future<void> _uploadTicket(ImageSource source) async {
-    if (deviceId == null || uploadingTicket) return;
+    if (deviceId == null || uploadingTicket) {
+      return;
+    }
     final picker = ImagePicker();
-    final XFile? file = await picker.pickImage(source: source, imageQuality: 85);
-    if (file == null) return;
+    final file = await picker.pickImage(source: source, imageQuality: 85);
+    if (file == null) {
+      return;
+    }
     setState(() {
       uploadingTicket = true;
       info = 'Uploader billet...';
@@ -138,12 +139,14 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       req.fields['device_id'] = deviceId!;
       final bytes = await file.readAsBytes();
       final filename = file.name.isNotEmpty ? file.name : 'ticket.jpg';
-      req.files.add(http.MultipartFile.fromBytes(
-        'image',
-        bytes,
-        filename: filename,
-        contentType: MediaType('image', 'jpeg'),
-      ));
+      req.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          bytes,
+          filename: filename,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
       final streamed = await req.send();
       final res = await http.Response.fromStream(streamed);
       if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -172,17 +175,30 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Self-paid $kind'),
+          title: Text('Selvbetalt $kind'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: amountCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number),
-              TextField(controller: currencyCtrl, decoration: const InputDecoration(labelText: 'Currency')),
+              TextField(
+                controller: amountCtrl,
+                decoration: const InputDecoration(labelText: 'Beløb'),
+                keyboardType: TextInputType.number,
+              ),
+              TextField(
+                controller: currencyCtrl,
+                decoration: const InputDecoration(labelText: 'Valuta'),
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Gem'),
+            ),
           ],
         );
       },
@@ -198,7 +214,9 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   }
 
   Future<void> _refreshJourneys() async {
-    if (deviceId == null) return;
+    if (deviceId == null) {
+      return;
+    }
     try {
       final svc = JourneysService(baseUrl: api.baseUrl);
       final list = await svc.list(deviceId!);
@@ -206,13 +224,13 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
         journeys = list;
       });
       _updateMode();
-    } catch (e) {
-      // ignore for now
-    }
+    } catch (_) {}
   }
 
   Future<void> _refreshEvents() async {
-    if (deviceId == null) return;
+    if (deviceId == null) {
+      return;
+    }
     setState(() {
       loadingEvents = true;
     });
@@ -223,7 +241,6 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
         backendEvents = list;
       });
     } catch (_) {
-      // ignore
     } finally {
       setState(() {
         loadingEvents = false;
@@ -236,20 +253,19 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
       final svc = JourneysService(baseUrl: api.baseUrl);
       await svc.confirm(id);
       setState(() {
-        info = 'Confirmed journey $id';
+        info = 'Bekræftede rejse $id';
       });
     } catch (e) {
       setState(() {
-        error = 'Confirm error: $e';
+        error = 'Confirm-fejl: $e';
       });
     }
   }
 
   void _updateMode() {
-    // simple heuristic: if any journey has status 'ended', set ended, else in_progress if any journey exists
-    String nextMode = 'in_progress';
-    for (final j in journeys) {
-      final status = (j['status'] ?? '').toString().toLowerCase();
+    var nextMode = 'in_progress';
+    for (final journey in journeys) {
+      final status = (journey['status'] ?? '').toString().toLowerCase();
       if (status == 'ended') {
         nextMode = 'ended';
         break;
@@ -265,258 +281,594 @@ class _LiveAssistScreenState extends State<LiveAssistScreen> {
   }
 
   void _maybeAutoNavigate(String mode) {
-    if (!mounted) return;
-    if (mode != 'ended') return;
-    if (_autoNavigated) return;
-    final endedJourneys = journeys.where((j) {
-      final status = (j['status'] ?? '').toString().toLowerCase();
+    if (!mounted || mode != 'ended' || _autoNavigated) {
+      return;
+    }
+    final endedJourneys = journeys.where((journey) {
+      final status = (journey['status'] ?? '').toString().toLowerCase();
       return status == 'ended';
     }).toList();
-    if (endedJourneys.isEmpty) return;
+    if (endedJourneys.isEmpty) {
+      return;
+    }
     _autoNavigated = true;
     final first = endedJourneys.first;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CaseCloseScreen(journey: first),
-        ),
+        MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: first)),
       );
     });
   }
 
   void _scheduleNudges() {
     _cancelNudges();
-    // Demo durations: use minutes in prod (60/90/100)
     final entries = [
       const Duration(minutes: 1),
       const Duration(minutes: 2),
       const Duration(minutes: 3),
     ];
-    for (final d in entries) {
-      _nudgeTimers.add(Timer(d, () {
-        _addNudge('Reminder efter ${d.inMinutes} min: tjek forsinkelse/assistance.');
-      }));
+    for (final duration in entries) {
+      _nudgeTimers.add(
+        Timer(duration, () {
+          _addNudge(
+            'Påmindelse efter ${duration.inMinutes} min: tjek forsinkelse og assistance.',
+          );
+        }),
+      );
     }
   }
 
   void _cancelNudges() {
-    for (final t in _nudgeTimers) {
-      t.cancel();
+    for (final timer in _nudgeTimers) {
+      timer.cancel();
     }
     _nudgeTimers.clear();
   }
 
-  void _addNudge(String msg) {
+  void _addNudge(String message) {
     setState(() {
-      _nudgeMessages.add(msg);
+      _nudgeMessages.add(message);
     });
-    noti?.showNow('Live Assist', msg);
+    noti?.showNow('Live Assist', message);
+  }
+
+  void _openJourneyReview(Map<String, dynamic> journey) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: journey)),
+    );
+  }
+
+  void _showTicketOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Foto billet'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadTicket(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galleri eller fil'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadTicket(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showOfferActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.restaurant_outlined),
+                title: const Text('Mad eller forfriskninger'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('offer_meals', {});
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.hotel_outlined),
+                title: const Text('Hotel eller overnatning'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('offer_hotel', {});
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.alt_route),
+                title: const Text('Transport til destination'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('offer_transport_destination', {});
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.directions_walk_outlined),
+                title: const Text('Transport væk fra toget'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('offer_transport_away', {});
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showExpenseActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.local_taxi_outlined),
+                title: const Text('Taxi'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _promptExpense('taxi');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.directions_bus_outlined),
+                title: const Text('Bus'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _promptExpense('bus');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.hotel_outlined),
+                title: const Text('Hotel'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _promptExpense('hotel');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.restaurant_outlined),
+                title: const Text('Mad'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _promptExpense('meals');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showStatusActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.report_problem_outlined),
+                title: const Text('Strandet'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('status_stranded', {});
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cancel_outlined),
+                title: const Text('Aflyst'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('status_cancelled', {});
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.access_time_outlined),
+                title: const Text('Ny afgangstid'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _postEvent('status_new_departure', {});
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<String> nudges = [];
+    final nudges = <String>[];
     if (tracking && modeLabel == 'in_progress') {
       nudges.add('Tracking aktiv - pings sendes til backend.');
     }
     if (modeLabel == 'ended') {
-      nudges.add('Rejsen er afsluttet - udfyld Case Close.');
+      nudges.add('Rejsen er afsluttet - gennemgå claim og send videre.');
     }
     nudges.addAll(_nudgeMessages.take(3));
 
+    final readyJourneys = journeys.where((journey) {
+      final status = (journey['status'] ?? '').toString().toLowerCase();
+      return ['ended', 'review', 'ready'].contains(status);
+    }).toList();
+
+    final activeJourneys = journeys.where((journey) {
+      final status = (journey['status'] ?? '').toString().toLowerCase();
+      return ['active', 'in_progress', 'detected'].contains(status);
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Live Assist')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Device: ${deviceId ?? 'registering...'}'),
-            if (stationCount != null) ...[
-              const SizedBox(height: 4),
-              Text('Stations loaded: $stationCount'),
-            ],
-            if (info != null) ...[
-              const SizedBox(height: 4),
-              Text(info!, style: const TextStyle(color: Colors.green)),
-            ],
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Text('Mode: '),
-                Text(modeLabel, style: TextStyle(color: modeLabel == 'ended' ? Colors.red : Colors.blue)),
-              ],
-            ),
-            if (nudges.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ...nudges.map((n) => Card(
-                    color: Colors.amber.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(n)),
-                        ],
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rejsehjælp undervejs',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    tracking
+                        ? 'Appen holder styr på rejsen. Registrer kun tilbud, egne udgifter og status.'
+                        : 'Start tracking hvis du vil registrere hændelser live. Ellers kan du stadig gå videre til review senere.',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _StatusPill(
+                        label: tracking ? 'Tracking aktiv' : 'Tracking stoppet',
+                        color: tracking ? Colors.green : Colors.grey,
                       ),
+                      _StatusPill(
+                        label: 'Mode: $modeLabel',
+                        color: modeLabel == 'ended'
+                            ? Colors.orange
+                            : Colors.blue,
+                      ),
+                      if (stationCount != null)
+                        _StatusPill(
+                          label: '$stationCount stationer',
+                          color: Colors.indigo,
+                        ),
+                    ],
+                  ),
+                  if (deviceId != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Device: $deviceId',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  )),
-            ],
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SOS (stub)')));
-                  },
-                  icon: const Icon(Icons.warning),
-                  label: const Text('SOS'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat/support (stub)')));
-                  },
-                  icon: const Icon(Icons.chat),
-                  label: const Text('Support'),
-                ),
-              ],
+                  ],
+                ],
+              ),
             ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                error!,
-                style: const TextStyle(color: Colors.red),
+          ),
+          if (info != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.green.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.check_circle_outline),
+                title: Text(info!),
+              ),
+            ),
+          ],
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.red.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.error_outline),
+                title: Text(error!),
+              ),
+            ),
+          ],
+          if (nudges.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...nudges.map(
+              (message) => Card(
+                color: Colors.amber.shade50,
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline, color: Colors.orange),
+                  title: Text(message),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          Text(
+            'Primære handlinger',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _ActionCard(
+                title: tracking ? 'Stop tracking' : 'Start tracking',
+                subtitle: tracking
+                    ? 'Stop live registrering af denne rejse.'
+                    : 'Start live registrering af rejsen.',
+                icon: tracking
+                    ? Icons.pause_circle_outline
+                    : Icons.play_circle_outline,
+                onTap: deviceId == null ? null : _toggleTracking,
+              ),
+              _ActionCard(
+                title: 'Se rejser',
+                subtitle: 'Åbn registrerede eller detekterede rejser.',
+                icon: Icons.timeline,
+                onTap: deviceId == null
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                JourneysListScreen(deviceId: deviceId!),
+                          ),
+                        );
+                      },
+              ),
+              _ActionCard(
+                title: 'Upload billet',
+                subtitle: uploadingTicket
+                    ? 'Uploader...'
+                    : 'Tilføj billet fra kamera eller galleri.',
+                icon: Icons.confirmation_number_outlined,
+                onTap: deviceId == null || uploadingTicket
+                    ? null
+                    : () => _showTicketOptions(context),
               ),
             ],
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: deviceId == null ? null : _toggleTracking,
-              child: Text(tracking ? 'Stop tracking' : 'Start tracking'),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Live handlinger',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _ActionCard(
+                title: 'Selskabet tilbød noget',
+                subtitle: 'Mad, hotel eller transport videre.',
+                icon: Icons.support_agent_outlined,
+                onTap: deviceId == null
+                    ? null
+                    : () => _showOfferActions(context),
+              ),
+              _ActionCard(
+                title: 'Jeg betalte selv',
+                subtitle: 'Taxi, bus, hotel eller mad.',
+                icon: Icons.receipt_long_outlined,
+                onTap: deviceId == null
+                    ? null
+                    : () => _showExpenseActions(context),
+              ),
+              _ActionCard(
+                title: 'Opdater status',
+                subtitle: 'Strandet, aflyst eller ny afgang.',
+                icon: Icons.report_problem_outlined,
+                onTap: deviceId == null
+                    ? null
+                    : () => _showStatusActions(context),
+              ),
+            ],
+          ),
+          if (readyJourneys.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Klar til review',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: deviceId == null
-                  ? null
-                  : () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => JourneysListScreen(deviceId: deviceId!),
-                        ),
-                      );
-                    },
-              child: const Text('Se rejser / Case Close'),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Hændelseslog'),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: deviceId == null ? null : _refreshEvents,
-                ),
-              ],
-            ),
-            if (loadingEvents) const LinearProgressIndicator(),
-            ...backendEvents.map((e) {
-              final ts = e['received_at'] ?? e['timestamp'] ?? e['ts'] ?? '';
-              final type = e['type'] ?? '';
-              return ListTile(
-                leading: const Icon(Icons.history),
-                title: Text(type.toString()),
-                subtitle: Text(ts.toString()),
-              );
-            }),
-            if (backendEvents.isNotEmpty) const SizedBox(height: 12),
-            if (localEvents.isNotEmpty) ...[
-              const Text('Seneste hændelser'),
-              const SizedBox(height: 8),
-              ...localEvents.reversed.take(5).map((e) {
-                final ts = e['ts'] ?? '';
-                final type = e['type'] ?? '';
-                return ListTile(
-                  leading: const Icon(Icons.timeline),
-                  title: Text(type.toString()),
-                  subtitle: Text(ts.toString()),
-                );
-              }),
-              const SizedBox(height: 24),
-            ],
-            const Text('Offers'),
-            Wrap(
-              spacing: 8,
-              children: [
-                ActionChip(label: const Text('Meals'), onPressed: deviceId == null ? null : () => _postEvent('offer_meals', {})),
-                ActionChip(label: const Text('Hotel'), onPressed: deviceId == null ? null : () => _postEvent('offer_hotel', {})),
-                ActionChip(label: const Text('Transport to destination'), onPressed: deviceId == null ? null : () => _postEvent('offer_transport_destination', {})),
-                ActionChip(label: const Text('Transport away from train'), onPressed: deviceId == null ? null : () => _postEvent('offer_transport_away', {})),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('Self-paid expense'),
-            Wrap(
-              spacing: 8,
-              children: [
-                ActionChip(label: const Text('Taxi'), onPressed: deviceId == null ? null : () => _promptExpense('taxi')),
-                ActionChip(label: const Text('Bus'), onPressed: deviceId == null ? null : () => _promptExpense('bus')),
-                ActionChip(label: const Text('Hotel'), onPressed: deviceId == null ? null : () => _promptExpense('hotel')),
-                ActionChip(label: const Text('Meals'), onPressed: deviceId == null ? null : () => _promptExpense('meals')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('Billet'),
-            Wrap(
-              spacing: 8,
-              children: [
-                ActionChip(
-                  label: const Text('Foto billet'),
-                  onPressed: (deviceId == null || uploadingTicket) ? null : () => _uploadTicket(ImageSource.camera),
-                ),
-                ActionChip(
-                  label: const Text('Galleri/fil'),
-                  onPressed: (deviceId == null || uploadingTicket) ? null : () => _uploadTicket(ImageSource.gallery),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('Status'),
-            Wrap(
-              spacing: 8,
-              children: [
-                ActionChip(label: const Text('Stranded'), onPressed: deviceId == null ? null : () => _postEvent('status_stranded', {})),
-                ActionChip(label: const Text('Cancelled'), onPressed: deviceId == null ? null : () => _postEvent('status_cancelled', {})),
-                ActionChip(label: const Text('New departure time'), onPressed: deviceId == null ? null : () => _postEvent('status_new_departure', {})),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Detected journeys'),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: deviceId == null ? null : _refreshJourneys,
-                ),
-              ],
-            ),
-            ...journeys.map((j) {
-              final id = (j['id'] ?? '').toString();
-              final start = (j['start'] ?? '').toString();
-              final end = (j['end'] ?? '').toString();
+            ...readyJourneys.take(3).map((journey) {
+              final id = (journey['id'] ?? '').toString();
+              final start = (journey['start'] ?? '').toString();
+              final end = (journey['end'] ?? '').toString();
               return Card(
                 child: ListTile(
-                  title: Text('Journey $id'),
-                  subtitle: Text('$start -> $end (${j['count'] ?? ''} pings)'),
+                  leading: const Icon(Icons.assignment_outlined),
+                  title: Text('Rejse $id'),
+                  subtitle: Text('$start -> $end'),
+                  trailing: const Text('Review'),
+                  onTap: () => _openJourneyReview(journey),
+                ),
+              );
+            }),
+          ],
+          if (activeJourneys.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Aktive rejser',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            ...activeJourneys.take(3).map((journey) {
+              final id = (journey['id'] ?? '').toString();
+              final start = (journey['start'] ?? '').toString();
+              final end = (journey['end'] ?? '').toString();
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.train_outlined),
+                  title: Text('Rejse $id'),
+                  subtitle: Text('$start -> $end'),
                   trailing: TextButton(
-                    onPressed: deviceId == null ? null : () => _confirmJourney(id),
+                    onPressed: deviceId == null
+                        ? null
+                        : () => _confirmJourney(id),
                     child: const Text('Confirm'),
                   ),
                 ),
               );
             }),
           ],
+          const SizedBox(height: 16),
+          ExpansionTile(
+            title: const Text('Aktivitetslog'),
+            subtitle: const Text('Åbn kun hvis du vil se rå events'),
+            children: [
+              if (loadingEvents) const LinearProgressIndicator(),
+              ...backendEvents.map((event) {
+                final ts =
+                    event['received_at'] ??
+                    event['timestamp'] ??
+                    event['ts'] ??
+                    '';
+                final type = event['type'] ?? '';
+                return ListTile(
+                  leading: const Icon(Icons.history),
+                  title: Text(type.toString()),
+                  subtitle: Text(ts.toString()),
+                );
+              }),
+              ...localEvents.reversed.take(5).map((event) {
+                final ts = event['ts'] ?? '';
+                final type = event['type'] ?? '';
+                return ListTile(
+                  leading: const Icon(Icons.timeline),
+                  title: Text(type.toString()),
+                  subtitle: Text(ts.toString()),
+                );
+              }),
+              if (backendEvents.isEmpty && localEvents.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.timeline),
+                  title: Text('Ingen events endnu'),
+                ),
+            ],
+          ),
+          ExpansionTile(
+            title: const Text('Avanceret'),
+            subtitle: const Text('Rå handlinger og tekniske genveje'),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('SOS (stub)')),
+                      );
+                    },
+                    icon: const Icon(Icons.warning),
+                    label: const Text('SOS'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Chat/support (stub)')),
+                      );
+                    },
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Support'),
+                  ),
+                  TextButton.icon(
+                    onPressed: deviceId == null ? null : _refreshEvents,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Opdatér events'),
+                  ),
+                  TextButton.icon(
+                    onPressed: deviceId == null ? null : _refreshJourneys,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Opdatér rejser'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _StatusPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text(label),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.25)),
+      labelStyle: TextStyle(color: color),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _ActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 28),
+                const SizedBox(height: 12),
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(subtitle),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -170,6 +170,17 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     if (step < currentStep) return StepState.complete;
     if (step == currentStep) return StepState.editing;
     return StepState.indexed;
+  }
+
+  String _journeyValue(String key) {
+    final value = widget.journey[key];
+    return value == null ? '' : value.toString();
+  }
+
+  void _jumpToStep(int step) {
+    setState(() {
+      currentStep = step;
+    });
   }
 
   void _addReceipt() {
@@ -510,707 +521,847 @@ class _CaseCloseScreenState extends State<CaseCloseScreen> {
     final isCancellation = eventType == 'cancellation';
     final isMissed = missedConnection;
     final artEligible = isCancellation || isMissed || effectiveDelay >= 60;
+    final routeLabel =
+        '${_journeyValue('dep_station').isEmpty ? _journeyValue('start') : _journeyValue('dep_station')} -> ${_journeyValue('arr_station').isEmpty ? _journeyValue('end') : _journeyValue('arr_station')}';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Case Close')),
-      body: Stepper(
-        type: StepperType.vertical,
-        currentStep: currentStep,
-        onStepContinue: _next,
-        onStepCancel: _back,
-        controlsBuilder: (context, details) {
-          final isLast = currentStep == 6;
-          return Row(
-            children: [
-              ElevatedButton(
-                onPressed: details.onStepContinue,
-                child: Text(isLast ? 'Indsend' : 'Næste'),
-              ),
-              const SizedBox(width: 8),
-              if (currentStep > 0)
-                TextButton(
-                  onPressed: details.onStepCancel,
-                  child: const Text('Tilbage'),
-                ),
-            ],
-          );
-        },
-        steps: [
-          Step(
-            title: const Text('1. Rejsestatus'),
-            state: _stateFor(0),
-            isActive: currentStep >= 0,
-            content: Column(
-              children: [
-                RadioListTile<String>(
-                  title: const Text('Rejsen er afsluttet'),
-                  value: 'completed',
-                  groupValue: travelStatus,
-                  onChanged: (v) => setState(() => travelStatus = v),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Rejsen er i gang'),
-                  value: 'in_progress',
-                  groupValue: travelStatus,
-                  onChanged: (v) => setState(() => travelStatus = v),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: depCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Afgang station',
-                  ),
-                ),
-                TextField(
-                  controller: arrCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Ankomst station',
-                  ),
-                ),
-                TextField(
-                  controller: depTimeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Planlagt afgang (ISO)',
-                  ),
-                ),
-                TextField(
-                  controller: arrTimeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Planlagt ankomst (ISO)',
-                  ),
-                ),
-                TextField(
-                  controller: ticketTypeCtrl,
-                  decoration: const InputDecoration(labelText: 'Billettype'),
-                ),
-              ],
-            ),
-          ),
-          Step(
-            title: const Text('2. Hændelse og forsinkelse'),
-            state: _stateFor(1),
-            isActive: currentStep >= 1,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RadioListTile<String>(
-                  title: const Text('Forsinkelse'),
-                  value: 'delay',
-                  groupValue: eventType,
-                  onChanged: (v) => setState(() => eventType = v),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Aflysning'),
-                  value: 'cancellation',
-                  groupValue: eventType,
-                  onChanged: (v) => setState(() => eventType = v),
-                ),
-                CheckboxListTile(
-                  title: const Text('Mistet forbindelse (kan kombineres)'),
-                  value: missedConnection,
-                  onChanged: (v) =>
-                      setState(() => missedConnection = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                if (missedConnection)
-                  TextField(
-                    controller: connectingStationCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Station for den missede forbindelse',
+      appBar: AppBar(title: const Text('Review og send')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      routeLabel.trim() == '->' ? 'Ukendt rute' : routeLabel,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  ),
-                if (travelStatus == 'completed')
-                  TextField(
-                    controller: delayCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Faktisk forsinkelse (min)',
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _SummaryChip(
+                          label: travelStatus == 'in_progress'
+                              ? 'Rejse i gang'
+                              : 'Review',
+                        ),
+                        _SummaryChip(
+                          label: eventType == null
+                              ? 'Ingen hændelse valgt'
+                              : 'Hændelse: $eventType',
+                        ),
+                        _SummaryChip(label: 'Delay: $effectiveDelay min'),
+                        _SummaryChip(
+                          label: artEligible
+                              ? 'Art.18/20 mulig'
+                              : 'Mangler art.18/20 trigger',
+                        ),
+                      ],
                     ),
-                    keyboardType: TextInputType.number,
-                  )
-                else
-                  TextField(
-                    controller: expectedDelayCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Forventet forsinkelse (min)',
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Hold denne side som avanceret review. Udfyld kun de sektioner, der faktisk ændrer resultatet.',
                     ),
-                    keyboardType: TextInputType.number,
-                  ),
-                const SizedBox(height: 8),
-                Text(
-                  artEligible
-                      ? 'Art.18/20: Klar til kompensation/assistance (aflysning/missed eller ≥60 min).'
-                      : 'Art.18/20: Aktiveres ved aflysning/missed eller forsinkelse ≥60 min.',
-                  style: TextStyle(
-                    color: artEligible ? Colors.green : Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Step(
-            title: const Text('3. Art.9 – PMR og cykel'),
-            state: _stateFor(2),
-            isActive: currentStep >= 2,
-            content: Column(
-              children: [
-                CheckboxListTile(
-                  title: const Text('Person med nedsat mobilitet (PMR)?'),
-                  value: pmr,
-                  onChanged: (v) => setState(() => pmr = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                if (pmr)
-                  CheckboxListTile(
-                    title: const Text('Var assistancen forudbestilt?'),
-                    value: pmrPrebooked,
-                    onChanged: (v) => setState(() => pmrPrebooked = v ?? false),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                CheckboxListTile(
-                  title: const Text('Rejser du med cykel?'),
-                  value: withBike,
-                  onChanged: (v) => setState(() => withBike = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              ],
-            ),
-          ),
-          Step(
-            title: const Text('4. Art.18 (refusion/omlægning)'),
-            state: _stateFor(3),
-            isActive: currentStep >= 3,
-            content: Column(
-              children: [
-                if (!artEligible)
-                  const Text(
-                    'Art.18 er normalt kun relevant ved aflysning/missed eller forsinkelse ≥60 min.',
-                    style: TextStyle(color: Colors.orange),
-                  ),
-                SwitchListTile(
-                  title: const Text(
-                    'Aflys hele rejsen og retur til udgangspunkt',
-                  ),
-                  value: tripCancelReturn,
-                  onChanged: artEligible
-                      ? (v) => setState(() => tripCancelReturn = v)
-                      : null,
-                ),
-                const Divider(),
-                const Text('Refusion'),
-                RadioListTile<String>(
-                  title: const Text('Anmodet om refusion: Ja'),
-                  value: 'yes',
-                  groupValue: refundRequested,
-                  onChanged: (v) =>
-                      setState(() => refundRequested = v ?? 'yes'),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Anmodet om refusion: Nej'),
-                  value: 'no',
-                  groupValue: refundRequested,
-                  onChanged: (v) => setState(() => refundRequested = v ?? 'no'),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Anmodet om refusion: Ved ikke'),
-                  value: 'unknown',
-                  groupValue: refundRequested,
-                  onChanged: (v) =>
-                      setState(() => refundRequested = v ?? 'unknown'),
-                ),
-                if (refundRequested == 'yes')
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Refusionstype (kontant/voucher/andet)',
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => _jumpToStep(1),
+                          child: const Text('Hændelse'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => _jumpToStep(4),
+                          child: const Text('Udlæg / assistance'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => _jumpToStep(5),
+                          child: const Text('Billetter'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => _jumpToStep(6),
+                          child: const Text('Indsend'),
+                        ),
+                      ],
                     ),
-                    onChanged: (v) => refundForm = v,
-                  ),
-                const Divider(),
-                const Text('Omlægning'),
-                CheckboxListTile(
-                  title: const Text('Omlægning ved først givne lejlighed'),
-                  value: rerouteSame,
-                  onChanged: (v) => setState(() => rerouteSame = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                CheckboxListTile(
-                  title: const Text('Omlægning til senere tidspunkt'),
-                  value: rerouteLater,
-                  onChanged: (v) => setState(() => rerouteLater = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: informedWithin100,
-                  decoration: const InputDecoration(
-                    labelText: 'Informerede operatøren inden for 100 min?',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'yes', child: Text('Ja')),
-                    DropdownMenuItem(value: 'no', child: Text('Nej')),
-                    DropdownMenuItem(value: 'unknown', child: Text('Ved ikke')),
                   ],
-                  onChanged: (v) =>
-                      setState(() => informedWithin100 = v ?? 'unknown'),
                 ),
-                const Divider(),
-                SwitchListTile(
-                  title: const Text('Ekstra udgifter ved omlægning'),
-                  value: extraCosts,
-                  onChanged: (v) => setState(() => extraCosts = v),
-                ),
-                if (extraCosts) ...[
-                  TextField(
-                    controller: extraCostAmountCtrl,
-                    decoration: const InputDecoration(labelText: 'Beløb'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  TextField(
-                    controller: extraCostCurrencyCtrl,
-                    decoration: const InputDecoration(labelText: 'Valuta'),
-                  ),
-                ],
-                CheckboxListTile(
-                  title: const Text('Nedklassificeret under omlægning'),
-                  value: downgradedDuringReroute,
-                  onChanged: (v) =>
-                      setState(() => downgradedDuringReroute = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              ],
+              ),
             ),
           ),
-          Step(
-            title: const Text('5. Art.20 og udlæg'),
-            state: _stateFor(4),
-            isActive: currentStep >= 4,
-            content: Column(
-              children: [
-                if (!artEligible)
-                  const Text(
-                    'Assistance (Art.20) kræver aflysning/missed eller forsinkelse ≥60 min.',
-                    style: TextStyle(color: Colors.orange),
-                  ),
-                SwitchListTile(
-                  title: const Text(
-                    'Spring over assistance (intet at indtaste)',
-                  ),
-                  value: skipAssistance,
-                  onChanged: (v) => setState(() => skipAssistance = v),
-                ),
-                if (!skipAssistance) ...[
-                  SwitchListTile(
-                    title: const Text('Fik du mad/forfriskninger?'),
-                    value: gotMeals,
-                    onChanged: artEligible
-                        ? (v) => setState(() => gotMeals = v)
-                        : null,
-                  ),
-                  SwitchListTile(
-                    title: const Text('Fik du hotel/overnatning?'),
-                    value: gotHotel,
-                    onChanged: artEligible
-                        ? (v) => setState(() => gotHotel = v)
-                        : null,
-                  ),
-                  SwitchListTile(
-                    title: const Text(
-                      'Fik du transport (til/fra/destination)?',
+          Expanded(
+            child: Stepper(
+              type: StepperType.vertical,
+              currentStep: currentStep,
+              onStepContinue: _next,
+              onStepCancel: _back,
+              controlsBuilder: (context, details) {
+                final isLast = currentStep == 6;
+                return Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: details.onStepContinue,
+                      child: Text(isLast ? 'Indsend' : 'Næste'),
                     ),
-                    value: gotTransport,
-                    onChanged: artEligible
-                        ? (v) => setState(() => gotTransport = v)
-                        : null,
-                  ),
-                  CheckboxListTile(
-                    title: const Text(
-                      'Har du haft udgifter (taxa/bus/hotel/mad)?',
-                    ),
-                    value: ownExpenses,
-                    onChanged: (v) => setState(() {
-                      ownExpenses = v ?? false;
-                      skipReceipts = !(v ?? false);
-                    }),
-                  ),
-                  if (ownExpenses && !skipReceipts) ...[
-                    TextButton.icon(
-                      onPressed: _addReceipt,
-                      icon: const Icon(Icons.upload),
-                      label: const Text('Tilføj kvittering'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        _addReceipt();
-                        if (receipts.isNotEmpty) {
-                          final r = receipts.last;
-                          r.typeCtrl.text = 'hotel';
-                          r.amountCtrl.text = '450';
-                          r.currencyCtrl.text = 'DKK';
-                          r.dateCtrl.text = DateTime.now().toIso8601String();
-                        }
-                      },
-                      child: const Text('Scan (stub) - autofyld demo'),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        _addReceipt();
-                        if (receipts.isEmpty) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Scanner kvittering...'),
-                          ),
-                        );
-                        final parsed = await receiptService.scanAndParse();
-                        final r = receipts.last;
-                        r.typeCtrl.text = (parsed['type'] ?? '').toString();
-                        r.amountCtrl.text = (parsed['amount'] ?? '').toString();
-                        r.currencyCtrl.text = (parsed['currency'] ?? '')
-                            .toString();
-                        r.dateCtrl.text = (parsed['date'] ?? '').toString();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('OCR udfyldt (ML Kit)')),
-                        );
-                      },
-                      child: const Text('Scan (ML Kit)'),
-                    ),
-                    if (receipts.isEmpty)
-                      const Text('Ingen bilag tilføjet endnu.'),
-                    for (int i = 0; i < receipts.length; i++)
-                      _ReceiptTile(
-                        item: receipts[i],
-                        onRemove: () => _removeReceipt(i),
+                    const SizedBox(width: 8),
+                    if (currentStep > 0)
+                      TextButton(
+                        onPressed: details.onStepCancel,
+                        child: const Text('Tilbage'),
                       ),
                   ],
-                  const Divider(),
-                  const Text('Særlige behov / handicapassistance'),
-                  CheckboxListTile(
-                    title: const Text('Kørestol / mobilitetshjælp'),
-                    value: needsWheelchair,
-                    onChanged: (v) =>
-                        setState(() => needsWheelchair = v ?? false),
-                  ),
-                  CheckboxListTile(
-                    title: const Text(
-                      'Ledsager / assistance ved ombordstigning',
-                    ),
-                    value: needsEscort,
-                    onChanged: (v) => setState(() => needsEscort = v ?? false),
-                  ),
-                  TextField(
-                    controller: otherNeedsCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Andre behov (valgfrit)',
-                    ),
-                    maxLines: 2,
-                  ),
-                  CheckboxListTile(
-                    title: const Text(
-                      'Fik du skriftlig bekræftelse på forsinkelsen/aflysningen?',
-                    ),
-                    value: delayConfirmation,
-                    onChanged: (v) =>
-                        setState(() => delayConfirmation = v ?? false),
-                  ),
-                  DropdownButtonFormField<String>(
-                    initialValue: extraordinary,
-                    decoration: const InputDecoration(
-                      labelText:
-                          'Henviste operatøren til ekstraordinære forhold?',
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'yes', child: Text('Ja')),
-                      DropdownMenuItem(value: 'no', child: Text('Nej')),
-                      DropdownMenuItem(
-                        value: 'unknown',
-                        child: Text('Ved ikke'),
+                );
+              },
+              steps: [
+                Step(
+                  title: const Text('1. Rejsestatus'),
+                  state: _stateFor(0),
+                  isActive: currentStep >= 0,
+                  content: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: const Text('Rejsen er afsluttet'),
+                        value: 'completed',
+                        groupValue: travelStatus,
+                        onChanged: (v) => setState(() => travelStatus = v),
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Rejsen er i gang'),
+                        value: 'in_progress',
+                        groupValue: travelStatus,
+                        onChanged: (v) => setState(() => travelStatus = v),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: depCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Afgang station',
+                        ),
+                      ),
+                      TextField(
+                        controller: arrCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Ankomst station',
+                        ),
+                      ),
+                      TextField(
+                        controller: depTimeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Planlagt afgang (ISO)',
+                        ),
+                      ),
+                      TextField(
+                        controller: arrTimeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Planlagt ankomst (ISO)',
+                        ),
+                      ),
+                      TextField(
+                        controller: ticketTypeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Billettype',
+                        ),
                       ),
                     ],
-                    onChanged: (v) =>
-                        setState(() => extraordinary = v ?? 'unknown'),
                   ),
-                  if (extraordinary == 'yes')
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Type (vejr/katastrofe/andet)',
+                ),
+                Step(
+                  title: const Text('2. Hændelse og forsinkelse'),
+                  state: _stateFor(1),
+                  isActive: currentStep >= 1,
+                  content: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RadioListTile<String>(
+                        title: const Text('Forsinkelse'),
+                        value: 'delay',
+                        groupValue: eventType,
+                        onChanged: (v) => setState(() => eventType = v),
                       ),
-                      onChanged: (v) => extraordinaryType = v,
-                    ),
-                ],
-              ],
-            ),
-          ),
-          Step(
-            title: const Text('6. Billetter (upload/manuel)'),
-            state: _stateFor(5),
-            isActive: currentStep >= 5,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Tilføj én eller flere billetter (OCR/PNR).'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: uploadingTicket
-                          ? null
-                          : () => _uploadTicket(ImageSource.camera),
-                      icon: const Icon(Icons.photo_camera),
-                      label: const Text('Upload fra kamera'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: uploadingTicket
-                          ? null
-                          : () => _uploadTicket(ImageSource.gallery),
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Upload fra galleri'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _addTicket,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Tilføj billet manuelt'),
-                    ),
-                  ],
-                ),
-                if (uploadingTicket)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8.0),
-                    child: LinearProgressIndicator(),
+                      RadioListTile<String>(
+                        title: const Text('Aflysning'),
+                        value: 'cancellation',
+                        groupValue: eventType,
+                        onChanged: (v) => setState(() => eventType = v),
+                      ),
+                      CheckboxListTile(
+                        title: const Text(
+                          'Mistet forbindelse (kan kombineres)',
+                        ),
+                        value: missedConnection,
+                        onChanged: (v) =>
+                            setState(() => missedConnection = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      if (missedConnection)
+                        TextField(
+                          controller: connectingStationCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Station for den missede forbindelse',
+                          ),
+                        ),
+                      if (travelStatus == 'completed')
+                        TextField(
+                          controller: delayCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Faktisk forsinkelse (min)',
+                          ),
+                          keyboardType: TextInputType.number,
+                        )
+                      else
+                        TextField(
+                          controller: expectedDelayCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Forventet forsinkelse (min)',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      const SizedBox(height: 8),
+                      Text(
+                        artEligible
+                            ? 'Art.18/20: Klar til kompensation/assistance (aflysning/missed eller ≥60 min).'
+                            : 'Art.18/20: Aktiveres ved aflysning/missed eller forsinkelse ≥60 min.',
+                        style: TextStyle(
+                          color: artEligible ? Colors.green : Colors.orange,
+                        ),
+                      ),
+                    ],
                   ),
-                if (ticketUploadInfo != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(ticketUploadInfo!),
-                  ),
-                const SizedBox(height: 8),
-                for (int i = 0; i < tickets.length; i++)
-                  _TicketTile(
-                    index: i,
-                    item: tickets[i],
-                    onRemove: () => _removeTicket(i),
-                    onSelectForUpload: () =>
-                        setState(() => ticketUploadTargetIndex = i),
-                    selectedForUpload: ticketUploadTargetIndex == i,
-                  ),
-              ],
-            ),
-          ),
-          Step(
-            title: const Text('7. Oversigt og indsend'),
-            state: _stateFor(6),
-            isActive: currentStep >= 6,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!artEligible)
-                  const Text(
-                    'Kompensation (Art.18) kræver aflysning/missed eller forsinkelse ≥60 min.',
-                    style: TextStyle(color: Colors.orange),
-                  ),
-                RadioListTile<String>(
-                  title: const Text('Refusion af billet'),
-                  value: 'refund',
-                  groupValue: compensationChoice,
-                  onChanged: artEligible
-                      ? (v) => setState(() => compensationChoice = v)
-                      : null,
                 ),
-                RadioListTile<String>(
-                  title: const Text('Omlægning nu'),
-                  value: 'reroute_now',
-                  groupValue: compensationChoice,
-                  onChanged: artEligible
-                      ? (v) => setState(() => compensationChoice = v)
-                      : null,
-                ),
-                RadioListTile<String>(
-                  title: const Text('Omlægning senere / voucher'),
-                  value: 'reroute_later',
-                  groupValue: compensationChoice,
-                  onChanged: artEligible
-                      ? (v) => setState(() => compensationChoice = v)
-                      : null,
-                ),
-                TextField(
-                  controller: refundAmountCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Billetpris (hvis refusion)',
+                Step(
+                  title: const Text('3. Art.9 – PMR og cykel'),
+                  state: _stateFor(2),
+                  isActive: currentStep >= 2,
+                  content: Column(
+                    children: [
+                      CheckboxListTile(
+                        title: const Text('Person med nedsat mobilitet (PMR)?'),
+                        value: pmr,
+                        onChanged: (v) => setState(() => pmr = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      if (pmr)
+                        CheckboxListTile(
+                          title: const Text('Var assistancen forudbestilt?'),
+                          value: pmrPrebooked,
+                          onChanged: (v) =>
+                              setState(() => pmrPrebooked = v ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                      CheckboxListTile(
+                        title: const Text('Rejser du med cykel?'),
+                        value: withBike,
+                        onChanged: (v) => setState(() => withBike = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    ],
                   ),
-                  keyboardType: TextInputType.number,
                 ),
-                TextField(
-                  controller: refundCurrencyCtrl,
-                  decoration: const InputDecoration(labelText: 'Valuta'),
-                ),
-                const Divider(),
-                CheckboxListTile(
-                  title: const Text('Jeg ansøger på vegne af en anden'),
-                  value: representative,
-                  onChanged: (v) => setState(() => representative = v ?? false),
-                ),
-                if (representative) ...[
-                  TextField(
-                    controller: repNameCtrl,
-                    decoration: const InputDecoration(labelText: 'Navn'),
-                  ),
-                  TextField(
-                    controller: repEmailCtrl,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                  ),
-                  TextField(
-                    controller: repPhoneCtrl,
-                    decoration: const InputDecoration(labelText: 'Telefon'),
-                  ),
-                  TextField(
-                    controller: repRelationCtrl,
-                    decoration: const InputDecoration(labelText: 'Relation'),
-                  ),
-                  CheckboxListTile(
-                    title: const Text(
-                      'Jeg bekræfter samtykke til at indsende på vegne af passageren',
-                    ),
-                    value: repConsent,
-                    onChanged: (v) => setState(() => repConsent = v ?? false),
-                  ),
-                ],
-                DropdownButtonFormField<String>(
-                  initialValue: forceMajeureReason,
-                  decoration: const InputDecoration(
-                    labelText: 'Force majeure årsag (valgfri)',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'weather', child: Text('Vejr')),
-                    DropdownMenuItem(value: 'strike', child: Text('Strejke')),
-                    DropdownMenuItem(
-                      value: 'security',
-                      child: Text('Sikkerhedshændelse'),
-                    ),
-                    DropdownMenuItem(value: 'other', child: Text('Andet')),
-                  ],
-                  onChanged: (v) => setState(() => forceMajeureReason = v),
-                ),
-                const Divider(),
-                _summaryRow('Status', travelStatus ?? 'Ikke valgt'),
-                _summaryRow('Rejse', '${depCtrl.text} -> ${arrCtrl.text}'),
-                _summaryRow('Hændelse', eventType ?? 'Ikke valgt'),
-                _summaryRow(
-                  'Mistet forbindelse',
-                  missedConnection ? 'Ja' : 'Nej',
-                ),
-                if (missedConnection && connectingStationCtrl.text.isNotEmpty)
-                  _summaryRow('Missed station', connectingStationCtrl.text),
-                _summaryRow(
-                  travelStatus == 'completed'
-                      ? 'Faktisk forsinkelse'
-                      : 'Forventet forsinkelse',
-                  travelStatus == 'completed'
-                      ? delayCtrl.text
-                      : expectedDelayCtrl.text,
-                ),
-                _summaryRow('PMR', pmr ? 'Ja' : 'Nej'),
-                if (pmr)
-                  _summaryRow('PMR forudbestilt', pmrPrebooked ? 'Ja' : 'Nej'),
-                _summaryRow('Cykel', withBike ? 'Ja' : 'Nej'),
-                _summaryRow('Billetter', '${tickets.length} stk'),
-                _summaryRow('Bilag', '${receipts.length} stk'),
-                _summaryRow('Assistance', _assistSummary()),
-                _summaryRow('Art.18: refusion?', refundRequested),
-                _summaryRow(
-                  'Art.18: omlægning nu/senere',
-                  '${rerouteSame ? 'nu' : ''} ${rerouteLater ? 'senere' : ''}'
-                          .trim()
-                          .isEmpty
-                      ? '-'
-                      : '${rerouteSame ? 'nu' : ''} ${rerouteLater ? 'senere' : ''}',
-                ),
-                _summaryRow(
-                  'Art.20: egne udgifter',
-                  ownExpenses ? 'Ja' : 'Nej',
-                ),
-                _summaryRow('Ekstraordinære forhold', extraordinary),
-                _summaryRow('Kompensation', compensationChoice ?? 'Ikke valgt'),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _previewJson,
-                      icon: const Icon(Icons.visibility),
-                      label: const Text('Forhåndsvis JSON'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _copyJson,
-                      icon: const Icon(Icons.copy),
-                      label: const Text('Kopier JSON'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: evaluating ? null : _evaluateOnServer,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Evaluer (server)'),
-                    ),
-                  ],
-                ),
-                if (evaluating)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8.0),
-                    child: LinearProgressIndicator(),
-                  ),
-                if (evalError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      evalError!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-                if (evalResult != null) ...[
-                  const SizedBox(height: 8),
-                  const Text('Evaluering (uddrag):'),
-                  Builder(
-                    builder: (context) {
-                      final comp =
-                          (evalResult!['compensation'] ?? {})
-                              as Map<String, dynamic>;
-                      final minutes = (comp['minutes'] ?? '').toString();
-                      final amount = (comp['amount'] ?? '').toString();
-                      final curr = (comp['currency'] ?? '').toString();
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _summaryRow('Minutters forsinkelse', minutes),
-                          _summaryRow(
-                            'Kompensation',
-                            amount.isEmpty ? '-' : '$amount $curr',
+                Step(
+                  title: const Text('4. Art.18 (refusion/omlægning)'),
+                  state: _stateFor(3),
+                  isActive: currentStep >= 3,
+                  content: Column(
+                    children: [
+                      if (!artEligible)
+                        const Text(
+                          'Art.18 er normalt kun relevant ved aflysning/missed eller forsinkelse ≥60 min.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      SwitchListTile(
+                        title: const Text(
+                          'Aflys hele rejsen og retur til udgangspunkt',
+                        ),
+                        value: tripCancelReturn,
+                        onChanged: artEligible
+                            ? (v) => setState(() => tripCancelReturn = v)
+                            : null,
+                      ),
+                      const Divider(),
+                      const Text('Refusion'),
+                      RadioListTile<String>(
+                        title: const Text('Anmodet om refusion: Ja'),
+                        value: 'yes',
+                        groupValue: refundRequested,
+                        onChanged: (v) =>
+                            setState(() => refundRequested = v ?? 'yes'),
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Anmodet om refusion: Nej'),
+                        value: 'no',
+                        groupValue: refundRequested,
+                        onChanged: (v) =>
+                            setState(() => refundRequested = v ?? 'no'),
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Anmodet om refusion: Ved ikke'),
+                        value: 'unknown',
+                        groupValue: refundRequested,
+                        onChanged: (v) =>
+                            setState(() => refundRequested = v ?? 'unknown'),
+                      ),
+                      if (refundRequested == 'yes')
+                        TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Refusionstype (kontant/voucher/andet)',
+                          ),
+                          onChanged: (v) => refundForm = v,
+                        ),
+                      const Divider(),
+                      const Text('Omlægning'),
+                      CheckboxListTile(
+                        title: const Text(
+                          'Omlægning ved først givne lejlighed',
+                        ),
+                        value: rerouteSame,
+                        onChanged: (v) =>
+                            setState(() => rerouteSame = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      CheckboxListTile(
+                        title: const Text('Omlægning til senere tidspunkt'),
+                        value: rerouteLater,
+                        onChanged: (v) =>
+                            setState(() => rerouteLater = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      DropdownButtonFormField<String>(
+                        initialValue: informedWithin100,
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Informerede operatøren inden for 100 min?',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'yes', child: Text('Ja')),
+                          DropdownMenuItem(value: 'no', child: Text('Nej')),
+                          DropdownMenuItem(
+                            value: 'unknown',
+                            child: Text('Ved ikke'),
                           ),
                         ],
-                      );
-                    },
+                        onChanged: (v) =>
+                            setState(() => informedWithin100 = v ?? 'unknown'),
+                      ),
+                      const Divider(),
+                      SwitchListTile(
+                        title: const Text('Ekstra udgifter ved omlægning'),
+                        value: extraCosts,
+                        onChanged: (v) => setState(() => extraCosts = v),
+                      ),
+                      if (extraCosts) ...[
+                        TextField(
+                          controller: extraCostAmountCtrl,
+                          decoration: const InputDecoration(labelText: 'Beløb'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        TextField(
+                          controller: extraCostCurrencyCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Valuta',
+                          ),
+                        ),
+                      ],
+                      CheckboxListTile(
+                        title: const Text('Nedklassificeret under omlægning'),
+                        value: downgradedDuringReroute,
+                        onChanged: (v) => setState(
+                          () => downgradedDuringReroute = v ?? false,
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 12),
-                const Text('Tryk Indsend for at sende kravet.'),
-                if (submitSuccess != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      submitSuccess!,
-                      style: const TextStyle(color: Colors.green),
-                    ),
+                ),
+                Step(
+                  title: const Text('5. Art.20 og udlæg'),
+                  state: _stateFor(4),
+                  isActive: currentStep >= 4,
+                  content: Column(
+                    children: [
+                      if (!artEligible)
+                        const Text(
+                          'Assistance (Art.20) kræver aflysning/missed eller forsinkelse ≥60 min.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      SwitchListTile(
+                        title: const Text(
+                          'Spring over assistance (intet at indtaste)',
+                        ),
+                        value: skipAssistance,
+                        onChanged: (v) => setState(() => skipAssistance = v),
+                      ),
+                      if (!skipAssistance) ...[
+                        SwitchListTile(
+                          title: const Text('Fik du mad/forfriskninger?'),
+                          value: gotMeals,
+                          onChanged: artEligible
+                              ? (v) => setState(() => gotMeals = v)
+                              : null,
+                        ),
+                        SwitchListTile(
+                          title: const Text('Fik du hotel/overnatning?'),
+                          value: gotHotel,
+                          onChanged: artEligible
+                              ? (v) => setState(() => gotHotel = v)
+                              : null,
+                        ),
+                        SwitchListTile(
+                          title: const Text(
+                            'Fik du transport (til/fra/destination)?',
+                          ),
+                          value: gotTransport,
+                          onChanged: artEligible
+                              ? (v) => setState(() => gotTransport = v)
+                              : null,
+                        ),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Har du haft udgifter (taxa/bus/hotel/mad)?',
+                          ),
+                          value: ownExpenses,
+                          onChanged: (v) => setState(() {
+                            ownExpenses = v ?? false;
+                            skipReceipts = !(v ?? false);
+                          }),
+                        ),
+                        if (ownExpenses && !skipReceipts) ...[
+                          TextButton.icon(
+                            onPressed: _addReceipt,
+                            icon: const Icon(Icons.upload),
+                            label: const Text('Tilføj kvittering'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              _addReceipt();
+                              if (receipts.isNotEmpty) {
+                                final r = receipts.last;
+                                r.typeCtrl.text = 'hotel';
+                                r.amountCtrl.text = '450';
+                                r.currencyCtrl.text = 'DKK';
+                                r.dateCtrl.text = DateTime.now()
+                                    .toIso8601String();
+                              }
+                            },
+                            child: const Text('Scan (stub) - autofyld demo'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              _addReceipt();
+                              if (receipts.isEmpty) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Scanner kvittering...'),
+                                ),
+                              );
+                              final parsed = await receiptService
+                                  .scanAndParse();
+                              final r = receipts.last;
+                              r.typeCtrl.text = (parsed['type'] ?? '')
+                                  .toString();
+                              r.amountCtrl.text = (parsed['amount'] ?? '')
+                                  .toString();
+                              r.currencyCtrl.text = (parsed['currency'] ?? '')
+                                  .toString();
+                              r.dateCtrl.text = (parsed['date'] ?? '')
+                                  .toString();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('OCR udfyldt (ML Kit)'),
+                                ),
+                              );
+                            },
+                            child: const Text('Scan (ML Kit)'),
+                          ),
+                          if (receipts.isEmpty)
+                            const Text('Ingen bilag tilføjet endnu.'),
+                          for (int i = 0; i < receipts.length; i++)
+                            _ReceiptTile(
+                              item: receipts[i],
+                              onRemove: () => _removeReceipt(i),
+                            ),
+                        ],
+                        const Divider(),
+                        const Text('Særlige behov / handicapassistance'),
+                        CheckboxListTile(
+                          title: const Text('Kørestol / mobilitetshjælp'),
+                          value: needsWheelchair,
+                          onChanged: (v) =>
+                              setState(() => needsWheelchair = v ?? false),
+                        ),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Ledsager / assistance ved ombordstigning',
+                          ),
+                          value: needsEscort,
+                          onChanged: (v) =>
+                              setState(() => needsEscort = v ?? false),
+                        ),
+                        TextField(
+                          controller: otherNeedsCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Andre behov (valgfrit)',
+                          ),
+                          maxLines: 2,
+                        ),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Fik du skriftlig bekræftelse på forsinkelsen/aflysningen?',
+                          ),
+                          value: delayConfirmation,
+                          onChanged: (v) =>
+                              setState(() => delayConfirmation = v ?? false),
+                        ),
+                        DropdownButtonFormField<String>(
+                          initialValue: extraordinary,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Henviste operatøren til ekstraordinære forhold?',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'yes', child: Text('Ja')),
+                            DropdownMenuItem(value: 'no', child: Text('Nej')),
+                            DropdownMenuItem(
+                              value: 'unknown',
+                              child: Text('Ved ikke'),
+                            ),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => extraordinary = v ?? 'unknown'),
+                        ),
+                        if (extraordinary == 'yes')
+                          TextField(
+                            decoration: const InputDecoration(
+                              labelText: 'Type (vejr/katastrofe/andet)',
+                            ),
+                            onChanged: (v) => extraordinaryType = v,
+                          ),
+                      ],
+                    ],
                   ),
-                if (submitError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      submitError!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                ),
+                Step(
+                  title: const Text('6. Billetter (upload/manuel)'),
+                  state: _stateFor(5),
+                  isActive: currentStep >= 5,
+                  content: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Tilføj én eller flere billetter (OCR/PNR).'),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: uploadingTicket
+                                ? null
+                                : () => _uploadTicket(ImageSource.camera),
+                            icon: const Icon(Icons.photo_camera),
+                            label: const Text('Upload fra kamera'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: uploadingTicket
+                                ? null
+                                : () => _uploadTicket(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library),
+                            label: const Text('Upload fra galleri'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _addTicket,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Tilføj billet manuelt'),
+                          ),
+                        ],
+                      ),
+                      if (uploadingTicket)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8.0),
+                          child: LinearProgressIndicator(),
+                        ),
+                      if (ticketUploadInfo != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(ticketUploadInfo!),
+                        ),
+                      const SizedBox(height: 8),
+                      for (int i = 0; i < tickets.length; i++)
+                        _TicketTile(
+                          index: i,
+                          item: tickets[i],
+                          onRemove: () => _removeTicket(i),
+                          onSelectForUpload: () =>
+                              setState(() => ticketUploadTargetIndex = i),
+                          selectedForUpload: ticketUploadTargetIndex == i,
+                        ),
+                    ],
                   ),
+                ),
+                Step(
+                  title: const Text('7. Oversigt og indsend'),
+                  state: _stateFor(6),
+                  isActive: currentStep >= 6,
+                  content: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!artEligible)
+                        const Text(
+                          'Kompensation (Art.18) kræver aflysning/missed eller forsinkelse ≥60 min.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      RadioListTile<String>(
+                        title: const Text('Refusion af billet'),
+                        value: 'refund',
+                        groupValue: compensationChoice,
+                        onChanged: artEligible
+                            ? (v) => setState(() => compensationChoice = v)
+                            : null,
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Omlægning nu'),
+                        value: 'reroute_now',
+                        groupValue: compensationChoice,
+                        onChanged: artEligible
+                            ? (v) => setState(() => compensationChoice = v)
+                            : null,
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Omlægning senere / voucher'),
+                        value: 'reroute_later',
+                        groupValue: compensationChoice,
+                        onChanged: artEligible
+                            ? (v) => setState(() => compensationChoice = v)
+                            : null,
+                      ),
+                      TextField(
+                        controller: refundAmountCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Billetpris (hvis refusion)',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      TextField(
+                        controller: refundCurrencyCtrl,
+                        decoration: const InputDecoration(labelText: 'Valuta'),
+                      ),
+                      const Divider(),
+                      CheckboxListTile(
+                        title: const Text('Jeg ansøger på vegne af en anden'),
+                        value: representative,
+                        onChanged: (v) =>
+                            setState(() => representative = v ?? false),
+                      ),
+                      if (representative) ...[
+                        TextField(
+                          controller: repNameCtrl,
+                          decoration: const InputDecoration(labelText: 'Navn'),
+                        ),
+                        TextField(
+                          controller: repEmailCtrl,
+                          decoration: const InputDecoration(labelText: 'Email'),
+                        ),
+                        TextField(
+                          controller: repPhoneCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Telefon',
+                          ),
+                        ),
+                        TextField(
+                          controller: repRelationCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Relation',
+                          ),
+                        ),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Jeg bekræfter samtykke til at indsende på vegne af passageren',
+                          ),
+                          value: repConsent,
+                          onChanged: (v) =>
+                              setState(() => repConsent = v ?? false),
+                        ),
+                      ],
+                      DropdownButtonFormField<String>(
+                        initialValue: forceMajeureReason,
+                        decoration: const InputDecoration(
+                          labelText: 'Force majeure årsag (valgfri)',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'weather',
+                            child: Text('Vejr'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'strike',
+                            child: Text('Strejke'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'security',
+                            child: Text('Sikkerhedshændelse'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'other',
+                            child: Text('Andet'),
+                          ),
+                        ],
+                        onChanged: (v) =>
+                            setState(() => forceMajeureReason = v),
+                      ),
+                      const Divider(),
+                      _summaryRow('Status', travelStatus ?? 'Ikke valgt'),
+                      _summaryRow(
+                        'Rejse',
+                        '${depCtrl.text} -> ${arrCtrl.text}',
+                      ),
+                      _summaryRow('Hændelse', eventType ?? 'Ikke valgt'),
+                      _summaryRow(
+                        'Mistet forbindelse',
+                        missedConnection ? 'Ja' : 'Nej',
+                      ),
+                      if (missedConnection &&
+                          connectingStationCtrl.text.isNotEmpty)
+                        _summaryRow(
+                          'Missed station',
+                          connectingStationCtrl.text,
+                        ),
+                      _summaryRow(
+                        travelStatus == 'completed'
+                            ? 'Faktisk forsinkelse'
+                            : 'Forventet forsinkelse',
+                        travelStatus == 'completed'
+                            ? delayCtrl.text
+                            : expectedDelayCtrl.text,
+                      ),
+                      _summaryRow('PMR', pmr ? 'Ja' : 'Nej'),
+                      if (pmr)
+                        _summaryRow(
+                          'PMR forudbestilt',
+                          pmrPrebooked ? 'Ja' : 'Nej',
+                        ),
+                      _summaryRow('Cykel', withBike ? 'Ja' : 'Nej'),
+                      _summaryRow('Billetter', '${tickets.length} stk'),
+                      _summaryRow('Bilag', '${receipts.length} stk'),
+                      _summaryRow('Assistance', _assistSummary()),
+                      _summaryRow('Art.18: refusion?', refundRequested),
+                      _summaryRow(
+                        'Art.18: omlægning nu/senere',
+                        '${rerouteSame ? 'nu' : ''} ${rerouteLater ? 'senere' : ''}'
+                                .trim()
+                                .isEmpty
+                            ? '-'
+                            : '${rerouteSame ? 'nu' : ''} ${rerouteLater ? 'senere' : ''}',
+                      ),
+                      _summaryRow(
+                        'Art.20: egne udgifter',
+                        ownExpenses ? 'Ja' : 'Nej',
+                      ),
+                      _summaryRow('Ekstraordinære forhold', extraordinary),
+                      _summaryRow(
+                        'Kompensation',
+                        compensationChoice ?? 'Ikke valgt',
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _previewJson,
+                            icon: const Icon(Icons.visibility),
+                            label: const Text('Forhåndsvis JSON'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _copyJson,
+                            icon: const Icon(Icons.copy),
+                            label: const Text('Kopier JSON'),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: evaluating ? null : _evaluateOnServer,
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('Evaluer (server)'),
+                          ),
+                        ],
+                      ),
+                      if (evaluating)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8.0),
+                          child: LinearProgressIndicator(),
+                        ),
+                      if (evalError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            evalError!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      if (evalResult != null) ...[
+                        const SizedBox(height: 8),
+                        const Text('Evaluering (uddrag):'),
+                        Builder(
+                          builder: (context) {
+                            final comp =
+                                (evalResult!['compensation'] ?? {})
+                                    as Map<String, dynamic>;
+                            final minutes = (comp['minutes'] ?? '').toString();
+                            final amount = (comp['amount'] ?? '').toString();
+                            final curr = (comp['currency'] ?? '').toString();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _summaryRow('Minutters forsinkelse', minutes),
+                                _summaryRow(
+                                  'Kompensation',
+                                  amount.isEmpty ? '-' : '$amount $curr',
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      const Text('Tryk Indsend for at sende kravet.'),
+                      if (submitSuccess != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            submitSuccess!,
+                            style: const TextStyle(color: Colors.green),
+                          ),
+                        ),
+                      if (submitError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            submitError!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final String label;
+
+  const _SummaryChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(label: Text(label), visualDensity: VisualDensity.compact);
   }
 }
 
