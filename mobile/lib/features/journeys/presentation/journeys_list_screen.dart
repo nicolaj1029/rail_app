@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
+import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
 import 'package:mobile/features/journeys/presentation/journey_detail_screen.dart';
 import 'package:mobile/features/journeys/presentation/manual_journey_screen.dart';
+import 'package:mobile/features/profile/data/commuter_profile_store.dart';
 import 'package:mobile/shared/services/tickets_service.dart';
 
 class JourneysListScreen extends StatefulWidget {
@@ -71,6 +74,22 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
   void _openClaimReview(Map<String, dynamic> journey) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: journey)),
+    );
+  }
+
+  void _openJourneyChat(Map<String, dynamic> journey) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          commuterMode: false,
+          deviceId: widget.deviceId,
+          commuterProfile: CommuterProfile.empty(),
+          initialContext: ChatContext.fromJourney(
+            journey,
+            source: 'journeys_list',
+          ),
+        ),
+      ),
     );
   }
 
@@ -324,7 +343,7 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
               : 'Forsinkelse: $delay min | Status: $status',
         ),
         trailing: SizedBox(
-          width: 140,
+          width: 180,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -338,9 +357,21 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                 child: Text(status, style: TextStyle(color: statusColor)),
               ),
               const SizedBox(height: 6),
-              TextButton(
-                onPressed: () => _openClaimReview(journey),
-                child: Text(readyForReview ? 'Review' : 'Open'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Chat om denne rejse',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _openJourneyChat(journey),
+                    icon: const Icon(Icons.chat_bubble_outline),
+                  ),
+                  TextButton(
+                    onPressed: () => _openClaimReview(journey),
+                    child: Text(readyForReview ? 'Review' : 'Open'),
+                  ),
+                ],
               ),
             ],
           ),
