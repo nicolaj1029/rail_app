@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
+import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/live_assist/presentation/reroute_screen.dart';
+import 'package:mobile/features/profile/data/commuter_profile_store.dart';
 
 class ClaimReviewScreen extends StatelessWidget {
   final Map<String, dynamic> journey;
@@ -129,27 +132,18 @@ class ClaimReviewScreen extends StatelessWidget {
   }
 
   void _openChatHint(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Chat er kontekstuel',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Brug Chat-fanen til forklaring eller manglende svar. Mobilappen skal ikke tvinge hele wizard-flowet ind i chat.',
-              ),
-            ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          commuterMode: false,
+          deviceId: _stringValue(['device_id']),
+          commuterProfile: CommuterProfile.empty(),
+          initialContext: ChatContext.fromJourney(
+            journey,
+            source: 'claim_review',
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

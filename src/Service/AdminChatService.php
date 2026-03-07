@@ -59,6 +59,101 @@ final class AdminChatService
     }
 
     /**
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    public function applyMobileContext(Session $session, array $context): array
+    {
+        $flow = $this->readFlow($session);
+        $form = (array)($flow['form'] ?? []);
+        $flags = (array)($flow['flags'] ?? []);
+        $incident = (array)($flow['incident'] ?? []);
+        $compute = (array)($flow['compute'] ?? []);
+
+        $status = strtolower(trim((string)($context['status'] ?? '')));
+        if ($status !== '') {
+            $flags['travel_state'] = in_array($status, ['active', 'in_progress', 'detected', 'ongoing'], true)
+                ? 'ongoing'
+                : 'completed';
+            $flags['step1_done'] = '1';
+        }
+
+        $ticketMode = $this->parseTicketMode((string)($context['ticket_mode'] ?? ''));
+        if ($ticketMode !== null) {
+            $form['ticket_upload_mode'] = $ticketMode;
+            $flags['gate_season_pass'] = $ticketMode === 'seasonpass' ? '1' : '';
+        }
+
+        foreach ([
+            'operator' => 'operator',
+            'operator_country' => 'operator_country',
+            'dep_station' => 'dep_station',
+            'arr_station' => 'arr_station',
+        ] as $contextKey => $formKey) {
+            $value = trim((string)($context[$contextKey] ?? ''));
+            if ($value !== '') {
+                $form[$formKey] = $value;
+            }
+        }
+
+        if (trim((string)($form['operator'] ?? '')) !== '' && trim((string)($form['operator_country'] ?? '')) !== '') {
+            $flags['step2_done'] = '1';
+        }
+
+        if (trim((string)($form['dep_station'] ?? '')) !== '' && trim((string)($form['arr_station'] ?? '')) !== '') {
+            $flags['step3_done'] = '1';
+            $flags['step4_done'] = '1';
+        }
+
+        $incidentMain = $this->parseIncident((string)($context['incident_main'] ?? ''));
+        if ($incidentMain !== null) {
+            if ($incidentMain === 'missed_connection') {
+                $incident['main'] = 'delay';
+                $incident['missed'] = true;
+            } elseif ($incidentMain === 'stranded') {
+                $incident['main'] = 'cancellation';
+                $incident['missed'] = false;
+                $flags['gate_art20_2c'] = '1';
+            } else {
+                $incident['main'] = $incidentMain;
+                $incident['missed'] = false;
+            }
+        }
+
+        $delayValue = $context['delay_minutes'] ?? null;
+        $delayMinutes = null;
+        if (is_int($delayValue)) {
+            $delayMinutes = $delayValue;
+        } elseif (is_string($delayValue) && trim($delayValue) !== '') {
+            $delayMinutes = $this->parseMinutes($delayValue);
+        }
+        if ($delayMinutes !== null) {
+            $form['delayAtFinalMinutes'] = (string)$delayMinutes;
+            $form['national_delay_minutes'] = (string)$delayMinutes;
+            $compute['delayAtFinalMinutes'] = $delayMinutes;
+            $compute['delayMinEU'] = $delayMinutes;
+            $flags['step5_done'] = '1';
+        }
+
+        $flow['form'] = $form;
+        $flow['flags'] = $flags;
+        $flow['incident'] = $incident;
+        $flow['compute'] = $compute;
+        $this->writeFlow($session, $flow);
+
+        $routeLabel = trim((string)($context['route_label'] ?? ''));
+        $history = (array)$session->read('admin.chat_history') ?: [];
+        $history[] = $this->assistantMessage(
+            $routeLabel !== ''
+                ? 'Kontekst indlaest for ' . $routeLabel . '. Chatten tager nu udgangspunkt i den rejse.'
+                : 'Kontekst indlaest fra mobil rejse.'
+        );
+        $session->write('admin.chat_history', $history);
+
+        return $this->buildPayload($session, 'Mobil kontekst anvendt.');
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function handleMessage(Session $session, string $rawInput): array

@@ -43,6 +43,23 @@ final class ChatController extends AppController
         return $this->json($this->normalizePayload($payload));
     }
 
+    public function context(): Response
+    {
+        $this->request->allowMethod(['post']);
+
+        $context = $this->request->getData('context');
+        if (!is_array($context)) {
+            return $this->json([
+                'ok' => false,
+                'notice' => 'Ingen kontekst modtaget.',
+            ]);
+        }
+
+        $payload = (new AdminChatService())->applyMobileContext($this->request->getSession(), $context);
+
+        return $this->json($this->normalizePayload($payload));
+    }
+
     public function upload(): Response
     {
         $this->request->allowMethod(['post']);

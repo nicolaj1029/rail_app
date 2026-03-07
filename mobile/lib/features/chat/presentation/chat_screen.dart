@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
 import 'package:mobile/features/chat/data/chat_service.dart';
 import 'package:mobile/features/profile/data/commuter_profile_store.dart';
 
@@ -9,12 +10,14 @@ class ChatScreen extends StatefulWidget {
   final bool commuterMode;
   final String? deviceId;
   final CommuterProfile commuterProfile;
+  final ChatContext? initialContext;
 
   const ChatScreen({
     super.key,
     required this.commuterMode,
     required this.deviceId,
     required this.commuterProfile,
+    this.initialContext,
   });
 
   @override
@@ -29,6 +32,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loading = true;
   bool _sending = false;
   bool _uploading = false;
+  bool _applyingContext = false;
+  bool _contextApplied = false;
   String? _error;
   Map<String, dynamic>? _payload;
 
@@ -50,9 +55,14 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _applyingContext = widget.initialContext != null && !_contextApplied;
     });
     try {
-      final payload = await _service.bootstrap();
+      var payload = await _service.bootstrap();
+      if (widget.initialContext != null && !_contextApplied) {
+        payload = await _service.applyContext(widget.initialContext!.payload);
+        _contextApplied = true;
+      }
       if (!mounted) return;
       setState(() {
         _payload = payload;
@@ -66,6 +76,39 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
+          _applyingContext = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _applyContext() async {
+    if (widget.initialContext == null || _loading || _sending || _uploading) {
+      return;
+    }
+
+    setState(() {
+      _applyingContext = true;
+      _error = null;
+    });
+    try {
+      final payload = await _service.applyContext(
+        widget.initialContext!.payload,
+      );
+      if (!mounted) return;
+      setState(() {
+        _payload = payload;
+        _contextApplied = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _applyingContext = false;
         });
       }
     }
@@ -202,6 +245,52 @@ class _ChatScreenState extends State<ChatScreen> {
               : 'Chatten er nu koblet på backend og bruges som hjælpelag oven på claims-flowet.',
         ),
         const SizedBox(height: 12),
+        if (widget.initialContext != null)
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.initialContext!.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(widget.initialContext!.subtitle),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _applyingContext ? null : _applyContext,
+                        icon: const Icon(Icons.sync),
+                        label: Text(
+                          _contextApplied
+                              ? 'Anvend rejsekontekst igen'
+                              : 'Brug denne rejse i chatten',
+                        ),
+                      ),
+                      ...widget.initialContext!.suggestions.map(
+                        (suggestion) => ActionChip(
+                          label: Text(suggestion),
+                          onPressed: () {
+                            _messageController.text = suggestion;
+                            _messageController.selection =
+                                TextSelection.collapsed(
+                                  offset: _messageController.text.length,
+                                );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         Card(
           child: ListTile(
             leading: const Icon(Icons.phone_android_outlined),
@@ -334,6 +423,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     'Samtale',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
+                  if (_applyingContext) ...[
+                    const SizedBox(height: 8),
+                    const LinearProgressIndicator(),
+                  ],
                   const SizedBox(height: 12),
                   if (history.isEmpty)
                     const Text('Ingen beskeder endnu.')

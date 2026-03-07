@@ -40,6 +40,18 @@ class ChatService {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> applyContext(
+    Map<String, dynamic> context,
+  ) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/chat/context'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'context': context}),
+    );
+
+    return _decode(response);
+  }
+
   Future<Map<String, dynamic>> upload(XFile file) async {
     final request = http.MultipartRequest(
       'POST',

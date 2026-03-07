@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile/config.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
+import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/live_assist/presentation/reroute_screen.dart';
+import 'package:mobile/features/profile/data/commuter_profile_store.dart';
 import 'package:mobile/services/events_service.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
@@ -96,27 +99,18 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   }
 
   void _openChatHint() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Brug chatten selektivt',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Trip detail skal primært give overblik. Chatten skal kun bruges til manglende svar, forklaring eller dokumentation.',
-              ),
-            ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          commuterMode: false,
+          deviceId: _stringValue(['device_id']),
+          commuterProfile: CommuterProfile.empty(),
+          initialContext: ChatContext.fromJourney(
+            widget.journey,
+            source: 'journey_detail',
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

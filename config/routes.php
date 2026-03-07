@@ -211,6 +211,7 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/chat/bootstrap', ['controller' => 'Chat', 'action' => 'bootstrap']);
         $builder->connect('/chat/message', ['controller' => 'Chat', 'action' => 'message']);
         $builder->connect('/chat/reset', ['controller' => 'Chat', 'action' => 'reset']);
+        $builder->connect('/chat/context', ['controller' => 'Chat', 'action' => 'context']);
         $builder->connect('/chat/upload', ['controller' => 'Chat', 'action' => 'upload']);
 
         // Provider stubs for SNCF / DB / DSB / RNE / Open
