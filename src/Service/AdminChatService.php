@@ -27,7 +27,7 @@ final class AdminChatService
         $history = (array)$session->read('admin.chat_history') ?: [];
         if ($history === []) {
             $history[] = $this->assistantMessage(
-                'Admin chat er aktiv. Jeg bruger den eksisterende flow-session som sandhedskilde og guider kun gennem noeglefelter.'
+                'Admin chat er aktiv. Jeg bruger den eksisterende flow-session som sandhedskilde og guider kun gennem noeglefelter. Filupload haandteres ikke i chatten: vaelg ticket for almindelig billetsag, ticketless for sag uden billetgrundlag, eller seasonpass for pendler/abonnement.'
             );
             $session->write('admin.chat_history', $history);
         }
@@ -177,7 +177,7 @@ final class AdminChatService
         if (($form['ticket_upload_mode'] ?? '') === '') {
             $candidates[] = [
                 'key' => 'ticket_upload_mode',
-                'prompt' => 'Hvilken billettype? Vae lg ticket, ticketless eller seasonpass.',
+                'prompt' => 'Hvilket sagsgrundlag passer? Vae lg ticket (almindelig billetsag, upload sker uden for chatten), ticketless (ingen billetgrundlag) eller seasonpass (pendler/abonnement).',
                 'choices' => [
                     ['value' => 'ticket', 'label' => 'ticket'],
                     ['value' => 'ticketless', 'label' => 'ticketless'],
@@ -1473,7 +1473,12 @@ final class AdminChatService
         $summary = $this->buildSummary($flow);
         return match ($key) {
             'travel_state' => 'TRIN 1 opdateret: travel_state=' . (string)$summary['travel_state'],
-            'ticket_upload_mode' => 'Billet-type sat til ' . (string)$summary['ticket_mode'],
+            'ticket_upload_mode' => match ((string)$summary['ticket_mode']) {
+                'ticket' => 'Sagsgrundlag sat til ticket. Det betyder almindelig billetsag; filupload haandteres ikke i admin chat.',
+                'ticketless' => 'Sagsgrundlag sat til ticketless. Det betyder sag uden billetgrundlag.',
+                'seasonpass' => 'Sagsgrundlag sat til seasonpass. Det betyder pendler/abonnement.',
+                default => 'Billet-type sat til ' . (string)$summary['ticket_mode'],
+            },
             'operator' => 'Operatoer gemt: ' . (string)$summary['operator'],
             'operator_country' => 'Operatoer-land gemt: ' . (string)$summary['operator_country'],
             'operator_product' => 'Produkt gemt: ' . (string)($flow['form']['operator_product'] ?? ''),

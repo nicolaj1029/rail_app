@@ -53,7 +53,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
      data-initial='<?= h($payloadJson) ?>'>
   <section class="admin-chat-card">
     <h1 style="margin-top:0;">Admin Chat</h1>
-    <div class="admin-muted">Deterministisk admin-chat oven paa den eksisterende flow-session. Chatten stiller kun whitelisted spoergsmaal og bruger flow-state som sandhedskilde.</div>
+    <div class="admin-muted">Deterministisk admin-chat oven paa den eksisterende flow-session. Chatten stiller kun whitelisted spoergsmaal og bruger flow-state som sandhedskilde. Filupload testes ikke her: brug `ticket` for almindelig billetsag, `ticketless` for sag uden billetgrundlag og `seasonpass` for pendler/abonnement.</div>
 
     <div class="admin-chat-log" data-chat-log></div>
 
