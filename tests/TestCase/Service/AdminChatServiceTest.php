@@ -33,6 +33,7 @@ final class AdminChatServiceTest extends TestCase
     {
         $payload = $this->service->bootstrap($this->session);
         $this->assertSame('travel_state', $payload['question']['key'] ?? null);
+        $this->assertArrayHasKey('explanation', $payload);
 
         $payload = $this->service->handleMessage($this->session, 'ongoing');
         $this->assertSame('ticket_upload_mode', $payload['question']['key'] ?? null);
@@ -82,5 +83,14 @@ final class AdminChatServiceTest extends TestCase
 
         $payload = $this->service->handleMessage($this->session, 'Pendlerkort');
         $this->assertSame('confirm_step2', $payload['question']['key'] ?? null);
+    }
+
+    public function testPayloadAlwaysExposesExplanationBlock(): void
+    {
+        $payload = $this->service->bootstrap($this->session);
+
+        $this->assertArrayHasKey('explanation', $payload);
+        $this->assertSame('groq', $payload['explanation']['provider'] ?? null);
+        $this->assertContains($payload['explanation']['status'] ?? null, ['disabled', 'idle', 'ok', 'cached', 'error']);
     }
 }

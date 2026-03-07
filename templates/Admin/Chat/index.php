@@ -38,6 +38,11 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
   .admin-blocker-group { margin-top:12px; }
   .admin-blocker-group:first-child { margin-top:10px; }
   .admin-blocker-group-title { font-size:13px; font-weight:700; color:#111; margin:0 0 8px; text-transform:uppercase; letter-spacing:.03em; }
+  .admin-explanation-status { display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:600; background:#eef2ff; color:#3730a3; margin-bottom:10px; }
+  .admin-explanation-status.disabled { background:#f3f4f6; color:#4b5563; }
+  .admin-explanation-status.error { background:#fef2f2; color:#991b1b; }
+  .admin-explanation-status.cached { background:#ecfeff; color:#155e75; }
+  .admin-explanation-body { white-space:pre-wrap; color:#111; line-height:1.5; }
   @media (max-width: 980px) {
     .admin-chat-page { grid-template-columns: 1fr; }
     .admin-chat-log { height:420px; }
@@ -91,6 +96,11 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     </div>
 
     <div class="admin-chat-card">
+      <h2 class="admin-section-title">Groq forklaring</h2>
+      <div data-chat-explanation></div>
+    </div>
+
+    <div class="admin-chat-card">
       <h2 class="admin-section-title">Synlige trin</h2>
       <ol class="admin-steps" data-chat-steps></ol>
     </div>
@@ -116,6 +126,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
   const previewEl = root.querySelector('[data-chat-preview]');
   const previewActionsEl = root.querySelector('[data-chat-preview-actions]');
   const previewBlockersEl = root.querySelector('[data-chat-preview-blockers]');
+  const explanationEl = root.querySelector('[data-chat-explanation]');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
@@ -285,6 +296,26 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
         )).join('');
   }
 
+  function renderExplanation(explanation) {
+    const status = explanation?.status || 'idle';
+    const message = explanation?.message || 'Ingen forklaring endnu.';
+    const text = explanation?.text || '';
+    const provider = explanation?.provider || 'groq';
+    const model = explanation?.model || '';
+    const statusLabel = {
+      ok: 'Live',
+      cached: 'Cache',
+      disabled: 'Deaktiveret',
+      error: 'Fejl',
+      idle: 'Idle'
+    }[status] || status;
+    const meta = [provider, model].filter(Boolean).join(' · ');
+    explanationEl.innerHTML =
+      '<div class="admin-explanation-status ' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</div>' +
+      '<div class="admin-muted" style="margin-bottom:10px;">' + escapeHtml(message + (meta ? ' (' + meta + ')' : '')) + '</div>' +
+      '<div class="admin-explanation-body">' + escapeHtml(text || 'Ingen forklaring genereret endnu.') + '</div>';
+  }
+
   function renderSteps(steps) {
     stepsEl.innerHTML = '';
     (steps || []).forEach((step) => {
@@ -317,6 +348,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     renderQuestion(payload.question || null);
     renderSummary(payload.summary || {}, payload.question || null);
     renderPreview(payload.preview || {});
+    renderExplanation(payload.explanation || {});
     renderSteps(payload.visible_steps || []);
     renderCitations(payload.citations || []);
     if (payload.notice) {

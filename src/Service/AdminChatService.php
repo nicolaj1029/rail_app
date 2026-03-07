@@ -48,6 +48,7 @@ final class AdminChatService
             'flow.incident',
             'flow.journey',
             'admin.chat_focus_key',
+            'admin.chat_explanation_cache',
             'admin.chat_history',
         ] as $key) {
             $session->delete($key);
@@ -499,6 +500,7 @@ final class AdminChatService
         $history = (array)$session->read('admin.chat_history') ?: [];
         $summary = $this->buildSummary($flow);
         $citations = $this->buildCitations($question);
+        $explanation = (new AdminChatExplanationService())->build($session, $question, $summary, $preview, $citations);
         $stepper = (new FlowStepsService())->buildSteps((array)($flow['flags'] ?? []), 'start');
         $visibleSteps = [];
         foreach ($stepper as $step) {
@@ -522,6 +524,7 @@ final class AdminChatService
             'summary' => $summary,
             'preview' => $preview,
             'citations' => $citations,
+            'explanation' => $explanation,
             'visible_steps' => $visibleSteps,
             'flow' => $flow,
         ];
