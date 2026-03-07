@@ -135,6 +135,26 @@ final class AdminChatService
      */
     private function currentQuestion(array $flow, ?array $preview = null, ?string $preferredKey = null): ?array
     {
+        $candidates = $this->buildBaseQuestions($flow);
+        $candidates = array_merge($candidates, $this->buildFollowupQuestions($flow, $preview));
+        $normalizedPreferredKey = $this->normalizeQuestionKey((string)$preferredKey);
+        if ($normalizedPreferredKey !== '') {
+            foreach ($candidates as $candidate) {
+                if ($this->normalizeQuestionKey((string)($candidate['key'] ?? '')) === $normalizedPreferredKey) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return $candidates[0] ?? null;
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildBaseQuestions(array $flow): array
+    {
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
         $incident = (array)($flow['incident'] ?? []);
@@ -257,17 +277,7 @@ final class AdminChatService
             ];
         }
 
-        $candidates = array_merge($candidates, $this->buildFollowupQuestions($flow, $preview));
-        $normalizedPreferredKey = $this->normalizeQuestionKey((string)$preferredKey);
-        if ($normalizedPreferredKey !== '') {
-            foreach ($candidates as $candidate) {
-                if ($this->normalizeQuestionKey((string)($candidate['key'] ?? '')) === $normalizedPreferredKey) {
-                    return $candidate;
-                }
-            }
-        }
-
-        return $candidates[0] ?? null;
+        return $candidates;
     }
 
     /**
@@ -992,15 +1002,20 @@ final class AdminChatService
             ];
         };
 
-        if (((string)($flags['step2_done'] ?? '')) !== '1') {
-            $add('confirm_step2', 'Fuldfør TRIN 2', 'Operatør og billetgrundlag er ikke markeret som afsluttet endnu.', '/flow/entitlements', 'foundation', 'required_now');
-        }
-        if (((string)($flags['step5_done'] ?? '')) !== '1') {
-            $add('incident_main', 'Angiv hændelse', 'Incident-type mangler stadig.', '/flow/incident', 'foundation', 'required_now');
-            $add('delay_minutes', 'Angiv forsinkelse', 'Forsinkelsesminutter mangler stadig.', '/flow/incident', 'foundation', 'required_now');
-        }
-        if (($form['ticket_upload_mode'] ?? '') === 'seasonpass' && trim((string)($form['operator_product'] ?? '')) === '') {
-            $add('operator_product', 'Angiv season-produkt', 'Pendler/season-produkt mangler for data-pack og policy-match.', '/flow/entitlements', 'season', 'required_now');
+        foreach ($this->buildBaseQuestions($flow) as $question) {
+            if (!is_array($question)) {
+                continue;
+            }
+            $key = (string)($question['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $flowPath = (string)($question['flow_path'] ?? '/flow/start');
+            $prompt = trim((string)($question['prompt'] ?? ''));
+            $label = $this->blockingLabelForQuestion($key);
+            $detail = $this->blockingDetailForQuestion($key, $prompt);
+            $group = $key === 'operator_product' ? 'season' : 'foundation';
+            $add($key, $label, $detail, $flowPath, $group, 'required_now');
         }
 
         $art12Labels = [
@@ -1124,6 +1139,40 @@ final class AdminChatService
         }
 
         return '';
+    }
+
+    private function blockingLabelForQuestion(string $key): string
+    {
+        return match ($this->normalizeQuestionKey($key)) {
+            'travel_state' => 'Angiv rejse-status',
+            'ticket_upload_mode' => 'Vælg billettype',
+            'operator' => 'Angiv operatør',
+            'operator_country' => 'Angiv operatørland',
+            'operator_product' => 'Angiv season-produkt',
+            'confirm_step2' => 'Fuldfør TRIN 2',
+            'dep_station' => 'Angiv afgangsstation',
+            'arr_station' => 'Angiv destinationsstation',
+            'incident_main' => 'Angiv hændelse',
+            'delay_minutes' => 'Angiv forsinkelse',
+            default => $key,
+        };
+    }
+
+    private function blockingDetailForQuestion(string $key, string $fallbackPrompt): string
+    {
+        return match ($this->normalizeQuestionKey($key)) {
+            'travel_state' => 'Rejsestatus mangler stadig.',
+            'ticket_upload_mode' => 'Billetgrundlag mangler stadig.',
+            'operator' => 'Operatør mangler stadig.',
+            'operator_country' => 'Operatørland mangler stadig.',
+            'operator_product' => 'Pendler/season-produkt mangler for data-pack og policy-match.',
+            'confirm_step2' => 'Operatør og billetgrundlag er ikke markeret som afsluttet endnu.',
+            'dep_station' => 'Afgangsstation mangler stadig.',
+            'arr_station' => 'Destinationsstation mangler stadig.',
+            'incident_main' => 'Incident-type mangler stadig.',
+            'delay_minutes' => 'Forsinkelsesminutter mangler stadig.',
+            default => $fallbackPrompt !== '' ? $fallbackPrompt : 'Feltet mangler stadig.',
+        };
     }
 
     private function normalizeQuestionKey(string $key): string
