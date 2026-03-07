@@ -10,6 +10,8 @@ class HomeScreen extends StatelessWidget {
   final CommuterProfile commuterProfile;
   final VoidCallback onRefresh;
   final ValueChanged<int> onNavigate;
+  final VoidCallback onOpenLiveAssist;
+  final VoidCallback? onOpenPrimaryReview;
 
   const HomeScreen({
     super.key,
@@ -20,6 +22,8 @@ class HomeScreen extends StatelessWidget {
     required this.commuterProfile,
     required this.onRefresh,
     required this.onNavigate,
+    required this.onOpenLiveAssist,
+    required this.onOpenPrimaryReview,
   });
 
   int get readyCount => journeys.where((journey) {
@@ -115,6 +119,14 @@ class HomeScreen extends StatelessWidget {
             runSpacing: 12,
             children: [
               _ActionCard(
+                title: commuterMode ? 'Start live hjælp' : 'Jeg er på rejse nu',
+                subtitle: commuterMode
+                    ? 'Log udgifter og hjælp under den aktuelle rejse.'
+                    : 'Åbn live assist til problemer under rejsen.',
+                icon: Icons.play_circle_outline,
+                onTap: onOpenLiveAssist,
+              ),
+              _ActionCard(
                 title: commuterMode ? 'Dagens rejser' : 'Se rejser',
                 subtitle: commuterMode
                     ? 'Review faste rejser og mulige forsinkelser.'
@@ -148,6 +160,26 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (onOpenPrimaryReview != null && readyCount > 0) ...[
+            const SizedBox(height: 20),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.assignment_turned_in_outlined),
+                title: Text(
+                  commuterMode
+                      ? 'Der er $readyCount rejser klar til hurtigt review'
+                      : 'Der er $readyCount sager klar til review',
+                ),
+                subtitle: const Text(
+                  'Åbn den vigtigste sag direkte fra forsiden.',
+                ),
+                trailing: FilledButton(
+                  onPressed: onOpenPrimaryReview,
+                  child: const Text('Review nu'),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Card(
             child: Padding(

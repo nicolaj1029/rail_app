@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile/config.dart';
-import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
 import 'package:mobile/features/chat/presentation/chat_screen.dart';
+import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/claims/presentation/claims_screen.dart';
 import 'package:mobile/features/home/presentation/home_screen.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
@@ -104,6 +104,32 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  Map<String, dynamic>? get _primaryReviewJourney {
+    for (final journey in journeys) {
+      final status = (journey['status'] ?? '').toString().toLowerCase();
+      if (['ended', 'ready', 'review'].contains(status)) {
+        return journey;
+      }
+    }
+    return journeys.isNotEmpty ? journeys.first : null;
+  }
+
+  void _openLiveAssist() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LiveAssistScreen()));
+  }
+
+  void _openPrimaryReview() {
+    final journey = _primaryReviewJourney;
+    if (journey == null) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: journey)),
+    );
+  }
+
   Widget _buildCurrentScreen() {
     switch (selectedIndex) {
       case 0:
@@ -115,6 +141,10 @@ class _AppShellState extends State<AppShell> {
           commuterProfile: commuterProfile,
           onRefresh: _bootstrap,
           onNavigate: (index) => setState(() => selectedIndex = index),
+          onOpenLiveAssist: _openLiveAssist,
+          onOpenPrimaryReview: _primaryReviewJourney == null
+              ? null
+              : _openPrimaryReview,
         );
       case 1:
         if (deviceId == null || deviceId!.isEmpty) {
@@ -126,6 +156,13 @@ class _AppShellState extends State<AppShell> {
           journeys: journeys,
           commuterMode: commuterMode,
           onRefresh: _refreshJourneys,
+          onOpenJourney: (journey) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ClaimReviewScreen(journey: journey),
+              ),
+            );
+          },
         );
       case 3:
         return ChatScreen(
@@ -159,25 +196,15 @@ class _AppShellState extends State<AppShell> {
         actions: [
           IconButton(onPressed: _bootstrap, icon: const Icon(Icons.refresh)),
           IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LiveAssistScreen()),
-              );
-            },
+            onPressed: _openLiveAssist,
             icon: const Icon(Icons.play_circle_outline),
             tooltip: 'Open live assist',
           ),
-          if (journeys.isNotEmpty)
+          if (_primaryReviewJourney != null)
             IconButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CaseCloseScreen(journey: journeys.first),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.rule_folder_outlined),
-              tooltip: 'Open case close',
+              onPressed: _openPrimaryReview,
+              icon: const Icon(Icons.assignment_outlined),
+              tooltip: 'Open review',
             ),
         ],
       ),

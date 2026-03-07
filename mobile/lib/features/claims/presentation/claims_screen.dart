@@ -4,12 +4,14 @@ class ClaimsScreen extends StatelessWidget {
   final List<Map<String, dynamic>> journeys;
   final bool commuterMode;
   final VoidCallback onRefresh;
+  final ValueChanged<Map<String, dynamic>> onOpenJourney;
 
   const ClaimsScreen({
     super.key,
     required this.journeys,
     required this.commuterMode,
     required this.onRefresh,
+    required this.onOpenJourney,
   });
 
   @override
@@ -78,9 +80,10 @@ class ClaimsScreen extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.description_outlined),
-                    title: Text('$dep → $arr'),
+                    title: Text('$dep -> $arr'),
                     subtitle: Text('Status: $status • Delay: $delay min'),
                     trailing: Text(commuterMode ? 'Claim assist' : 'Open'),
+                    onTap: () => onOpenJourney(journey),
                   ),
                 );
               }),

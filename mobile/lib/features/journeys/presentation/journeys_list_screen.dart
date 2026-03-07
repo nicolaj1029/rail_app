@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:mobile/config.dart';
-import 'package:mobile/features/case_close/presentation/case_close_screen.dart';
+import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/journeys/data/journeys_service.dart';
 import 'package:mobile/features/journeys/presentation/journey_detail_screen.dart';
 import 'package:mobile/features/journeys/presentation/manual_journey_screen.dart';
@@ -58,9 +58,9 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
     }
   }
 
-  void _openCaseClose(Map<String, dynamic> journey) {
+  void _openClaimReview(Map<String, dynamic> journey) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => CaseCloseScreen(journey: journey)),
+      MaterialPageRoute(builder: (_) => ClaimReviewScreen(journey: journey)),
     );
   }
 
@@ -160,20 +160,34 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
               itemCount: journeys.length,
               itemBuilder: (context, index) {
                 final j = journeys[index];
-                final id = (j['id'] ?? '').toString();
                 final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
                 final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
                 final delay = (j['delay_minutes'] ?? j['delay'] ?? '')
                     .toString();
                 final status = (j['status'] ?? '').toString();
-                final ended = status.toLowerCase() == 'ended';
-                final statusColor = ended ? Colors.red : Colors.blue;
+                final normalizedStatus = status.toLowerCase();
+                final readyForReview = [
+                  'ended',
+                  'review',
+                  'ready',
+                ].contains(normalizedStatus);
+                final statusColor = readyForReview
+                    ? Colors.orange
+                    : Colors.blue;
                 return Card(
                   child: ListTile(
-                    title: Text('Journey $id'),
-                    subtitle: Text('$dep -> $arr  | delay: $delay min'),
+                    title: Text(
+                      dep.isEmpty && arr.isEmpty
+                          ? 'Ukendt rejse'
+                          : '$dep -> $arr',
+                    ),
+                    subtitle: Text(
+                      delay.isEmpty
+                          ? 'Status: $status'
+                          : 'Forsinkelse: $delay min | Status: $status',
+                    ),
                     trailing: SizedBox(
-                      width: 120,
+                      width: 140,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -194,8 +208,8 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                           ),
                           const SizedBox(height: 6),
                           TextButton(
-                            onPressed: () => _openCaseClose(j),
-                            child: Text(ended ? 'Case Close' : 'Open'),
+                            onPressed: () => _openClaimReview(j),
+                            child: Text(readyForReview ? 'Review' : 'Open'),
                           ),
                         ],
                       ),
