@@ -11,6 +11,7 @@ import 'package:mobile/shared/services/tickets_service.dart';
 class JourneysListScreen extends StatefulWidget {
   final String deviceId;
   final bool embedded;
+
   const JourneysListScreen({
     super.key,
     required this.deviceId,
@@ -22,17 +23,18 @@ class JourneysListScreen extends StatefulWidget {
 }
 
 class _JourneysListScreenState extends State<JourneysListScreen> {
-  late final JourneysService _svc;
+  late final JourneysService _service;
   late final TicketsService _tickets;
+
   bool loading = true;
+  bool matching = false;
   String? error;
   List<Map<String, dynamic>> journeys = [];
-  bool matching = false;
 
   @override
   void initState() {
     super.initState();
-    _svc = JourneysService(baseUrl: apiBaseUrl);
+    _service = JourneysService(baseUrl: apiBaseUrl);
     _tickets = TicketsService(baseUrl: apiBaseUrl);
     _load();
   }
@@ -43,18 +45,26 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
       error = null;
     });
     try {
-      final list = await _svc.list(widget.deviceId);
+      final list = await _service.list(widget.deviceId);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         journeys = list;
       });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         error = '$e';
       });
     } finally {
-      setState(() {
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -74,42 +84,85 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
   }
 
   Future<void> _matchTicket() async {
-    if (matching) return;
+    if (matching) {
+      return;
+    }
+
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
     );
-    if (file == null) return;
+    if (file == null) {
+      return;
+    }
+
     setState(() {
       matching = true;
       error = null;
     });
+
     try {
       final res = await _tickets.matchTicket(
         deviceId: widget.deviceId,
         file: file,
       );
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Billet uploadet: ${res['status'] ?? 'ok'}')),
       );
       await _load();
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         error = '$e';
       });
     } finally {
-      setState(() {
-        matching = false;
-      });
+      if (mounted) {
+        setState(() {
+          matching = false;
+        });
+      }
     }
   }
 
+  String _statusOf(Map<String, dynamic> journey) =>
+      (journey['status'] ?? '').toString().toLowerCase();
+
+  Map<String, List<Map<String, dynamic>>> _groupJourneys() {
+    final groups = <String, List<Map<String, dynamic>>>{
+      'Needs review': [],
+      'Active now': [],
+      'Other journeys': [],
+    };
+
+    for (final journey in journeys) {
+      final status = _statusOf(journey);
+      if (['ended', 'review', 'ready'].contains(status)) {
+        groups['Needs review']!.add(journey);
+      } else if (['active', 'in_progress', 'detected'].contains(status)) {
+        groups['Active now']!.add(journey);
+      } else {
+        groups['Other journeys']!.add(journey);
+      }
+    }
+
+    return groups;
+  }
+
+  int get _reviewCount => _groupJourneys()['Needs review']!.length;
+  int get _activeCount => _groupJourneys()['Active now']!.length;
+
   @override
   Widget build(BuildContext context) {
+    final groups = _groupJourneys();
+
     final content = Padding(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.all(12),
       child: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
@@ -120,7 +173,7 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
               children: [
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -156,77 +209,63 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
                 ),
               ],
             )
-          : ListView.builder(
-              itemCount: journeys.length,
-              itemBuilder: (context, index) {
-                final j = journeys[index];
-                final dep = (j['dep_station'] ?? j['start'] ?? '').toString();
-                final arr = (j['arr_station'] ?? j['end'] ?? '').toString();
-                final routeLabel = (j['route_label'] ?? '').toString();
-                final delay = (j['delay_minutes'] ?? j['delay'] ?? '')
-                    .toString();
-                final status = (j['status'] ?? '').toString();
-                final normalizedStatus = status.toLowerCase();
-                final readyForReview = [
-                  'ended',
-                  'review',
-                  'ready',
-                ].contains(normalizedStatus);
-                final statusColor = readyForReview
-                    ? Colors.orange
-                    : Colors.blue;
-                return Card(
-                  child: ListTile(
-                    title: Text(
-                      routeLabel.isNotEmpty
-                          ? routeLabel
-                          : (dep.isEmpty && arr.isEmpty
-                                ? 'Ukendt rejse'
-                                : '$dep -> $arr'),
-                    ),
-                    subtitle: Text(
-                      delay.isEmpty
-                          ? 'Status: $status'
-                          : 'Forsinkelse: $delay min | Status: $status',
-                    ),
-                    trailing: SizedBox(
-                      width: 140,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              status,
-                              style: TextStyle(color: statusColor),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextButton(
-                            onPressed: () => _openClaimReview(j),
-                            child: Text(readyForReview ? 'Review' : 'Open'),
-                          ),
-                        ],
+          : ListView(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TripsMetricCard(
+                        label: 'Needs review',
+                        value: _reviewCount.toString(),
+                        icon: Icons.assignment_outlined,
                       ),
                     ),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => JourneyDetailScreen(journey: j),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _TripsMetricCard(
+                        label: 'Active now',
+                        value: _activeCount.toString(),
+                        icon: Icons.play_circle_outline,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                for (final entry in groups.entries) ...[
+                  if (entry.value.isNotEmpty) ...[
+                    Text(
+                      entry.key,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    ...entry.value.map(_buildJourneyCard),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _openManual,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Anmeld rejse manuelt'),
                         ),
-                      );
-                    },
+                        OutlinedButton.icon(
+                          onPressed: matching ? null : _matchTicket,
+                          icon: const Icon(Icons.upload),
+                          label: Text(
+                            matching ? 'Uploader...' : 'Upload billet',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
     );
 
@@ -245,6 +284,112 @@ class _JourneysListScreenState extends State<JourneysListScreen> {
         ],
       ),
       body: content,
+    );
+  }
+
+  Widget _buildJourneyCard(Map<String, dynamic> journey) {
+    final dep = (journey['dep_station'] ?? journey['start'] ?? '').toString();
+    final arr = (journey['arr_station'] ?? journey['end'] ?? '').toString();
+    final routeLabel = (journey['route_label'] ?? '').toString();
+    final delay = (journey['delay_minutes'] ?? journey['delay'] ?? '')
+        .toString();
+    final status = (journey['status'] ?? '').toString();
+    final normalizedStatus = status.toLowerCase();
+    final readyForReview = [
+      'ended',
+      'review',
+      'ready',
+    ].contains(normalizedStatus);
+    final activeNow = [
+      'active',
+      'in_progress',
+      'detected',
+    ].contains(normalizedStatus);
+    final statusColor = readyForReview
+        ? Colors.orange
+        : activeNow
+        ? Colors.green
+        : Colors.blue;
+
+    return Card(
+      child: ListTile(
+        title: Text(
+          routeLabel.isNotEmpty
+              ? routeLabel
+              : (dep.isEmpty && arr.isEmpty ? 'Ukendt rejse' : '$dep -> $arr'),
+        ),
+        subtitle: Text(
+          delay.isEmpty
+              ? 'Status: $status'
+              : 'Forsinkelse: $delay min | Status: $status',
+        ),
+        trailing: SizedBox(
+          width: 140,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(status, style: TextStyle(color: statusColor)),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => _openClaimReview(journey),
+                child: Text(readyForReview ? 'Review' : 'Open'),
+              ),
+            ],
+          ),
+        ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => JourneyDetailScreen(journey: journey),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TripsMetricCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _TripsMetricCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text(value, style: Theme.of(context).textTheme.titleLarge),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
