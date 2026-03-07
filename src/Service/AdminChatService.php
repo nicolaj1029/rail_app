@@ -5,6 +5,7 @@ namespace App\Service;
 
 use Cake\Http\Session;
 use Cake\Utility\Hash;
+use Psr\Http\Message\UploadedFileInterface;
 
 /**
  * Deterministic admin chat orchestration on top of the existing flow session.
@@ -27,7 +28,7 @@ final class AdminChatService
         $history = (array)$session->read('admin.chat_history') ?: [];
         if ($history === []) {
             $history[] = $this->assistantMessage(
-                'Admin chat er aktiv. Jeg bruger den eksisterende flow-session som sandhedskilde og guider kun gennem noeglefelter. Filupload haandteres ikke i chatten: vaelg ticket for almindelig billetsag, ticketless for sag uden billetgrundlag, eller seasonpass for pendler/abonnement.'
+                'Admin chat er aktiv. Jeg bruger den eksisterende flow-session som sandhedskilde og guider kun gennem noeglefelter. Du kan nu ogsaa uploade billet eller season-dokument direkte i chatten. Vaelg ticket for almindelig billetsag, ticketless for sag uden billetgrundlag, eller seasonpass for pendler/abonnement.'
             );
             $session->write('admin.chat_history', $history);
         }
@@ -126,6 +127,34 @@ final class AdminChatService
         if (($question['key'] ?? null) !== $focusKey) {
             $payload['notice'] = 'Blocker valgt, men spoergsmaalet er ikke aktivt endnu. Udfyld de tidligere afhængigheder først.';
         }
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function handleUpload(Session $session, UploadedFileInterface $file): array
+    {
+        $flow = $this->readFlow($session);
+        $result = (new AdminChatTicketUploadService())->handleUpload($file, $flow);
+        if (!$result['ok']) {
+            return $this->buildPayload($session, (string)$result['message']);
+        }
+
+        $this->writeFlow($session, (array)$result['flow']);
+        $history = (array)$session->read('admin.chat_history') ?: [];
+        $history[] = $this->assistantMessage((string)$result['message']);
+        $session->write('admin.chat_history', $history);
+
+        $payload = $this->buildPayload($session, 'Upload behandlet i admin-chatten.');
+        $history = (array)$session->read('admin.chat_history') ?: [];
+        $next = (array)($payload['question'] ?? []);
+        if ($next !== []) {
+            $history[] = $this->assistantMessage((string)($next['prompt'] ?? ''));
+        }
+        $session->write('admin.chat_history', $history);
+        $payload['history'] = $history;
 
         return $payload;
     }
@@ -1210,6 +1239,7 @@ final class AdminChatService
             'season_mode' => $ticketMode === 'seasonpass',
             'operator' => (string)($form['operator'] ?? ''),
             'operator_country' => (string)($form['operator_country'] ?? ''),
+            'operator_product' => (string)($form['operator_product'] ?? ''),
             'route' => trim((string)($form['dep_station'] ?? '') . ' -> ' . (string)($form['arr_station'] ?? '')),
             'incident_main' => (string)($incident['main'] ?? ''),
             'missed_connection' => (bool)($incident['missed'] ?? false),
@@ -1220,6 +1250,9 @@ final class AdminChatService
             'gate_art18' => ((string)($flags['gate_art18'] ?? '')) === '1',
             'gate_art20' => ((string)($flags['gate_art20'] ?? '')) === '1',
             'gate_art20_2c' => ((string)($flags['gate_art20_2c'] ?? '')) === '1',
+            'uploaded_file' => (string)($form['_ticketOriginalName'] ?? ''),
+            'extraction_provider' => (string)($flow['meta']['extraction_provider'] ?? ''),
+            'extraction_confidence' => isset($flow['meta']['extraction_confidence']) ? (string)$flow['meta']['extraction_confidence'] : '',
             'datapack_url' => (((string)($flags['step5_done'] ?? '')) === '1' || (((string)($flags['step2_done'] ?? '')) === '1' && $ticketMode === 'seasonpass'))
                 ? '/flow/compensation?datapack=1&pretty=1'
                 : null,
@@ -1477,9 +1510,9 @@ final class AdminChatService
         return match ($key) {
             'travel_state' => 'TRIN 1 opdateret: travel_state=' . (string)$summary['travel_state'],
             'ticket_upload_mode' => match ((string)$summary['ticket_mode']) {
-                'ticket' => 'Sagsgrundlag sat til ticket. Det betyder almindelig billetsag; filupload haandteres ikke i admin chat.',
+                'ticket' => 'Sagsgrundlag sat til ticket. Det betyder almindelig billetsag; du kan nu uploade billet direkte i admin-chatten.',
                 'ticketless' => 'Sagsgrundlag sat til ticketless. Det betyder sag uden billetgrundlag.',
-                'seasonpass' => 'Sagsgrundlag sat til seasonpass. Det betyder pendler/abonnement.',
+                'seasonpass' => 'Sagsgrundlag sat til seasonpass. Det betyder pendler/abonnement; du kan nu uploade season-dokument direkte i admin-chatten.',
                 default => 'Billet-type sat til ' . (string)$summary['ticket_mode'],
             },
             'operator' => 'Operatoer gemt: ' . (string)$summary['operator'],

@@ -44,6 +44,23 @@ final class ChatController extends AppController
         return $this->json($payload);
     }
 
+    public function upload(): Response
+    {
+        $this->request->allowMethod(['post']);
+
+        $file = $this->request->getUploadedFile('ticket_upload');
+        if ($file === null) {
+            return $this->json([
+                'ok' => false,
+                'notice' => 'Ingen fil modtaget.',
+            ]);
+        }
+
+        $payload = (new AdminChatService())->handleUpload($this->request->getSession(), $file);
+
+        return $this->json($payload);
+    }
+
     /**
      * @param array<string,mixed> $payload
      */

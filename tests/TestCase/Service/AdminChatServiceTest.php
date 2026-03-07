@@ -6,6 +6,7 @@ namespace App\Test\TestCase\Service;
 use App\Service\AdminChatService;
 use Cake\Http\Session;
 use Cake\TestSuite\TestCase;
+use Laminas\Diactoros\UploadedFile;
 
 final class AdminChatServiceTest extends TestCase
 {
@@ -92,5 +93,33 @@ final class AdminChatServiceTest extends TestCase
         $this->assertArrayHasKey('explanation', $payload);
         $this->assertSame('groq', $payload['explanation']['provider'] ?? null);
         $this->assertContains($payload['explanation']['status'] ?? null, ['disabled', 'idle', 'ok', 'cached', 'error']);
+    }
+
+    public function testUploadUpdatesFlowWithExtractedFields(): void
+    {
+        $this->service->handleMessage($this->session, 'ongoing');
+        $this->service->handleMessage($this->session, 'ticket');
+
+        $tmp = tempnam(sys_get_temp_dir(), 'chat_ticket_');
+        $path = $tmp . '.txt';
+        @rename($tmp, $path);
+        file_put_contents($path, "From København\nTo Roskilde\nOperator DSB\nDate 2026-03-07\nDeparture 08:15\nArrival 08:45\nPrice 129 DKK");
+
+        $upload = new UploadedFile($path, filesize($path) ?: 0, UPLOAD_ERR_OK, 'ticket.txt', 'text/plain');
+        $payload = $this->service->handleUpload($this->session, $upload);
+
+        $this->assertTrue($payload['ok'] ?? false);
+        $this->assertSame('ticket.txt', $payload['summary']['uploaded_file'] ?? null);
+        $this->assertSame('DSB', $payload['summary']['operator'] ?? null);
+        $this->assertNotSame('', $payload['summary']['route'] ?? '');
+        $this->assertNotSame('', $payload['summary']['extraction_provider'] ?? '');
+
+        $stored = (string)$this->session->read('flow.form._ticketFilename');
+        if ($stored !== '') {
+            $fullPath = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $stored;
+            if (is_file($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
     }
 }

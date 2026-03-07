@@ -54,11 +54,12 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
      data-message-url="<?= h($this->Url->build(['action' => 'message'])) ?>"
      data-reset-url="<?= h($this->Url->build(['action' => 'reset'])) ?>"
      data-focus-url="<?= h($this->Url->build(['action' => 'focus'])) ?>"
+     data-upload-url="<?= h($this->Url->build(['action' => 'upload'])) ?>"
      data-csrf-token="<?= h($csrfToken) ?>"
      data-initial='<?= h($payloadJson) ?>'>
   <section class="admin-chat-card">
     <h1 style="margin-top:0;">Admin Chat</h1>
-    <div class="admin-muted">Deterministisk admin-chat oven paa den eksisterende flow-session. Chatten stiller kun whitelisted spoergsmaal og bruger flow-state som sandhedskilde. Filupload testes ikke her: brug `ticket` for almindelig billetsag, `ticketless` for sag uden billetgrundlag og `seasonpass` for pendler/abonnement.</div>
+    <div class="admin-muted">Deterministisk admin-chat oven paa den eksisterende flow-session. Chatten stiller kun whitelisted spoergsmaal og bruger flow-state som sandhedskilde. Du kan uploade billet eller season-dokument direkte her; chatten bruger den eksisterende extraction-stack og skriver kun whitelistede felter tilbage til flowet.</div>
 
     <div class="admin-chat-log" data-chat-log></div>
 
@@ -71,6 +72,11 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     <form class="admin-chat-form" data-chat-form>
       <input type="text" name="message" placeholder="Skriv svar eller brug quick replies" autocomplete="off">
       <button type="submit">Send</button>
+    </form>
+
+    <form class="admin-chat-form" data-chat-upload-form enctype="multipart/form-data">
+      <input type="file" name="ticket_upload" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.heic,.txt,.text,application/pdf,image/*">
+      <button type="submit">Upload</button>
     </form>
 
     <div class="admin-toolbar">
@@ -130,11 +136,13 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
   const stepsEl = root.querySelector('[data-chat-steps]');
   const citationsEl = root.querySelector('[data-chat-citations]');
   const formEl = root.querySelector('[data-chat-form]');
+  const uploadFormEl = root.querySelector('[data-chat-upload-form]');
   const inputEl = formEl.querySelector('input[name="message"]');
   const resetEl = root.querySelector('[data-chat-reset]');
   const messageUrl = root.dataset.messageUrl;
   const resetUrl = root.dataset.resetUrl;
   const focusUrl = root.dataset.focusUrl;
+  const uploadUrl = root.dataset.uploadUrl;
   const csrfToken = root.dataset.csrfToken || '';
 
   let payload = JSON.parse(root.dataset.initial || '{}');
@@ -191,10 +199,14 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
       ['season_mode', boolLabel(!!summary.season_mode)],
       ['operator', summary.operator || '-'],
       ['operator_country', summary.operator_country || '-'],
+      ['operator_product', summary.operator_product || '-'],
       ['route', summary.route || '-'],
       ['incident_main', summary.incident_main || '-'],
       ['missed_connection', boolLabel(!!summary.missed_connection)],
       ['delay_minutes', summary.delay_minutes || '-'],
+      ['uploaded_file', summary.uploaded_file || '-'],
+      ['extraction_provider', summary.extraction_provider || '-'],
+      ['extraction_confidence', summary.extraction_confidence || '-'],
       ['eu_only', boolLabel(!!summary.eu_only)],
       ['step2_done', boolLabel(!!summary.step2_done)],
       ['step5_done', boolLabel(!!summary.step5_done)],
@@ -374,6 +386,21 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     return response.json();
   }
 
+  async function postUpload(url, formData) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(csrfToken ? {'X-CSRF-Token': csrfToken} : {})
+      },
+      body: formData
+    });
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+    return response.json();
+  }
+
   formEl.addEventListener('submit', async (event) => {
     event.preventDefault();
     const message = inputEl.value.trim();
@@ -388,6 +415,29 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     } finally {
       inputEl.disabled = false;
       inputEl.focus();
+    }
+  });
+
+  uploadFormEl.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const fileInput = uploadFormEl.querySelector('input[name="ticket_upload"]');
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      window.alert('Vælg en fil først.');
+      return;
+    }
+    fileInput.disabled = true;
+    try {
+      const data = new FormData();
+      data.append('ticket_upload', file);
+      const nextPayload = await postUpload(uploadUrl, data);
+      fileInput.value = '';
+      render(nextPayload);
+      inputEl.focus();
+    } catch (error) {
+      window.alert('Kunne ikke uploade filen: ' + error.message);
+    } finally {
+      fileInput.disabled = false;
     }
   });
 
