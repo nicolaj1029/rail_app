@@ -938,8 +938,42 @@ final class AdminChatService
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
         $items = [];
+        $questionOrder = [
+            'travel_state' => 10,
+            'ticket_upload_mode' => 20,
+            'operator' => 30,
+            'operator_country' => 40,
+            'operator_product' => 50,
+            'confirm_step2' => 60,
+            'dep_station' => 70,
+            'arr_station' => 80,
+            'incident_main' => 90,
+            'delay_minutes' => 100,
+            'separate_contract_notice' => 110,
+            'through_ticket_disclosure' => 120,
+            'meal_offered' => 130,
+            'hotel_offered' => 140,
+            'a20_3_solution_offered' => 150,
+            'a20_3_self_paid' => 160,
+            'alt_transport_provided' => 170,
+            'meal_self_paid_amount' => 180,
+            'hotel_self_paid_amount' => 190,
+            'a20_3_self_paid_amount' => 200,
+            'remedy_choice' => 210,
+            'refund_requested' => 220,
+            'return_to_origin_expense' => 230,
+            'return_to_origin_amount' => 240,
+            'reroute_same_conditions_soonest' => 250,
+            'reroute_later_at_choice' => 260,
+            'reroute_info_within_100min' => 270,
+            'reroute_extra_costs' => 280,
+            'reroute_later_outcome' => 290,
+            'reroute_later_self_paid_amount' => 300,
+            'reroute_extra_costs_amount' => 310,
+            'claim_export' => 900,
+        ];
 
-        $add = function (string $key, string $label, string $detail, string $href, string $group, string $priority) use (&$items): void {
+        $add = function (string $key, string $label, string $detail, string $href, string $group, string $priority) use (&$items, $questionOrder): void {
             $id = $group . '|' . $key;
             if (isset($items[$id])) {
                 return;
@@ -954,6 +988,7 @@ final class AdminChatService
                 'priority' => $priority,
                 'focus_key' => $focusKey,
                 'can_focus' => $focusKey !== '',
+                'order' => $questionOrder[$focusKey !== '' ? $focusKey : $key] ?? 999,
             ];
         };
 
@@ -1057,6 +1092,11 @@ final class AdminChatService
             $rightPriority = $priorityOrder[$right['priority'] ?? 'review_before_export'] ?? 99;
             if ($leftPriority !== $rightPriority) {
                 return $leftPriority <=> $rightPriority;
+            }
+            $leftOrder = (int)($left['order'] ?? 999);
+            $rightOrder = (int)($right['order'] ?? 999);
+            if ($leftOrder !== $rightOrder) {
+                return $leftOrder <=> $rightOrder;
             }
             return strcmp((string)($left['label'] ?? ''), (string)($right['label'] ?? ''));
         });
