@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 
 import 'package:mobile/config.dart';
 import 'package:mobile/features/profile/data/commuter_profile_store.dart';
+import 'package:mobile/features/profile/presentation/device_qa_screen.dart';
 import 'package:mobile/services/stations_service.dart';
 import 'package:mobile/shared/widgets/station_lookup_field.dart';
 
 class ProfileScreen extends StatefulWidget {
   final CommuterProfile commuterProfile;
   final ValueChanged<CommuterProfile> onSaveProfile;
+  final String? deviceId;
 
   const ProfileScreen({
     super.key,
     required this.commuterProfile,
     required this.onSaveProfile,
+    required this.deviceId,
   });
 
   @override
@@ -166,6 +169,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'I fase 1 ændrer denne skærm kun profil og mode. Geofencing og native tracking testes senere på device.',
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => DeviceQaScreen(initialDeviceId: widget.deviceId),
+              ),
+            );
+          },
+          icon: const Icon(Icons.developer_mode_outlined),
+          label: const Text('Åbn device QA'),
         ),
         const SizedBox(height: 16),
         ElevatedButton.icon(

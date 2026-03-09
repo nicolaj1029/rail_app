@@ -209,6 +209,7 @@ class _AppShellState extends State<AppShell> {
         return ProfileScreen(
           commuterProfile: commuterProfile,
           onSaveProfile: _saveCommuterProfile,
+          deviceId: deviceId,
         );
       default:
         return const SizedBox.shrink();
