@@ -37,6 +37,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _error;
   Map<String, dynamic>? _payload;
 
+  String get _stageTone => widget.initialContext?.stageTone ?? 'general';
+
   Color _stageColor(String tone) {
     switch (tone) {
       case 'live':
@@ -49,6 +51,62 @@ class _ChatScreenState extends State<ChatScreen> {
         return Colors.teal;
       default:
         return Colors.blueGrey;
+    }
+  }
+
+  String _uploadTitle() {
+    switch (_stageTone) {
+      case 'live':
+        return 'Dokumentér hændelsen nu';
+      case 'review':
+        return 'Upload billet eller season-dokument';
+      case 'submitted':
+        return 'Tilføj ekstra dokumentation';
+      case 'completed':
+        return 'Gem dokumentation';
+      default:
+        return 'Upload dokumentation';
+    }
+  }
+
+  String _uploadSubtitle() {
+    switch (_stageTone) {
+      case 'live':
+        return 'Prioritér kvitteringer, fotos og anden dokumentation fra den aktuelle rejse.';
+      case 'review':
+        return 'Prioritér billet, season-pass eller andet der stabiliserer review og eligibility.';
+      case 'submitted':
+        return 'Upload kun ekstra dokumentation hvis sagen skal styrkes eller opdateres.';
+      case 'completed':
+        return 'Gem kun materiale hvis det er nyttigt som reference til senere sager.';
+      default:
+        return 'Upload relevant dokumentation til den aktuelle sag.';
+    }
+  }
+
+  String _cameraUploadLabel() {
+    switch (_stageTone) {
+      case 'live':
+        return _uploading ? 'Uploader...' : 'Foto af kvittering';
+      case 'review':
+        return _uploading ? 'Uploader...' : 'Foto af billet';
+      case 'submitted':
+        return _uploading ? 'Uploader...' : 'Foto af dokumentation';
+      default:
+        return _uploading ? 'Uploader...' : 'Foto upload';
+    }
+  }
+
+  String _fileUploadLabel() {
+    switch (_stageTone) {
+      case 'review':
+        return 'Billet / season-fil';
+      case 'submitted':
+        return 'Ekstra bilag';
+      case 'completed':
+        return 'Gem bilag';
+      default:
+        return 'Fil upload';
     }
   }
 
@@ -374,6 +432,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 subtitle: Text((uploadHint['text'] ?? '').toString()),
               ),
             ),
+          Card(
+            color: _stageColor(_stageTone).withValues(alpha: 0.08),
+            child: ListTile(
+              leading: Icon(
+                Icons.attach_file_outlined,
+                color: _stageColor(_stageTone),
+              ),
+              title: Text(_uploadTitle()),
+              subtitle: Text(_uploadSubtitle()),
+            ),
+          ),
           if ((explanation['status'] ?? '').toString() == 'ok' &&
               (explanation['text'] ?? '').toString().trim().isNotEmpty)
             Card(
@@ -544,14 +613,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? null
                     : () => _uploadTicket(ImageSource.camera),
                 icon: const Icon(Icons.photo_camera_outlined),
-                label: Text(_uploading ? 'Uploader...' : 'Foto upload'),
+                label: Text(_cameraUploadLabel()),
               ),
               OutlinedButton.icon(
                 onPressed: _uploading
                     ? null
                     : () => _uploadTicket(ImageSource.gallery),
                 icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('Fil upload'),
+                label: Text(_fileUploadLabel()),
               ),
             ],
           ),
