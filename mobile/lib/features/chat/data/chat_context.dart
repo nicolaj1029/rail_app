@@ -3,12 +3,18 @@ class ChatContext {
   final String subtitle;
   final Map<String, dynamic> payload;
   final List<String> suggestions;
+  final String stageLabel;
+  final String stageDescription;
+  final String stageTone;
 
   const ChatContext({
     required this.title,
     required this.subtitle,
     required this.payload,
     required this.suggestions,
+    required this.stageLabel,
+    required this.stageDescription,
+    required this.stageTone,
   });
 
   factory ChatContext.fromJourney(
@@ -68,6 +74,7 @@ class ChatContext {
       delayMinutes: delayMinutes,
       ticketMode: ticketMode,
     );
+    final stageMeta = _stageMeta(status);
 
     return ChatContext(
       title: displayRoute,
@@ -89,6 +96,9 @@ class ChatContext {
         'incident_main': readString(['incident_main']),
       },
       suggestions: suggestions,
+      stageLabel: stageMeta.label,
+      stageDescription: stageMeta.description,
+      stageTone: stageMeta.tone,
     );
   }
 
@@ -192,4 +202,59 @@ class ChatContext {
 
     return suggestions.toSet().toList();
   }
+
+  static _StageMeta _stageMeta(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (['ended', 'review', 'ready'].contains(normalized)) {
+      return const _StageMeta(
+        label: 'Review',
+        description:
+            'Chatten bør fokusere på manglende oplysninger, eligibility og næste trin før sagen sendes.',
+        tone: 'review',
+      );
+    }
+    if (['active', 'in_progress', 'detected', 'ongoing'].contains(normalized)) {
+      return const _StageMeta(
+        label: 'Live',
+        description:
+            'Chatten bør fokusere på hvad der skal registreres nu under rejsen og hvad der kan vente til review.',
+        tone: 'live',
+      );
+    }
+    if (['submitted', 'sent', 'waiting', 'open'].contains(normalized)) {
+      return const _StageMeta(
+        label: 'Submitted',
+        description:
+            'Chatten bør fokusere på opfølgning, manglende dokumentation og hvad der realistisk sker næste gang.',
+        tone: 'submitted',
+      );
+    }
+    if (['paid', 'closed', 'resolved'].contains(normalized)) {
+      return const _StageMeta(
+        label: 'Completed',
+        description:
+            'Chatten bør fokusere på opsummering, læring og om noget skal gemmes til senere sager.',
+        tone: 'completed',
+      );
+    }
+
+    return const _StageMeta(
+      label: 'General',
+      description:
+          'Chatten bruges som hjælpelag oven på den aktuelle sag og bør fokusere på næste relevante handling.',
+      tone: 'general',
+    );
+  }
+}
+
+class _StageMeta {
+  final String label;
+  final String description;
+  final String tone;
+
+  const _StageMeta({
+    required this.label,
+    required this.description,
+    required this.tone,
+  });
 }

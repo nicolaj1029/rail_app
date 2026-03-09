@@ -37,6 +37,21 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _error;
   Map<String, dynamic>? _payload;
 
+  Color _stageColor(String tone) {
+    switch (tone) {
+      case 'live':
+        return Colors.green;
+      case 'review':
+        return Colors.orange;
+      case 'submitted':
+        return Colors.indigo;
+      case 'completed':
+        return Colors.teal;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -289,6 +304,23 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+        if (widget.initialContext != null)
+          Card(
+            color: _stageColor(
+              widget.initialContext!.stageTone,
+            ).withValues(alpha: 0.10),
+            child: ListTile(
+              leading: Icon(switch (widget.initialContext!.stageTone) {
+                'live' => Icons.play_circle_outline,
+                'review' => Icons.assignment_outlined,
+                'submitted' => Icons.outbox_outlined,
+                'completed' => Icons.check_circle_outline,
+                _ => Icons.info_outline,
+              }, color: _stageColor(widget.initialContext!.stageTone)),
+              title: Text('Fase: ${widget.initialContext!.stageLabel}'),
+              subtitle: Text(widget.initialContext!.stageDescription),
             ),
           ),
         Card(
