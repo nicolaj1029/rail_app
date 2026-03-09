@@ -92,12 +92,12 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
         dep_station: item.dep_station || '',
         arr_station: item.arr_station || '',
         delay_minutes: item.delay_minutes == null ? '' : String(item.delay_minutes),
-        ticket_mode: item.ticket_type || '',
+        ticket_mode: item.ticket_mode || item.ticket_type || '',
       });
       return `
         <div class="backend-item">
           <strong>${esc(item.route_label || item.file || 'Claim')}</strong><br>
-          <span class="muted">Status: ${esc(item.status || 'submitted')}</span><br>
+          <span class="muted">Status: ${esc(item.status_label || item.status || 'submitted')}</span><br>
           <span class="muted">Indsendt: ${esc(item.submitted_at || item.modified || '')}</span><br>
           <div style="margin-top:8px;">
             <a href="${reviewUrl}?${params.toString()}">Review</a> ·

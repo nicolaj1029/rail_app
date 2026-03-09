@@ -121,6 +121,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
     final providedRoute = _stringValue(['route_label']);
     final delay = _intValue(['delay_minutes', 'delay']);
     final status = _stringValue(['status']).toLowerCase();
+    final statusLabel = _stringValue(['status_label']);
     final deviceId = _stringValue(['device_id']);
     final routeLabel = providedRoute.isNotEmpty
         ? providedRoute
@@ -153,7 +154,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                       runSpacing: 8,
                       children: [
                         _StatusChip(
-                          label: statusText,
+                          label: statusLabel.isNotEmpty ? statusLabel : statusText,
                           color: _statusColor(status),
                         ),
                         if (delay != null)
@@ -252,7 +253,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
                   ),
                   _FactTile(
                     label: 'Billettype',
-                    value: _stringValue(['ticket_type']),
+                    value: _stringValue(['ticket_mode', 'ticket_type']),
                   ),
                 ],
               ),

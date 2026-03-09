@@ -69,7 +69,7 @@
       return `
         <div class="journey-card">
           <strong>${esc(journey.route_label || 'Journey')}</strong><br>
-          <span class="muted">Status: ${esc(journey.status || 'ukendt')}</span><br>
+          <span class="muted">Status: ${esc(journey.status_label || journey.status || 'ukendt')}</span><br>
           <span class="muted">Fra ${esc(journey.dep_station || '')} til ${esc(journey.arr_station || '')}</span><br>
           <span class="muted">Tid: ${esc(journey.dep_time || '')} -> ${esc(journey.arr_time || '')}</span><br>
           <div style="margin-top:8px;">

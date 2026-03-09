@@ -201,7 +201,7 @@ $nextActionText = is_array($nextStep)
       return `
         <div class="backend-item">
           <strong>${esc(journey.route_label || 'Journey')}</strong><br>
-          <span class="muted">Status: ${esc(journey.status || 'ukendt')}</span><br>
+          <span class="muted">Status: ${esc(journey.status_label || journey.status || 'ukendt')}</span><br>
           <span class="muted">Tid: ${esc(journey.dep_time || '')} -> ${esc(journey.arr_time || '')}</span><br>
           <div style="margin-top:8px;">
             <a href="${reviewUrl}?${params.toString()}">Review</a> ·
@@ -225,12 +225,12 @@ $nextActionText = is_array($nextStep)
         dep_station: item.dep_station || '',
         arr_station: item.arr_station || '',
         delay_minutes: item.delay_minutes == null ? '' : String(item.delay_minutes),
-        ticket_mode: item.ticket_type || '',
+        ticket_mode: item.ticket_mode || item.ticket_type || '',
       });
       return `
         <div class="backend-item">
           <strong>${esc(item.route_label || item.file || 'Claim')}</strong><br>
-          <span class="muted">Status: ${esc(item.status || 'submitted')}</span><br>
+          <span class="muted">Status: ${esc(item.status_label || item.status || 'submitted')}</span><br>
           <span class="muted">Fil: ${esc(item.file || '')}</span><br>
           <div style="margin-top:8px;">
             <a href="${reviewUrl}?${params.toString()}">Review</a> ·

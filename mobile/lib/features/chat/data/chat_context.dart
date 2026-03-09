@@ -54,6 +54,7 @@ class ChatContext {
     final operator = readString(['operator']);
     final operatorCountry = readString(['operator_country']);
     final status = readString(['status']).toLowerCase();
+    final statusLabel = readString(['status_label']);
     final delayMinutes = readInt(['delay_minutes', 'delay']);
     final ticketMode = _ticketModeForJourney(journey);
 
@@ -66,7 +67,8 @@ class ChatContext {
     final subtitleParts = <String>[
       if (operator.isNotEmpty) operator,
       if (delayMinutes != null && delayMinutes > 0) '$delayMinutes min',
-      if (_statusLabel(status).isNotEmpty) _statusLabel(status),
+      if ((statusLabel.isNotEmpty ? statusLabel : _statusLabel(status)).isNotEmpty)
+        (statusLabel.isNotEmpty ? statusLabel : _statusLabel(status)),
     ];
 
     final suggestions = _suggestionsForStatus(
@@ -103,7 +105,10 @@ class ChatContext {
   }
 
   static String _ticketModeForJourney(Map<String, dynamic> journey) {
-    final explicit = (journey['ticket_upload_mode'] ?? '').toString().trim();
+    final explicit =
+        (journey['ticket_upload_mode'] ?? journey['ticket_mode'] ?? '')
+            .toString()
+            .trim();
     if (explicit.isNotEmpty) {
       return explicit;
     }

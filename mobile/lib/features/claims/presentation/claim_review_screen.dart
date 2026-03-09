@@ -54,6 +54,11 @@ class ClaimReviewScreen extends StatelessWidget {
   String get statusKey => _stringValue(['status']).toLowerCase();
 
   String get statusLabel {
+    final explicit = _stringValue(['status_label']);
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
+
     switch (statusKey) {
       case 'ended':
       case 'ready':
@@ -115,7 +120,7 @@ class ClaimReviewScreen extends StatelessWidget {
     if (arrTime.isNotEmpty) {
       items.add('Ankomst: $arrTime');
     }
-    final ticketType = _stringValue(['ticket_type']);
+    final ticketType = _stringValue(['ticket_mode', 'ticket_type']);
     if (ticketType.isNotEmpty) {
       items.add('Billet: $ticketType');
     }

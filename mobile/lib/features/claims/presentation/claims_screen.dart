@@ -108,8 +108,12 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
               Text('Fil: ${(item['file'] ?? '').toString()}'),
               if ((item['submitted_at'] ?? '').toString().isNotEmpty)
                 Text('Indsendt: ${(item['submitted_at'] ?? '').toString()}'),
-              if ((item['ticket_type'] ?? '').toString().isNotEmpty)
-                Text('Billet: ${(item['ticket_type'] ?? '').toString()}'),
+              if (((item['ticket_mode'] ?? item['ticket_type']) ?? '')
+                  .toString()
+                  .isNotEmpty)
+                Text(
+                  'Billet: ${((item['ticket_mode'] ?? item['ticket_type']) ?? '').toString()}',
+                ),
               if (item['delay_minutes'] != null)
                 Text('Forsinkelse: ${item['delay_minutes']} min'),
               const SizedBox(height: 12),
