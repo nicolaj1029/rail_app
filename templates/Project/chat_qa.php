@@ -33,6 +33,7 @@
     <div class="chatqa-card">
       <h3>Admin chat panel</h3>
       <p class="chatqa-note">Der er nu et faktisk admin-chat panel med session-state, whitelisted spoergsmaal, citations og links tilbage til flowet.</p>
+      <div><a href="<?= h($this->Url->build('/admin/desk', ['fullBase' => true])) ?>" target="_blank">Aabn /admin/desk</a></div>
       <div><a href="<?= h($links['adminChat'] ?? '/admin/chat') ?>" target="_blank">Aabn /admin/chat</a></div>
     </div>
     <div class="chatqa-card">

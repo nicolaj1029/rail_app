@@ -133,6 +133,10 @@ return function (RouteBuilder $routes): void {
         // Admin panel for flow (session flag toggle & read-only inspection)
         $builder->connect('/admin/flow', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'index']);
         $builder->connect('/admin/flow/toggle', ['prefix' => 'Admin', 'controller' => 'FlowAdmin', 'action' => 'toggle']);
+        $builder->connect('/admin/desk', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'index']);
+        $builder->connect('/admin/desk/view', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'view']);
+        $builder->connect('/admin/desk/role', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'role']);
+        $builder->connect('/admin/desk/update-status', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'updateStatus']);
         $builder->connect('/admin/chat', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'index']);
         $builder->connect('/admin/chat/message', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'message']);
         $builder->connect('/admin/chat/reset', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'reset']);

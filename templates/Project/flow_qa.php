@@ -26,6 +26,7 @@
     <h3>Chat / RAG / Groq</h3>
     <p>Samlet arbejdsside for chatbot-opsaetning, regulation search/quote, Groq audit og forslag til hvordan chatten kobles paa det nuvaerende flow uden at erstatte evaluators eller pipeline.</p>
     <div><a href="<?= h($this->Url->build('/project/chat-qa', ['fullBase' => true])) ?>" target="_blank">Aabn chat QA-siden</a></div>
+    <div style="margin-top:6px;"><a href="<?= h($this->Url->build('/admin/desk', ['fullBase' => true])) ?>" target="_blank">Aabn admin desk</a></div>
     <div style="margin-top:6px;"><a href="<?= h($this->Url->build('/admin/chat', ['fullBase' => true])) ?>" target="_blank">Aabn admin-chat panel</a></div>
   </div>
   <div class="card" style="margin-bottom:12px; border-color:#d9f99d; background:#f7fee7;">

@@ -84,6 +84,7 @@ $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
     </form>
 
     <div class="admin-toolbar">
+      <a class="button button-outline" href="<?= h($this->Url->build('/admin/desk')) ?>">Admin Desk</a>
       <button type="button" class="button button-outline" data-chat-reset>Nulstil chat</button>
       <a class="button button-outline" href="<?= h($this->Url->build('/project/chat-qa')) ?>">Chat QA</a>
       <a class="button button-outline" href="<?= h($this->Url->build('/admin/audit/latest')) ?>">Audit</a>
