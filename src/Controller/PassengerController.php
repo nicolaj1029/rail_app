@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Service\AdminChatService;
 use App\Service\FlowStepsService;
 use App\Service\OperatorCatalog;
 use App\Service\SeasonPolicyCatalog;
@@ -27,9 +28,16 @@ class PassengerController extends AppController
 
     public function review(): void
     {
-        $snapshot = $this->buildSnapshot();
         $selectedContext = $this->buildSelectedContext();
-        $this->set(compact('snapshot', 'selectedContext'));
+        $contextApplied = false;
+
+        if ($selectedContext !== []) {
+            (new AdminChatService())->applyContextToFlow($this->request->getSession(), $selectedContext);
+            $contextApplied = true;
+        }
+
+        $snapshot = $this->buildSnapshot();
+        $this->set(compact('snapshot', 'selectedContext', 'contextApplied'));
     }
 
     public function commuter(): void

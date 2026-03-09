@@ -64,6 +64,25 @@ final class AdminChatService
      */
     public function applyMobileContext(Session $session, array $context): array
     {
+        $this->applyContextToFlow($session, $context);
+
+        $routeLabel = trim((string)($context['route_label'] ?? ''));
+        $history = (array)$session->read('admin.chat_history') ?: [];
+        $history[] = $this->assistantMessage(
+            $routeLabel !== ''
+                ? 'Kontekst indlaest for ' . $routeLabel . '. Chatten tager nu udgangspunkt i den rejse.'
+                : 'Kontekst indlaest fra mobil rejse.'
+        );
+        $session->write('admin.chat_history', $history);
+
+        return $this->buildPayload($session, 'Mobil kontekst anvendt.');
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    public function applyContextToFlow(Session $session, array $context): void
+    {
         $flow = $this->readFlow($session);
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
@@ -140,17 +159,6 @@ final class AdminChatService
         $flow['incident'] = $incident;
         $flow['compute'] = $compute;
         $this->writeFlow($session, $flow);
-
-        $routeLabel = trim((string)($context['route_label'] ?? ''));
-        $history = (array)$session->read('admin.chat_history') ?: [];
-        $history[] = $this->assistantMessage(
-            $routeLabel !== ''
-                ? 'Kontekst indlaest for ' . $routeLabel . '. Chatten tager nu udgangspunkt i den rejse.'
-                : 'Kontekst indlaest fra mobil rejse.'
-        );
-        $session->write('admin.chat_history', $history);
-
-        return $this->buildPayload($session, 'Mobil kontekst anvendt.');
     }
 
     /**

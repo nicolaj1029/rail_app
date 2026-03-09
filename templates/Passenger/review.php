@@ -2,6 +2,7 @@
 /** @var \App\View\AppView $this */
 /** @var array<string,mixed> $snapshot */
 /** @var array<string,mixed> $selectedContext */
+/** @var bool $contextApplied */
 $form = (array)($snapshot['form'] ?? []);
 $nextStep = $snapshot['nextStep'] ?? null;
 $steps = (array)($snapshot['steps'] ?? []);
@@ -28,7 +29,12 @@ $steps = (array)($snapshot['steps'] ?? []);
     <div class="card">
       <h2>Det vi har nu</h2>
       <?php if ($selectedContext !== []): ?>
-        <p class="muted">Review-siden blev åbnet med valgt kontekst fra journeys/claims-listen.</p>
+        <p class="muted">
+          Review-siden blev åbnet med valgt kontekst fra journeys/claims-listen.
+          <?php if ($contextApplied): ?>
+            Den kontekst er nu også skrevet ind i flow-sessionen.
+          <?php endif; ?>
+        </p>
       <?php endif; ?>
       <div class="summary">
         <div>Status</div><div><strong><?= h((string)$snapshot['status']) ?></strong></div>
