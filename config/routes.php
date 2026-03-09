@@ -69,6 +69,11 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/project/mobile-qa', ['controller' => 'Project', 'action' => 'mobileQa']);
         $builder->connect('/project/flow-qa', ['controller' => 'Project', 'action' => 'flowQa']);
         $builder->connect('/project/chat-qa', ['controller' => 'Project', 'action' => 'chatQa']);
+        $builder->connect('/passenger', ['controller' => 'Passenger', 'action' => 'start']);
+        $builder->connect('/passenger/start', ['controller' => 'Passenger', 'action' => 'start']);
+        $builder->connect('/passenger/review', ['controller' => 'Passenger', 'action' => 'review']);
+        $builder->connect('/passenger/commuter', ['controller' => 'Passenger', 'action' => 'commuter']);
+        $builder->connect('/passenger/claims', ['controller' => 'Passenger', 'action' => 'claims']);
         $builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
             ->setPass(['slug']);
         $builder->connect('/project/annotate/{slug}', ['controller' => 'Project', 'action' => 'annotate'])

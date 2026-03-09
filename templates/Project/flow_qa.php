@@ -28,6 +28,11 @@
     <div><a href="<?= h($this->Url->build('/project/chat-qa', ['fullBase' => true])) ?>" target="_blank">Aabn chat QA-siden</a></div>
     <div style="margin-top:6px;"><a href="<?= h($this->Url->build('/admin/chat', ['fullBase' => true])) ?>" target="_blank">Aabn admin-chat panel</a></div>
   </div>
+  <div class="card" style="margin-bottom:12px; border-color:#d9f99d; background:#f7fee7;">
+    <h3>Passenger V2</h3>
+    <p>Alternativ passager-UI bygget oven på samme flow/session/evaluators som den nuværende webapp. Det gamle flow er bevaret; dette er kun et nyt entry-lag inspireret af mobil-appens produktstruktur.</p>
+    <div><a href="<?= h($this->Url->build('/passenger/start', ['fullBase' => true])) ?>" target="_blank">Aabn Passenger V2</a></div>
+  </div>
   <p>Hurtige links og en simpel "how-to" til at teste split-flowet (trin 1-12), samt bruge fixtures/scenarios som regressionstest, admin-debug og operatør-output (EU-formularens fritekstfelt).</p>
 
   <h2>Sådan tester du trin for trin</h2>
