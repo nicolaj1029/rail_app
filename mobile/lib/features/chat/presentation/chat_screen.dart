@@ -27,6 +27,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatService _service;
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
 
   bool _loading = true;
@@ -120,8 +121,27 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     _service.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final offset = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          offset,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      _scrollController.jumpTo(offset);
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -140,6 +160,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _payload = payload;
       });
+      _scrollToBottom(animated: false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -173,6 +194,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _payload = payload;
         _contextApplied = true;
       });
+      _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -204,6 +226,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _payload = payload;
       });
+      _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -233,6 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _payload = payload;
       });
+      _scrollToBottom(animated: false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -266,6 +290,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _payload = payload;
       });
+      _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -313,6 +338,7 @@ class _ChatScreenState extends State<ChatScreen> {
         : const <String>[];
 
     return ListView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       children: [
         Text(
