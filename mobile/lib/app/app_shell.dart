@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile/config.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
 import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/claims/presentation/claim_review_screen.dart';
 import 'package:mobile/features/claims/presentation/claims_screen.dart';
@@ -138,6 +139,28 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  void _openPrimaryChat() {
+    final journey = _primaryReviewJourney;
+    if (journey == null) {
+      setState(() => selectedIndex = 3);
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          commuterMode: commuterMode,
+          deviceId: deviceId,
+          commuterProfile: commuterProfile,
+          initialContext: ChatContext.fromJourney(
+            journey,
+            source: 'home_primary',
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCurrentScreen() {
     switch (selectedIndex) {
       case 0:
@@ -154,6 +177,9 @@ class _AppShellState extends State<AppShell> {
           onOpenPrimaryReview: _primaryReviewJourney == null
               ? null
               : _openPrimaryReview,
+          onOpenPrimaryChat: _primaryReviewJourney == null
+              ? null
+              : _openPrimaryChat,
         );
       case 1:
         if (deviceId == null || deviceId!.isEmpty) {

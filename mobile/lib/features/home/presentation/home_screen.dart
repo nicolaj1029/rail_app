@@ -13,6 +13,7 @@ class HomeScreen extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final VoidCallback onOpenLiveAssist;
   final VoidCallback? onOpenPrimaryReview;
+  final VoidCallback? onOpenPrimaryChat;
 
   const HomeScreen({
     super.key,
@@ -26,6 +27,7 @@ class HomeScreen extends StatelessWidget {
     required this.onNavigate,
     required this.onOpenLiveAssist,
     required this.onOpenPrimaryReview,
+    this.onOpenPrimaryChat,
   });
 
   int get readyCount => _summaryInt('ready_count');
@@ -51,6 +53,12 @@ class HomeScreen extends StatelessWidget {
     final kind = (action['kind'] ?? '').toString();
     switch (kind) {
       case 'review_journey':
+        if (commuterProfile.enabled &&
+            commuterProfile.isConfigured &&
+            onOpenPrimaryChat != null) {
+          onOpenPrimaryChat!();
+          return;
+        }
         if (onOpenPrimaryReview != null) {
           onOpenPrimaryReview!();
           return;
@@ -207,9 +215,17 @@ class HomeScreen extends StatelessWidget {
               ),
               _ActionCard(
                 title: commuterMode ? 'Chat om en sag' : 'Få hjælp i chat',
-                subtitle: 'Åbn kontekstuel chat med quick replies.',
+                subtitle: commuterMode
+                    ? 'Åbn chat direkte på din vigtigste pendlerrejse.'
+                    : 'Åbn kontekstuel chat med quick replies.',
                 icon: Icons.chat_bubble_outline,
-                onTap: () => onNavigate(3),
+                onTap: () {
+                  if (commuterMode && onOpenPrimaryChat != null) {
+                    onOpenPrimaryChat!();
+                    return;
+                  }
+                  onNavigate(3);
+                },
               ),
               _ActionCard(
                 title: commuterMode
@@ -237,8 +253,10 @@ class HomeScreen extends StatelessWidget {
                   'Åbn den vigtigste sag direkte fra forsiden.',
                 ),
                 trailing: FilledButton(
-                  onPressed: onOpenPrimaryReview,
-                  child: const Text('Review nu'),
+                  onPressed: commuterMode && onOpenPrimaryChat != null
+                      ? onOpenPrimaryChat
+                      : onOpenPrimaryReview,
+                  child: Text(commuterMode ? 'Chat nu' : 'Review nu'),
                 ),
               ),
             ),
