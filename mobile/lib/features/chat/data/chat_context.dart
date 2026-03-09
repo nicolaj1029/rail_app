@@ -60,17 +60,14 @@ class ChatContext {
     final subtitleParts = <String>[
       if (operator.isNotEmpty) operator,
       if (delayMinutes != null && delayMinutes > 0) '$delayMinutes min',
-      if (status.isNotEmpty) status,
+      if (_statusLabel(status).isNotEmpty) _statusLabel(status),
     ];
 
-    final suggestions = <String>[
-      'Hvad mangler der endnu i denne sag?',
-      if (delayMinutes != null && delayMinutes > 0)
-        'Er $delayMinutes min nok til kompensation?',
-      if (ticketMode == 'seasonpass')
-        'Hvordan håndterer vi pendler/season pass her?',
-      'Hvilket næste trin anbefaler du?',
-    ];
+    final suggestions = _suggestionsForStatus(
+      status: status,
+      delayMinutes: delayMinutes,
+      ticketMode: ticketMode,
+    );
 
     return ChatContext(
       title: displayRoute,
@@ -109,5 +106,90 @@ class ChatContext {
     }
 
     return 'ticket';
+  }
+
+  static String _statusLabel(String status) {
+    switch (status) {
+      case 'ended':
+      case 'review':
+      case 'ready':
+        return 'klar til review';
+      case 'active':
+      case 'in_progress':
+      case 'detected':
+      case 'ongoing':
+        return 'rejse i gang';
+      case 'submitted':
+      case 'sent':
+      case 'waiting':
+      case 'open':
+        return 'indsendt / i gang';
+      case 'paid':
+      case 'closed':
+      case 'resolved':
+        return 'afsluttet';
+      default:
+        return status.trim();
+    }
+  }
+
+  static List<String> _suggestionsForStatus({
+    required String status,
+    required int? delayMinutes,
+    required String ticketMode,
+  }) {
+    final normalized = status.trim().toLowerCase();
+    final suggestions = <String>[];
+
+    if (['ended', 'review', 'ready'].contains(normalized)) {
+      suggestions.addAll([
+        'Hvad mangler der endnu før vi kan sende sagen?',
+        'Hvilket næste trin anbefaler du for denne rejse?',
+      ]);
+      if (delayMinutes != null && delayMinutes > 0) {
+        suggestions.add('Er $delayMinutes min nok til kompensation?');
+      }
+      if (ticketMode == 'seasonpass') {
+        suggestions.add('Hvordan håndterer vi pendler/season pass her?');
+      }
+    } else if ([
+      'active',
+      'in_progress',
+      'detected',
+      'ongoing',
+    ].contains(normalized)) {
+      suggestions.addAll([
+        'Hvad bør jeg registrere nu under rejsen?',
+        'Skal jeg bruge live assist eller vente til review?',
+        'Er der noget vigtigt jeg mangler at dokumentere?',
+      ]);
+      if (delayMinutes != null && delayMinutes > 0) {
+        suggestions.add('Hvad betyder $delayMinutes min forsinkelse lige nu?');
+      }
+    } else if (['submitted', 'sent', 'waiting', 'open'].contains(normalized)) {
+      suggestions.addAll([
+        'Er der mere vi bør tilføje til den indsendte sag?',
+        'Hvad er næste forventede skridt nu?',
+        'Mangler der dokumentation for at styrke sagen?',
+      ]);
+    } else if (['paid', 'closed', 'resolved'].contains(normalized)) {
+      suggestions.addAll([
+        'Kan du opsummere udfaldet af denne sag?',
+        'Er der noget vi bør gemme til lignende rejser?',
+      ]);
+    } else {
+      suggestions.addAll([
+        'Hvad mangler der endnu i denne sag?',
+        'Hvilket næste trin anbefaler du?',
+      ]);
+      if (delayMinutes != null && delayMinutes > 0) {
+        suggestions.add('Er $delayMinutes min nok til kompensation?');
+      }
+      if (ticketMode == 'seasonpass') {
+        suggestions.add('Hvordan håndterer vi pendler/season pass her?');
+      }
+    }
+
+    return suggestions.toSet().toList();
   }
 }
