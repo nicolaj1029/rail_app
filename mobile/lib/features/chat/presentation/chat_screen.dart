@@ -571,10 +571,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     const LinearProgressIndicator(),
                   ],
                   const SizedBox(height: 12),
-                  if (history.isEmpty)
-                    const Text('Ingen beskeder endnu.')
-                  else
+                  if (history.isEmpty && !_sending)
+                    const Text('Ingen beskeder endnu.'),
+                  if (history.isNotEmpty) ...[
                     ...history.map(_buildMessageBubble),
+                  ],
+                  if (_sending) _buildTypingBubble(),
                 ],
               ),
             ),
@@ -687,6 +689,36 @@ class _ChatScreenState extends State<ChatScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(content),
+      ),
+    );
+  }
+
+  Widget _buildTypingBubble() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        constraints: const BoxConstraints(maxWidth: 520),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Assistenten svarer...',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ],
+        ),
       ),
     );
   }
