@@ -6,6 +6,10 @@ $nextStep = $snapshot['nextStep'] ?? null;
 $steps = (array)($snapshot['steps'] ?? []);
 $journeysApi = $this->Url->build('/api/shadow/journeys', ['fullBase' => true]);
 $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
+$modeLabel = $snapshot['mode'] === 'commuter' ? 'Pendler / abonnement' : 'Enkeltrejse / standard';
+$nextActionText = is_array($nextStep)
+    ? 'Fortsæt ved næste relevante trin'
+    : 'Se resultat og afslut sagen';
 ?>
 <style>
   .passenger-page { max-width: 1080px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -13,6 +17,7 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   .hero h1 { margin: 0 0 8px; }
   .hero p { margin: 0; color: #334155; line-height: 1.5; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .subgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
   .card h2, .card h3 { margin-top: 0; }
   .muted { color: #64748b; }
@@ -22,10 +27,11 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   .list { margin: 0; padding-left: 18px; }
   .step-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .step-chip { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; font-size: 13px; }
-  .inline-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .inline-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
   .inline-form input { min-width: 240px; }
-  .backend-list { display:grid; gap:10px; margin-top:12px; }
-  .backend-item { border:1px solid #e5e7eb; border-radius:10px; padding:12px; }
+  .backend-list { display: grid; gap: 10px; margin-top: 12px; }
+  .backend-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+  .kpi { font-size: 28px; font-weight: 700; margin: 4px 0; }
 </style>
 
 <div class="passenger-page" id="passenger-v2-root"
@@ -35,71 +41,89 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
      data-review-url="<?= h($this->Url->build('/passenger/review', ['fullBase' => true])) ?>"
      data-trips-url="<?= h($this->Url->build('/passenger/trips', ['fullBase' => true])) ?>">
   <div class="hero">
-    <span class="pill">Alternativ web-oplevelse</span>
-    <h1>Passenger V2</h1>
-    <p>Dette er et alternativt passagerlag oven på den eksisterende flow-motor. Det gamle flow er bevaret urørt. Her reorganiseres oplevelsen efter det, der fungerede bedst i mobil-appen: review først, pendler-flow som egen genvej og hjælp i kontekst.</p>
+    <span class="pill">Ny passageroplevelse</span>
+    <h1>En enklere vej gennem sagen</h1>
+    <p>Denne side er et alternativ til det eksisterende flow. Den samme motor og de samme regler bruges stadig, men indgangen er gjort mere direkte: fortsæt hvor du slap, åbn hjælpen i kontekst, eller gå direkte til pendler-sporet.</p>
+  </div>
+
+  <div class="subgrid">
+    <div class="card">
+      <div class="muted">Status</div>
+      <div class="kpi"><?= h((string)$snapshot['status']) ?></div>
+      <div class="muted"><?= h($nextActionText) ?></div>
+    </div>
+    <div class="card">
+      <div class="muted">Type</div>
+      <div class="kpi"><?= h($modeLabel) ?></div>
+      <div class="muted">Skifter efter billet eller season pass</div>
+    </div>
+    <div class="card">
+      <div class="muted">Fremdrift</div>
+      <div class="kpi"><?= (int)$snapshot['completedVisible'] ?>/<?= (int)$snapshot['visibleTotal'] ?></div>
+      <div class="muted">Synlige trin færdige</div>
+    </div>
   </div>
 
   <div class="grid" style="margin-bottom:16px;">
     <div class="card">
-      <h2>Aktuel sag</h2>
-      <p><strong>Status:</strong> <?= h((string)$snapshot['status']) ?></p>
-      <p><strong>Mode:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler / season pass' : 'Standard') ?></p>
+      <h2>Din aktuelle sag</h2>
       <p><strong>Operatør:</strong> <?= h((string)($snapshot['operator'] ?: 'Ikke valgt endnu')) ?></p>
       <p><strong>Rute:</strong> <?= h((string)($snapshot['route'] ?: 'Ikke udfyldt endnu')) ?></p>
-      <p><strong>Progression:</strong> <?= (int)$snapshot['completedVisible'] ?>/<?= (int)$snapshot['visibleTotal'] ?> synlige trin færdige</p>
+      <p><strong>Næste skridt:</strong> <?= h($nextActionText) ?></p>
       <?php if (is_array($nextStep)): ?>
         <a class="cta" href="<?= h($this->Url->build('/flow/' . $nextStep['action'])) ?>">Fortsæt ved trin <?= h((string)($nextStep['num'] ?? '')) ?></a>
       <?php else: ?>
         <a class="cta" href="<?= h($quickLinks['flowCompensation']) ?>">Se resultat</a>
       <?php endif; ?>
+      <br>
+      <a class="cta secondary" href="<?= h($quickLinks['review']) ?>">Se samlet review</a>
     </div>
 
     <div class="card">
-      <h2>Hurtig start</h2>
-      <p class="muted">Samme backend som i dag. Kun indgangen er enklere.</p>
+      <h2>Hurtige handlinger</h2>
+      <p class="muted">Brug dette som den enkle indgang. Det eksisterende flow findes stadig bagved.</p>
       <a class="cta" href="<?= h($quickLinks['flowStart']) ?>">Start ny sag</a>
       <br>
-      <a class="cta secondary" href="<?= h($quickLinks['review']) ?>">Åbn review-side</a>
+      <a class="cta secondary" href="<?= h($quickLinks['review']) ?>">Åbn review</a>
       <br>
       <a class="cta secondary" href="<?= h($quickLinks['claims']) ?>">Se claims-status</a>
       <br>
-      <a class="cta secondary" href="<?= h($this->Url->build('/passenger/trips')) ?>">Åbn journeys-liste</a>
+      <a class="cta secondary" href="<?= h($this->Url->build('/passenger/trips')) ?>">Åbn rejser</a>
     </div>
 
     <div class="card">
-      <h2>Pendler</h2>
-      <p class="muted">Små forsinkelser og data-pack/claim-assist først. Samme season-pass motor som i flowet.</p>
-      <a class="cta" href="<?= h($quickLinks['commuter']) ?>">Åbn pendler-mode</a>
+      <h2>Pendler og abonnement</h2>
+      <p class="muted">Hvis du rejser på season pass, går du hurtigere videre herfra. Små forsinkelser og data-pack vurderes uden hård 60-minutters gate.</p>
+      <a class="cta" href="<?= h($quickLinks['commuter']) ?>">Åbn pendler-spor</a>
       <br>
-      <a class="cta secondary" href="<?= h($this->Url->build('/flow/entitlements')) ?>">Gå til billet / season setup</a>
+      <a class="cta secondary" href="<?= h($this->Url->build('/flow/entitlements')) ?>">Vælg billet / season pass</a>
       <br>
-      <a class="cta secondary" href="<?= h($this->Url->build('/passenger/chat')) ?>">Åbn passager-chat</a>
+      <a class="cta secondary" href="<?= h($this->Url->build('/passenger/chat')) ?>">Åbn hjælp i chat</a>
     </div>
   </div>
 
   <div class="grid">
     <div class="card">
-      <h3>Hvad løftes ind fra mobil-appen</h3>
+      <h3>Det nye i denne indgang</h3>
       <ul class="list">
-        <li>Review først i stedet for ren stepper først.</li>
-        <li>Pendler og standard i samme produkt, men med forskellig entry.</li>
+        <li>Review først i stedet for at starte forfra hver gang.</li>
+        <li>Pendler og standard i samme produkt, men med forskellig indgang.</li>
         <li>Statusfaser: live, review, submitted, completed.</li>
-        <li>Claims og hjælp i kontekst, ikke generisk navigation.</li>
+        <li>Claims og hjælp åbnes i kontekst.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h3>Originalt flow bevares</h3>
+      <h3>Det gamle flow er stadig her</h3>
       <ul class="list">
         <li><a href="<?= h($quickLinks['flowStart']) ?>">/flow/start</a> er stadig baseline.</li>
-        <li>Alle eksisterende evaluators og session keys genbruges.</li>
-        <li>Passenger V2 er kun et nyt UI-lag.</li>
+        <li>De samme regler, session keys og beregninger bruges stadig.</li>
+        <li>Denne side ændrer kun oplevelsen, ikke jura-motoren.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h3>Synlige trin nu</h3>
+      <h3>Hvad sagen består af lige nu</h3>
       <div class="step-list">
         <?php foreach ($steps as $step): ?>
           <span class="step-chip">
@@ -112,8 +136,8 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
 
   <div class="grid" style="margin-top:16px;">
     <div class="card">
-      <h2>Backend journeys</h2>
-      <p class="muted">Bruger samme shadow journeys som mobil-appen. Indtast et device-id for at hente rigtige journeys.</p>
+      <h2>Dine rejser</h2>
+      <p class="muted">Hent rejser fra den samme journey-kilde som mobil-appen. Dette er især nyttigt ved test og gennemgang af konkrete device-baserede rejser.</p>
       <div class="inline-form">
         <label for="passenger-device-id">Device ID</label>
         <input id="passenger-device-id" type="text" placeholder="fx stationtest">
@@ -124,8 +148,8 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
     </div>
 
     <div class="card">
-      <h2>Backend claims</h2>
-      <p class="muted">Liste over rigtige indsendte shadow cases i backend.</p>
+      <h2>Indsendte sager</h2>
+      <p class="muted">Her hentes de claims, som allerede er gemt i backend. Brug dette som et enkelt overblik over indsendte eller klargjorte sager.</p>
       <div class="inline-form">
         <button type="button" id="load-passenger-cases">Hent claims</button>
         <a class="cta secondary" href="<?= h($this->Url->build('/passenger/claims')) ?>">Åbn claims-view</a>
@@ -178,7 +202,7 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
         <div class="backend-item">
           <strong>${esc(journey.route_label || 'Journey')}</strong><br>
           <span class="muted">Status: ${esc(journey.status || 'ukendt')}</span><br>
-          <span class="muted">Tid: ${esc(journey.dep_time || '')} → ${esc(journey.arr_time || '')}</span><br>
+          <span class="muted">Tid: ${esc(journey.dep_time || '')} -> ${esc(journey.arr_time || '')}</span><br>
           <div style="margin-top:8px;">
             <a href="${reviewUrl}?${params.toString()}">Review</a> ·
             <a href="${chatUrl}?${params.toString()}">Chat</a>
@@ -223,14 +247,14 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
       return;
     }
     localStorage.setItem('passenger.device_id', deviceId);
-    journeysList.innerHTML = '<div class="muted">Henter journeys…</div>';
+    journeysList.innerHTML = '<div class="muted">Henter journeys...</div>';
     const response = await fetch(`${journeysApi}?device_id=${encodeURIComponent(deviceId)}`);
     const payload = await response.json();
     renderJourneys(payload?.data?.journeys || []);
   });
 
   document.getElementById('load-passenger-cases')?.addEventListener('click', async () => {
-    casesList.innerHTML = '<div class="muted">Henter claims…</div>';
+    casesList.innerHTML = '<div class="muted">Henter claims...</div>';
     const response = await fetch(casesApi);
     const payload = await response.json();
     renderCases(payload?.data?.cases || []);

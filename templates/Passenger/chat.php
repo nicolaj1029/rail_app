@@ -8,15 +8,15 @@
 <style>
   .passenger-page { max-width: 960px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
   .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); margin-bottom: 12px; }
-  .history { display:grid; gap:10px; }
+  .history { display: grid; gap: 10px; }
   .bubble { padding: 12px; border-radius: 12px; max-width: 700px; }
-  .bubble.assistant { background:#f8fafc; }
-  .bubble.user { background:#eff6ff; margin-left:auto; }
-  .choices { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-  .choice { border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:6px 10px; cursor:pointer; }
-  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
-  .toolbar input[type="text"] { flex:1; min-width:260px; }
-  .muted { color:#64748b; }
+  .bubble.assistant { background: #f8fafc; }
+  .bubble.user { background: #eff6ff; margin-left: auto; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .choice { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .toolbar input[type="text"] { flex: 1; min-width: 260px; }
+  .muted { color: #64748b; }
 </style>
 
 <div class="passenger-page" id="passenger-chat-root"
@@ -27,17 +27,17 @@
      data-context-url="<?= h($chatUrls['context']) ?>"
      data-upload-url="<?= h($chatUrls['upload']) ?>"
      data-initial-context='<?= h((string)json_encode($initialContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>'>
-  <h1>Passenger chat</h1>
-  <p class="muted">Samme chat-motor som admin/mobile, men her som passager-entry i web-laget. Hvis siden er åbnet fra en journey eller claim, indlæses den kontekst automatisk.</p>
+  <h1>Hjælp i chat</h1>
+  <p class="muted">Denne chat bruger den samme motor som de andre flader, men her er den tilpasset passager-visning. Hvis du åbnede siden fra en rejse eller claim, er den kontekst allerede indlæst.</p>
 
   <div class="card">
     <strong>Status:</strong> <?= h((string)$snapshot['status']) ?><br>
-    <strong>Mode:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler / season pass' : 'Standard') ?>
+    <strong>Type:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler / season pass' : 'Standard') ?>
   </div>
 
   <div class="card">
     <h2>Samtale</h2>
-    <div id="chat-history" class="history"><div class="muted">Indlæser chat…</div></div>
+    <div id="chat-history" class="history"><div class="muted">Indlæser chat...</div></div>
     <div id="chat-choices" class="choices"></div>
     <div class="toolbar">
       <input type="text" id="chat-input" placeholder="Skriv dit svar">
@@ -110,7 +110,7 @@
   const sendMessage = async (message) => {
     const trimmed = (message || '').trim();
     if (!trimmed) return;
-    noticeEl.textContent = 'Sender…';
+    noticeEl.textContent = 'Sender...';
     const body = new URLSearchParams({message: trimmed});
     const payload = await fetchJson(urls.message, {
       method: 'POST',
@@ -147,7 +147,7 @@
     sendMessage(target.getAttribute('data-value') || '');
   });
   document.getElementById('chat-reset')?.addEventListener('click', async () => {
-    noticeEl.textContent = 'Nulstiller…';
+    noticeEl.textContent = 'Nulstiller...';
     const payload = await fetchJson(urls.reset, {method: 'POST'});
     render(payload);
   });
@@ -157,7 +157,7 @@
       noticeEl.textContent = 'Vælg en fil først.';
       return;
     }
-    noticeEl.textContent = 'Uploader…';
+    noticeEl.textContent = 'Uploader...';
     const formData = new FormData();
     formData.append('ticket_upload', file);
     const payload = await fetchJson(urls.upload, {

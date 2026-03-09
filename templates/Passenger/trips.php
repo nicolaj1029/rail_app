@@ -6,10 +6,10 @@
 <style>
   .passenger-page { max-width: 1080px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
   .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 16px; }
-  .journey-list { display:grid; gap:12px; }
-  .journey-card { border:1px solid #e5e7eb; border-radius:12px; padding:14px; background:#fff; }
-  .muted { color:#64748b; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 16px; }
+  .journey-list { display: grid; gap: 12px; }
+  .journey-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #fff; }
+  .muted { color: #64748b; }
 </style>
 
 <div class="passenger-page" id="passenger-trips-root"
@@ -17,17 +17,17 @@
      data-chat-url="<?= h($apiLinks['chat']) ?>"
      data-review-url="<?= h($apiLinks['review']) ?>">
   <h1>Journeys</h1>
-  <p class="muted">Rigtig journeys-liste fra backend. Denne side er tænkt som web-modstykke til mobilens Trips-view.</p>
+  <p class="muted">Her ser du rejser fra den samme journey-kilde som mobil-appen. Brug listen til hurtigt at åbne review eller chat for en konkret rejse.</p>
 
   <div class="card">
     <div class="toolbar">
       <label for="device-id">Device ID</label>
       <input id="device-id" type="text" placeholder="fx stationtest">
       <button type="button" id="load-journeys">Hent journeys</button>
-      <a href="<?= h($this->Url->build('/passenger/start')) ?>">Tilbage til Passenger V2</a>
+      <a href="<?= h($this->Url->build('/passenger/start')) ?>">Tilbage til passager-start</a>
     </div>
     <div id="journey-results" class="journey-list">
-      <div class="muted">Ingen journeys hentet endnu.</div>
+      <div class="muted">Ingen rejser hentet endnu.</div>
     </div>
   </div>
 </div>
@@ -71,7 +71,7 @@
           <strong>${esc(journey.route_label || 'Journey')}</strong><br>
           <span class="muted">Status: ${esc(journey.status || 'ukendt')}</span><br>
           <span class="muted">Fra ${esc(journey.dep_station || '')} til ${esc(journey.arr_station || '')}</span><br>
-          <span class="muted">Tid: ${esc(journey.dep_time || '')} → ${esc(journey.arr_time || '')}</span><br>
+          <span class="muted">Tid: ${esc(journey.dep_time || '')} -> ${esc(journey.arr_time || '')}</span><br>
           <div style="margin-top:8px;">
             <a href="${reviewUrl}?${params.toString()}">Review</a> ·
             <a href="${chatUrl}?${params.toString()}">Chat</a> ·
@@ -88,7 +88,7 @@
       return;
     }
     localStorage.setItem('passenger.device_id', deviceId);
-    results.innerHTML = '<div class="muted">Henter journeys…</div>';
+    results.innerHTML = '<div class="muted">Henter journeys...</div>';
     const response = await fetch(`${api}?device_id=${encodeURIComponent(deviceId)}`);
     const payload = await response.json();
     render(payload?.data?.journeys || []);

@@ -12,8 +12,8 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   .cta { display: inline-block; margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: #0f172a; color: #fff; text-decoration: none; }
   .cta.secondary { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; }
   .muted { color: #64748b; }
-  .backend-list { display:grid; gap:10px; margin-top:12px; }
-  .backend-item { border:1px solid #e5e7eb; border-radius:10px; padding:12px; }
+  .backend-list { display: grid; gap: 10px; margin-top: 12px; }
+  .backend-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
 </style>
 
 <div class="passenger-page" id="passenger-claims-root"
@@ -21,13 +21,13 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
      data-chat-url="<?= h($this->Url->build('/passenger/chat', ['fullBase' => true])) ?>"
      data-review-url="<?= h($this->Url->build('/passenger/review', ['fullBase' => true])) ?>">
   <h1>Claims & status</h1>
-  <p class="muted">Alternativ claims-side, stadig bundet til det eksisterende web-flow. Formålet er at give et mere produkt-orienteret overblik, ikke at erstatte den nuværende motor.</p>
+  <p class="muted">Her samles dine kladder, reviews og indsendte claims i et enklere overblik. Den samme motor bruges stadig bagved.</p>
 
   <div class="grid">
     <div class="card">
       <h2>Aktuel claim-status</h2>
       <p><strong>Status:</strong> <?= h((string)$snapshot['status']) ?></p>
-      <p><strong>Mode:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler / season pass' : 'Standard') ?></p>
+      <p><strong>Type:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler / season pass' : 'Standard') ?></p>
       <?php if (is_array($nextStep)): ?>
         <p><strong>Næste trin:</strong> <?= h((string)($nextStep['title'] ?? '')) ?></p>
         <a class="cta" href="<?= h($this->Url->build('/flow/' . $nextStep['action'])) ?>">Fortsæt sag</a>
@@ -47,7 +47,7 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
     </div>
 
     <div class="card">
-      <h2>Eksterne / støtteflader</h2>
+      <h2>Andre værktøjer</h2>
       <a class="cta secondary" href="<?= h($claimLinks['reimbursement']) ?>">Reimbursement side</a>
       <br>
       <a class="cta secondary" href="<?= h($claimLinks['shadowCases']) ?>" target="_blank">Shadow cases API</a>
@@ -55,7 +55,7 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h2>Rigtige backend-claims</h2>
+    <h2>Indsendte claims i backend</h2>
     <p class="muted">Denne liste kommer direkte fra backend-filerne i <code>tmp/shadow_cases</code>.</p>
     <div style="margin:8px 0 12px;">
       <button type="button" id="load-real-claims">Hent claims</button>
@@ -108,7 +108,7 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   };
 
   document.getElementById('load-real-claims')?.addEventListener('click', async () => {
-    list.innerHTML = '<div class="muted">Henter claims…</div>';
+    list.innerHTML = '<div class="muted">Henter claims...</div>';
     const response = await fetch(api);
     const payload = await response.json();
     render(payload?.data?.cases || []);

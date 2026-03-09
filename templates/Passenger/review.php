@@ -6,6 +6,7 @@
 $form = (array)($snapshot['form'] ?? []);
 $nextStep = $snapshot['nextStep'] ?? null;
 $steps = (array)($snapshot['steps'] ?? []);
+$modeLabel = $snapshot['mode'] === 'commuter' ? 'Pendler / abonnement' : 'Standard';
 ?>
 <style>
   .passenger-page { max-width: 1080px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -23,14 +24,14 @@ $steps = (array)($snapshot['steps'] ?? []);
 
 <div class="passenger-page">
   <h1>Trip Review</h1>
-  <p class="muted">Samme flow-data som i den nuværende webapp, men læst som et review-overblik i stedet for ren stepper-navigation.</p>
+  <p class="muted">Her samles det vigtigste, før du går videre. Hvis siden blev åbnet fra en rejse eller claim, er den kontekst allerede skrevet ind i flowet.</p>
 
   <div class="grid">
     <div class="card">
       <h2>Det vi har nu</h2>
       <?php if ($selectedContext !== []): ?>
         <p class="muted">
-          Review-siden blev åbnet med valgt kontekst fra journeys/claims-listen.
+          Review-siden blev åbnet med valgt kontekst fra rejser eller claims.
           <?php if ($contextApplied): ?>
             Den kontekst er nu også skrevet ind i flow-sessionen.
           <?php endif; ?>
@@ -38,6 +39,7 @@ $steps = (array)($snapshot['steps'] ?? []);
       <?php endif; ?>
       <div class="summary">
         <div>Status</div><div><strong><?= h((string)$snapshot['status']) ?></strong></div>
+        <div>Type</div><div><?= h($modeLabel) ?></div>
         <div>Sagsgrundlag</div><div><?= h((string)($form['ticket_upload_mode'] ?? 'Ikke valgt')) ?></div>
         <div>Operatør</div><div><?= h((string)($snapshot['operator'] ?: 'Mangler')) ?></div>
         <div>Produkt</div><div><?= h((string)($snapshot['product'] ?: 'Mangler / ikke relevant')) ?></div>

@@ -18,21 +18,21 @@ $coverageRows = is_array($coverage) ? array_slice($coverage, 0, 8, true) : [];
 
 <div class="passenger-page">
   <h1>Pendler / season pass</h1>
-  <p class="muted">Denne side er den alternative indgang for season pass. Den bygger på den samme pendler-logik, som nu findes i flowet: tidlig adgang til resultat, ingen hård 60-minutters gate og claim-assist/data-pack som baseline.</p>
+  <p class="muted">Denne side er lavet til pendlere og abonnementer. Den bruger den samme season-pass logik som resten af flowet, men samler det vigtigste ét sted: fast operatør, produkt, små forsinkelser og hurtig adgang til data-pack/resultat.</p>
 
   <div class="grid">
     <div class="card">
-      <h2>Hvorfor særskilt pendler-entry</h2>
+      <h2>Hvorfor et særskilt pendler-spor</h2>
       <ul>
         <li>Små forsinkelser kan stadig være relevante.</li>
-        <li>TRIN 10 bør kunne åbnes tidligt.</li>
+        <li>Resultat og data-pack bør kunne åbnes tidligt.</li>
         <li>Data-pack/claim-assist er ofte vigtigere end instant payout.</li>
         <li>Fast rute og produkt kan genbruges på tværs af sager.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h2>Aktuel pendler-status</h2>
+      <h2>Din pendler-status</h2>
       <p><strong>Mode:</strong> <?= h($snapshot['mode'] === 'commuter' ? 'Pendler aktiv' : 'Ikke sat til pendler endnu') ?></p>
       <p><strong>Operatør:</strong> <?= h((string)($snapshot['operator'] ?: 'Mangler')) ?></p>
       <p><strong>Produkt:</strong> <?= h((string)($snapshot['product'] ?: 'Mangler')) ?></p>
@@ -44,8 +44,8 @@ $coverageRows = is_array($coverage) ? array_slice($coverage, 0, 8, true) : [];
 
   <?php if ($coverageRows !== []): ?>
     <div class="card" style="margin-top:16px;">
-      <h2>Policy-matrix snapshot</h2>
-      <p class="muted">Udpluk fra season policy-matrix, så den alternative web-indgang kan pege på samme dækning som QA-værktøjerne.</p>
+      <h2>Dækning i policy-matrix</h2>
+      <p class="muted">Dette er bagvedliggende dækning for season-pass regler. Det er primært nyttigt til QA og operatørdækning, men det viser også hvor verified rules findes.</p>
       <table>
         <thead>
           <tr>
