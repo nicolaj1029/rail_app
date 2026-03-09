@@ -356,13 +356,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       if (recommendedSuggestion != null)
                         FilledButton.tonalIcon(
-                          onPressed: () {
-                            _messageController.text = recommendedSuggestion;
-                            _messageController.selection =
-                                TextSelection.collapsed(
-                                  offset: _messageController.text.length,
-                                );
-                          },
+                          onPressed: _sending
+                              ? null
+                              : () => _sendMessage(recommendedSuggestion),
                           icon: const Icon(Icons.auto_awesome),
                           label: Text(recommendedSuggestion),
                         ),
