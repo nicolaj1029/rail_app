@@ -1,6 +1,7 @@
 <?php
 /** @var \App\View\AppView $this */
 /** @var array<string,mixed> $snapshot */
+/** @var array<string,mixed> $selectedContext */
 $form = (array)($snapshot['form'] ?? []);
 $nextStep = $snapshot['nextStep'] ?? null;
 $steps = (array)($snapshot['steps'] ?? []);
@@ -26,6 +27,9 @@ $steps = (array)($snapshot['steps'] ?? []);
   <div class="grid">
     <div class="card">
       <h2>Det vi har nu</h2>
+      <?php if ($selectedContext !== []): ?>
+        <p class="muted">Review-siden blev åbnet med valgt kontekst fra journeys/claims-listen.</p>
+      <?php endif; ?>
       <div class="summary">
         <div>Status</div><div><strong><?= h((string)$snapshot['status']) ?></strong></div>
         <div>Sagsgrundlag</div><div><?= h((string)($form['ticket_upload_mode'] ?? 'Ikke valgt')) ?></div>
@@ -35,11 +39,18 @@ $steps = (array)($snapshot['steps'] ?? []);
         <div>Til</div><div><?= h((string)($form['arr_station_name'] ?? $form['to_station'] ?? 'Mangler')) ?></div>
         <div>Hændelse</div><div><?= h((string)($form['incident_main'] ?? 'Mangler')) ?></div>
         <div>Forsinkelse</div><div><?= h((string)($form['delay_minutes'] ?? 'Mangler')) ?></div>
+        <?php if ($selectedContext !== []): ?>
+          <div>Valgt kontekst</div><div><?= h((string)($selectedContext['route_label'] ?? $selectedContext['case_file'] ?? 'Ekstern liste')) ?></div>
+        <?php endif; ?>
       </div>
       <?php if (is_array($nextStep)): ?>
         <a class="cta" href="<?= h($this->Url->build('/flow/' . $nextStep['action'])) ?>">Fortsæt ved næste relevante trin</a>
       <?php else: ?>
         <a class="cta" href="<?= h($this->Url->build('/flow/consent')) ?>">Fortsæt til slutningen</a>
+      <?php endif; ?>
+      <?php if ($selectedContext !== []): ?>
+        <br>
+        <a class="cta" href="<?= h($this->Url->build('/passenger/chat?' . http_build_query($selectedContext))) ?>">Åbn chat om denne sag</a>
       <?php endif; ?>
     </div>
 

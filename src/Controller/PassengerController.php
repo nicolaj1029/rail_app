@@ -28,7 +28,8 @@ class PassengerController extends AppController
     public function review(): void
     {
         $snapshot = $this->buildSnapshot();
-        $this->set(compact('snapshot'));
+        $selectedContext = $this->buildSelectedContext();
+        $this->set(compact('snapshot', 'selectedContext'));
     }
 
     public function commuter(): void
@@ -59,6 +60,34 @@ class PassengerController extends AppController
         ];
 
         $this->set(compact('snapshot', 'claimLinks'));
+    }
+
+    public function trips(): void
+    {
+        $snapshot = $this->buildSnapshot();
+        $apiLinks = [
+            'journeys' => Router::url('/api/shadow/journeys', true),
+            'chat' => Router::url('/passenger/chat', true),
+            'review' => Router::url('/passenger/review', true),
+        ];
+
+        $this->set(compact('snapshot', 'apiLinks'));
+    }
+
+    public function chat(): void
+    {
+        $snapshot = $this->buildSnapshot();
+        $csrfToken = (string)($this->request->getAttribute('csrfToken') ?? '');
+        $chatUrls = [
+            'bootstrap' => Router::url('/api/chat/bootstrap', true),
+            'message' => Router::url('/api/chat/message', true),
+            'reset' => Router::url('/api/chat/reset', true),
+            'context' => Router::url('/api/chat/context', true),
+            'upload' => Router::url('/api/chat/upload', true),
+        ];
+        $initialContext = $this->buildSelectedContext();
+
+        $this->set(compact('snapshot', 'csrfToken', 'chatUrls', 'initialContext'));
     }
 
     /**
@@ -145,5 +174,41 @@ class PassengerController extends AppController
         }
 
         return 'Ikke startet';
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildSelectedContext(): array
+    {
+        $query = $this->request->getQueryParams();
+        $context = [];
+        foreach ([
+            'journey_id',
+            'case_file',
+            'route_label',
+            'status',
+            'ticket_mode',
+            'operator',
+            'operator_country',
+            'dep_station',
+            'arr_station',
+            'incident_main',
+            'delay_minutes',
+        ] as $key) {
+            $value = $query[$key] ?? null;
+            if ($value === null) {
+                continue;
+            }
+            if (is_string($value)) {
+                $value = trim($value);
+            }
+            if ($value === '' || $value === []) {
+                continue;
+            }
+            $context[$key] = $value;
+        }
+
+        return $context;
     }
 }

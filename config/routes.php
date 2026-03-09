@@ -74,6 +74,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/passenger/review', ['controller' => 'Passenger', 'action' => 'review']);
         $builder->connect('/passenger/commuter', ['controller' => 'Passenger', 'action' => 'commuter']);
         $builder->connect('/passenger/claims', ['controller' => 'Passenger', 'action' => 'claims']);
+        $builder->connect('/passenger/trips', ['controller' => 'Passenger', 'action' => 'trips']);
+        $builder->connect('/passenger/chat', ['controller' => 'Passenger', 'action' => 'chat']);
         $builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
             ->setPass(['slug']);
         $builder->connect('/project/annotate/{slug}', ['controller' => 'Project', 'action' => 'annotate'])
