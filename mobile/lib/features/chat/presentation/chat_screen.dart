@@ -303,6 +303,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final summary =
         (payload['summary'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final contextSuggestions =
+        widget.initialContext?.suggestions ?? const <String>[];
+    final recommendedSuggestion = contextSuggestions.isNotEmpty
+        ? contextSuggestions.first
+        : null;
+    final secondarySuggestions = contextSuggestions.length > 1
+        ? contextSuggestions.sublist(1)
+        : const <String>[];
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -346,7 +354,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               : 'Brug denne rejse i chatten',
                         ),
                       ),
-                      ...widget.initialContext!.suggestions.map(
+                      if (recommendedSuggestion != null)
+                        FilledButton.tonalIcon(
+                          onPressed: () {
+                            _messageController.text = recommendedSuggestion;
+                            _messageController.selection =
+                                TextSelection.collapsed(
+                                  offset: _messageController.text.length,
+                                );
+                          },
+                          icon: const Icon(Icons.auto_awesome),
+                          label: Text(recommendedSuggestion),
+                        ),
+                      ...secondarySuggestions.map(
                         (suggestion) => ActionChip(
                           label: Text(suggestion),
                           onPressed: () {
