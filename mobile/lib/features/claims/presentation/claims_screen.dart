@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile/config.dart';
+import 'package:mobile/features/chat/data/chat_context.dart';
+import 'package:mobile/features/chat/presentation/chat_screen.dart';
 import 'package:mobile/features/claims/data/claims_service.dart';
+import 'package:mobile/features/profile/data/commuter_profile_store.dart';
 
 class ClaimsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> journeys;
@@ -120,6 +123,30 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     );
   }
 
+  void _openClaimChat(Map<String, dynamic> item) {
+    final journey = _findJourneyForCase(item);
+    final contextPayload = journey ?? item;
+    final contextSource = (item['_source'] ?? '') == 'case'
+        ? 'claims_list_case'
+        : 'claims_list_journey';
+    final deviceId = (contextPayload['device_id'] ?? item['device_id'] ?? '')
+        .toString();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          commuterMode: widget.commuterMode,
+          deviceId: deviceId.isEmpty ? null : deviceId,
+          commuterProfile: CommuterProfile.empty(),
+          initialContext: ChatContext.fromJourney(
+            contextPayload,
+            source: contextSource,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final groups = <String, List<Map<String, dynamic>>>{
@@ -231,10 +258,21 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                                 : '$dep -> $arr'),
                     ),
                     subtitle: Text(subtitleParts.join(' • ')),
-                    trailing: Text(
-                      isCase
-                          ? 'Åbn'
-                          : (widget.commuterMode ? 'Claim assist' : 'Open'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Chat om denne sag',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _openClaimChat(item),
+                          icon: const Icon(Icons.chat_bubble_outline),
+                        ),
+                        Text(
+                          isCase
+                              ? 'Åbn'
+                              : (widget.commuterMode ? 'Claim assist' : 'Open'),
+                        ),
+                      ],
                     ),
                     onTap: () {
                       if (isCase) {
