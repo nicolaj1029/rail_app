@@ -28,12 +28,14 @@ final class DeskController extends AppController
         $source = trim((string)$this->request->getQuery('source', 'session'));
         $id = trim((string)$this->request->getQuery('id', $source === 'session' ? 'current' : ''));
         $cockpit = $service->loadDeskItem($this->request->getSession(), $source, $id);
+        $playbooks = $cockpit !== null ? $service->playbooksForRole($role, $cockpit) : [];
 
         $this->set([
             'role' => $role,
             'source' => $source,
             'id' => $id,
             'cockpit' => $cockpit,
+            'playbooks' => $playbooks,
             'allowedStatuses' => $service->allowedStatusesForRole($role),
         ]);
     }
@@ -51,12 +53,18 @@ final class DeskController extends AppController
     {
         $this->request->allowMethod(['post']);
         $service = new AdminDeskService();
+        $role = $service->getRole($this->request->getSession());
         $source = trim((string)$this->request->getData('source'));
         $id = trim((string)$this->request->getData('id'));
         $status = trim((string)$this->request->getData('status'));
 
         if ($source !== '' && $id !== '' && $status !== '') {
-            $service->updateStatus($source, $id, $status);
+            $ok = $service->updateStatusForRole($role, $source, $id, $status);
+            if ($ok) {
+                $this->Flash->success('Driftstatus opdateret.');
+            } else {
+                $this->Flash->error('Status kunne ikke opdateres for den aktuelle rolle eller kilde.');
+            }
         }
 
         $redirect = (string)$this->request->getData('redirect', '/admin/desk');

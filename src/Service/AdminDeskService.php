@@ -109,8 +109,16 @@ final class AdminDeskService
 
     public function updateStatus(string $source, string $id, string $status): bool
     {
+        return $this->updateStatusForRole('jurist', $source, $id, $status);
+    }
+
+    public function updateStatusForRole(string $role, string $source, string $id, string $status): bool
+    {
         $normalized = $this->normalizeOpsStatus($status);
         if ($normalized === '') {
+            return false;
+        }
+        if (!array_key_exists($normalized, $this->allowedStatusesForRole($role))) {
             return false;
         }
 
@@ -129,6 +137,69 @@ final class AdminDeskService
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string,mixed> $cockpit
+     * @return list<array<string,mixed>>
+     */
+    public function playbooksForRole(string $role, array $cockpit): array
+    {
+        $item = (array)($cockpit['item'] ?? []);
+        $opsStatus = (string)($item['ops_status'] ?? 'in_review');
+        $source = (string)($cockpit['source'] ?? '');
+        $legalPanel = (array)($cockpit['legal_panel'] ?? []);
+        $summaryRows = (array)($cockpit['summary_rows'] ?? []);
+        $ticketMode = strtolower(trim((string)($summaryRows['Billetmode'] ?? $item['ticket_mode'] ?? '')));
+        $playbooks = [];
+
+        if ($role === 'operator') {
+            $playbooks[] = [
+                'title' => 'Live intake',
+                'text' => 'Bekræft kun kernefakta: operatør, rute, forsinkelse, billetgrundlag og uploads. Undgå juridiske løfter.',
+            ];
+            $playbooks[] = [
+                'title' => 'Eskalering',
+                'text' => 'Hvis policy, season-pass eller artikelvurdering er uklar, skift status til Juridisk review og overlad sagen til jurist.',
+            ];
+            if ($ticketMode === '' || $ticketMode === 'ticketless') {
+                $playbooks[] = [
+                    'title' => 'Mangler dokumentation',
+                    'text' => 'Bed passageren om billet, season-dokument eller kvittering før du lover næste skridt.',
+                ];
+            }
+            if (($legalPanel['extraordinary'] ?? false) === true || ($legalPanel['profile_blocked'] ?? false) === true) {
+                $playbooks[] = [
+                    'title' => 'Hold hænderne fra juraen',
+                    'text' => 'Denne sag har juridiske markører. Operator bør ikke afslutte den uden jurist.',
+                ];
+            }
+        } else {
+            $playbooks[] = [
+                'title' => 'Jurist review',
+                'text' => 'Brug cockpit til at afgøre ansvar, kompensation, refund og operator policy før endelig status.',
+            ];
+            if ($opsStatus === 'legal_review') {
+                $playbooks[] = [
+                    'title' => 'Afklar policy og outcome',
+                    'text' => 'Når juraen er afklaret, flyt sagen til Klar til indsendelse eller tilbage til Afventer passager hvis der mangler materiale.',
+                ];
+            }
+            if ($ticketMode === 'seasonpass') {
+                $playbooks[] = [
+                    'title' => 'Season pass',
+                    'text' => 'Kontrollér operator-policy og hold claim-assist/data-pack som baseline, medmindre policy er verificeret nok til noget stærkere.',
+                ];
+            }
+            if ($source === 'session') {
+                $playbooks[] = [
+                    'title' => 'Live med passager',
+                    'text' => 'Brug admin-chatten til at lukke blockers i realtid og opret sag fra sessionen, når kernen er bekræftet.',
+                ];
+            }
+        }
+
+        return $playbooks;
     }
 
     /**

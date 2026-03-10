@@ -5,6 +5,7 @@
 /** @var string $id */
 /** @var array<string,mixed>|null $cockpit */
 /** @var array<string,string> $allowedStatuses */
+/** @var list<array<string,mixed>> $playbooks */
 $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
 $item = (array)($cockpit['item'] ?? []);
 $summaryRows = (array)($cockpit['summary_rows'] ?? []);
@@ -17,6 +18,7 @@ $attachments = (array)($cockpit['attachments'] ?? []);
 $steps = (array)($opsPanel['steps'] ?? []);
 $blockers = (array)($opsPanel['blockers'] ?? []);
 $actions = (array)($opsPanel['actions'] ?? []);
+$playbooks = $playbooks ?? [];
 $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source) . '&id=' . urlencode($id));
 ?>
 <style>
@@ -157,8 +159,29 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
                 <?php endforeach; ?>
               </select>
               <button class="desk-button primary" type="submit">Gem driftstatus</button>
+              <?php if ($role === 'operator'): ?>
+                <button class="desk-button" type="submit" name="status" value="legal_review">Send til jurist</button>
+              <?php endif; ?>
             </form>
           <?php endif; ?>
+        </section>
+
+        <section class="desk-card">
+          <h2 class="desk-title"><?= $role === 'jurist' ? 'Jurist-playbooks' : 'Operator-playbooks' ?></h2>
+          <div class="desk-panel-list">
+            <?php foreach ($playbooks as $playbook): ?>
+              <div class="desk-panel-item">
+                <strong><?= h((string)($playbook['title'] ?? 'Playbook')) ?></strong>
+                <div><?= h((string)($playbook['text'] ?? '')) ?></div>
+              </div>
+            <?php endforeach; ?>
+            <?php if ($playbooks === []): ?>
+              <div class="desk-panel-item">
+                <strong>Ingen playbooks</strong>
+                <div>Denne sag har ingen særlige driftsinstruktioner endnu.</div>
+              </div>
+            <?php endif; ?>
+          </div>
         </section>
 
         <?php if ($history !== []): ?>
