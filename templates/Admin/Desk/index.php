@@ -5,8 +5,11 @@
 /** @var bool $roleLocked */
 /** @var string $authUser */
 /** @var string $roleLabel */
+/** @var string $filter */
+/** @var string $search */
 $items = (array)($inbox['items'] ?? []);
 $stats = (array)($inbox['stats'] ?? []);
+$availableFilters = (array)($inbox['available_filters'] ?? []);
 $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
 ?>
 <style>
@@ -31,6 +34,9 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
   .desk-actions { display:flex; gap:8px; flex-wrap:wrap; }
   .desk-note { border-left:4px solid #0a6fd8; background:#f5faff; padding:10px 12px; border-radius:8px; margin-top:12px; }
   code.desk-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .desk-filter-form { display:grid; gap:10px; margin-top:12px; }
+  .desk-filter-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .desk-input, .desk-select { border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; background:#fff; color:#0f172a; min-width:180px; }
   @media (max-width: 980px) { .desk-grid { grid-template-columns:1fr; } }
 </style>
 
@@ -83,7 +89,24 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
     <section class="desk-card">
       <h2 class="desk-title">Inbox</h2>
       <div class="desk-muted">Samler live session, sager, claims og shadow-filer i én arbejdsliste.</div>
+      <form method="get" action="<?= h($this->Url->build('/admin/desk')) ?>" class="desk-filter-form">
+        <div class="desk-filter-row">
+          <select class="desk-select" name="filter">
+            <?php foreach ($availableFilters as $filterValue => $label): ?>
+              <option value="<?= h((string)$filterValue) ?>" <?= $filter === (string)$filterValue ? 'selected' : '' ?>><?= h((string)$label) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <input class="desk-input" type="search" name="q" value="<?= h($search) ?>" placeholder="Søg på rute, passager, kilde ...">
+          <button class="desk-button primary" type="submit">Filtrér</button>
+          <?php if ($filter !== 'all' || trim($search) !== ''): ?>
+            <a class="desk-button" href="<?= h($this->Url->build('/admin/desk')) ?>">Nulstil</a>
+          <?php endif; ?>
+        </div>
+      </form>
       <div class="desk-list" style="margin-top:12px;">
+        <?php if ($items === []): ?>
+          <div class="desk-note">Ingen sager matcher det valgte filter.</div>
+        <?php endif; ?>
         <?php foreach ($items as $item): ?>
           <article class="desk-item">
             <div class="desk-item-head">

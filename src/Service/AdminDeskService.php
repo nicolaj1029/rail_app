@@ -64,7 +64,7 @@ final class AdminDeskService
     /**
      * @return array<string,mixed>
      */
-    public function buildInbox(Session $session): array
+    public function buildInbox(Session $session, string $filter = 'all', string $search = ''): array
     {
         $items = [];
 
@@ -98,6 +98,27 @@ final class AdminDeskService
             return $bTime <=> $aTime;
         });
 
+        $normalizedFilter = $this->normalizeInboxFilter($filter);
+        $normalizedSearch = mb_strtolower(trim($search));
+        $items = array_values(array_filter($items, function (array $item) use ($normalizedFilter, $normalizedSearch): bool {
+            if ($normalizedFilter !== 'all' && (string)($item['ops_status'] ?? '') !== $normalizedFilter) {
+                return false;
+            }
+            if ($normalizedSearch === '') {
+                return true;
+            }
+
+            $haystack = mb_strtolower(implode(' ', array_filter([
+                (string)($item['title'] ?? ''),
+                (string)($item['subtitle'] ?? ''),
+                (string)($item['source'] ?? ''),
+                (string)($item['ticket_mode'] ?? ''),
+                (string)($item['next_action'] ?? ''),
+            ])));
+
+            return str_contains($haystack, $normalizedSearch);
+        }));
+
         $stats = [
             'all' => count($items),
             'awaiting_passenger' => 0,
@@ -118,6 +139,9 @@ final class AdminDeskService
         return [
             'items' => $items,
             'stats' => $stats,
+            'filter' => $normalizedFilter,
+            'search' => $search,
+            'available_filters' => $this->availableInboxFilters(),
         ];
     }
 
@@ -138,6 +162,22 @@ final class AdminDeskService
     public function updateStatus(string $source, string $id, string $status): bool
     {
         return $this->updateStatusForRole('jurist', $source, $id, $status);
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    public function availableInboxFilters(): array
+    {
+        return [
+            'all' => 'Alle',
+            'awaiting_passenger' => 'Afventer passager',
+            'in_review' => 'Under behandling',
+            'legal_review' => 'Juridisk review',
+            'ready_to_submit' => 'Klar til indsendelse',
+            'submitted' => 'Indsendt',
+            'resolved' => 'Løst',
+        ];
     }
 
     public function updateStatusForRole(string $role, string $source, string $id, string $status): bool
@@ -614,6 +654,13 @@ final class AdminDeskService
         }
 
         return 'Åbn cockpit';
+    }
+
+    private function normalizeInboxFilter(string $filter): string
+    {
+        $normalized = strtolower(trim($filter));
+
+        return array_key_exists($normalized, $this->availableInboxFilters()) ? $normalized : 'all';
     }
 
     /**

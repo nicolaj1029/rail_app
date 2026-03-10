@@ -14,11 +14,15 @@ final class DeskController extends AppController
         $service = new AdminDeskService();
         $session = $this->request->getSession();
         $role = $service->getRole($session);
-        $inbox = $service->buildInbox($session);
+        $filter = trim((string)$this->request->getQuery('filter', 'all'));
+        $search = trim((string)$this->request->getQuery('q', ''));
+        $inbox = $service->buildInbox($session, $filter, $search);
 
         $this->set([
             'role' => $role,
             'inbox' => $inbox,
+            'filter' => (string)($inbox['filter'] ?? 'all'),
+            'search' => (string)($inbox['search'] ?? ''),
             'roleLocked' => $service->roleIsLocked($session),
             'authUser' => $service->getAuthenticatedUser($session),
             'roleLabel' => $service->getRoleLabel($session),
