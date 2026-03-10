@@ -7,6 +7,7 @@ use Cake\Datasource\EntityInterface;
 use Cake\Http\Session;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
+use Throwable;
 
 final class AdminDeskService
 {
@@ -72,12 +73,18 @@ final class AdminDeskService
             $items[] = $currentSession;
         }
 
-        foreach ($this->cases->find()->orderDesc('modified')->limit(100)->all() as $case) {
-            $items[] = $this->buildCaseItem($case);
+        try {
+            foreach ($this->cases->find()->orderDesc('modified')->limit(100)->all() as $case) {
+                $items[] = $this->buildCaseItem($case);
+            }
+        } catch (Throwable) {
         }
 
-        foreach ($this->claims->find()->orderDesc('modified')->limit(100)->all() as $claim) {
-            $items[] = $this->buildClaimItem($claim);
+        try {
+            foreach ($this->claims->find()->orderDesc('modified')->limit(100)->all() as $claim) {
+                $items[] = $this->buildClaimItem($claim);
+            }
+        } catch (Throwable) {
         }
 
         foreach ((new PassengerDataService())->listCases() as $shadowCase) {
@@ -144,17 +151,25 @@ final class AdminDeskService
         }
 
         if ($source === 'case') {
-            $entity = $this->cases->get($id);
-            $entity->set('status', $normalized);
+            try {
+                $entity = $this->cases->get($id);
+                $entity->set('status', $normalized);
 
-            return (bool)$this->cases->save($entity);
+                return (bool)$this->cases->save($entity);
+            } catch (Throwable) {
+                return false;
+            }
         }
 
         if ($source === 'claim') {
-            $entity = $this->claims->get($id);
-            $entity->set('status', $normalized);
+            try {
+                $entity = $this->claims->get($id);
+                $entity->set('status', $normalized);
 
-            return (bool)$this->claims->save($entity);
+                return (bool)$this->claims->save($entity);
+            } catch (Throwable) {
+                return false;
+            }
         }
 
         return false;
@@ -418,7 +433,11 @@ final class AdminDeskService
      */
     private function buildStoredCaseCockpit(string $id): ?array
     {
-        $case = $this->cases->find()->where(['id' => $id])->first();
+        try {
+            $case = $this->cases->find()->where(['id' => $id])->first();
+        } catch (Throwable) {
+            return null;
+        }
         if ($case === null) {
             return null;
         }
@@ -471,7 +490,11 @@ final class AdminDeskService
      */
     private function buildClaimCockpit(string $id): ?array
     {
-        $claim = $this->claims->find()->contain(['ClaimAttachments'])->where(['id' => $id])->first();
+        try {
+            $claim = $this->claims->find()->contain(['ClaimAttachments'])->where(['id' => $id])->first();
+        } catch (Throwable) {
+            return null;
+        }
         if ($claim === null) {
             return null;
         }
