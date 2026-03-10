@@ -66,9 +66,10 @@ class AdminBasicAuthMiddleware implements MiddlewareInterface
      */
     private function configuredUsers(): array
     {
+        $users = [];
+
         $configured = Configure::read('AdminUsers');
         if (is_array($configured) && $configured !== []) {
-            $users = [];
             foreach ($configured as $row) {
                 if (!is_array($row)) {
                     continue;
@@ -82,15 +83,12 @@ class AdminBasicAuthMiddleware implements MiddlewareInterface
                 if (!in_array($role, ['jurist', 'operator'], true)) {
                     $role = 'jurist';
                 }
-                $users[] = [
+                $users = $this->appendUniqueUser($users, [
                     'username' => $username,
                     'password' => $password,
                     'role' => $role,
                     'label' => trim((string)($row['label'] ?? $username)) ?: $username,
-                ];
-            }
-            if ($users !== []) {
-                return $users;
+                ]);
             }
         }
 
@@ -101,34 +99,57 @@ class AdminBasicAuthMiddleware implements MiddlewareInterface
         $operatorPass = (string)env('ADMIN_OPERATOR_PASS', '');
 
         if ($juristPass !== '' || $operatorPass !== '') {
-            $users = [];
             if ($juristPass !== '') {
-                $users[] = [
+                $users = $this->appendUniqueUser($users, [
                     'username' => $juristUser !== '' ? $juristUser : 'jurist',
                     'password' => $juristPass,
                     'role' => 'jurist',
                     'label' => 'Jurist',
-                ];
+                ]);
             }
             if ($operatorPass !== '') {
-                $users[] = [
+                $users = $this->appendUniqueUser($users, [
                     'username' => $operatorUser !== '' ? $operatorUser : 'operator',
                     'password' => $operatorPass,
                     'role' => 'operator',
                     'label' => 'Operator',
-                ];
-            }
-            if ($users !== []) {
-                return $users;
+                ]);
             }
         }
 
-        return [[
+        $users = $this->appendUniqueUser($users, [
             'username' => trim((string)($cfg['username'] ?? 'admin')) ?: 'admin',
             'password' => (string)($cfg['password'] ?? 'changeme'),
             'role' => 'jurist',
             'label' => 'Admin',
-        ]];
+        ]);
+
+        return $users;
+    }
+
+    /**
+     * @param list<array{username:string,password:string,role:string,label:string}> $users
+     * @param array{username:string,password:string,role:string,label:string} $candidate
+     * @return list<array{username:string,password:string,role:string,label:string}>
+     */
+    private function appendUniqueUser(array $users, array $candidate): array
+    {
+        if ($candidate['username'] === '' || $candidate['password'] === '') {
+            return $users;
+        }
+
+        foreach ($users as $existing) {
+            if (
+                hash_equals($existing['username'], $candidate['username']) &&
+                hash_equals($existing['password'], $candidate['password'])
+            ) {
+                return $users;
+            }
+        }
+
+        $users[] = $candidate;
+
+        return $users;
     }
 
     /**
