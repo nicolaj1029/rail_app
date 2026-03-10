@@ -2,6 +2,9 @@
 /** @var \App\View\AppView $this */
 /** @var string $role */
 /** @var array<string,mixed> $inbox */
+/** @var bool $roleLocked */
+/** @var string $authUser */
+/** @var string $roleLabel */
 $items = (array)($inbox['items'] ?? []);
 $stats = (array)($inbox['stats'] ?? []);
 $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
@@ -27,6 +30,7 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
   .desk-meta { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:#475569; }
   .desk-actions { display:flex; gap:8px; flex-wrap:wrap; }
   .desk-note { border-left:4px solid #0a6fd8; background:#f5faff; padding:10px 12px; border-radius:8px; margin-top:12px; }
+  code.desk-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   @media (max-width: 980px) { .desk-grid { grid-template-columns:1fr; } }
 </style>
 
@@ -38,12 +42,19 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
     <section class="desk-card">
       <h2 class="desk-title">Arbejdstilstand</h2>
       <div class="desk-muted">Jurist ser juridisk vurdering og overrides. Operator ser kun sikre handlinger og eskalering.</div>
-      <form method="post" action="<?= h($this->Url->build('/admin/desk/role')) ?>" class="desk-toolbar">
-        <input type="hidden" name="_csrfToken" value="<?= h((string)$this->getRequest()->getAttribute('csrfToken')) ?>">
-        <input type="hidden" name="redirect" value="<?= h($currentUrl) ?>">
-        <button class="desk-chip <?= $role === 'jurist' ? 'active' : '' ?>" type="submit" name="role" value="jurist">Jurist</button>
-        <button class="desk-chip <?= $role === 'operator' ? 'active' : '' ?>" type="submit" name="role" value="operator">Operator</button>
-      </form>
+      <?php if ($roleLocked): ?>
+        <div class="desk-note">
+          <strong>Logget ind som <?= h($roleLabel) ?></strong><br>
+          Brugeren <code class="desk-code"><?= h($authUser !== '' ? $authUser : 'ukendt') ?></code> er bundet til rollen <strong><?= h($role === 'jurist' ? 'Jurist' : 'Operator') ?></strong>.
+        </div>
+      <?php else: ?>
+        <form method="post" action="<?= h($this->Url->build('/admin/desk/role')) ?>" class="desk-toolbar">
+          <input type="hidden" name="_csrfToken" value="<?= h((string)$this->getRequest()->getAttribute('csrfToken')) ?>">
+          <input type="hidden" name="redirect" value="<?= h($currentUrl) ?>">
+          <button class="desk-chip <?= $role === 'jurist' ? 'active' : '' ?>" type="submit" name="role" value="jurist">Jurist</button>
+          <button class="desk-chip <?= $role === 'operator' ? 'active' : '' ?>" type="submit" name="role" value="operator">Operator</button>
+        </form>
+      <?php endif; ?>
 
       <div class="desk-stats">
         <div class="desk-stat"><div class="desk-muted">Alle</div><strong><?= (int)($stats['all'] ?? 0) ?></strong></div>
@@ -58,7 +69,7 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
         <strong><?= $role === 'jurist' ? 'Jurist-mode' : 'Operator-mode' ?></strong><br>
         <?= $role === 'jurist'
           ? 'Brug cockpit til artikelvurdering, policy-check og endelig beslutning. Operator-playbooks og eskalering er stadig synlige.'
-          : 'Hold dig til intake, dokumenter, chat og status. Brug “Send til jurist” når policy eller jura er uklar.' ?>
+          : 'Hold dig til intake, dokumenter, chat og status. Brug "Send til jurist" når policy eller jura er uklar.' ?>
       </div>
 
       <div class="desk-toolbar">

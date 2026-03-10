@@ -28,8 +28,29 @@ final class AdminDeskService
         return in_array($role, ['jurist', 'operator'], true) ? $role : 'jurist';
     }
 
+    public function getAuthenticatedUser(Session $session): string
+    {
+        return trim((string)$session->read('admin.auth_user'));
+    }
+
+    public function getRoleLabel(Session $session): string
+    {
+        $label = trim((string)$session->read('admin.auth_label'));
+
+        return $label !== '' ? $label : ucfirst($this->getRole($session));
+    }
+
+    public function roleIsLocked(Session $session): bool
+    {
+        return (bool)$session->read('admin.role_locked');
+    }
+
     public function setRole(Session $session, string $role): string
     {
+        if ($this->roleIsLocked($session)) {
+            return $this->getRole($session);
+        }
+
         $normalized = strtolower(trim($role));
         if (!in_array($normalized, ['jurist', 'operator'], true)) {
             $normalized = 'jurist';

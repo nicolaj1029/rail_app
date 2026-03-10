@@ -12,22 +12,27 @@ final class DeskController extends AppController
     public function index(): void
     {
         $service = new AdminDeskService();
-        $role = $service->getRole($this->request->getSession());
-        $inbox = $service->buildInbox($this->request->getSession());
+        $session = $this->request->getSession();
+        $role = $service->getRole($session);
+        $inbox = $service->buildInbox($session);
 
         $this->set([
             'role' => $role,
             'inbox' => $inbox,
+            'roleLocked' => $service->roleIsLocked($session),
+            'authUser' => $service->getAuthenticatedUser($session),
+            'roleLabel' => $service->getRoleLabel($session),
         ]);
     }
 
     public function view(): void
     {
         $service = new AdminDeskService();
-        $role = $service->getRole($this->request->getSession());
+        $session = $this->request->getSession();
+        $role = $service->getRole($session);
         $source = trim((string)$this->request->getQuery('source', 'session'));
         $id = trim((string)$this->request->getQuery('id', $source === 'session' ? 'current' : ''));
-        $cockpit = $service->loadDeskItem($this->request->getSession(), $source, $id);
+        $cockpit = $service->loadDeskItem($session, $source, $id);
         $playbooks = $cockpit !== null ? $service->playbooksForRole($role, $cockpit) : [];
 
         $this->set([
@@ -37,6 +42,9 @@ final class DeskController extends AppController
             'cockpit' => $cockpit,
             'playbooks' => $playbooks,
             'allowedStatuses' => $service->allowedStatusesForRole($role),
+            'roleLocked' => $service->roleIsLocked($session),
+            'authUser' => $service->getAuthenticatedUser($session),
+            'roleLabel' => $service->getRoleLabel($session),
         ]);
     }
 
@@ -44,7 +52,14 @@ final class DeskController extends AppController
     {
         $this->request->allowMethod(['post']);
         $service = new AdminDeskService();
-        $service->setRole($this->request->getSession(), (string)$this->request->getData('role'));
+        $session = $this->request->getSession();
+        $before = $service->getRole($session);
+        $after = $service->setRole($session, (string)$this->request->getData('role'));
+        if ($before !== $after) {
+            $this->Flash->success('Arbejdstilstand opdateret.');
+        } elseif ($service->roleIsLocked($session)) {
+            $this->Flash->error('Rollen styres af admin-login og kan ikke ændres her.');
+        }
 
         return $this->redirect((string)$this->request->getData('redirect', '/admin/desk'));
     }

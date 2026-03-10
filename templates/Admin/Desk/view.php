@@ -6,6 +6,9 @@
 /** @var array<string,mixed>|null $cockpit */
 /** @var array<string,string> $allowedStatuses */
 /** @var list<array<string,mixed>> $playbooks */
+/** @var bool $roleLocked */
+/** @var string $authUser */
+/** @var string $roleLabel */
 $csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
 $item = (array)($cockpit['item'] ?? []);
 $summaryRows = (array)($cockpit['summary_rows'] ?? []);
@@ -45,6 +48,7 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
   .desk-msg small { display:block; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
   .desk-steps { display:flex; gap:8px; flex-wrap:wrap; }
   .desk-step { padding:6px 10px; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; font-size:13px; }
+  .desk-note { border-left:4px solid #0a6fd8; background:#f5faff; padding:10px 12px; border-radius:8px; margin-top:12px; }
   pre.desk-pre { max-height:320px; overflow:auto; font-size:12px; background:#0f172a; color:#e2e8f0; padding:12px; border-radius:10px; }
   @media (max-width: 980px) { .desk-grid { grid-template-columns:1fr; } }
 </style>
@@ -66,6 +70,9 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
         <div class="desk-toolbar">
           <span class="desk-badge"><?= h((string)($item['ops_status_label'] ?? '')) ?></span>
           <span class="desk-badge"><?= h($role === 'jurist' ? 'Jurist' : 'Operator') ?></span>
+          <?php if ($roleLocked): ?>
+            <span class="desk-badge"><?= h($roleLabel) ?> · <?= h($authUser !== '' ? $authUser : 'ukendt') ?></span>
+          <?php endif; ?>
           <span class="desk-badge"><?= h((string)$source) ?></span>
         </div>
       </div>
