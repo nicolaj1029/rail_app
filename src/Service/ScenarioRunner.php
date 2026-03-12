@@ -67,6 +67,7 @@ class ScenarioRunner
         }
 
         $actual = (array)$resp->getJson();
+        $actual = $this->enrichMultimodalActual($fixture, $actual);
         $expected = (array)($fixture['expected'] ?? []);
         $diff = $this->compareResults($expected, $actual);
 
@@ -157,5 +158,31 @@ class ScenarioRunner
         }
         $fixture['computeOverrides'] = (array)($fixture['computeOverrides'] ?? []);
         return $fixture;
+    }
+
+    /**
+     * @param array<string,mixed> $fixture
+     * @param array<string,mixed> $actual
+     * @return array<string,mixed>
+     */
+    private function enrichMultimodalActual(array $fixture, array $actual): array
+    {
+        $transportMode = strtolower(trim((string)($fixture['transport_mode'] ?? 'rail')));
+        $actual['transport_mode'] = $transportMode;
+        if (!empty($fixture['contract_meta']) && is_array($fixture['contract_meta'])) {
+            $actual['contract_meta'] = (array)$fixture['contract_meta'];
+        }
+        if (!empty($fixture['incident_meta']) && is_array($fixture['incident_meta'])) {
+            $actual['incident_meta'] = (array)$fixture['incident_meta'];
+        }
+
+        if ($transportMode === 'ferry') {
+            $resolver = new FerryScopeResolver();
+            $actual['ferry_scope'] = $resolver->evaluate((array)($fixture['scope_meta'] ?? []));
+        } elseif (!empty($fixture['scope_meta']) && is_array($fixture['scope_meta'])) {
+            $actual['scope_meta'] = (array)$fixture['scope_meta'];
+        }
+
+        return $actual;
     }
 }
