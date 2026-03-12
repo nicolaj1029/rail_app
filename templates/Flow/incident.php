@@ -29,10 +29,14 @@ $multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
 if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
 $isFerry = $transportMode === 'ferry';
+$isBus = $transportMode === 'bus';
 $isAir = $transportMode === 'air';
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$busRights = (array)($multimodal['bus_rights'] ?? []);
+$busContract = (array)($multimodal['bus_contract'] ?? []);
+$busScope = (array)($multimodal['bus_scope'] ?? []);
 $airRights = (array)($multimodal['air_rights'] ?? []);
 $airContract = (array)($multimodal['air_contract'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
@@ -77,6 +81,8 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 <div class="flow-wrapper">
   <?php if ($isFerry): ?>
     <h1>TRIN 5 - Haendelse (ferry)</h1>
+  <?php elseif ($isBus): ?>
+    <h1>TRIN 5 - Haendelse (bus)</h1>
   <?php elseif ($isAir): ?>
     <h1>TRIN 5 - Haendelse (fly)</h1>
   <?php elseif ($isOngoing): ?>
@@ -219,6 +225,71 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
           <div>Art. 17: <?= !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']) ? 'Ja' : 'Nej' ?></div>
           <div>Art. 18: <?= !empty($ferryRights['gate_art18']) ? 'Ja' : 'Nej' ?></div>
           <div>Art. 19: <?= !empty($ferryRights['gate_art19']) ? ('Ja (' . h((string)($ferryRights['art19_comp_band'] ?? '')) . '%)') : 'Nej' ?></div>
+        </div>
+      <?php endif; ?>
+    <?php elseif ($isBus): ?>
+      <strong><span aria-hidden="true">&#x1F68C;</span> Haendelse (bus / EU 181/2011)</strong>
+      <p class="small muted">TRIN 5 bruges til at afgore information, assistance, rerouting/refund og evt. 50% kompensation ved manglende valg mellem refund og ombooking.</p>
+
+      <div class="mt8">
+        <div>Haendelsestype</div>
+        <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+      </div>
+
+      <div class="mt8">
+        <label>Afgangsforsinkelse (minutter)
+          <input type="number" name="delay_minutes_departure" min="0" step="1" value="<?= h($v('delay_minutes_departure')) ?>" placeholder="130" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <label>Planlagt rejsevarighed (minutter)
+          <input type="number" name="scheduled_journey_duration_minutes" min="0" step="1" value="<?= h($v('scheduled_journey_duration_minutes')) ?>" placeholder="240" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <div>Var der overbooking / manglende plads?</div>
+        <label><input type="radio" name="overbooking" value="yes" <?= $v('overbooking')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="overbooking" value="no" <?= $v('overbooking')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8">
+        <div>Tilboed operatoeren valg mellem refund og ombooking?</div>
+        <label><input type="radio" name="carrier_offered_choice" value="yes" <?= $v('carrier_offered_choice')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="carrier_offered_choice" value="no" <?= $v('carrier_offered_choice')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8">
+        <div>Er det en aaben billet uden afgangstid?</div>
+        <label><input type="radio" name="open_ticket_without_departure_time" value="yes" <?= $v('open_ticket_without_departure_time')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="open_ticket_without_departure_time" value="no" <?= $v('open_ticket_without_departure_time')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8">
+        <div>Var der kraftigt vejr?</div>
+        <label><input type="radio" name="severe_weather" value="yes" <?= $v('severe_weather')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="severe_weather" value="no" <?= $v('severe_weather')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8">
+        <div>Var der stor naturkatastrofe?</div>
+        <label><input type="radio" name="major_natural_disaster" value="yes" <?= $v('major_natural_disaster')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="major_natural_disaster" value="no" <?= $v('major_natural_disaster')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <input type="hidden" name="season_ticket" value="<?= h(((string)($form['ticket_upload_mode'] ?? '') === 'seasonpass') ? 'yes' : 'no') ?>" />
+
+      <?php if (!empty($busScope) || !empty($busContract) || !empty($busRights)): ?>
+        <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <div><strong>Resolver status</strong></div>
+          <div>Scope: <?= !empty($busScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?></div>
+          <div>Claim-kanal: <?= h((string)($busContract['primary_claim_party_name'] ?? ($busContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
+          <div>Info: <?= !empty($busRights['gate_bus_info']) ? 'Ja' : 'Nej' ?></div>
+          <div>Assistance: <?= !empty($busRights['gate_bus_assistance_refreshments']) || !empty($busRights['gate_bus_assistance_hotel']) ? 'Ja' : 'Nej' ?></div>
+          <div>Refund/ombooking: <?= !empty($busRights['gate_bus_reroute_refund']) ? 'Ja' : 'Nej' ?></div>
+          <div>50% kompensation: <?= !empty($busRights['gate_bus_compensation_50']) ? 'Ja' : 'Nej' ?></div>
         </div>
       <?php endif; ?>
     <?php elseif ($isAir): ?>

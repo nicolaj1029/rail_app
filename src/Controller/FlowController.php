@@ -592,6 +592,12 @@ class FlowController extends AppController
             $flags['gate_air_compensation'] = '';
             $flags['gate_air_denied_boarding'] = '';
             $flags['air_comp_band'] = '';
+            $flags['gate_bus_info'] = '';
+            $flags['gate_bus_assistance_refreshments'] = '';
+            $flags['gate_bus_assistance_hotel'] = '';
+            $flags['gate_bus_reroute_refund'] = '';
+            $flags['gate_bus_compensation_50'] = '';
+            $flags['bus_comp_band'] = '';
         } elseif ($form['transport_mode'] === 'air') {
             $airRights = (array)($multimodal['air_rights'] ?? []);
             $gateArt18 = !empty($airRights['gate_air_reroute_refund']);
@@ -607,9 +613,16 @@ class FlowController extends AppController
             $flags['gate_air_compensation'] = !empty($airRights['gate_air_compensation']) ? '1' : '';
             $flags['gate_air_denied_boarding'] = !empty($airRights['gate_air_denied_boarding']) ? '1' : '';
             $flags['air_comp_band'] = (string)($airRights['air_comp_band'] ?? '');
+            $flags['gate_bus_info'] = '';
+            $flags['gate_bus_assistance_refreshments'] = '';
+            $flags['gate_bus_assistance_hotel'] = '';
+            $flags['gate_bus_reroute_refund'] = '';
+            $flags['gate_bus_compensation_50'] = '';
+            $flags['bus_comp_band'] = '';
         } elseif ($form['transport_mode'] === 'bus') {
-            $gateArt18 = false;
-            $gateArt20 = false;
+            $busRights = (array)($multimodal['bus_rights'] ?? []);
+            $gateArt18 = !empty($busRights['gate_bus_reroute_refund']);
+            $gateArt20 = !empty($busRights['gate_bus_assistance_refreshments']) || !empty($busRights['gate_bus_assistance_hotel']);
             $gateArt20_2c = false;
             $flags['gate_ferry_art16_notice'] = '';
             $flags['gate_ferry_art17_refreshments'] = '';
@@ -621,6 +634,12 @@ class FlowController extends AppController
             $flags['gate_air_compensation'] = '';
             $flags['gate_air_denied_boarding'] = '';
             $flags['air_comp_band'] = '';
+            $flags['gate_bus_info'] = !empty($busRights['gate_bus_info']) ? '1' : '';
+            $flags['gate_bus_assistance_refreshments'] = !empty($busRights['gate_bus_assistance_refreshments']) ? '1' : '';
+            $flags['gate_bus_assistance_hotel'] = !empty($busRights['gate_bus_assistance_hotel']) ? '1' : '';
+            $flags['gate_bus_reroute_refund'] = !empty($busRights['gate_bus_reroute_refund']) ? '1' : '';
+            $flags['gate_bus_compensation_50'] = !empty($busRights['gate_bus_compensation_50']) ? '1' : '';
+            $flags['bus_comp_band'] = (string)($busRights['bus_comp_band'] ?? '');
         } else {
             $articles = (array)($profile['articles'] ?? []);
             $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -644,6 +663,12 @@ class FlowController extends AppController
             $flags['gate_air_compensation'] = '';
             $flags['gate_air_denied_boarding'] = '';
             $flags['air_comp_band'] = '';
+            $flags['gate_bus_info'] = '';
+            $flags['gate_bus_assistance_refreshments'] = '';
+            $flags['gate_bus_assistance_hotel'] = '';
+            $flags['gate_bus_reroute_refund'] = '';
+            $flags['gate_bus_compensation_50'] = '';
+            $flags['bus_comp_band'] = '';
         }
 
         $flags['gate_art18'] = $gateArt18 ? '1' : '';
@@ -666,7 +691,7 @@ class FlowController extends AppController
                 return $this->redirect(['action' => 'remedies']);
             }
 
-            if (in_array($form['transport_mode'], ['ferry', 'air'], true) && $gateArt20) {
+            if (in_array($form['transport_mode'], ['ferry', 'air', 'bus'], true) && $gateArt20) {
                 return $this->redirect(['action' => 'assistance']);
             }
 

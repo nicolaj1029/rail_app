@@ -72,16 +72,29 @@ final class MultimodalFlowResolverTest extends TestCase
                 'single_txn_retailer' => 'yes',
                 'through_ticket_disclosure' => 'bundled',
                 'separate_contract_notice' => 'no',
+                'bus_regular_service' => 'yes',
+                'boarding_in_eu' => 'yes',
+                'alighting_in_eu' => 'yes',
+                'departure_from_terminal' => 'yes',
+                'scheduled_distance_km' => '320',
+                'incident_main' => 'delay',
+                'delay_minutes_departure' => '130',
+                'scheduled_journey_duration_minutes' => '240',
+                'carrier_offered_choice' => 'no',
             ],
             'meta' => [],
             'journey' => [],
-            'incident' => [],
-        ], false);
+            'incident' => ['main' => 'delay'],
+        ]);
 
         $this->assertSame('bus', $result['transport_mode']);
+        $this->assertTrue($result['bus_scope']['regulation_applies']);
         $this->assertSame('single_mode_single_contract', $result['contract_meta']['contract_topology']);
         $this->assertSame('bus', $result['bus_contract']['rights_module']);
+        $this->assertTrue($result['bus_rights']['gate_bus_reroute_refund']);
+        $this->assertTrue($result['bus_rights']['gate_bus_compensation_50']);
         $this->assertSame('bus', $result['claim_direction']['rights_module']);
+        $this->assertContains('reroute_or_refund_evidence', $result['claim_direction']['recommended_documents']);
         $this->assertContains('operator_connection_or_terminal_evidence', $result['claim_direction']['recommended_documents']);
     }
 

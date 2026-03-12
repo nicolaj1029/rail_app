@@ -1,0 +1,44 @@
+{
+  "fixture": {
+    "id": "bus_weather_hotel_exclusion",
+    "version": 2,
+    "label": "Bus weather event blocks hotel but keeps refreshment assistance",
+    "transport_mode": "bus",
+    "journey": [],
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "Regional Coach",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "bus",
+      "incident_segment_operator": "Regional Coach",
+      "primary_claim_party": "carrier",
+      "rights_module": "bus",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "bus_regular_service": true,
+      "boarding_in_eu": true,
+      "alighting_in_eu": true,
+      "departure_from_terminal": true,
+      "scheduled_distance_km": 280
+    },
+    "incident_meta": {
+      "incident_type": "cancellation",
+      "delay_minutes_departure": 95,
+      "scheduled_journey_duration_minutes": 220,
+      "carrier_offered_choice": true,
+      "severe_weather": true
+    },
+    "expected": {
+      "transport_mode": "bus",
+      "bus_scope.regulation_applies": true,
+      "bus_rights.gate_bus_assistance_refreshments": true,
+      "bus_rights.gate_bus_assistance_hotel": false,
+      "bus_rights.compensation_block_reason": "hotel_weather_or_disaster_exclusion"
+    }
+  }
+}

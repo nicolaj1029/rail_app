@@ -24,10 +24,14 @@ $isFutureLike = ($isOngoing || $isBeforeStart);
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isFerry = ($transportMode === 'ferry');
+$isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$busScope = (array)($multimodal['bus_scope'] ?? []);
+$busContract = (array)($multimodal['bus_contract'] ?? []);
+$busRights = (array)($multimodal['bus_rights'] ?? []);
 
 if ($isFerry) {
     $remediesTitle = $isOngoing
@@ -38,6 +42,15 @@ if ($isFerry) {
     $decisionHint = $isFutureLike ? 'Foreloebigt valg baseret paa den nuvaerende faergesituation.' : ($isCompleted ? 'Endeligt valg baseret paa hvad der skete med faergerejsen.' : '');
     $downgradeHint = '';
     $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?' : 'Havde du udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?';
+} elseif ($isBus) {
+    $remediesTitle = $isOngoing
+        ? 'TRIN 7 - Tilbagebetaling eller ombooking (bus, igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 7 - Tilbagebetaling eller ombooking (bus, afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Tilbagebetaling eller ombooking (bus)' : 'TRIN 7 - Tilbagebetaling eller ombooking (bus)'));
+    $art18Title = $isOngoing ? 'Busturen er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Busturen starter senere - hvad vil du vaelge, hvis det sker?' : 'Busturen er afsluttet - hvad skete der?');
+    $art18Help = $isFutureLike ? 'Ud fra din nuvaerende bussituation kan tilbagebetaling eller ombooking vaere relevant.' : 'Ved aflysning, overbooking eller afgangsforsinkelse paa mindst 120 minutter kan tilbagebetaling eller ombooking vaere relevant efter busreglerne.';
+    $decisionHint = $isFutureLike ? 'Foreloebigt valg baseret paa nuvaerende bussituation.' : ($isCompleted ? 'Endeligt valg baseret paa det afsluttede busforloeb.' : '');
+    $downgradeHint = '';
+    $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - ekstraudgifter som foelge af ombooking eller tilbagevenden til afgangsstedet?' : 'Havde du ekstraudgifter som foelge af ombooking eller tilbagevenden til afgangsstedet?';
 } elseif ($isAir) {
     $remediesTitle = $isOngoing
         ? 'TRIN 7 - Refund eller ombooking (fly, igangvaerende rejse)'
@@ -169,6 +182,17 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
             <div class="small muted mt8">Scope-note: <?= h((string)$ferryScope['scope_exclusion_reason']) ?></div>
         <?php endif; ?>
     </div>
+<?php elseif ($isBus): ?>
+    <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="card-title"><span class="icon">&#128652;</span><span>Bus-kontekst</span></div>
+        <div class="small muted mt4">TRIN 2 har placeret claim-kanalen hos <strong><?= h((string)($busContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler valg om tilbagebetaling eller ombooking efter busforordningen.</div>
+        <?php if (!empty($busScope['scope_exclusion_reason'])): ?>
+            <div class="small muted mt8">Scope-note: <?= h((string)$busScope['scope_exclusion_reason']) ?></div>
+        <?php endif; ?>
+        <?php if (!empty($busRights['gate_bus_compensation_50'])): ?>
+            <div class="small muted mt8">Der er samtidig et foreloebigt 50% kompensationsspor, hvis operatoeren ikke tilbod et valg mellem ombooking og tilbagebetaling.</div>
+        <?php endif; ?>
+    </div>
 <?php endif; ?>
 <?php
     $articles = (array)($profile['articles'] ?? []);
@@ -189,6 +213,13 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
 <input type="hidden" name="ferry_return_to_departure_port_expense" value="<?= h((string)($form['ferry_return_to_departure_port_expense'] ?? ($form['return_to_origin_expense'] ?? ''))) ?>" />
 <input type="hidden" name="ferry_return_to_departure_port_amount" value="<?= h((string)($form['ferry_return_to_departure_port_amount'] ?? ($form['return_to_origin_amount'] ?? ''))) ?>" />
 <input type="hidden" name="ferry_return_to_departure_port_currency" value="<?= h((string)($form['ferry_return_to_departure_port_currency'] ?? ($form['return_to_origin_currency'] ?? ''))) ?>" />
+<?php elseif ($isBus): ?>
+<input type="hidden" name="bus_remedy_choice" value="<?= h((string)($form['bus_remedy_choice'] ?? $remedy ?? '')) ?>" />
+<input type="hidden" name="bus_refund_requested" value="<?= h((string)($form['bus_refund_requested'] ?? (($remedy ?? '') === 'refund_return' ? 'yes' : 'no'))) ?>" />
+<input type="hidden" name="bus_reroute_choice" value="<?= h((string)($form['bus_reroute_choice'] ?? (in_array(($remedy ?? ''), ['reroute_soonest','reroute_later'], true) ? $remedy : ''))) ?>" />
+<input type="hidden" name="bus_return_to_departure_stop_expense" value="<?= h((string)($form['bus_return_to_departure_stop_expense'] ?? ($form['return_to_origin_expense'] ?? ''))) ?>" />
+<input type="hidden" name="bus_return_to_departure_stop_amount" value="<?= h((string)($form['bus_return_to_departure_stop_amount'] ?? ($form['return_to_origin_amount'] ?? ''))) ?>" />
+<input type="hidden" name="bus_return_to_departure_stop_currency" value="<?= h((string)($form['bus_return_to_departure_stop_currency'] ?? ($form['return_to_origin_currency'] ?? ''))) ?>" />
 <?php endif; ?>
 <!-- TRIN 5 (Art.20) hint data: used only for UX hints in this step -->
 <input type="hidden" id="trin5_a20_3_self_paid_amount" value="<?= h($v('a20_3_self_paid_amount')) ?>" />
@@ -2269,27 +2300,39 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
-        function syncFerryRemedyAliases(){
+        function syncModeRemedyAliases(){
             var ferryChoice = document.querySelector('input[name="ferry_remedy_choice"]');
-            if (!ferryChoice) { return; }
+            var busChoice = document.querySelector('input[name="bus_remedy_choice"]');
+            if (!ferryChoice && !busChoice) { return; }
             var currentRemedy = (document.querySelector('input[name="remedyChoice"]:checked') || {}).value || '';
             var ferryRefund = document.querySelector('input[name="ferry_refund_requested"]');
             var ferryReroute = document.querySelector('input[name="ferry_reroute_choice"]');
             var ferryReturnExp = document.querySelector('input[name="ferry_return_to_departure_port_expense"]');
             var ferryReturnAmt = document.querySelector('input[name="ferry_return_to_departure_port_amount"]');
             var ferryReturnCur = document.querySelector('input[name="ferry_return_to_departure_port_currency"]');
-            ferryChoice.value = currentRemedy;
+            var busRefund = document.querySelector('input[name="bus_refund_requested"]');
+            var busReroute = document.querySelector('input[name="bus_reroute_choice"]');
+            var busReturnExp = document.querySelector('input[name="bus_return_to_departure_stop_expense"]');
+            var busReturnAmt = document.querySelector('input[name="bus_return_to_departure_stop_amount"]');
+            var busReturnCur = document.querySelector('input[name="bus_return_to_departure_stop_currency"]');
+            if (ferryChoice) { ferryChoice.value = currentRemedy; }
+            if (busChoice) { busChoice.value = currentRemedy; }
             if (ferryRefund) { ferryRefund.value = currentRemedy === 'refund_return' ? 'yes' : 'no'; }
+            if (busRefund) { busRefund.value = currentRemedy === 'refund_return' ? 'yes' : 'no'; }
             if (ferryReroute) { ferryReroute.value = (currentRemedy === 'reroute_soonest' || currentRemedy === 'reroute_later') ? currentRemedy : ''; }
+            if (busReroute) { busReroute.value = (currentRemedy === 'reroute_soonest' || currentRemedy === 'reroute_later') ? currentRemedy : ''; }
             var rtVal = (document.querySelector('input[name="return_to_origin_expense"]:checked') || {}).value || '';
             if (ferryReturnExp) { ferryReturnExp.value = rtVal; }
+            if (busReturnExp) { busReturnExp.value = rtVal; }
             var rtAmt = document.querySelector('input[name="return_to_origin_amount"]');
             var rtCur = document.querySelector('input[name="return_to_origin_currency"]');
             if (ferryReturnAmt) { ferryReturnAmt.value = rtAmt ? (rtAmt.value || '') : ''; }
             if (ferryReturnCur) { ferryReturnCur.value = rtCur ? (rtCur.value || '') : ''; }
+            if (busReturnAmt) { busReturnAmt.value = rtAmt ? (rtAmt.value || '') : ''; }
+            if (busReturnCur) { busReturnCur.value = rtCur ? (rtCur.value || '') : ''; }
         }
         document.querySelectorAll('input[name="remedyChoice"], input[name="return_to_origin_expense"], input[name="return_to_origin_amount"], input[name="return_to_origin_currency"]').forEach(function(el){
-            ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, syncFerryRemedyAliases); });
+            ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, syncModeRemedyAliases); });
         });
     // (No class/reservation fields in TRIN 5 now)
         var advPast = document.getElementById('advPast');
@@ -2318,7 +2361,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ }
             }
         });
-        syncFerryRemedyAliases();
+        syncModeRemedyAliases();
     });
 })();
 </script>

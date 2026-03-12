@@ -47,9 +47,14 @@ final class MultimodalFlowResolver
             }
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['air_rights'] ?? []));
         } elseif ($transportMode === 'bus') {
+            $scope = (new BusScopeResolver())->evaluate($scopeMeta);
             $contract = (new ModeContractResolver())->evaluate($transportMode, $contractMeta);
-            $result[$transportMode . '_contract'] = $contract;
-            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scopeMeta, []);
+            $result['bus_scope'] = $scope;
+            $result['bus_contract'] = $contract;
+            if ($includeIncident) {
+                $result['bus_rights'] = (new BusRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
+            }
+            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['bus_rights'] ?? []));
         } else {
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contractMeta, $scopeMeta, []);
         }
@@ -227,6 +232,10 @@ final class MultimodalFlowResolver
             'arrival_airport_in_eu' => $this->normalizeNullableBool($form['arrival_airport_in_eu'] ?? null),
             'operating_carrier_is_eu' => $this->normalizeNullableBool($form['operating_carrier_is_eu'] ?? null),
             'marketing_carrier_is_eu' => $this->normalizeNullableBool($form['marketing_carrier_is_eu'] ?? null),
+            'bus_regular_service' => $this->normalizeNullableBool($form['bus_regular_service'] ?? null),
+            'boarding_in_eu' => $this->normalizeNullableBool($form['boarding_in_eu'] ?? null),
+            'alighting_in_eu' => $this->normalizeNullableBool($form['alighting_in_eu'] ?? null),
+            'scheduled_distance_km' => $this->normalizeNullableInt($form['scheduled_distance_km'] ?? null),
             'vessel_passenger_capacity' => $this->normalizeNullableInt($form['vessel_passenger_capacity'] ?? null),
             'vessel_operational_crew' => $this->normalizeNullableInt($form['vessel_operational_crew'] ?? null),
             'route_distance_meters' => $this->normalizeNullableInt($form['route_distance_meters'] ?? null),
@@ -285,6 +294,10 @@ final class MultimodalFlowResolver
             'meal_offered' => $this->normalizeNullableBool($form['meal_offered'] ?? null),
             'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
             'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
+            'overbooking' => $this->normalizeNullableBool($form['overbooking'] ?? null),
+            'carrier_offered_choice' => $this->normalizeNullableBool($form['carrier_offered_choice'] ?? null),
+            'severe_weather' => $this->normalizeNullableBool($form['severe_weather'] ?? null),
+            'major_natural_disaster' => $this->normalizeNullableBool($form['major_natural_disaster'] ?? null),
         ];
     }
 
@@ -389,6 +402,18 @@ final class MultimodalFlowResolver
             }
         } elseif ($transportMode === 'bus') {
             $requiredDocuments[] = 'operator_connection_or_terminal_evidence';
+            if (!empty($rightsResult['gate_bus_assistance_refreshments'])) {
+                $requiredDocuments[] = 'refreshment_receipts_if_self_paid';
+            }
+            if (!empty($rightsResult['gate_bus_assistance_hotel'])) {
+                $requiredDocuments[] = 'hotel_receipts_if_self_paid';
+            }
+            if (!empty($rightsResult['gate_bus_reroute_refund'])) {
+                $requiredDocuments[] = 'reroute_or_refund_evidence';
+            }
+            if (!empty($rightsResult['gate_bus_compensation_50'])) {
+                $requiredDocuments[] = 'operator_failed_to_offer_choice_evidence';
+            }
         } elseif ($transportMode === 'air') {
             $requiredDocuments[] = 'boarding_pass_or_pnr';
             if (!empty($rightsResult['gate_air_denied_boarding'])) {

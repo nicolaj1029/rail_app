@@ -219,16 +219,26 @@ class ScenarioRunner
                 'incident_meta' => (array)($fixture['incident_meta'] ?? []),
             ])['claim_direction'] ?? [];
         } elseif ($transportMode === 'bus') {
+            $scopeResolver = new BusScopeResolver();
+            $actual['bus_scope'] = $scopeResolver->evaluate((array)($fixture['scope_meta'] ?? []));
             $contractResolver = new ModeContractResolver();
-            $actual[$transportMode . '_contract'] = $contractResolver->evaluate($transportMode, (array)($fixture['contract_meta'] ?? []));
+            $actual['bus_contract'] = $contractResolver->evaluate($transportMode, (array)($fixture['contract_meta'] ?? []));
+            $rightsResolver = new BusRightsEvaluator();
+            $actual['bus_rights'] = $rightsResolver->evaluate(
+                (array)($fixture['incident_meta'] ?? []),
+                (array)$actual['bus_scope'],
+                (array)$actual['bus_contract']
+            );
             $resolver = new MultimodalFlowResolver();
             $actual['claim_direction'] = $resolver->evaluate([
-                'form' => ['transport_mode' => $transportMode] + (array)($fixture['contract_meta'] ?? []),
+                'form' => ['transport_mode' => $transportMode] + (array)($fixture['contract_meta'] ?? []) + (array)($fixture['scope_meta'] ?? []) + (array)($fixture['incident_meta'] ?? []),
                 'meta' => [],
                 'journey' => [],
-                'incident' => [],
+                'incident' => ['main' => (string)(($fixture['incident_meta']['incident_type'] ?? ''))],
                 'contract_meta' => (array)($fixture['contract_meta'] ?? []),
-            ], false)['claim_direction'] ?? [];
+                'scope_meta' => (array)($fixture['scope_meta'] ?? []),
+                'incident_meta' => (array)($fixture['incident_meta'] ?? []),
+            ])['claim_direction'] ?? [];
         } elseif (!empty($fixture['scope_meta']) && is_array($fixture['scope_meta'])) {
             $actual['scope_meta'] = (array)$fixture['scope_meta'];
         }

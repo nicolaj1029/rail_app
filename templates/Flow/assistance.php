@@ -18,16 +18,20 @@ $isCompleted = ($travelState === 'completed');
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isFerry = ($transportMode === 'ferry');
+$isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$busScope = (array)($multimodal['bus_scope'] ?? []);
+$busContract = (array)($multimodal['bus_contract'] ?? []);
+$busRights = (array)($multimodal['bus_rights'] ?? []);
 $assistTitle = $isOngoing
-    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)'))
-    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)')) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isAir ? 'TRIN 8 - Care (flight)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)')));
+    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)')))
+    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)'))) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isBus ? 'TRIN 8 - Assistance (bus)' : ($isAir ? 'TRIN 8 - Care (flight)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)'))));
 $assistHint = $isOngoing
-    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : ($isAir ? 'Registrer maaltider, hotel og egne udgifter under flight-forloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).'))
-    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : ($isAir ? 'Registrer den care der blev tilbudt eller de udgifter du selv afholdt under flight-forloebet.' : 'Udgifter under hele rejsen.')) : '');
+    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : ($isBus ? 'Registrer maaltider, hotel og egne udgifter under busforloebet indtil nu.' : ($isAir ? 'Registrer maaltider, hotel og egne udgifter under flight-forloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).')))
+    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : ($isBus ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under busturen.' : ($isAir ? 'Registrer den care der blev tilbudt eller de udgifter du selv afholdt under flight-forloebet.' : 'Udgifter under hele rejsen.'))) : '');
 $assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -143,6 +147,16 @@ $hintText = function (string $key) use ($priceHints): string {
   <input type="hidden" name="ferry_hotel_self_paid_amount" value="<?= h((string)($form['ferry_hotel_self_paid_amount'] ?? ($form['hotel_self_paid_amount'] ?? ''))) ?>" />
   <input type="hidden" name="ferry_hotel_self_paid_currency" value="<?= h((string)($form['ferry_hotel_self_paid_currency'] ?? ($form['hotel_self_paid_currency'] ?? ''))) ?>" />
   <input type="hidden" name="ferry_hotel_self_paid_nights" value="<?= h((string)($form['ferry_hotel_self_paid_nights'] ?? ($form['hotel_self_paid_nights'] ?? ''))) ?>" />
+<?php elseif ($isBus): ?>
+  <input type="hidden" name="bus_refreshments_offered" value="<?= h((string)($form['bus_refreshments_offered'] ?? ($form['meal_offered'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_refreshments_self_paid_amount" value="<?= h((string)($form['bus_refreshments_self_paid_amount'] ?? ($form['meal_self_paid_amount'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_refreshments_self_paid_currency" value="<?= h((string)($form['bus_refreshments_self_paid_currency'] ?? ($form['meal_self_paid_currency'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_hotel_offered" value="<?= h((string)($form['bus_hotel_offered'] ?? ($form['hotel_offered'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_overnight_required" value="<?= h((string)($form['bus_overnight_required'] ?? ($form['overnight_needed'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_hotel_transport_included" value="<?= h((string)($form['bus_hotel_transport_included'] ?? ($form['assistance_hotel_transport_included'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_hotel_self_paid_amount" value="<?= h((string)($form['bus_hotel_self_paid_amount'] ?? ($form['hotel_self_paid_amount'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_hotel_self_paid_currency" value="<?= h((string)($form['bus_hotel_self_paid_currency'] ?? ($form['hotel_self_paid_currency'] ?? ''))) ?>" />
+  <input type="hidden" name="bus_hotel_self_paid_nights" value="<?= h((string)($form['bus_hotel_self_paid_nights'] ?? ($form['hotel_self_paid_nights'] ?? ''))) ?>" />
 <?php endif; ?>
 
 
@@ -150,7 +164,9 @@ $hintText = function (string $key) use ($priceHints): string {
 <p class="small muted">
   <?= $isFerry
       ? 'Aktiveres ved aflysning eller forventet/faktisk afgangsforsinkelse paa mindst 90 minutter. Hoteldelen kan bortfalde ved vejrsikkerhed.'
-      : 'Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).' ?>
+      : ($isBus
+          ? 'Aktiveres ved aflysning, overbooking eller afgangsforsinkelse paa mindst 90/120 minutter. Hoteldelen kan bortfalde ved svaert vejr eller naturkatastrofe.'
+          : 'Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).') ?>
 </p>
 
 <?php if ($assistHint !== ''): ?>
@@ -165,23 +181,31 @@ $hintText = function (string $key) use ($priceHints): string {
       <div class="small muted mt4">Scope-note: <?= h((string)$ferryScope['scope_exclusion_reason']) ?></div>
     <?php endif; ?>
   </div>
+<?php elseif ($isBus): ?>
+  <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
+    <strong>Bus-kontekst</strong>
+    <div class="small muted mt4">Claim-kanal: <strong><?= h((string)($busContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler bus-assistance ved terminalafgang efter busforordningen.</div>
+    <?php if (!empty($busScope['scope_exclusion_reason'])): ?>
+      <div class="small muted mt4">Scope-note: <?= h((string)$busScope['scope_exclusion_reason']) ?></div>
+    <?php endif; ?>
+  </div>
 <?php endif; ?>
 
 
 
 <?php if ($art20Partial): ?>
   <div class="card hl mt8">
-    <strong><?= $isFerry ? 'Assistance er delvist aktiveret via saerhensyn.' : 'Art. 20 er delvist aktiveret via PMR.' ?></strong>
-    <div class="small muted"><?= $isFerry ? 'Udfyld kun de dele der faktisk blev tilbudt eller maatte betales selv.' : 'Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.' ?></div>
+      <strong><?= $isFerry ? 'Assistance er delvist aktiveret via saerhensyn.' : ($isBus ? 'Bus-assistance er delvist aktiveret.' : 'Art. 20 er delvist aktiveret via PMR.') ?></strong>
+    <div class="small muted"><?= $isFerry ? 'Udfyld kun de dele der faktisk blev tilbudt eller maatte betales selv.' : ($isBus ? 'Udfyld kun de assistanceposter der faktisk blev tilbudt eller maatte betales selv.' : 'Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.') ?></div>
   </div>
 <?php elseif (!$art20Active): ?>
   <div class="card hl mt8">
     <?php if ($art20Blocked): ?>
-      <strong><?= $isFerry ? 'Faerge-assistance er ikke aktiveret.' : 'Art. 20 er ikke aktiveret.' ?></strong>
-      <div class="small muted"><?= $isFerry ? 'Betingelserne for ferry Art. 17 er ikke opfyldt ud fra dine svar i Trin 5.' : 'Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.' ?></div>
+      <strong><?= $isFerry ? 'Faerge-assistance er ikke aktiveret.' : ($isBus ? 'Bus-assistance er ikke aktiveret.' : 'Art. 20 er ikke aktiveret.') ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Betingelserne for ferry Art. 17 er ikke opfyldt ud fra dine svar i Trin 5.' : ($isBus ? 'Betingelserne for bus-assistance er ikke opfyldt ud fra dine svar i Trin 5.' : 'Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.') ?></div>
     <?php else: ?>
-      <strong><?= $isFerry ? 'Faerge-assistance afventer gating.' : 'Art. 20 afventer gating.' ?></strong>
-      <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld aflysning/90-minutters afgangsforsinkelse for at aktivere ferry Art. 17.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.' ?></div>
+      <strong><?= $isFerry ? 'Faerge-assistance afventer gating.' : ($isBus ? 'Bus-assistance afventer gating.' : 'Art. 20 afventer gating.') ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld aflysning/90-minutters afgangsforsinkelse for at aktivere ferry Art. 17.' : ($isBus ? 'Ga tilbage til Trin 5 og udfyld aflysning, overbooking eller terminalforsinkelse for at aktivere bus-assistance.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.') ?></div>
     <?php endif; ?>
   </div>
 <?php endif; ?>
@@ -192,7 +216,9 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <?= $isFerry
       ? 'Assistance efter ferry Art. 17 kan vaere undtaget for denne rejse. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
-      : 'Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.' ?>
+      : ($isBus
+          ? 'Bus-assistance kan vaere undtaget for denne rejse eller denne forsinkelse. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
+          : 'Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.') ?>
 
   </div>
 
@@ -204,8 +230,8 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <!-- Måltider / drikke -->
 <div class="card mt12 <?= ($assistMealsOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
-  <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : 'Måltider og drikke (Art.20)' ?></strong>
-  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.' ?></p>
+  <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : ($isBus ? 'Maaltider og forfriskninger (bus)' : 'Måltider og drikke (Art.20)') ?></strong>
+  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : ($isBus ? 'Busoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller forsinkelse paa mindst 90 minutter, naar rejsen varer over 3 timer og assistancebetingelserne er opfyldt.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.') ?></p>
   <div class="mt8">
     <div>1. Fik du måltider eller forfriskninger?</div>
     <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
@@ -280,7 +306,7 @@ $hintText = function (string $key) use ($priceHints): string {
         <path d="M7 10h10a3 3 0 0 1 3 3v6h-2v-2H6v2H4v-8a3 3 0 0 1 3-3zm-1 5h12v-2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2zm1-9a2 2 0 1 1 0 4a2 2 0 0 1 0-4z"/>
       </svg>
     </span>
-    <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : 'Hotel og indkvartering (Art.20)' ?>
+    <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : ($isBus ? 'Hotel og indkvartering (bus)' : 'Hotel og indkvartering (Art.20)') ?>
   </strong>
 
   <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' ?></p>
@@ -638,9 +664,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   bindRemoveButtons();
-  function syncFerryAssistanceAliases() {
+  function syncModeAssistanceAliases() {
     var ferryMeals = document.querySelector('input[name="ferry_refreshments_offered"]');
-    if (!ferryMeals) { return; }
+    var busMeals = document.querySelector('input[name="bus_refreshments_offered"]');
+    if (!ferryMeals && !busMeals) { return; }
     var getRadio = function(name) {
       var checked = document.querySelector('input[name="' + name + '"]:checked');
       return checked ? (checked.value || '') : '';
@@ -649,7 +676,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var el = document.querySelector('[name="' + name + '"]');
       return el ? (el.value || '') : '';
     };
-    ferryMeals.value = getRadio('meal_offered');
+    if (ferryMeals) { ferryMeals.value = getRadio('meal_offered'); }
+    if (busMeals) { busMeals.value = getRadio('meal_offered'); }
     var ferryMealAmt = document.querySelector('input[name="ferry_refreshments_self_paid_amount"]');
     var ferryMealCur = document.querySelector('input[name="ferry_refreshments_self_paid_currency"]');
     var ferryHotel = document.querySelector('input[name="ferry_hotel_offered"]');
@@ -658,6 +686,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var ferryHotelAmt = document.querySelector('input[name="ferry_hotel_self_paid_amount"]');
     var ferryHotelCur = document.querySelector('input[name="ferry_hotel_self_paid_currency"]');
     var ferryHotelNights = document.querySelector('input[name="ferry_hotel_self_paid_nights"]');
+    var busMealAmt = document.querySelector('input[name="bus_refreshments_self_paid_amount"]');
+    var busMealCur = document.querySelector('input[name="bus_refreshments_self_paid_currency"]');
+    var busHotel = document.querySelector('input[name="bus_hotel_offered"]');
+    var busNight = document.querySelector('input[name="bus_overnight_required"]');
+    var busHotelTransport = document.querySelector('input[name="bus_hotel_transport_included"]');
+    var busHotelAmt = document.querySelector('input[name="bus_hotel_self_paid_amount"]');
+    var busHotelCur = document.querySelector('input[name="bus_hotel_self_paid_currency"]');
+    var busHotelNights = document.querySelector('input[name="bus_hotel_self_paid_nights"]');
     if (ferryMealAmt) { ferryMealAmt.value = getValue('meal_self_paid_amount'); }
     if (ferryMealCur) { ferryMealCur.value = getValue('meal_self_paid_currency'); }
     if (ferryHotel) { ferryHotel.value = getRadio('hotel_offered'); }
@@ -666,11 +702,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ferryHotelAmt) { ferryHotelAmt.value = getValue('hotel_self_paid_amount'); }
     if (ferryHotelCur) { ferryHotelCur.value = getValue('hotel_self_paid_currency'); }
     if (ferryHotelNights) { ferryHotelNights.value = getValue('hotel_self_paid_nights'); }
+    if (busMealAmt) { busMealAmt.value = getValue('meal_self_paid_amount'); }
+    if (busMealCur) { busMealCur.value = getValue('meal_self_paid_currency'); }
+    if (busHotel) { busHotel.value = getRadio('hotel_offered'); }
+    if (busNight) { busNight.value = getRadio('overnight_needed'); }
+    if (busHotelTransport) { busHotelTransport.value = getRadio('assistance_hotel_transport_included'); }
+    if (busHotelAmt) { busHotelAmt.value = getValue('hotel_self_paid_amount'); }
+    if (busHotelCur) { busHotelCur.value = getValue('hotel_self_paid_currency'); }
+    if (busHotelNights) { busHotelNights.value = getValue('hotel_self_paid_nights'); }
   }
   document.querySelectorAll('input[name="meal_offered"], input[name="hotel_offered"], input[name="overnight_needed"], input[name="assistance_hotel_transport_included"], input[name="meal_self_paid_amount"], input[name="meal_self_paid_currency"], input[name="hotel_self_paid_amount"], input[name="hotel_self_paid_currency"], input[name="hotel_self_paid_nights"]').forEach(function(el) {
-    ['change','input','click'].forEach(function(ev){ el.addEventListener(ev, syncFerryAssistanceAliases); });
+    ['change','input','click'].forEach(function(ev){ el.addEventListener(ev, syncModeAssistanceAliases); });
   });
-  syncFerryAssistanceAliases();
+  syncModeAssistanceAliases();
 });
 
 </script>

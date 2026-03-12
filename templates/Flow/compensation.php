@@ -22,7 +22,10 @@ $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
 $airContract = (array)($multimodal['air_contract'] ?? []);
 $airRights = (array)($multimodal['air_rights'] ?? []);
-$modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
+$busScope = (array)($multimodal['bus_scope'] ?? []);
+$busContract = (array)($multimodal['bus_contract'] ?? []);
+$busRights = (array)($multimodal['bus_rights'] ?? []);
+$modeContract = $isBus ? $busContract : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
 $claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $compTitle = $isOngoing
     ? (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat (foreloebigt)' : 'TRIN 10 - Kompensation (foreloebig)')
@@ -340,28 +343,33 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 
 <?php if ($isBus): ?>
 <?php
-  $modeLabel = 'Bus';
-  $claimPartyName = (string)($modeContract['primary_claim_party_name'] ?? '');
-  $claimPartyType = (string)($modeContract['primary_claim_party'] ?? '');
-  $scopeReason = (string)($claimDirection['scope_exclusion_reason'] ?? '');
-  $scopeApplies = array_key_exists('scope_applies', $claimDirection) ? $claimDirection['scope_applies'] : null;
+  $claimPartyName = (string)($busContract['primary_claim_party_name'] ?? '');
+  $claimPartyType = (string)($busContract['primary_claim_party'] ?? '');
+  $scopeReason = (string)($busScope['scope_exclusion_reason'] ?? '');
+  $scopeApplies = array_key_exists('regulation_applies', $busScope) ? (bool)$busScope['regulation_applies'] : null;
+  $busCompBand = (string)($busRights['bus_comp_band'] ?? ($flags['bus_comp_band'] ?? 'none'));
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
-  <strong><?= h($modeLabel) ?>-resultat</strong>
-  <div class="small muted mt4">TRIN 10 viser her kontraktretning og claim-assist for <?= strtolower($modeLabel) ?>. Materielle <?= strtolower($modeLabel) ?>-rettigheder kobles paa i naeste modul.</div>
+  <strong>Bus-resultat</strong>
+  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for busforloebet. Resultatet bygger paa bus scope, claim-kanal og de aktive assistance-/refundgates.</div>
   <ul class="small mt8">
-    <li>Kontrakt: <strong><?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown_manual_review')) ?></strong></li>
+    <li>Scope: <strong><?= $scopeApplies === true ? 'omfattet' : ($scopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $scopeReason !== '' ? ' - ' . h($scopeReason) : '' ?></li>
     <li>Claim-kanal: <strong><?= h($claimPartyName !== '' ? $claimPartyName : ($claimPartyType !== '' ? $claimPartyType : 'manual_review')) ?></strong></li>
-    <li>Rights module: <strong><?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></strong></li>
-    <li>Manual review: <strong><?= !empty($modeContract['manual_review_required']) ? 'ja' : 'nej' ?></strong></li>
-    <?php if ($scopeApplies !== null): ?>
-      <li>Scope: <strong><?= $scopeApplies ? 'omfattet' : 'uklart/ikke omfattet' ?></strong><?= $scopeReason !== '' ? ' - ' . h($scopeReason) : '' ?></li>
-    <?php endif; ?>
+    <li>Refund / ombooking: <strong><?= !empty($busRights['gate_bus_reroute_refund']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Assistance: <strong><?= !empty($busRights['gate_bus_assistance_refreshments']) || !empty($busRights['gate_bus_assistance_hotel']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>50% kompensation: <strong><?= !empty($busRights['gate_bus_compensation_50']) ? 'relevant' : 'ikke aktiveret' ?></strong><?= $busCompBand !== '' && $busCompBand !== 'none' ? ' - ' . h($busCompBand) . '%' : '' ?></li>
+    <li>Manual review: <strong><?= !empty($busContract['manual_review_required']) || !empty($busRights['manual_review_required']) ? 'ja' : 'nej' ?></strong></li>
     <?php if (!empty($claimDirection['recommended_documents'])): ?>
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
     <?php endif; ?>
   </ul>
-  <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, indtil <?= strtolower($modeLabel) ?>-rights modulet er koblet helt paa.</div>
+  <?php if (!empty($busRights['gate_bus_compensation_50'])): ?>
+    <div class="ok mt8 small">Sagen peger paa 50% buskompensation, hvis operatoeren ikke tilbod et valg mellem ombooking og tilbagebetaling.</div>
+  <?php elseif (!empty($busRights['compensation_block_reason']) && $busRights['compensation_block_reason'] !== 'none'): ?>
+    <div class="hl mt8 small">Kompensation er foreloebigt blokeret af: <strong><?= h((string)$busRights['compensation_block_reason']) ?></strong>.</div>
+  <?php else: ?>
+    <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, mens bus-sagen afklares yderligere.</div>
+  <?php endif; ?>
 </div>
 </fieldset>
 <?= $this->Form->end() ?>

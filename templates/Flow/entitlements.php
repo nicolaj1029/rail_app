@@ -21,6 +21,7 @@ $isAir = $transportMode === 'air';
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
+$busScope = (array)($multimodal['bus_scope'] ?? []);
 $modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
 $claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $isPreview = !empty($flowPreview);
@@ -138,7 +139,7 @@ $isPreview = !empty($flowPreview);
 
   <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isBus || $isAir) ? '' : ' display:none;' ?>">
     <strong><?= $isAir ? 'Air kontraktstruktur' : 'Bus kontraktstruktur' ?></strong>
-    <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Dette lag afklarer protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Dette lag afklarer kun claim-kanal og rettighedsmodul. De materielle bus-regler kobles paa senere.' ?></div>
+    <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Dette lag afklarer protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Dette lag afklarer regular service scope, claim-kanal og rettighedsmodul for bussagen.' ?></div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <?php if ($isAir): ?>
       <label>Afgangslufthavn i EU?
@@ -217,6 +218,38 @@ $isPreview = !empty($flowPreview);
       <label>Operating carrier
         <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
       </label>
+      <?php elseif ($isBus): ?>
+      <label>Regular service?
+        <?php $busRegular = (string)($form['bus_regular_service'] ?? 'yes'); ?>
+        <select name="bus_regular_service">
+          <option value="yes" <?= $busRegular==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $busRegular==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Boarding i EU?
+        <?php $boardingInEu = (string)($form['boarding_in_eu'] ?? 'yes'); ?>
+        <select name="boarding_in_eu">
+          <option value="yes" <?= $boardingInEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $boardingInEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Alighting i EU?
+        <?php $alightingInEu = (string)($form['alighting_in_eu'] ?? 'yes'); ?>
+        <select name="alighting_in_eu">
+          <option value="yes" <?= $alightingInEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $alightingInEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Fra terminal?
+        <?php $busTerminal = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
+        <select name="departure_from_terminal">
+          <option value="yes" <?= $busTerminal==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $busTerminal==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Planlagt distance (km)
+        <input type="number" name="scheduled_distance_km" min="0" step="1" value="<?= h((string)($form['scheduled_distance_km'] ?? '')) ?>" placeholder="320" />
+      </label>
       <?php endif; ?>
       <label>Ramt segment
         <?php $modeIncidentSegment = (string)($form['incident_segment_mode'] ?? ($modeContract['rights_module'] ?? $transportMode)); ?>
@@ -238,6 +271,8 @@ $isPreview = !empty($flowPreview);
         <?php if ($isAir): ?>
           <div>Scope: <?= array_key_exists('regulation_applies', $airScope) ? (!empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($airScope['scope_basis']) ? ' - ' . h((string)$airScope['scope_basis']) : '' ?></div>
           <div>Connection: <?= h((string)($modeContract['air_connection_type'] ?? 'unknown')) ?></div>
+        <?php elseif ($isBus): ?>
+          <div>Scope: <?= array_key_exists('regulation_applies', $busScope) ? (!empty($busScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($busScope['scope_basis']) ? ' - ' . h((string)$busScope['scope_basis']) : '' ?></div>
         <?php endif; ?>
         <div>Kontrakt: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
         <div>Claim-kanal: <?= h((string)($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
