@@ -1,0 +1,49 @@
+{
+  "fixture": {
+    "id": "air_protected_connection_same_booking",
+    "version": 2,
+    "label": "Air protected connection on same booking keeps airline as claim channel",
+    "transport_mode": "air",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "SAS",
+        "operator_country": "DK",
+        "ticket_no": "PNR-001",
+        "seller_channel": "operator",
+        "through_ticket_disclosure": "yes",
+        "separate_contract_notice": "no",
+        "single_txn_operator": "yes",
+        "single_txn_retailer": "no",
+        "incident_segment_mode": "air",
+        "incident_segment_operator": "SAS"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "protected_single_contract",
+      "seller_type": "operator",
+      "seller_name": "SAS",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "air",
+      "incident_segment_operator": "SAS",
+      "primary_claim_party": "seller",
+      "rights_module": "air",
+      "manual_review_required": false
+    },
+    "expected": {
+      "transport_mode": "air",
+      "air_contract.primary_claim_party": "carrier",
+      "air_contract.primary_claim_party_name": "SAS",
+      "air_contract.rights_module": "air",
+      "claim_direction.claim_party_type": "carrier",
+      "claim_direction.rights_module": "air"
+    }
+  }
+}

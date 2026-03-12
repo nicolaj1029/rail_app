@@ -1,0 +1,49 @@
+{
+  "fixture": {
+    "id": "bus_multimodal_separate_contracts",
+    "version": 2,
+    "label": "Bus multimodal separate contracts: affected bus operator is claim channel",
+    "transport_mode": "bus",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "Travel Platform",
+        "operator_country": "DK",
+        "ticket_no": "",
+        "seller_channel": "retailer",
+        "through_ticket_disclosure": "separate",
+        "separate_contract_notice": "yes",
+        "single_txn_operator": "no",
+        "single_txn_retailer": "no",
+        "incident_segment_mode": "bus",
+        "incident_segment_operator": "FlixBus"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "separate_contracts",
+      "seller_type": "ticket_vendor",
+      "seller_name": "Travel Platform",
+      "shared_booking_reference": false,
+      "single_transaction": false,
+      "contract_structure_disclosure": "separate",
+      "separate_contract_notice": "yes",
+      "incident_segment_mode": "bus",
+      "incident_segment_operator": "FlixBus",
+      "primary_claim_party": "segment_operator",
+      "rights_module": "bus",
+      "manual_review_required": false
+    },
+    "expected": {
+      "transport_mode": "bus",
+      "bus_contract.primary_claim_party": "segment_operator",
+      "bus_contract.primary_claim_party_name": "FlixBus",
+      "bus_contract.rights_module": "bus",
+      "claim_direction.claim_party_type": "segment_operator",
+      "claim_direction.rights_module": "bus"
+    }
+  }
+}

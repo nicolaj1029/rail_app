@@ -16,8 +16,12 @@ $multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
 if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
 $isFerry = $transportMode === 'ferry';
+$isBus = $transportMode === 'bus';
+$isAir = $transportMode === 'air';
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+$modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
+$claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
@@ -122,13 +126,44 @@ $isPreview = !empty($flowPreview);
 
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
     <strong>Transportform</strong>
-    <div class="small muted" style="margin-top:6px;">Rail er default. Vaelg ferry for at aktivere multimodal ansvar + ferry scope i TRIN 2.</div>
+    <div class="small muted" style="margin-top:6px;">Rail er default. Faerge aktiverer scope + rights i flowet. Bus og fly bruger samme multimodale kontraktstruktur for claim-kanal og ansvar.</div>
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="transport_mode" value="rail" <?= $transportMode==='rail'?'checked':'' ?> /> Tog</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="ferry" <?= $transportMode==='ferry'?'checked':'' ?> /> Faerge</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="bus" <?= $transportMode==='bus'?'checked':'' ?> /> Bus</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="air" <?= $transportMode==='air'?'checked':'' ?> /> Fly</label>
     </div>
+  </div>
+
+  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isBus || $isAir) ? '' : ' display:none;' ?>">
+    <strong><?= $isAir ? 'Air kontraktstruktur' : 'Bus kontraktstruktur' ?></strong>
+    <div class="small muted" style="margin-top:6px;">Dette lag afklarer kun claim-kanal og rettighedsmodul. De materielle bus/fly-regler kobles paa senere.</div>
+    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+      <label>Ramt segment
+        <?php $modeIncidentSegment = (string)($form['incident_segment_mode'] ?? ($modeContract['rights_module'] ?? $transportMode)); ?>
+        <select name="incident_segment_mode">
+          <option value="<?= h($transportMode) ?>" <?= $modeIncidentSegment===$transportMode?'selected':'' ?>><?= $isAir ? 'Fly' : 'Bus' ?></option>
+          <option value="rail" <?= $modeIncidentSegment==='rail'?'selected':'' ?>>Tog</option>
+          <option value="ferry" <?= $modeIncidentSegment==='ferry'?'selected':'' ?>>Faerge</option>
+          <option value="bus" <?= $modeIncidentSegment==='bus'?'selected':'' ?>>Bus</option>
+          <option value="air" <?= $modeIncidentSegment==='air'?'selected':'' ?>>Fly</option>
+        </select>
+      </label>
+      <label>Problem-operatoer (valgfri)
+        <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? ($modeContract['primary_claim_party_name'] ?? ''))) ?>" placeholder="<?= $isAir ? 'Fx SAS' : 'Fx FlixBus' ?>" />
+      </label>
+    </div>
+    <?php if (!empty($modeContract) || !empty($claimDirection)): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <div><strong>Resolver output</strong></div>
+        <div>Kontrakt: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Claim-kanal: <?= h((string)($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
+        <div>Rights module: <?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></div>
+        <?php if (!empty($claimDirection['recommended_documents'])): ?>
+          <div>Anbefalet dokumentation: <?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></div>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
   </div>
 
   <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $isFerry ? '' : ' display:none;' ?>">
@@ -1426,6 +1461,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     const ticketlessCard = document.getElementById('ticketlessCard');
     const seasonCard = document.getElementById('seasonPassCard');
     const ferryScopeCard = document.getElementById('ferryScopeCard');
+    const modeContractCard = document.getElementById('modeContractCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
     const ticketlessFs = document.getElementById('ticketlessFieldset');
     const seasonFs = document.getElementById('seasonPassFieldset');
@@ -1470,6 +1506,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     function updateTransportMode(){
       const mode = radioVal('transport_mode') || 'rail';
       show(ferryScopeCard, mode === 'ferry');
+      show(modeContractCard, mode === 'bus' || mode === 'air');
     }
 
     form.addEventListener('change', (e)=>{

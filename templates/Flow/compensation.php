@@ -14,15 +14,19 @@ $isCompleted = ($travelState === 'completed');
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isFerry = ($transportMode === 'ferry');
+$isBus = ($transportMode === 'bus');
+$isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
+$claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $compTitle = $isOngoing
-    ? ($isFerry ? 'TRIN 10 - Faergeresultat (foreloebigt)' : 'TRIN 10 - Kompensation (foreloebig)')
-    : ($isCompleted ? ($isFerry ? 'TRIN 10 - Faergeresultat (afsluttet rejse)' : 'TRIN 10 - Kompensation (afsluttet rejse)') : ($isFerry ? 'TRIN 10 - Faergeresultat' : 'TRIN 10 - Kompensation (Art. 19)'));
+    ? (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat (foreloebigt)' : 'TRIN 10 - Kompensation (foreloebig)')
+    : ($isCompleted ? (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat (afsluttet rejse)' : 'TRIN 10 - Kompensation (afsluttet rejse)') : (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat' : 'TRIN 10 - Kompensation (Art. 19)'));
 $compHint = $isOngoing
-    ? ($isFerry ? 'Resultatet kan aendre sig, naar den faktiske ankomstforsinkelse er kendt.' : 'Beregningen kan aendre sig, naar rejsen er afsluttet.')
-    : ($isCompleted ? ($isFerry ? 'Resultatet er baseret paa den afsluttede faergerejse.' : 'Beregningen er baseret paa den afsluttede rejse.') : '');
+    ? (($isFerry || $isBus || $isAir) ? 'Resultatet kan aendre sig, naar kontrakt- og haendelsesoplysningerne er fuldt afklaret.' : 'Beregningen kan aendre sig, naar rejsen er afsluttet.')
+    : ($isCompleted ? (($isFerry || $isBus || $isAir) ? 'Resultatet er baseret paa den afsluttede rejse og den nuvaerende kontraktvurdering.' : 'Beregningen er baseret paa den afsluttede rejse.') : '');
 $delayAtFinal = (int)($delayAtFinal ?? 0);
 $bandAuto = (string)($bandAuto ?? '0');
 $refundChosen = (bool)($refundChosen ?? false);
@@ -279,6 +283,9 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <li>Art. 17 assistance: <strong><?= !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
     <li>Art. 18 tilbagebetaling/ombooking: <strong><?= !empty($ferryRights['gate_art18']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
     <li>Art. 19 kompensation: <strong><?= !empty($ferryRights['gate_art19']) ? 'relevant' : 'ikke aktiveret' ?></strong><?= $ferryBand !== '' && $ferryBand !== 'none' ? ' - band ' . h($ferryBand) . '%' : '' ?></li>
+    <?php if (!empty($claimDirection['recommended_documents'])): ?>
+      <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
+    <?php endif; ?>
   </ul>
   <?php if (!empty($ferryRights['gate_art19']) && $ferryBand !== 'none'): ?>
     <div class="ok mt8 small">Ankomstforsinkelsen peger paa ferry Art. 19 med et foreloebigt bånd paa <strong><?= h($ferryBand) ?>%</strong>.</div>
@@ -287,6 +294,36 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <?php else: ?>
     <div class="hl mt8 small">Brug data-pack og de aktive gates ovenfor som grundlag for claim-assist eller manuel vurdering.</div>
   <?php endif; ?>
+</div>
+</fieldset>
+<?= $this->Form->end() ?>
+<?php return; ?>
+<?php endif; ?>
+
+<?php if ($isBus || $isAir): ?>
+<?php
+  $modeLabel = $isAir ? 'Fly' : 'Bus';
+  $claimPartyName = (string)($modeContract['primary_claim_party_name'] ?? '');
+  $claimPartyType = (string)($modeContract['primary_claim_party'] ?? '');
+  $scopeReason = (string)($claimDirection['scope_exclusion_reason'] ?? '');
+  $scopeApplies = array_key_exists('scope_applies', $claimDirection) ? $claimDirection['scope_applies'] : null;
+?>
+<div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
+  <strong><?= h($modeLabel) ?>-resultat</strong>
+  <div class="small muted mt4">TRIN 10 viser her kontraktretning og claim-assist for <?= strtolower($modeLabel) ?>. Materielle <?= strtolower($modeLabel) ?>-rettigheder kobles paa i naeste modul.</div>
+  <ul class="small mt8">
+    <li>Kontrakt: <strong><?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown_manual_review')) ?></strong></li>
+    <li>Claim-kanal: <strong><?= h($claimPartyName !== '' ? $claimPartyName : ($claimPartyType !== '' ? $claimPartyType : 'manual_review')) ?></strong></li>
+    <li>Rights module: <strong><?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></strong></li>
+    <li>Manual review: <strong><?= !empty($modeContract['manual_review_required']) ? 'ja' : 'nej' ?></strong></li>
+    <?php if ($scopeApplies !== null): ?>
+      <li>Scope: <strong><?= $scopeApplies ? 'omfattet' : 'uklart/ikke omfattet' ?></strong><?= $scopeReason !== '' ? ' - ' . h($scopeReason) : '' ?></li>
+    <?php endif; ?>
+    <?php if (!empty($claimDirection['recommended_documents'])): ?>
+      <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
+    <?php endif; ?>
+  </ul>
+  <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, indtil <?= strtolower($modeLabel) ?>-rights modulet er koblet helt paa.</div>
 </div>
 </fieldset>
 <?= $this->Form->end() ?>

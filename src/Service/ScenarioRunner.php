@@ -187,6 +187,27 @@ class ScenarioRunner
                 (array)$actual['ferry_scope'],
                 (array)$actual['ferry_contract']
             );
+            $resolver = new MultimodalFlowResolver();
+            $actual['claim_direction'] = $resolver->evaluate([
+                'form' => ['transport_mode' => 'ferry'] + (array)($fixture['incident_meta'] ?? []) + (array)($fixture['scope_meta'] ?? []) + (array)($fixture['contract_meta'] ?? []),
+                'meta' => [],
+                'journey' => [],
+                'incident' => ['main' => (string)(($fixture['incident_meta']['incident_type'] ?? ''))],
+                'contract_meta' => (array)($fixture['contract_meta'] ?? []),
+                'scope_meta' => (array)($fixture['scope_meta'] ?? []),
+                'incident_meta' => (array)($fixture['incident_meta'] ?? []),
+            ])['claim_direction'] ?? [];
+        } elseif (in_array($transportMode, ['bus', 'air'], true)) {
+            $contractResolver = new ModeContractResolver();
+            $actual[$transportMode . '_contract'] = $contractResolver->evaluate($transportMode, (array)($fixture['contract_meta'] ?? []));
+            $resolver = new MultimodalFlowResolver();
+            $actual['claim_direction'] = $resolver->evaluate([
+                'form' => ['transport_mode' => $transportMode] + (array)($fixture['contract_meta'] ?? []),
+                'meta' => [],
+                'journey' => [],
+                'incident' => [],
+                'contract_meta' => (array)($fixture['contract_meta'] ?? []),
+            ], false)['claim_direction'] ?? [];
         } elseif (!empty($fixture['scope_meta']) && is_array($fixture['scope_meta'])) {
             $actual['scope_meta'] = (array)$fixture['scope_meta'];
         }

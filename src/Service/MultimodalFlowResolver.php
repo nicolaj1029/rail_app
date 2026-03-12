@@ -17,6 +17,9 @@ final class MultimodalFlowResolver
         $contractMeta = $this->buildContractMeta($flow, $journeyBasic, $segments, $transportMode);
         $scopeMeta = $this->buildScopeMeta($flow, $transportMode);
         $incidentMeta = $this->buildIncidentMeta($flow, $transportMode);
+        $contractMeta = array_replace($contractMeta, (array)($flow['contract_meta'] ?? []));
+        $scopeMeta = array_replace($scopeMeta, (array)($flow['scope_meta'] ?? []));
+        $incidentMeta = array_replace($incidentMeta, (array)($flow['incident_meta'] ?? []));
 
         $result = [
             'transport_mode' => $transportMode,
@@ -33,6 +36,13 @@ final class MultimodalFlowResolver
             if ($includeIncident) {
                 $result['ferry_rights'] = (new FerryRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
             }
+            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['ferry_rights'] ?? []));
+        } elseif (in_array($transportMode, ['bus', 'air'], true)) {
+            $contract = (new ModeContractResolver())->evaluate($transportMode, $contractMeta);
+            $result[$transportMode . '_contract'] = $contract;
+            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scopeMeta, []);
+        } else {
+            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contractMeta, $scopeMeta, []);
         }
 
         return $result;
@@ -307,5 +317,60 @@ final class MultimodalFlowResolver
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $contractMeta
+     * @param array<string,mixed> $contractResult
+     * @param array<string,mixed> $scopeResult
+     * @param array<string,mixed> $rightsResult
+     * @return array<string,mixed>
+     */
+    private function buildClaimDirection(
+        string $transportMode,
+        array $contractMeta,
+        array $contractResult,
+        array $scopeResult,
+        array $rightsResult
+    ): array {
+        $claimPartyType = (string)($contractResult['primary_claim_party'] ?? ($contractMeta['primary_claim_party'] ?? 'manual_review'));
+        $claimPartyName = (string)($contractResult['primary_claim_party_name'] ?? ($contractMeta['seller_name'] ?? ''));
+        $rightsModule = (string)($contractResult['rights_module'] ?? ($contractMeta['rights_module'] ?? $transportMode));
+        $manualReview = (bool)($contractResult['manual_review_required'] ?? ($contractMeta['manual_review_required'] ?? false));
+
+        $requiredDocuments = ['ticket_or_booking'];
+        if ($transportMode === 'ferry') {
+            if (!empty($rightsResult['gate_art17_refreshments'])) {
+                $requiredDocuments[] = 'refreshment_receipts_if_self_paid';
+            }
+            if (!empty($rightsResult['gate_art17_hotel'])) {
+                $requiredDocuments[] = 'hotel_receipts_if_self_paid';
+            }
+            if (!empty($rightsResult['gate_art18'])) {
+                $requiredDocuments[] = 'reroute_or_refund_evidence';
+            }
+            if (!empty($rightsResult['gate_art19'])) {
+                $requiredDocuments[] = 'arrival_delay_evidence';
+            }
+            if (!empty($rightsResult['gate_art16_notice']) || !empty($rightsResult['gate_art16_alt_connections'])) {
+                $requiredDocuments[] = 'operator_information_evidence';
+            }
+        } elseif ($transportMode === 'bus') {
+            $requiredDocuments[] = 'operator_connection_or_terminal_evidence';
+        } elseif ($transportMode === 'air') {
+            $requiredDocuments[] = 'boarding_pass_or_pnr';
+        }
+
+        return [
+            'transport_mode' => $transportMode,
+            'contract_topology' => (string)($contractMeta['contract_topology'] ?? 'unknown_manual_review'),
+            'claim_party_type' => $claimPartyType,
+            'claim_party_name' => $claimPartyName !== '' ? $claimPartyName : null,
+            'rights_module' => $rightsModule,
+            'manual_review_required' => $manualReview,
+            'scope_applies' => array_key_exists('regulation_applies', $scopeResult) ? (bool)$scopeResult['regulation_applies'] : null,
+            'scope_exclusion_reason' => (string)($scopeResult['scope_exclusion_reason'] ?? ''),
+            'recommended_documents' => array_values(array_unique($requiredDocuments)),
+        ];
     }
 }

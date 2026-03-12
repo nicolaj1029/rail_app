@@ -564,10 +564,12 @@ class FlowController extends AppController
         $form['transport_mode'] = (string)($multimodal['transport_mode'] ?? 'rail');
         $meta['transport_mode'] = $form['transport_mode'];
         $meta['_multimodal'] = $multimodal;
-        if ($form['transport_mode'] === 'ferry') {
-            $compute['rights_module'] = 'ferry';
-            $compute['primary_claim_party'] = (string)($multimodal['ferry_contract']['primary_claim_party'] ?? '');
-            $compute['primary_claim_party_name'] = (string)($multimodal['ferry_contract']['primary_claim_party_name'] ?? '');
+        if (in_array($form['transport_mode'], ['ferry', 'bus', 'air'], true)) {
+            $contractKey = $form['transport_mode'] === 'ferry' ? 'ferry_contract' : ($form['transport_mode'] . '_contract');
+            $modeContract = (array)($multimodal[$contractKey] ?? []);
+            $compute['rights_module'] = (string)($modeContract['rights_module'] ?? $form['transport_mode']);
+            $compute['primary_claim_party'] = (string)($modeContract['primary_claim_party'] ?? '');
+            $compute['primary_claim_party_name'] = (string)($modeContract['primary_claim_party_name'] ?? '');
         }
 
         // ------------------------------------------------------
@@ -585,6 +587,15 @@ class FlowController extends AppController
             $flags['gate_ferry_art17_hotel'] = !empty($ferryRights['gate_art17_hotel']) ? '1' : '';
             $flags['gate_ferry_art19'] = !empty($ferryRights['gate_art19']) ? '1' : '';
             $flags['ferry_art19_comp_band'] = (string)($ferryRights['art19_comp_band'] ?? '');
+        } elseif (in_array($form['transport_mode'], ['bus', 'air'], true)) {
+            $gateArt18 = false;
+            $gateArt20 = false;
+            $gateArt20_2c = false;
+            $flags['gate_ferry_art16_notice'] = '';
+            $flags['gate_ferry_art17_refreshments'] = '';
+            $flags['gate_ferry_art17_hotel'] = '';
+            $flags['gate_ferry_art19'] = '';
+            $flags['ferry_art19_comp_band'] = '';
         } else {
             $articles = (array)($profile['articles'] ?? []);
             $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -627,6 +638,10 @@ class FlowController extends AppController
 
             if ($form['transport_mode'] === 'ferry' && $gateArt20) {
                 return $this->redirect(['action' => 'assistance']);
+            }
+
+            if (in_array($form['transport_mode'], ['bus', 'air'], true)) {
+                return $this->redirect(['action' => 'compensation']);
             }
 
             // Stay on gating step (shows national fallback UI)
@@ -6642,6 +6657,31 @@ class FlowController extends AppController
                 ];
             }
 
+            $multimodal = (new \App\Service\MultimodalFlowResolver())->evaluate([
+                'form' => $form,
+                'meta' => $meta,
+                'journey' => $journey,
+                'incident' => $incident,
+            ]);
+
+            $multimodalOut = [
+                'transport_mode' => (string)($multimodal['transport_mode'] ?? 'rail'),
+                'contract_meta' => $multimodal['contract_meta'] ?? null,
+                'scope_meta' => $multimodal['scope_meta'] ?? null,
+                'claim_direction' => $multimodal['claim_direction'] ?? null,
+            ];
+
+            $ferryOut = null;
+            if (($multimodalOut['transport_mode'] ?? 'rail') === 'ferry') {
+                $claimDirection = (array)($multimodal['claim_direction'] ?? []);
+                $ferryOut = [
+                    'scope' => $multimodal['ferry_scope'] ?? null,
+                    'contract' => $multimodal['ferry_contract'] ?? null,
+                    'rights' => $multimodal['ferry_rights'] ?? null,
+                    'recommended_documents' => $claimDirection['recommended_documents'] ?? [],
+                ];
+            }
+
             $pack = [
                 'ok' => true,
                 'generated_at' => gmdate('c'),
@@ -6676,6 +6716,8 @@ class FlowController extends AppController
                     'minutes_whole_trip' => $delayWhole,
                     'minutes_national_reported' => $delayNational,
                 ],
+                'multimodal' => $multimodalOut,
+                'ferry' => $ferryOut,
                 'season_policy' => $policyOut,
             ];
 

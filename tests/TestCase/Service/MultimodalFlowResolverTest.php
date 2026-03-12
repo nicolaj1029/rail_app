@@ -55,5 +55,60 @@ final class MultimodalFlowResolverTest extends TestCase
         $this->assertTrue($result['ferry_rights']['gate_art18']);
         $this->assertTrue($result['ferry_rights']['gate_art19']);
         $this->assertSame('25', $result['ferry_rights']['art19_comp_band']);
+        $this->assertSame('ferry', $result['claim_direction']['rights_module']);
+    }
+
+    public function testEvaluatesBusContractDirection(): void
+    {
+        $result = (new MultimodalFlowResolver())->evaluate([
+            'form' => [
+                'transport_mode' => 'bus',
+                'operator' => 'Ticket Seller',
+                'ticket_no' => 'BUS-1',
+                'dep_station' => 'Odense',
+                'arr_station' => 'Aarhus',
+                'incident_segment_mode' => 'bus',
+                'incident_segment_operator' => 'FlixBus',
+                'single_txn_retailer' => 'yes',
+                'through_ticket_disclosure' => 'bundled',
+                'separate_contract_notice' => 'no',
+            ],
+            'meta' => [],
+            'journey' => [],
+            'incident' => [],
+        ], false);
+
+        $this->assertSame('bus', $result['transport_mode']);
+        $this->assertSame('single_mode_single_contract', $result['contract_meta']['contract_topology']);
+        $this->assertSame('bus', $result['bus_contract']['rights_module']);
+        $this->assertSame('bus', $result['claim_direction']['rights_module']);
+        $this->assertContains('operator_connection_or_terminal_evidence', $result['claim_direction']['recommended_documents']);
+    }
+
+    public function testEvaluatesAirContractDirection(): void
+    {
+        $result = (new MultimodalFlowResolver())->evaluate([
+            'form' => [
+                'transport_mode' => 'air',
+                'operator' => 'SAS',
+                'ticket_no' => 'PNR-1',
+                'dep_station' => 'CPH',
+                'arr_station' => 'ARN',
+                'incident_segment_mode' => 'air',
+                'incident_segment_operator' => 'SAS',
+                'single_txn_operator' => 'yes',
+                'through_ticket_disclosure' => 'bundled',
+                'separate_contract_notice' => 'no',
+            ],
+            'meta' => [],
+            'journey' => [],
+            'incident' => [],
+        ], false);
+
+        $this->assertSame('air', $result['transport_mode']);
+        $this->assertSame('single_mode_single_contract', $result['contract_meta']['contract_topology']);
+        $this->assertSame('air', $result['air_contract']['rights_module']);
+        $this->assertSame('air', $result['claim_direction']['rights_module']);
+        $this->assertContains('boarding_pass_or_pnr', $result['claim_direction']['recommended_documents']);
     }
 }
