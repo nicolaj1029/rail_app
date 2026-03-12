@@ -181,6 +181,12 @@ class ScenarioRunner
             $actual['ferry_scope'] = $scopeResolver->evaluate((array)($fixture['scope_meta'] ?? []));
             $contractResolver = new FerryContractResolver();
             $actual['ferry_contract'] = $contractResolver->evaluate((array)($fixture['contract_meta'] ?? []), (array)$actual['ferry_scope']);
+            $rightsResolver = new FerryRightsEvaluator();
+            $actual['ferry_rights'] = $rightsResolver->evaluate(
+                (array)($fixture['incident_meta'] ?? []),
+                (array)$actual['ferry_scope'],
+                (array)$actual['ferry_contract']
+            );
         } elseif (!empty($fixture['scope_meta']) && is_array($fixture['scope_meta'])) {
             $actual['scope_meta'] = (array)$fixture['scope_meta'];
         }
