@@ -22,14 +22,22 @@ class SessionToFixtureMapper
         $step8Assistance = $this->extractStep8Assistance($flow);
         $step9Downgrade = $this->extractStep9Downgrade($flow);
         $step10Comp = $this->extractStep10Compensation($flow);
+        $transportMode = $this->detectTransportMode($flow);
+        $contractMeta = $this->buildContractMeta($flow, $journeyBasic, $segments, $transportMode);
+        $scopeMeta = $this->buildScopeMeta($flow, $transportMode);
+        $incidentMeta = $this->buildIncidentMeta($flow, $transportMode, $step5Incident);
 
         return [
             'id' => 'session_' . date('Ymd_His'),
             'version' => 2,
             'label' => 'Captured wizard session ' . date('c'),
+            'transport_mode' => $transportMode,
             'journey' => $flow['journey'] ?? ($flow['meta']['journey'] ?? []),
             'journeyBasic' => $journeyBasic,
             'segments' => $segments,
+            'contract_meta' => $contractMeta,
+            'scope_meta' => $scopeMeta,
+            'incident_meta' => $incidentMeta,
             // Persist selected meta hooks (multi-ticket / guardian etc.) for QA fixtures
             'meta' => $this->extractMeta($flow),
             'wizard' => [
@@ -133,8 +141,223 @@ class SessionToFixtureMapper
             'separate_contract_notice' => 'Ved ikke',
             'through_ticket_disclosure' => 'Ved ikke',
         ];
+        $base['contract_meta'] = $this->buildContractMeta($flow, (array)$base['journeyBasic'], (array)$base['segments'], (string)($base['transport_mode'] ?? 'rail'));
+        $base['scope_meta'] = $this->buildScopeMeta($flow, (string)($base['transport_mode'] ?? 'rail'));
+        $base['incident_meta'] = $this->buildIncidentMeta($flow, (string)($base['transport_mode'] ?? 'rail'), (array)(($base['wizard']['step5_incident'] ?? [])));
 
         return $base;
+    }
+
+    private function detectTransportMode(array $flow): string
+    {
+        $form = (array)($flow['form'] ?? []);
+        $meta = (array)($flow['meta'] ?? []);
+        $journey = (array)($flow['journey'] ?? ($meta['journey'] ?? []));
+
+        $candidate = strtolower(trim((string)(
+            $form['transport_mode']
+            ?? $meta['transport_mode']
+            ?? $journey['transport_mode']
+            ?? ''
+        )));
+
+        return match ($candidate) {
+            'ferry', 'bus', 'air', 'rail' => $candidate,
+            default => 'rail',
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $journeyBasic
+     * @param array<int,array<string,mixed>> $segments
+     * @return array<string,mixed>
+     */
+    private function buildContractMeta(array $flow, array $journeyBasic, array $segments, string $transportMode): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $meta = (array)($flow['meta'] ?? []);
+        $auto = (array)($meta['_auto'] ?? []);
+
+        $sellerChannel = strtolower(trim((string)($form['seller_channel'] ?? '')));
+        $singleTxnOperator = $this->normalizeYesNoMachine($form['single_txn_operator'] ?? ($meta['single_txn_operator'] ?? null));
+        $singleTxnRetailer = $this->normalizeYesNoMachine($form['single_txn_retailer'] ?? ($meta['single_txn_retailer'] ?? null));
+        $throughDisclosure = $this->normalizeDisclosure($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
+        $separateNotice = $this->normalizeSeparateNotice($form['separate_contract_notice'] ?? ($meta['separate_contract_notice'] ?? null));
+
+        $ticketNo = (string)($journeyBasic['ticket_no'] ?? '');
+        $sharedBookingReference = $ticketNo !== '';
+        $singleTransaction = match (true) {
+            $singleTxnOperator === 'yes', $singleTxnRetailer === 'yes' => true,
+            $singleTxnOperator === 'no' && $singleTxnRetailer === 'no' => false,
+            default => null,
+        };
+
+        $sellerType = match ($sellerChannel) {
+            'operator' => 'operator',
+            'retailer' => 'ticket_vendor',
+            'agency' => 'travel_agent',
+            'tour_operator' => 'tour_operator',
+            default => ($singleTxnRetailer === 'yes' ? 'ticket_vendor' : ($journeyBasic['operator'] ?? null ? 'operator' : 'unknown')),
+        };
+        $sellerName = $journeyBasic['operator'] ?? ($auto['operator']['value'] ?? null);
+
+        $journeyStructure = match (true) {
+            count($segments) > 1 && $transportMode === 'rail' => 'single_mode_connections',
+            count($segments) > 1 => 'multimodal_connections',
+            !empty($journeyBasic['dep_station']) || !empty($journeyBasic['arr_station']) => 'single_segment',
+            default => 'unknown',
+        };
+
+        $contractTopology = 'unknown_manual_review';
+        if ($journeyStructure === 'single_segment') {
+            $contractTopology = 'single_mode_single_contract';
+        } elseif ($separateNotice === 'yes' && $throughDisclosure === 'separate') {
+            $contractTopology = 'separate_contracts';
+        } elseif (($sharedBookingReference || $singleTransaction === true) && $separateNotice === 'no') {
+            $contractTopology = $journeyStructure === 'single_mode_connections'
+                ? 'protected_single_contract'
+                : 'single_multimodal_contract';
+        } elseif ($singleTransaction === false) {
+            $contractTopology = 'separate_contracts';
+        }
+
+        $incidentSegmentMode = strtolower(trim((string)(
+            $form['incident_segment_mode']
+            ?? $meta['incident_segment_mode']
+            ?? $transportMode
+        )));
+        if (!in_array($incidentSegmentMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+            $incidentSegmentMode = $transportMode;
+        }
+
+        $primaryClaimParty = match ($contractTopology) {
+            'separate_contracts' => 'segment_operator',
+            'single_mode_single_contract', 'protected_single_contract', 'single_multimodal_contract' => 'seller',
+            default => 'manual_review',
+        };
+
+        return [
+            'seller_type' => $sellerType,
+            'seller_name' => $sellerName,
+            'shared_booking_reference' => $sharedBookingReference,
+            'single_transaction' => $singleTransaction,
+            'contract_structure_disclosure' => $throughDisclosure,
+            'separate_contract_notice' => $separateNotice,
+            'journey_structure' => $journeyStructure,
+            'contract_topology' => $contractTopology,
+            'incident_segment_mode' => $incidentSegmentMode,
+            'incident_segment_operator' => $form['incident_segment_operator'] ?? $journeyBasic['operator'] ?? null,
+            'primary_claim_party' => $primaryClaimParty,
+            'rights_module' => $incidentSegmentMode,
+            'manual_review_required' => $contractTopology === 'unknown_manual_review',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildScopeMeta(array $flow, string $transportMode): array
+    {
+        $form = (array)($flow['form'] ?? []);
+
+        return [
+            'transport_mode' => $transportMode,
+            'service_type' => $form['service_type'] ?? null,
+            'departure_from_terminal' => $this->normalizeNullableBool($form['departure_from_terminal'] ?? null),
+            'departure_port_in_eu' => $this->normalizeNullableBool($form['departure_port_in_eu'] ?? null),
+            'arrival_port_in_eu' => $this->normalizeNullableBool($form['arrival_port_in_eu'] ?? null),
+            'carrier_is_eu' => $this->normalizeNullableBool($form['carrier_is_eu'] ?? null),
+            'vessel_passenger_capacity' => $this->normalizeNullableInt($form['vessel_passenger_capacity'] ?? null),
+            'vessel_operational_crew' => $this->normalizeNullableInt($form['vessel_operational_crew'] ?? null),
+            'route_distance_meters' => $this->normalizeNullableInt($form['route_distance_meters'] ?? null),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $step5Incident
+     * @return array<string,mixed>
+     */
+    private function buildIncidentMeta(array $flow, string $transportMode, array $step5Incident): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $incidentType = strtolower(trim((string)($step5Incident['incident_main'] ?? '')));
+        if (!in_array($incidentType, ['delay', 'cancellation'], true)) {
+            $incidentType = $incidentType !== '' ? $incidentType : null;
+        }
+
+        return [
+            'transport_mode' => $transportMode,
+            'incident_type' => $incidentType,
+            'incident_missed' => $this->normalizeYesNoMachine($step5Incident['incident_missed'] ?? null),
+            'expected_delay_60' => $this->normalizeNullableBool($step5Incident['expected_delay_60'] ?? null),
+            'delay_already_60' => $this->normalizeNullableBool($step5Incident['delay_already_60'] ?? null),
+            'missed_expected_delay_60' => $this->normalizeNullableBool($step5Incident['missed_expected_delay_60'] ?? null),
+            'national_delay_minutes' => $this->normalizeNullableInt($step5Incident['national_delay_minutes'] ?? null),
+            'preinformed_disruption' => $this->normalizeNullableBool($step5Incident['preinformed_disruption'] ?? null),
+            'preinfo_channel' => $step5Incident['preinfo_channel'] ?? null,
+            'realtime_info_seen' => $step5Incident['realtime_info_seen'] ?? null,
+            'operator_exceptional_circumstances' => $this->normalizeNullableBool($step5Incident['operatorExceptionalCircumstances'] ?? null),
+            'operator_exceptional_type' => $step5Incident['operatorExceptionalType'] ?? null,
+            'minimum_threshold_applies' => $this->normalizeNullableBool($step5Incident['minThresholdApplies'] ?? null),
+            'arrival_delay_minutes' => $this->normalizeNullableInt($form['arrival_delay_minutes'] ?? null),
+            'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
+        ];
+    }
+
+    private function normalizeYesNoMachine(mixed $value): ?string
+    {
+        if (is_bool($value)) {
+            return $value ? 'yes' : 'no';
+        }
+        $normalized = strtolower(trim((string)$value));
+        return match ($normalized) {
+            'ja', 'yes', 'y', '1', 'true', 'gennemgående' => 'yes',
+            'nej', 'no', 'n', '0', 'false', 'særskilte' => 'no',
+            '', 'unknown', 'ved ikke', 'unclear' => null,
+            default => in_array($normalized, ['yes', 'no'], true) ? $normalized : null,
+        };
+    }
+
+    private function normalizeDisclosure(mixed $value): string
+    {
+        $normalized = strtolower(trim((string)$value));
+        return match ($normalized) {
+            'gennemgående', 'bundled' => 'bundled',
+            'særskilte', 'separate' => 'separate',
+            'yes', 'ja' => 'bundled',
+            'no', 'nej' => 'none',
+            '', 'unknown', 'ved ikke' => 'unknown',
+            default => 'unknown',
+        };
+    }
+
+    private function normalizeSeparateNotice(mixed $value): string
+    {
+        return match ($this->normalizeYesNoMachine($value)) {
+            'yes' => 'yes',
+            'no' => 'no',
+            default => 'unclear',
+        };
+    }
+
+    private function normalizeNullableBool(mixed $value): ?bool
+    {
+        return match ($this->normalizeYesNoMachine($value)) {
+            'yes' => true,
+            'no' => false,
+            default => null,
+        };
+    }
+
+    private function normalizeNullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_numeric($value)) {
+            return (int)$value;
+        }
+        return null;
     }
 
     /**

@@ -37,6 +37,11 @@ class ScenarioRunner
             'wizard' => $fixture['wizard'] ?? [],
             'computeOverrides' => $fixture['computeOverrides'] ?? [],
         ];
+        foreach (['transport_mode', 'contract_meta', 'scope_meta', 'incident_meta'] as $key) {
+            if (array_key_exists($key, $fixture)) {
+                $payload[$key] = $fixture[$key];
+            }
+        }
         if (!empty($fixture['meta']) && is_array($fixture['meta'])) {
             $payload['meta'] = (array)$fixture['meta'];
         }
@@ -136,6 +141,7 @@ class ScenarioRunner
     {
         $fixture['version'] = 2;
         $fixture['wizard'] = (array)($fixture['wizard'] ?? []);
+        $fixture['transport_mode'] = $fixture['transport_mode'] ?? 'rail';
         $legacyStep3 = (array)($fixture['wizard']['step3_entitlements'] ?? []);
         $fixture['wizard']['step3_journey'] = (array)($fixture['wizard']['step3_journey'] ?? $legacyStep3);
         $fixture['wizard']['step3_journey'] += [

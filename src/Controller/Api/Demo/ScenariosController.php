@@ -55,6 +55,10 @@ class ScenariosController extends AppController
                 'version' => $fx['version'] ?? 1,
                 'label' => $fx['label'] ?? $fx['id'],
                 'tags' => $fx['tags'] ?? [],
+                'transport_mode' => $fx['transport_mode'] ?? 'rail',
+                'contract_meta' => $fx['contract_meta'] ?? null,
+                'scope_meta' => $fx['scope_meta'] ?? null,
+                'incident_meta' => $fx['incident_meta'] ?? null,
                 'expected' => $fx['expected'] ?? null,
             ];
             if ($withEval) {
