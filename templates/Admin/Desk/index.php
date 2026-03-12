@@ -120,9 +120,14 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
               <span>Kilde: <?= h((string)($item['source'] ?? '')) ?></span>
               <?php if (($item['delay_minutes'] ?? null) !== null): ?><span>Forsinkelse: <?= h((string)$item['delay_minutes']) ?> min</span><?php endif; ?>
               <?php if (trim((string)($item['ticket_mode'] ?? '')) !== ''): ?><span>Billet: <?= h((string)$item['ticket_mode']) ?></span><?php endif; ?>
+              <?php if (trim((string)(($item['follow_up']['due_at'] ?? ''))) !== ''): ?><span>Opfølgning: <?= h(date('d-m-Y H:i', strtotime((string)$item['follow_up']['due_at']))) ?></span><?php endif; ?>
+              <?php if (($item['notes_count'] ?? 0) > 0): ?><span>Noter: <?= (int)$item['notes_count'] ?></span><?php endif; ?>
               <span>Opdateret: <?= h((string)($item['updated_at'] ?? '')) ?></span>
             </div>
             <div class="desk-muted"><?= h((string)($item['next_action'] ?? '')) ?></div>
+            <?php if (trim((string)(($item['follow_up']['reason'] ?? ''))) !== ''): ?>
+              <div class="desk-muted">Opfølgningsårsag: <?= h((string)$item['follow_up']['reason']) ?></div>
+            <?php endif; ?>
             <div class="desk-actions">
               <a class="desk-button primary" href="<?= h($this->Url->build('/admin/desk/view?source=' . urlencode((string)$item['source']) . '&id=' . urlencode((string)$item['id']))) ?>">Åbn cockpit</a>
               <?php if (($item['source'] ?? '') === 'session'): ?>

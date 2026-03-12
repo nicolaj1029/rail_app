@@ -91,6 +91,16 @@ final class AdminDeskService
             $items[] = $this->buildShadowCaseItem($shadowCase);
         }
 
+        $items = array_map(function (array $item): array {
+            $source = (string)($item['source'] ?? '');
+            $id = (string)($item['id'] ?? '');
+            $followUp = $this->followUpFor($source, $id);
+            $item['follow_up'] = $followUp;
+            $item['notes_count'] = count($this->notesFor($source, $id));
+
+            return $item;
+        }, $items);
+
         usort($items, static function (array $a, array $b): int {
             $aTime = strtotime((string)($a['updated_at'] ?? '')) ?: 0;
             $bTime = strtotime((string)($b['updated_at'] ?? '')) ?: 0;
@@ -101,7 +111,7 @@ final class AdminDeskService
         $normalizedFilter = $this->normalizeInboxFilter($filter);
         $normalizedSearch = mb_strtolower(trim($search));
         $items = array_values(array_filter($items, function (array $item) use ($normalizedFilter, $normalizedSearch): bool {
-            if ($normalizedFilter !== 'all' && (string)($item['ops_status'] ?? '') !== $normalizedFilter) {
+            if (!$this->matchesInboxFilter($item, $normalizedFilter)) {
                 return false;
             }
             if ($normalizedSearch === '') {
@@ -114,6 +124,7 @@ final class AdminDeskService
                 (string)($item['source'] ?? ''),
                 (string)($item['ticket_mode'] ?? ''),
                 (string)($item['next_action'] ?? ''),
+                (string)(($item['follow_up']['reason'] ?? '')),
             ])));
 
             return str_contains($haystack, $normalizedSearch);
@@ -150,13 +161,21 @@ final class AdminDeskService
      */
     public function loadDeskItem(Session $session, string $source, string $id): ?array
     {
-        return match ($source) {
+        $cockpit = match ($source) {
             'session' => $this->buildCurrentSessionCockpit($session),
             'case' => $this->buildStoredCaseCockpit($id),
             'claim' => $this->buildClaimCockpit($id),
             'shadow_case' => $this->buildShadowCaseCockpit($id),
             default => null,
         };
+        if ($cockpit === null) {
+            return null;
+        }
+
+        $cockpit['notes'] = $this->notesFor($source, $id);
+        $cockpit['follow_up'] = $this->followUpFor($source, $id);
+
+        return $cockpit;
     }
 
     public function updateStatus(string $source, string $id, string $status): bool
@@ -177,7 +196,88 @@ final class AdminDeskService
             'ready_to_submit' => 'Klar til indsendelse',
             'submitted' => 'Indsendt',
             'resolved' => 'Løst',
+            'due_today' => 'Forfalder i dag',
+            'overdue' => 'Overskredet',
+            'scheduled' => 'Har opfølgning',
         ];
+    }
+
+    public function addNote(string $source, string $id, string $role, string $author, string $text): bool
+    {
+        $source = trim($source);
+        $id = trim($id);
+        $text = trim($text);
+        if ($source === '' || $id === '' || $text === '') {
+            return false;
+        }
+
+        $state = $this->readDeskState();
+        $key = $this->stateKey($source, $id);
+        $notes = (array)($state['notes'][$key] ?? []);
+        $notes[] = [
+            'created_at' => date('c'),
+            'role' => $role,
+            'author' => $author !== '' ? $author : 'admin',
+            'text' => $text,
+        ];
+        $state['notes'][$key] = $notes;
+
+        return $this->writeDeskState($state);
+    }
+
+    public function saveFollowUp(string $source, string $id, string $role, string $author, string $dueAt, string $reason): bool
+    {
+        $source = trim($source);
+        $id = trim($id);
+        $reason = trim($reason);
+        $normalizedDue = trim($dueAt);
+        if ($source === '' || $id === '') {
+            return false;
+        }
+
+        $state = $this->readDeskState();
+        $key = $this->stateKey($source, $id);
+        if ($normalizedDue === '') {
+            unset($state['follow_ups'][$key]);
+            return $this->writeDeskState($state);
+        }
+
+        $timestamp = strtotime($normalizedDue);
+        if ($timestamp === false) {
+            return false;
+        }
+
+        $state['follow_ups'][$key] = [
+            'due_at' => date('c', $timestamp),
+            'reason' => $reason,
+            'role' => $role,
+            'author' => $author !== '' ? $author : 'admin',
+            'updated_at' => date('c'),
+        ];
+
+        return $this->writeDeskState($state);
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function notesFor(string $source, string $id): array
+    {
+        $state = $this->readDeskState();
+        $key = $this->stateKey($source, $id);
+
+        return array_values((array)($state['notes'][$key] ?? []));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function followUpFor(string $source, string $id): array
+    {
+        $state = $this->readDeskState();
+        $key = $this->stateKey($source, $id);
+
+        return (array)($state['follow_ups'][$key] ?? []);
     }
 
     public function updateStatusForRole(string $role, string $source, string $id, string $status): bool
@@ -661,6 +761,74 @@ final class AdminDeskService
         $normalized = strtolower(trim($filter));
 
         return array_key_exists($normalized, $this->availableInboxFilters()) ? $normalized : 'all';
+    }
+
+    /**
+     * @param array<string,mixed> $item
+     */
+    private function matchesInboxFilter(array $item, string $filter): bool
+    {
+        if ($filter === 'all') {
+            return true;
+        }
+
+        $followUp = (array)($item['follow_up'] ?? []);
+        $dueAt = trim((string)($followUp['due_at'] ?? ''));
+        $dueTs = $dueAt !== '' ? strtotime($dueAt) : false;
+        $todayStart = strtotime(date('Y-m-d 00:00:00'));
+        $todayEnd = strtotime(date('Y-m-d 23:59:59'));
+        $now = time();
+
+        return match ($filter) {
+            'due_today' => $dueTs !== false && $dueTs >= $todayStart && $dueTs <= $todayEnd,
+            'overdue' => $dueTs !== false && $dueTs < $todayStart,
+            'scheduled' => $dueTs !== false && $dueTs >= $now,
+            default => (string)($item['ops_status'] ?? '') === $filter,
+        };
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function readDeskState(): array
+    {
+        $file = $this->deskStateFile();
+        if (!is_file($file)) {
+            return ['notes' => [], 'follow_ups' => []];
+        }
+        $decoded = json_decode((string)file_get_contents($file), true);
+        if (!is_array($decoded)) {
+            return ['notes' => [], 'follow_ups' => []];
+        }
+
+        return [
+            'notes' => (array)($decoded['notes'] ?? []),
+            'follow_ups' => (array)($decoded['follow_ups'] ?? []),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     */
+    private function writeDeskState(array $state): bool
+    {
+        $file = $this->deskStateFile();
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        return file_put_contents($file, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+    }
+
+    private function deskStateFile(): string
+    {
+        return TMP . 'admin_desk_state.json';
+    }
+
+    private function stateKey(string $source, string $id): string
+    {
+        return strtolower(trim($source)) . ':' . trim($id);
     }
 
     /**

@@ -21,6 +21,8 @@ $attachments = (array)($cockpit['attachments'] ?? []);
 $steps = (array)($opsPanel['steps'] ?? []);
 $blockers = (array)($opsPanel['blockers'] ?? []);
 $actions = (array)($opsPanel['actions'] ?? []);
+$notes = (array)($cockpit['notes'] ?? []);
+$followUp = (array)($cockpit['follow_up'] ?? []);
 $playbooks = $playbooks ?? [];
 $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source) . '&id=' . urlencode($id));
 ?>
@@ -170,6 +172,61 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
                 <button class="desk-button" type="submit" name="status" value="legal_review">Send til jurist</button>
               <?php endif; ?>
             </form>
+          <?php endif; ?>
+        </section>
+
+        <section class="desk-card">
+          <h2 class="desk-title">Interne noter</h2>
+          <form method="post" action="<?= h($this->Url->build('/admin/desk/note')) ?>" class="desk-panel-list">
+            <input type="hidden" name="_csrfToken" value="<?= h($csrfToken) ?>">
+            <input type="hidden" name="source" value="<?= h($source) ?>">
+            <input type="hidden" name="id" value="<?= h($id) ?>">
+            <input type="hidden" name="redirect" value="<?= h($redirectUrl) ?>">
+            <textarea name="note" rows="3" style="width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:10px;" placeholder="Skriv intern note eller kort samtalereferat ..."></textarea>
+            <div class="desk-toolbar">
+              <button class="desk-button primary" type="submit">Gem note</button>
+            </div>
+          </form>
+          <div class="desk-panel-list" style="margin-top:12px;">
+            <?php if ($notes === []): ?>
+              <div class="desk-panel-item">
+                <strong>Ingen noter</strong>
+                <div>Der er endnu ikke gemt interne noter på denne sag.</div>
+              </div>
+            <?php endif; ?>
+            <?php foreach ($notes as $note): ?>
+              <div class="desk-panel-item">
+                <strong><?= h((string)($note['author'] ?? 'admin')) ?> · <?= h((string)($note['role'] ?? '')) ?></strong>
+                <div class="desk-muted"><?= h((string)($note['created_at'] ?? '')) ?></div>
+                <div><?= h((string)($note['text'] ?? '')) ?></div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </section>
+
+        <section class="desk-card">
+          <h2 class="desk-title">Opfølgning</h2>
+          <form method="post" action="<?= h($this->Url->build('/admin/desk/follow-up')) ?>" class="desk-panel-list">
+            <input type="hidden" name="_csrfToken" value="<?= h($csrfToken) ?>">
+            <input type="hidden" name="source" value="<?= h($source) ?>">
+            <input type="hidden" name="id" value="<?= h($id) ?>">
+            <input type="hidden" name="redirect" value="<?= h($redirectUrl) ?>">
+            <input type="datetime-local" name="follow_up_at" value="<?= h(trim((string)($followUp['due_at'] ?? '')) !== '' ? date('Y-m-d\TH:i', strtotime((string)$followUp['due_at'])) : '') ?>" style="border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px;">
+            <input type="text" name="follow_up_reason" value="<?= h((string)($followUp['reason'] ?? '')) ?>" placeholder="Hvorfor skal der følges op?" style="border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px;">
+            <div class="desk-toolbar">
+              <button class="desk-button primary" type="submit">Gem opfølgning</button>
+            </div>
+          </form>
+          <?php if (trim((string)($followUp['due_at'] ?? '')) !== ''): ?>
+            <div class="desk-note">
+              <strong>Næste opfølgning</strong><br>
+              <?= h(date('d-m-Y H:i', strtotime((string)$followUp['due_at']))) ?>
+              <?php if (trim((string)($followUp['reason'] ?? '')) !== ''): ?>
+                · <?= h((string)$followUp['reason']) ?>
+              <?php endif; ?>
+            </div>
+          <?php else: ?>
+            <div class="desk-muted">Ingen opfølgning planlagt endnu.</div>
           <?php endif; ?>
         </section>
 

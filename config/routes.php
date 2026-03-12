@@ -137,6 +137,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/admin/desk/view', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'view']);
         $builder->connect('/admin/desk/role', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'role']);
         $builder->connect('/admin/desk/update-status', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'updateStatus']);
+        $builder->connect('/admin/desk/note', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'note']);
+        $builder->connect('/admin/desk/follow-up', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'followUp']);
         $builder->connect('/admin/chat', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'index']);
         $builder->connect('/admin/chat/message', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'message']);
         $builder->connect('/admin/chat/reset', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'reset']);

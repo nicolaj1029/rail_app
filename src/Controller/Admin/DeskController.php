@@ -72,7 +72,8 @@ final class DeskController extends AppController
     {
         $this->request->allowMethod(['post']);
         $service = new AdminDeskService();
-        $role = $service->getRole($this->request->getSession());
+        $session = $this->request->getSession();
+        $role = $service->getRole($session);
         $source = trim((string)$this->request->getData('source'));
         $id = trim((string)$this->request->getData('id'));
         $status = trim((string)$this->request->getData('status'));
@@ -89,5 +90,50 @@ final class DeskController extends AppController
         $redirect = (string)$this->request->getData('redirect', '/admin/desk');
 
         return $this->redirect($redirect);
+    }
+
+    public function note(): Response
+    {
+        $this->request->allowMethod(['post']);
+        $service = new AdminDeskService();
+        $session = $this->request->getSession();
+        $ok = $service->addNote(
+            trim((string)$this->request->getData('source')),
+            trim((string)$this->request->getData('id')),
+            $service->getRole($session),
+            $service->getAuthenticatedUser($session),
+            trim((string)$this->request->getData('note'))
+        );
+
+        if ($ok) {
+            $this->Flash->success('Intern note gemt.');
+        } else {
+            $this->Flash->error('Kunne ikke gemme note.');
+        }
+
+        return $this->redirect((string)$this->request->getData('redirect', '/admin/desk'));
+    }
+
+    public function followUp(): Response
+    {
+        $this->request->allowMethod(['post']);
+        $service = new AdminDeskService();
+        $session = $this->request->getSession();
+        $ok = $service->saveFollowUp(
+            trim((string)$this->request->getData('source')),
+            trim((string)$this->request->getData('id')),
+            $service->getRole($session),
+            $service->getAuthenticatedUser($session),
+            trim((string)$this->request->getData('follow_up_at')),
+            trim((string)$this->request->getData('follow_up_reason'))
+        );
+
+        if ($ok) {
+            $this->Flash->success('Opfølgning gemt.');
+        } else {
+            $this->Flash->error('Kunne ikke gemme opfølgning.');
+        }
+
+        return $this->redirect((string)$this->request->getData('redirect', '/admin/desk'));
     }
 }
