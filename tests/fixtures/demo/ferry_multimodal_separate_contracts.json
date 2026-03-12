@@ -1,0 +1,74 @@
+{
+  "fixture": {
+    "id": "ferry_multimodal_separate_contracts",
+    "version": 2,
+    "label": "Rail + ferry separate contracts: ferry operator liable for ferry segment",
+    "transport_mode": "ferry",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "Scandlines",
+        "operator_country": "DK",
+        "ticket_no": "",
+        "seller_channel": "retailer",
+        "through_ticket_disclosure": "separate",
+        "separate_contract_notice": "yes",
+        "single_txn_operator": "no",
+        "single_txn_retailer": "no"
+      },
+      "step5_incident": {
+        "incident_main": "delay"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "separate_contracts",
+      "seller_type": "ticket_vendor",
+      "seller_name": "Travel Platform",
+      "shared_booking_reference": false,
+      "single_transaction": false,
+      "contract_structure_disclosure": "separate",
+      "separate_contract_notice": "yes",
+      "incident_segment_mode": "ferry",
+      "incident_segment_operator": "Scandlines",
+      "primary_claim_party": "segment_operator",
+      "rights_module": "ferry",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "ferry",
+      "service_type": "passenger_service",
+      "departure_port_in_eu": true,
+      "arrival_port_in_eu": true,
+      "carrier_is_eu": true,
+      "departure_from_terminal": true,
+      "vessel_passenger_capacity": 500,
+      "vessel_operational_crew": 20,
+      "route_distance_meters": 9000
+    },
+    "incident_meta": {
+      "transport_mode": "ferry",
+      "incident_type": "delay",
+      "actual_departure_delay_90": true,
+      "arrival_delay_minutes": 80,
+      "scheduled_journey_duration_minutes": 180,
+      "overnight_required": false,
+      "informed_before_purchase": false,
+      "passenger_fault": false,
+      "weather_safety": false,
+      "extraordinary_circumstances": false
+    },
+    "expected": {
+      "transport_mode": "ferry",
+      "ferry_contract.primary_claim_party": "segment_operator",
+      "ferry_contract.primary_claim_party_name": "Scandlines",
+      "ferry_contract.rights_module": "ferry",
+      "ferry_rights.gate_art18": true,
+      "ferry_rights.gate_art19": true,
+      "ferry_rights.art19_comp_band": "25"
+    }
+  }
+}

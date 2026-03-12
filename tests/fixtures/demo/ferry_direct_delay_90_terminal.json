@@ -1,0 +1,87 @@
+{
+  "fixture": {
+    "id": "ferry_direct_delay_90_terminal",
+    "version": 2,
+    "label": "Ferry direct service: 90+ min departure delay from terminal",
+    "transport_mode": "ferry",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "ongoing",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "Example Ferry",
+        "operator_country": "DK",
+        "operator_product": "Passenger ferry",
+        "ticket_no": "FERRY-001",
+        "dep_date": "2026-03-12",
+        "dep_time": "10:00",
+        "dep_station": "Helsingør",
+        "arr_station": "Helsingborg",
+        "arr_time": "11:30",
+        "price": "35.00",
+        "price_currency": "EUR",
+        "seller_channel": "operator",
+        "through_ticket_disclosure": "yes",
+        "separate_contract_notice": "no",
+        "single_txn_operator": "yes",
+        "single_txn_retailer": "no"
+      },
+      "step5_incident": {
+        "incident_main": "delay",
+        "incident_missed": "no"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "Example Ferry",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "ferry",
+      "incident_segment_operator": "Example Ferry",
+      "primary_claim_party": "seller",
+      "rights_module": "ferry",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "ferry",
+      "service_type": "passenger_service",
+      "departure_port_in_eu": true,
+      "arrival_port_in_eu": true,
+      "carrier_is_eu": true,
+      "departure_from_terminal": true,
+      "vessel_passenger_capacity": 200,
+      "vessel_operational_crew": 12,
+      "route_distance_meters": 10000
+    },
+    "incident_meta": {
+      "transport_mode": "ferry",
+      "incident_type": "delay",
+      "actual_departure_delay_90": true,
+      "arrival_delay_minutes": 130,
+      "scheduled_journey_duration_minutes": 300,
+      "overnight_required": false,
+      "informed_before_purchase": false,
+      "passenger_fault": false,
+      "weather_safety": false,
+      "extraordinary_circumstances": false,
+      "open_ticket_without_departure_time": false,
+      "season_ticket": false
+    },
+    "expected": {
+      "transport_mode": "ferry",
+      "ferry_scope.regulation_applies": true,
+      "ferry_scope.scope_basis": "departure_eu",
+      "ferry_contract.primary_claim_party": "carrier",
+      "ferry_contract.rights_module": "ferry",
+      "ferry_rights.gate_art17_refreshments": true,
+      "ferry_rights.gate_art18": true,
+      "ferry_rights.gate_art19": true,
+      "ferry_rights.art19_comp_band": "25"
+    }
+  }
+}

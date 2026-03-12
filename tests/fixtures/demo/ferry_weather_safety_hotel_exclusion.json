@@ -1,0 +1,73 @@
+{
+  "fixture": {
+    "id": "ferry_weather_safety_hotel_exclusion",
+    "version": 2,
+    "label": "Ferry weather safety excludes hotel branch and Art.19",
+    "transport_mode": "ferry",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "ongoing",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "Weather Ferry",
+        "operator_country": "SE",
+        "ticket_no": "FERRY-WS-001",
+        "seller_channel": "operator",
+        "through_ticket_disclosure": "yes",
+        "separate_contract_notice": "no",
+        "single_txn_operator": "yes"
+      },
+      "step5_incident": {
+        "incident_main": "cancellation"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "Weather Ferry",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "ferry",
+      "incident_segment_operator": "Weather Ferry",
+      "primary_claim_party": "seller",
+      "rights_module": "ferry",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "ferry",
+      "service_type": "passenger_service",
+      "departure_port_in_eu": true,
+      "arrival_port_in_eu": true,
+      "carrier_is_eu": true,
+      "departure_from_terminal": true,
+      "vessel_passenger_capacity": 300,
+      "vessel_operational_crew": 15,
+      "route_distance_meters": 15000
+    },
+    "incident_meta": {
+      "transport_mode": "ferry",
+      "incident_type": "cancellation",
+      "expected_departure_delay_90": true,
+      "arrival_delay_minutes": 240,
+      "scheduled_journey_duration_minutes": 300,
+      "overnight_required": true,
+      "informed_before_purchase": false,
+      "passenger_fault": false,
+      "weather_safety": true,
+      "extraordinary_circumstances": false
+    },
+    "expected": {
+      "transport_mode": "ferry",
+      "ferry_scope.regulation_applies": true,
+      "ferry_contract.primary_claim_party": "carrier",
+      "ferry_rights.gate_art17_refreshments": true,
+      "ferry_rights.gate_art17_hotel": false,
+      "ferry_rights.gate_art18": true,
+      "ferry_rights.gate_art19": false
+    }
+  }
+}
