@@ -12,6 +12,12 @@ $hasSeason0 = array_key_exists('has', $seasonMeta0) ? (bool)$seasonMeta0['has'] 
 $ticketMode = (string)($form['ticket_upload_mode'] ?? '');
 if (!in_array($ticketMode, ['ticket','ticketless','seasonpass'], true)) { $ticketMode = ''; }
 if ($ticketMode === '') { $ticketMode = $hasSeason0 ? 'seasonpass' : 'ticket'; }
+$multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
+if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
+$isFerry = $transportMode === 'ferry';
+$ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
@@ -112,6 +118,89 @@ $isPreview = !empty($flowPreview);
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
     </div>
+  </div>
+
+  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
+    <strong>Transportform</strong>
+    <div class="small muted" style="margin-top:6px;">Rail er default. Vaelg ferry for at aktivere multimodal ansvar + ferry scope i TRIN 2.</div>
+    <div class="small" style="margin-top:8px;">
+      <label class="mr8"><input type="radio" name="transport_mode" value="rail" <?= $transportMode==='rail'?'checked':'' ?> /> Tog</label>
+      <label class="mr8"><input type="radio" name="transport_mode" value="ferry" <?= $transportMode==='ferry'?'checked':'' ?> /> Faerge</label>
+      <label class="mr8"><input type="radio" name="transport_mode" value="bus" <?= $transportMode==='bus'?'checked':'' ?> /> Bus</label>
+      <label class="mr8"><input type="radio" name="transport_mode" value="air" <?= $transportMode==='air'?'checked':'' ?> /> Fly</label>
+    </div>
+  </div>
+
+  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $isFerry ? '' : ' display:none;' ?>">
+    <strong>Ferry scope (multimodal forberedelse)</strong>
+    <div class="small muted" style="margin-top:6px;">Brug kun disse felter for faerge. Handicap/PMR kommer senere.</div>
+    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+      <label>Service type
+        <?php $serviceType = (string)($form['service_type'] ?? 'passenger_service'); ?>
+        <select name="service_type">
+          <option value="passenger_service" <?= $serviceType==='passenger_service'?'selected':'' ?>>Passenger service</option>
+          <option value="cruise" <?= $serviceType==='cruise'?'selected':'' ?>>Cruise</option>
+        </select>
+      </label>
+      <label>Ramt segment
+        <?php $incidentSegmentMode = (string)($form['incident_segment_mode'] ?? ($ferryContract['rights_module'] ?? 'ferry')); ?>
+        <select name="incident_segment_mode">
+          <option value="ferry" <?= $incidentSegmentMode==='ferry'?'selected':'' ?>>Faerge</option>
+          <option value="rail" <?= $incidentSegmentMode==='rail'?'selected':'' ?>>Tog</option>
+          <option value="bus" <?= $incidentSegmentMode==='bus'?'selected':'' ?>>Bus</option>
+          <option value="air" <?= $incidentSegmentMode==='air'?'selected':'' ?>>Fly</option>
+        </select>
+      </label>
+      <label>Problem-operatoer (valgfri)
+        <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? ($ferryContract['primary_claim_party_name'] ?? ''))) ?>" placeholder="Fx Scandlines" />
+      </label>
+      <label>Fra havneterminal?
+        <?php $depTerminal = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
+        <select name="departure_from_terminal">
+          <option value="yes" <?= $depTerminal==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $depTerminal==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Afgang i EU?
+        <?php $depEu = (string)($form['departure_port_in_eu'] ?? 'yes'); ?>
+        <select name="departure_port_in_eu">
+          <option value="yes" <?= $depEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $depEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ankomst i EU?
+        <?php $arrEu = (string)($form['arrival_port_in_eu'] ?? 'yes'); ?>
+        <select name="arrival_port_in_eu">
+          <option value="yes" <?= $arrEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $arrEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Carrier er EU-operatoer?
+        <?php $carrierEu = (string)($form['carrier_is_eu'] ?? 'yes'); ?>
+        <select name="carrier_is_eu">
+          <option value="yes" <?= $carrierEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $carrierEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ruteafstand i meter (valgfri)
+        <input type="number" name="route_distance_meters" min="0" step="1" value="<?= h((string)($form['route_distance_meters'] ?? '')) ?>" placeholder="10000" />
+      </label>
+      <label>Passagerkapacitet (valgfri)
+        <input type="number" name="vessel_passenger_capacity" min="0" step="1" value="<?= h((string)($form['vessel_passenger_capacity'] ?? '')) ?>" placeholder="200" />
+      </label>
+      <label>Operationel besaetning (valgfri)
+        <input type="number" name="vessel_operational_crew" min="0" step="1" value="<?= h((string)($form['vessel_operational_crew'] ?? '')) ?>" placeholder="12" />
+      </label>
+    </div>
+    <?php if (!empty($ferryScope) || !empty($ferryContract)): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <div><strong>Resolver output</strong></div>
+        <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' – ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
+        <div>Kontrakt: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
+        <div>Rights module: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
+      </div>
+    <?php endif; ?>
   </div>
 
   <?php
@@ -1336,6 +1425,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     const uploadCard = document.getElementById('ticketUploadCard');
     const ticketlessCard = document.getElementById('ticketlessCard');
     const seasonCard = document.getElementById('seasonPassCard');
+    const ferryScopeCard = document.getElementById('ferryScopeCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
     const ticketlessFs = document.getElementById('ticketlessFieldset');
     const seasonFs = document.getElementById('seasonPassFieldset');
@@ -1377,13 +1467,19 @@ if ($a12Applies === false && !empty($contractsView)) {
         if (cur) cur.value = '';
       }
     }
+    function updateTransportMode(){
+      const mode = radioVal('transport_mode') || 'rail';
+      show(ferryScopeCard, mode === 'ferry');
+    }
 
     form.addEventListener('change', (e)=>{
       const nm = (e.target && (e.target.name||'')) || '';
       if (nm === 'ticket_upload_mode') updateTicketMode();
+      if (nm === 'transport_mode') updateTransportMode();
       if (nm === 'price_known') updatePriceKnown();
     }, { passive:true });
     updateTicketMode();
+    updateTransportMode();
     updatePriceKnown();
   })();
   // Toggle journey fields 3.1–3.5

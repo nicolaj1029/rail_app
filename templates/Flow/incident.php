@@ -25,6 +25,13 @@ if ($segCount < 2) {
     $altSegs = $meta['_segments_llm_suggest'] ?? ($meta['_segments_auto'] ?? []);
     if (is_array($altSegs)) { $segCount = max($segCount, count($altSegs)); }
 }
+$multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
+if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
+$isFerry = $transportMode === 'ferry';
+$ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+$ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 
 // National policy hint (optional) used for TRIN 5 "national fallback" UX (e.g., DK 30 min).
 $nationalPolicy = $nationalPolicy ?? null;
@@ -64,7 +71,9 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 </style>
 
 <div class="flow-wrapper">
-  <?php if ($isOngoing): ?>
+  <?php if ($isFerry): ?>
+    <h1>TRIN 5 - Haendelse (ferry)</h1>
+  <?php elseif ($isOngoing): ?>
     <h1>TRIN 5 - Forsinkelse, aflysning eller mistet forbindelse (igangvaerende rejse)</h1>
   <?php elseif ($isCompleted): ?>
     <h1>TRIN 5 - Haendelse (afsluttet rejse)</h1>
@@ -124,29 +133,114 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 
   <!-- Standard gating -->
   <div class="card mt12">
-    <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art.18/20)</strong>
-    <p class="small muted">Vaelg den haendelse, der ramte dit tog. Bruges til at aktivere standard vurdering af Art. 18/20.<?= $incidentHint !== '' ? (' ' . h($incidentHint)) : '' ?></p>
+    <?php if ($isFerry): ?>
+      <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art. 16-19 ferry)</strong>
+      <p class="small muted">TRIN 5 bruges til at afgore information, assistance, rerouting/refund og kompensation for faergebenet.</p>
 
-    <div class="mt8">
-      <div>Haendelsestype (vaelg en)</div>
-      <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
-      <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
-    </div>
+      <div class="mt8">
+        <div>Haendelsestype</div>
+        <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+      </div>
 
-    <div class="mt4" data-show-if="incident_main:delay">
-      <div>Har du modtaget besked om &ge;60 minutters forsinkelse?</div>
-      <label><input type="radio" name="expected_delay_60" value="yes" <?= $v('expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="expected_delay_60" value="no" <?= $v('expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
-    </div>
+      <div class="mt8" data-show-if="incident_main:delay">
+        <div>Forventet afgangsforsinkelse mindst 90 minutter?</div>
+        <label><input type="radio" name="expected_departure_delay_90" value="yes" <?= $v('expected_departure_delay_90')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="expected_departure_delay_90" value="no" <?= $v('expected_departure_delay_90')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
 
-    <div class="mt8" data-show-if="incident_main:delay">
-      <div>Er du allerede 60 minutter forsinket?</div>
-      <label><input type="radio" name="delay_already_60" value="yes" <?= $v('delay_already_60')==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= $v('delay_already_60')==='no'?'checked':'' ?> /> Nej</label>
-      <div class="small muted mt4">Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.</div>
-    </div>
+      <div class="mt8" data-show-if="incident_main:delay">
+        <div>Var afgangen faktisk mindst 90 minutter forsinket?</div>
+        <label><input type="radio" name="actual_departure_delay_90" value="yes" <?= $v('actual_departure_delay_90')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="actual_departure_delay_90" value="no" <?= $v('actual_departure_delay_90')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <label>Forsinkelse ved ankomst (minutter)
+          <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h($v('arrival_delay_minutes')) ?>" placeholder="130" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <label>Planlagt rejsevarighed (minutter)
+          <input type="number" name="scheduled_journey_duration_minutes" min="0" step="1" value="<?= h($v('scheduled_journey_duration_minutes')) ?>" placeholder="300" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <div>Var overnatning noedvendig pga. haendelsen?</div>
+        <label><input type="radio" name="overnight_required" value="yes" <?= $v('overnight_required')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="overnight_required" value="no" <?= $v('overnight_required')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8">
+        <div>Var passageren informeret om aflysning/forsinkelse foer koeb?</div>
+        <label><input type="radio" name="informed_before_purchase" value="yes" <?= $v('informed_before_purchase')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="informed_before_purchase" value="no" <?= $v('informed_before_purchase')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Skyldtes problemet passagerens egne forhold?</div>
+        <label><input type="radio" name="passenger_fault" value="yes" <?= $v('passenger_fault')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="passenger_fault" value="no" <?= $v('passenger_fault')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Var der vejrsikkerhed / sikkerhedsforhold?</div>
+        <label><input type="radio" name="weather_safety" value="yes" <?= $v('weather_safety')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="weather_safety" value="no" <?= $v('weather_safety')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Paaberaaber carrier ekstraordinaere omstaendigheder?</div>
+        <label><input type="radio" name="extraordinary_circumstances" value="yes" <?= $v('extraordinary_circumstances')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="extraordinary_circumstances" value="no" <?= $v('extraordinary_circumstances')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Er det en aaben billet uden afgangstid?</div>
+        <label><input type="radio" name="open_ticket_without_departure_time" value="yes" <?= $v('open_ticket_without_departure_time')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="open_ticket_without_departure_time" value="no" <?= $v('open_ticket_without_departure_time')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <input type="hidden" name="season_ticket" value="<?= h(((string)($form['ticket_upload_mode'] ?? '') === 'seasonpass') ? 'yes' : 'no') ?>" />
+
+      <?php if (!empty($ferryScope) || !empty($ferryContract) || !empty($ferryRights)): ?>
+        <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <div><strong>Resolver status</strong></div>
+          <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?></div>
+          <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
+          <div>Art. 17: <?= !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']) ? 'Ja' : 'Nej' ?></div>
+          <div>Art. 18: <?= !empty($ferryRights['gate_art18']) ? 'Ja' : 'Nej' ?></div>
+          <div>Art. 19: <?= !empty($ferryRights['gate_art19']) ? ('Ja (' . h((string)($ferryRights['art19_comp_band'] ?? '')) . '%)') : 'Nej' ?></div>
+        </div>
+      <?php endif; ?>
+    <?php else: ?>
+      <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art.18/20)</strong>
+      <p class="small muted">Vaelg den haendelse, der ramte dit tog. Bruges til at aktivere standard vurdering af Art. 18/20.<?= $incidentHint !== '' ? (' ' . h($incidentHint)) : '' ?></p>
+
+      <div class="mt8">
+        <div>Haendelsestype (vaelg en)</div>
+        <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+      </div>
+
+      <div class="mt4" data-show-if="incident_main:delay">
+        <div>Har du modtaget besked om &ge;60 minutters forsinkelse?</div>
+        <label><input type="radio" name="expected_delay_60" value="yes" <?= $v('expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="expected_delay_60" value="no" <?= $v('expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8" data-show-if="incident_main:delay">
+        <div>Er du allerede 60 minutter forsinket?</div>
+        <label><input type="radio" name="delay_already_60" value="yes" <?= $v('delay_already_60')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= $v('delay_already_60')==='no'?'checked':'' ?> /> Nej</label>
+        <div class="small muted mt4">Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.</div>
+      </div>
+    <?php endif; ?>
   </div>
 
+  <?php if (!$isFerry): ?>
   <!-- Mistet forbindelse -->
   <div class="card mt12">
     <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
@@ -173,7 +267,9 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
       </div>
     </div>
   </div>
+  <?php endif; ?>
 
+  <?php if (!$isFerry): ?>
   <!-- Form & exemptions (moved from TRIN 9) -->
   <div class="card mt12">
     <div class="widget-title">
@@ -215,7 +311,9 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
       <label><input type="checkbox" name="minThresholdApplies" value="1" <?= !empty($form['minThresholdApplies']) ? 'checked' : '' ?> /> Anvend min. taerskel <= 4 EUR (Art. 19(8))</label>
     </div>
   </div>
+  <?php endif; ?>
 
+  <?php if (!$isFerry): ?>
   <!-- National fallback (shown only when EU 60-min gate is NOT met; displayed after "last chance" + force majeure) -->
   <div id="nationalFallbackWrap" class="card mt12 hidden" style="border-color:#ffe8cc;background:#fff8e6">
     <strong>National ordning (fallback)<?= (!empty($nationalPolicy['name']) ? (': ' . h((string)$nationalPolicy['name'])) : '') ?></strong>
@@ -270,6 +368,7 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
       </div>
     </div>
   </div>
+  <?php endif; ?>
   <div class="mt12" style="display:flex; gap:8px; align-items:center;">
     <?= $this->Html->link('<- Tilbage', ['action' => 'journey'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
     <?= $this->Form->button('Naeste trin ->', ['class' => 'button']) ?>

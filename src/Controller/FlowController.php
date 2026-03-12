@@ -555,34 +555,64 @@ class FlowController extends AppController
             ]);
         } catch (\Throwable $e) { $formDecision = ['form'=>'eu_standard_claim','reason'=>'Fallback','notes'=>['err:'.$e->getMessage()]]; }
 
+        $multimodal = (new \App\Service\MultimodalFlowResolver())->evaluate([
+            'form' => $form,
+            'meta' => $meta,
+            'journey' => $journey,
+            'incident' => $incident,
+        ]);
+        $form['transport_mode'] = (string)($multimodal['transport_mode'] ?? 'rail');
+        $meta['transport_mode'] = $form['transport_mode'];
+        $meta['_multimodal'] = $multimodal;
+        if ($form['transport_mode'] === 'ferry') {
+            $compute['rights_module'] = 'ferry';
+            $compute['primary_claim_party'] = (string)($multimodal['ferry_contract']['primary_claim_party'] ?? '');
+            $compute['primary_claim_party_name'] = (string)($multimodal['ferry_contract']['primary_claim_party_name'] ?? '');
+        }
+
         // ------------------------------------------------------
         // Gate flags for downstream steps (Trin 6-8)
         // ------------------------------------------------------
         // These live in flow.flags so the stepper can mark steps as locked (preview-only)
         // when Art. 18/20 is not active yet.
-        $articles = (array)($profile['articles'] ?? []);
-        $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
+        if ($form['transport_mode'] === 'ferry') {
+            $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+            $gateArt18 = !empty($ferryRights['gate_art18']);
+            $gateArt20 = !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']);
+            $gateArt20_2c = false;
+            $flags['gate_ferry_art16_notice'] = !empty($ferryRights['gate_art16_notice']) ? '1' : '';
+            $flags['gate_ferry_art17_refreshments'] = !empty($ferryRights['gate_art17_refreshments']) ? '1' : '';
+            $flags['gate_ferry_art17_hotel'] = !empty($ferryRights['gate_art17_hotel']) ? '1' : '';
+            $flags['gate_ferry_art19'] = !empty($ferryRights['gate_art19']) ? '1' : '';
+            $flags['ferry_art19_comp_band'] = (string)($ferryRights['art19_comp_band'] ?? '');
+        } else {
+            $articles = (array)($profile['articles'] ?? []);
+            $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
 
-        $reasonCancellation = (!empty($incident['main']) && $incident['main'] === 'cancellation');
-        $reasonMissed = !empty($incident['missed']);
+            $reasonCancellation = (!empty($incident['main']) && $incident['main'] === 'cancellation');
+            $reasonMissed = !empty($incident['missed']);
 
-        // Mirrors FlowController::remedies() Art. 18 activation logic (split-flow variant)
-        $gateArt18 = $reasonCancellation || $reasonMissed;
-        if (!$gateArt18 && ((string)($form['art18_expected_delay_60'] ?? '') === 'yes')) { $gateArt18 = true; }
-        if (!$gateArt18 && (($pmrBikeGate['pmr_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt18 = true; }
+            // Mirrors FlowController::remedies() Art. 18 activation logic (split-flow variant)
+            $gateArt18 = $reasonCancellation || $reasonMissed;
+            if (!$gateArt18 && ((string)($form['art18_expected_delay_60'] ?? '') === 'yes')) { $gateArt18 = true; }
+            if (!$gateArt18 && (($pmrBikeGate['pmr_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt18 = true; }
 
-        // Mirrors FlowController::assistance() Art. 20 activation logic (split-flow variant)
-        $gateArt20 = $reasonCancellation;
-        if (!$gateArt20 && ((string)($form['art20_expected_delay_60'] ?? '') === 'yes')) { $gateArt20 = true; }
-        if (!$gateArt20 && (($pmrBikeGate['pmr_full_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt20 = true; }
+            // Mirrors FlowController::assistance() Art. 20 activation logic (split-flow variant)
+            $gateArt20 = $reasonCancellation;
+            if (!$gateArt20 && ((string)($form['art20_expected_delay_60'] ?? '') === 'yes')) { $gateArt20 = true; }
+            if (!$gateArt20 && (($pmrBikeGate['pmr_full_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt20 = true; }
 
-        $gateArt20_2c = $gateArt20 && !$art20TrackOff;
+            $gateArt20_2c = $gateArt20 && !$art20TrackOff;
+        }
 
         $flags['gate_art18'] = $gateArt18 ? '1' : '';
         $flags['gate_art20'] = $gateArt20 ? '1' : '';
         $flags['gate_art20_2c'] = $gateArt20_2c ? '1' : '';
         $flags['gate_downgrade'] = ((string)($form['downgrade_occurred'] ?? '') === 'yes') ? '1' : '';
         $sess->write('flow.flags', $flags);
+        $sess->write('flow.form', $form);
+        $sess->write('flow.meta', $meta);
+        $sess->write('flow.compute', $compute);
 
         // After POST: decide where to send the user next.
         // If gates are not met yet, keep the user in TRIN 5 (national fallback / waiting for >=60).
@@ -595,13 +625,17 @@ class FlowController extends AppController
                 return $this->redirect(['action' => 'remedies']);
             }
 
+            if ($form['transport_mode'] === 'ferry' && $gateArt20) {
+                return $this->redirect(['action' => 'assistance']);
+            }
+
             // Stay on gating step (shows national fallback UI)
             return $this->redirect(['action' => 'incident']);
         }
 
         $sess->write('flow.journey', $journey);
         $sess->write('flow.meta', $meta);
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile','nationalPolicy','art12','art9','art6','pmr','pmrBikeGate','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','nationalPolicy','art12','art9','art6','pmr','pmrBikeGate','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings','multimodal'));
         return null;
     }
 
@@ -1351,12 +1385,16 @@ class FlowController extends AppController
 
             // Accept edits to the core 3.2/3.3 fields
             $allowedFormKeys = [
+                'transport_mode',
                 'operator','operator_country','operator_product',
                 'dep_date','dep_time','dep_station','arr_station','arr_time',
                 // Station metadata (set by autocomplete; improves stability for ticketless and later distance/scope logic)
                 'dep_station_osm_id','dep_station_lat','dep_station_lon','dep_station_country','dep_station_type','dep_station_source',
                 'arr_station_osm_id','arr_station_lat','arr_station_lon','arr_station_country','arr_station_type','arr_station_source',
                 'train_no','ticket_no','price','price_currency','price_known','scope_choice','ticket_upload_mode',
+                'incident_segment_mode','incident_segment_operator',
+                'service_type','departure_from_terminal','departure_port_in_eu','arrival_port_in_eu','carrier_is_eu',
+                'vessel_passenger_capacity','vessel_operational_crew','route_distance_meters',
                 'actual_arrival_date','actual_dep_time','actual_arr_time',
                 'missed_connection_station','leg_class_purchased','leg_class_delivered','leg_downgraded','leg_reservation_purchased','leg_reservation_delivered',
                 // passengers auto edit entries
@@ -2538,6 +2576,17 @@ class FlowController extends AppController
             $session->write('flow.form', $form);
 
             if ($this->truthy($this->request->getData('continue'))) {
+                $multimodal = (new \App\Service\MultimodalFlowResolver())->evaluate([
+                    'form' => $form,
+                    'meta' => $meta,
+                    'journey' => $journey,
+                    'incident' => $incident,
+                ], false);
+                $form['transport_mode'] = (string)($multimodal['transport_mode'] ?? 'rail');
+                $meta['transport_mode'] = $form['transport_mode'];
+                $meta['_multimodal'] = $multimodal;
+                $session->write('flow.form', $form);
+                $session->write('flow.meta', $meta);
                 $flags = (array)$session->read('flow.flags') ?: [];
                 $flags['step2_done'] = '1';
                 $ticketModeNow = (string)($form['ticket_upload_mode'] ?? 'ticket');
@@ -3100,15 +3149,26 @@ class FlowController extends AppController
             $formDecision = ['form' => 'eu_standard_claim', 'reason' => 'EU baseline (fallback)', 'notes' => ['Selector error: ' . $e->getMessage()]];
         }
 
+        $multimodal = (new \App\Service\MultimodalFlowResolver())->evaluate([
+            'form' => $form,
+            'meta' => $meta,
+            'journey' => $journey,
+            'incident' => $incident,
+        ], false);
+        $form['transport_mode'] = (string)($multimodal['transport_mode'] ?? 'rail');
+        $meta['transport_mode'] = $form['transport_mode'];
+        $meta['_multimodal'] = $multimodal;
+
         // Persist any form updates (e.g., auto preselect)
         $session->write('flow.form', $form);
+        $session->write('flow.meta', $meta);
 
         // AJAX partial: render only hooks panel for live updates in PRG
         if ($isAjaxHooks && $this->request->is('ajax')) {
             $this->viewBuilder()->disableAutoLayout();
             $this->viewBuilder()->setTemplatePath('element');
             $this->viewBuilder()->setTemplate('hooks_panel');
-            $this->set(compact('journey','meta','compute','form','incident','profile','art12','art12flow','art9','refund','refusion','euOnlySuggested','euOnlyReason','groupedTickets','formDecision'));
+            $this->set(compact('journey','meta','compute','form','incident','profile','art12','art12flow','art9','refund','refusion','euOnlySuggested','euOnlyReason','groupedTickets','formDecision','multimodal'));
             return $this->render();
         }
 
@@ -3206,7 +3266,7 @@ class FlowController extends AppController
             }
         } catch (\Throwable $e) { /* silent per-contract errors in TRIN 3 */ }
 
-        $this->set(compact('journey','meta','compute','form','incident','profile','art12','art12flow','art9','refund','refusion','euOnlySuggested','euOnlyReason','groupedTickets','formDecision','contractsView'));
+        $this->set(compact('journey','meta','compute','form','incident','profile','art12','art12flow','art9','refund','refusion','euOnlySuggested','euOnlyReason','groupedTickets','formDecision','contractsView','multimodal'));
         $this->set('isAdmin', $isAdmin);
         return null;
     }
