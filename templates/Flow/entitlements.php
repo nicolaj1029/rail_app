@@ -128,7 +128,7 @@ $isPreview = !empty($flowPreview);
 
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
     <strong>Transportform</strong>
-    <div class="small muted" style="margin-top:6px;">Rail er default. Faerge aktiverer scope + rights i flowet. Bus og fly bruger samme multimodale kontraktstruktur for claim-kanal og ansvar.</div>
+    <div class="small muted" style="margin-top:6px;">Vaelg den transporttype hvor problemet opstod eller forventes at opsta. Det styrer scope, ansvar og hvilket regelsaet vi bruger senere i flowet.</div>
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="transport_mode" value="rail" <?= $transportMode==='rail'?'checked':'' ?> /> Tog</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="ferry" <?= $transportMode==='ferry'?'checked':'' ?> /> Faerge</label>
@@ -138,8 +138,8 @@ $isPreview = !empty($flowPreview);
   </div>
 
   <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isBus || $isAir) ? '' : ' display:none;' ?>">
-    <strong><?= $isAir ? 'Air kontraktstruktur' : 'Bus kontraktstruktur' ?></strong>
-    <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Dette lag afklarer protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Dette lag afklarer regular service scope, claim-kanal og rettighedsmodul for bussagen.' ?></div>
+    <strong><?= $isAir ? 'Fly: booking og ansvar' : 'Bus: booking og ansvar' ?></strong>
+    <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Her afklarer vi protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Her afklarer vi regular service-scope, claim-kanal og hvilket busmodul der skal bruges senere.' ?></div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <?php if ($isAir): ?>
       <label>Afgangslufthavn i EU?
@@ -171,7 +171,7 @@ $isPreview = !empty($flowPreview);
           <option value="no" <?= $mkCarrierEu==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <label>Connection type
+      <label>Forbindelsestype
         <?php $airConnectionType = (string)($form['air_connection_type'] ?? ($modeContract['air_connection_type'] ?? '')); ?>
         <select name="air_connection_type">
           <option value="">Auto / resolver</option>
@@ -204,7 +204,7 @@ $isPreview = !empty($flowPreview);
           <option value="no" <?= $sameEticket==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <label>Self-transfer oplyst?
+      <label>Self-transfer oplyst foer koeb?
         <?php $selfTransferNotice = (string)($form['self_transfer_notice'] ?? ''); ?>
         <select name="self_transfer_notice">
           <option value="" <?= $selfTransferNotice===''?'selected':'' ?>>Ukendt</option>
@@ -267,28 +267,29 @@ $isPreview = !empty($flowPreview);
     </div>
     <?php if (!empty($modeContract) || !empty($claimDirection)): ?>
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
-        <div><strong>Resolver output</strong></div>
+        <div><strong>Foreloebig vurdering</strong></div>
         <?php if ($isAir): ?>
           <div>Scope: <?= array_key_exists('regulation_applies', $airScope) ? (!empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($airScope['scope_basis']) ? ' - ' . h((string)$airScope['scope_basis']) : '' ?></div>
-          <div>Connection: <?= h((string)($modeContract['air_connection_type'] ?? 'unknown')) ?></div>
+          <div>Forbindelse: <?= h((string)($modeContract['air_connection_type'] ?? 'unknown')) ?></div>
         <?php elseif ($isBus): ?>
           <div>Scope: <?= array_key_exists('regulation_applies', $busScope) ? (!empty($busScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($busScope['scope_basis']) ? ' - ' . h((string)$busScope['scope_basis']) : '' ?></div>
         <?php endif; ?>
-        <div>Kontrakt: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
         <div>Claim-kanal: <?= h((string)($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
-        <div>Rights module: <?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></div>
+        <div>Rettighedsmodul: <?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></div>
         <?php if (!empty($claimDirection['recommended_documents'])): ?>
           <div>Anbefalet dokumentation: <?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></div>
         <?php endif; ?>
+        <div class="muted" style="margin-top:6px;">Claim-kanal og rettighedsmodul bruges senere til at afgore hvem sagen rettes mod, og hvilke regler der vurderes efter.</div>
       </div>
     <?php endif; ?>
   </div>
 
   <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $isFerry ? '' : ' display:none;' ?>">
-    <strong>Ferry scope (multimodal forberedelse)</strong>
-    <div class="small muted" style="margin-top:6px;">Brug kun disse felter for faerge. Handicap/PMR kommer senere.</div>
+    <strong>Faerge: scope og ansvar</strong>
+    <div class="small muted" style="margin-top:6px;">Her afklarer vi om faergeforordningen finder anvendelse, om problemet ligger paa faergedelen, og hvem claimet som udgangspunkt skal rettes mod. Handicap/PMR kommer senere.</div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-      <label>Service type
+      <label>Servicetype
         <?php $serviceType = (string)($form['service_type'] ?? 'passenger_service'); ?>
         <select name="service_type">
           <option value="passenger_service" <?= $serviceType==='passenger_service'?'selected':'' ?>>Passenger service</option>
@@ -347,11 +348,12 @@ $isPreview = !empty($flowPreview);
     </div>
     <?php if (!empty($ferryScope) || !empty($ferryContract)): ?>
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
-        <div><strong>Resolver output</strong></div>
+        <div><strong>Foreloebig vurdering</strong></div>
         <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' – ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
-        <div>Kontrakt: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
         <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
-        <div>Rights module: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
+        <div>Rettighedsmodul: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
+        <div class="muted" style="margin-top:6px;">Hvis kontrakten er samlet, kan claim-kanalen vaere rederiet eller saelgeren, selv om selve rettighedsmodulet ligger paa den ramte transportdel.</div>
       </div>
     <?php endif; ?>
   </div>

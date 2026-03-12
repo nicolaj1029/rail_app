@@ -279,7 +279,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Faerge-resultat</strong>
-  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for ferry. Den endelige pengeudregning er ikke koblet paa samme maade som rail endnu.</div>
+  <div class="small muted mt4">TRIN 10 samler scope, claim-kanal og aktive ferry-rettigheder. Brug resultatet til claim-assist, dokumentpakke eller manuel vurdering.</div>
   <?php if ($ferryClaimName !== ''): ?>
     <div class="small mt8">Primær claim-kanal: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
   <?php endif; ?>
@@ -293,6 +293,18 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
     <?php endif; ?>
   </ul>
+  <div class="small muted mt8">
+    Naeste handling:
+    <strong><?=
+      !$ferryApplies
+        ? 'afklar scope eller afslut som uden for forordningen'
+        : (!empty($ferryRights['gate_art18'])
+            ? 'gaa til tilbagebetaling eller ombooking'
+            : ((!empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']))
+                ? 'registrer assistance og egne udgifter'
+                : 'byg data-pack og vurder claim-kanalen manuelt'))
+    ?></strong>
+  </div>
   <?php if (!empty($ferryRights['gate_art19']) && $ferryBand !== 'none'): ?>
     <div class="ok mt8 small">Ankomstforsinkelsen peger paa ferry Art. 19 med et foreloebigt bånd paa <strong><?= h($ferryBand) ?>%</strong>.</div>
   <?php elseif (!$ferryApplies): ?>
@@ -316,18 +328,30 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Fly-resultat</strong>
-  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for flighten eller den protected connection der blev ramt.</div>
+  <div class="small muted mt4">TRIN 10 samler scope, bookingtype og aktive flight-rettigheder. Brug resultatet til claim-assist og til at skelne mellem protected connection og self-transfer.</div>
   <ul class="small mt8">
     <li>Scope: <strong><?= $airScopeApplies === true ? 'omfattet' : ($airScopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $airScopeReason !== '' ? ' - ' . h($airScopeReason) : '' ?></li>
     <li>Connection type: <strong><?= h((string)($airContract['air_connection_type'] ?? 'unknown')) ?></strong></li>
     <li>Claim-kanal: <strong><?= h($airClaimPartyName !== '' ? $airClaimPartyName : ($airClaimPartyType !== '' ? $airClaimPartyType : 'manual_review')) ?></strong></li>
     <li>Care: <strong><?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
     <li>Reroute / refund: <strong><?= !empty($airRights['gate_air_reroute_refund']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
-    <li>Kompensation: <strong><?= !empty($airRights['gate_air_compensation']) ? 'candidate' : 'ikke aktiveret' ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
+    <li>Kompensation: <strong><?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
     <?php if (!empty($claimDirection['recommended_documents'])): ?>
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
     <?php endif; ?>
   </ul>
+  <div class="small muted mt8">
+    Naeste handling:
+    <strong><?=
+      !empty($airRights['gate_air_reroute_refund'])
+        ? 'gaa til refund eller ombooking'
+        : (!empty($airRights['gate_air_care'])
+            ? 'registrer maaltider, hotel og anden care'
+            : (!empty($airRights['gate_air_compensation'])
+                ? 'byg data-pack og forbered kompensationsclaim'
+                : 'afklar bookingtype, scope eller manuel vurdering'))
+    ?></strong>
+  </div>
   <?php if (!empty($airRights['gate_air_compensation'])): ?>
     <div class="ok mt8 small">Sagen peger paa flight-kompensation som kandidat. Brug data-pack og flightdokumentation til claim-assist eller videre juridisk vurdering.</div>
   <?php elseif (!empty($airRights['compensation_block_reason']) && $airRights['compensation_block_reason'] !== 'none'): ?>
@@ -351,7 +375,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Bus-resultat</strong>
-  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for busforloebet. Resultatet bygger paa bus scope, claim-kanal og de aktive assistance-/refundgates.</div>
+  <div class="small muted mt4">TRIN 10 samler scope, claim-kanal og aktive busrettigheder. Resultatet bruges til claim-assist og til at afgore om sagen skal videre til refund, assistance eller manuel vurdering.</div>
   <ul class="small mt8">
     <li>Scope: <strong><?= $scopeApplies === true ? 'omfattet' : ($scopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $scopeReason !== '' ? ' - ' . h($scopeReason) : '' ?></li>
     <li>Claim-kanal: <strong><?= h($claimPartyName !== '' ? $claimPartyName : ($claimPartyType !== '' ? $claimPartyType : 'manual_review')) ?></strong></li>
@@ -363,6 +387,18 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
     <?php endif; ?>
   </ul>
+  <div class="small muted mt8">
+    Naeste handling:
+    <strong><?=
+      !empty($busRights['gate_bus_reroute_refund'])
+        ? 'gaa til refund eller ombooking'
+        : ((!empty($busRights['gate_bus_assistance_refreshments']) || !empty($busRights['gate_bus_assistance_hotel']))
+            ? 'registrer assistance og egne udgifter'
+            : ((!empty($busContract['manual_review_required']) || !empty($busRights['manual_review_required']))
+                ? 'send sagen til manuel vurdering'
+                : 'byg data-pack og afklar buskravet videre'))
+    ?></strong>
+  </div>
   <?php if (!empty($busRights['gate_bus_compensation_50'])): ?>
     <div class="ok mt8 small">Sagen peger paa 50% buskompensation, hvis operatoeren ikke tilbod et valg mellem ombooking og tilbagebetaling.</div>
   <?php elseif (!empty($busRights['compensation_block_reason']) && $busRights['compensation_block_reason'] !== 'none'): ?>
