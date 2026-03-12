@@ -587,7 +587,27 @@ class FlowController extends AppController
             $flags['gate_ferry_art17_hotel'] = !empty($ferryRights['gate_art17_hotel']) ? '1' : '';
             $flags['gate_ferry_art19'] = !empty($ferryRights['gate_art19']) ? '1' : '';
             $flags['ferry_art19_comp_band'] = (string)($ferryRights['art19_comp_band'] ?? '');
-        } elseif (in_array($form['transport_mode'], ['bus', 'air'], true)) {
+            $flags['gate_air_care'] = '';
+            $flags['gate_air_reroute_refund'] = '';
+            $flags['gate_air_compensation'] = '';
+            $flags['gate_air_denied_boarding'] = '';
+            $flags['air_comp_band'] = '';
+        } elseif ($form['transport_mode'] === 'air') {
+            $airRights = (array)($multimodal['air_rights'] ?? []);
+            $gateArt18 = !empty($airRights['gate_air_reroute_refund']);
+            $gateArt20 = !empty($airRights['gate_air_care']);
+            $gateArt20_2c = false;
+            $flags['gate_ferry_art16_notice'] = '';
+            $flags['gate_ferry_art17_refreshments'] = '';
+            $flags['gate_ferry_art17_hotel'] = '';
+            $flags['gate_ferry_art19'] = '';
+            $flags['ferry_art19_comp_band'] = '';
+            $flags['gate_air_care'] = !empty($airRights['gate_air_care']) ? '1' : '';
+            $flags['gate_air_reroute_refund'] = !empty($airRights['gate_air_reroute_refund']) ? '1' : '';
+            $flags['gate_air_compensation'] = !empty($airRights['gate_air_compensation']) ? '1' : '';
+            $flags['gate_air_denied_boarding'] = !empty($airRights['gate_air_denied_boarding']) ? '1' : '';
+            $flags['air_comp_band'] = (string)($airRights['air_comp_band'] ?? '');
+        } elseif ($form['transport_mode'] === 'bus') {
             $gateArt18 = false;
             $gateArt20 = false;
             $gateArt20_2c = false;
@@ -596,6 +616,11 @@ class FlowController extends AppController
             $flags['gate_ferry_art17_hotel'] = '';
             $flags['gate_ferry_art19'] = '';
             $flags['ferry_art19_comp_band'] = '';
+            $flags['gate_air_care'] = '';
+            $flags['gate_air_reroute_refund'] = '';
+            $flags['gate_air_compensation'] = '';
+            $flags['gate_air_denied_boarding'] = '';
+            $flags['air_comp_band'] = '';
         } else {
             $articles = (array)($profile['articles'] ?? []);
             $art20TrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -614,6 +639,11 @@ class FlowController extends AppController
             if (!$gateArt20 && (($pmrBikeGate['pmr_full_gate'] ?? false) || ($pmrBikeGate['bike_gate'] ?? false))) { $gateArt20 = true; }
 
             $gateArt20_2c = $gateArt20 && !$art20TrackOff;
+            $flags['gate_air_care'] = '';
+            $flags['gate_air_reroute_refund'] = '';
+            $flags['gate_air_compensation'] = '';
+            $flags['gate_air_denied_boarding'] = '';
+            $flags['air_comp_band'] = '';
         }
 
         $flags['gate_art18'] = $gateArt18 ? '1' : '';
@@ -636,7 +666,7 @@ class FlowController extends AppController
                 return $this->redirect(['action' => 'remedies']);
             }
 
-            if ($form['transport_mode'] === 'ferry' && $gateArt20) {
+            if (in_array($form['transport_mode'], ['ferry', 'air'], true) && $gateArt20) {
                 return $this->redirect(['action' => 'assistance']);
             }
 
@@ -6682,6 +6712,17 @@ class FlowController extends AppController
                 ];
             }
 
+            $airOut = null;
+            if (($multimodalOut['transport_mode'] ?? 'rail') === 'air') {
+                $claimDirection = (array)($multimodal['claim_direction'] ?? []);
+                $airOut = [
+                    'scope' => $multimodal['air_scope'] ?? null,
+                    'contract' => $multimodal['air_contract'] ?? null,
+                    'rights' => $multimodal['air_rights'] ?? null,
+                    'recommended_documents' => $claimDirection['recommended_documents'] ?? [],
+                ];
+            }
+
             $pack = [
                 'ok' => true,
                 'generated_at' => gmdate('c'),
@@ -6718,6 +6759,7 @@ class FlowController extends AppController
                 ],
                 'multimodal' => $multimodalOut,
                 'ferry' => $ferryOut,
+                'air' => $airOut,
                 'season_policy' => $policyOut,
             ];
 

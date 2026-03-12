@@ -250,6 +250,14 @@ class SessionToFixtureMapper
             'primary_claim_party' => $primaryClaimParty,
             'rights_module' => $incidentSegmentMode,
             'manual_review_required' => $contractTopology === 'unknown_manual_review',
+            'same_pnr' => $this->normalizeNullableBool($form['same_pnr'] ?? null),
+            'same_booking_reference' => $this->normalizeNullableBool($form['same_booking_reference'] ?? null),
+            'same_eticket' => $this->normalizeNullableBool($form['same_eticket'] ?? null),
+            'protected_connection_disclosed' => $this->normalizeNullableBool($form['protected_connection_disclosed'] ?? null),
+            'self_transfer_notice' => $this->normalizeNullableBool($form['self_transfer_notice'] ?? null),
+            'marketing_carrier' => $form['marketing_carrier'] ?? null,
+            'operating_carrier' => $form['operating_carrier'] ?? null,
+            'air_connection_type' => $form['air_connection_type'] ?? null,
         ];
     }
 
@@ -267,6 +275,10 @@ class SessionToFixtureMapper
             'departure_port_in_eu' => $this->normalizeNullableBool($form['departure_port_in_eu'] ?? null),
             'arrival_port_in_eu' => $this->normalizeNullableBool($form['arrival_port_in_eu'] ?? null),
             'carrier_is_eu' => $this->normalizeNullableBool($form['carrier_is_eu'] ?? null),
+            'departure_airport_in_eu' => $this->normalizeNullableBool($form['departure_airport_in_eu'] ?? null),
+            'arrival_airport_in_eu' => $this->normalizeNullableBool($form['arrival_airport_in_eu'] ?? null),
+            'operating_carrier_is_eu' => $this->normalizeNullableBool($form['operating_carrier_is_eu'] ?? null),
+            'marketing_carrier_is_eu' => $this->normalizeNullableBool($form['marketing_carrier_is_eu'] ?? null),
             'vessel_passenger_capacity' => $this->normalizeNullableInt($form['vessel_passenger_capacity'] ?? null),
             'vessel_operational_crew' => $this->normalizeNullableInt($form['vessel_operational_crew'] ?? null),
             'route_distance_meters' => $this->normalizeNullableInt($form['route_distance_meters'] ?? null),
@@ -281,7 +293,7 @@ class SessionToFixtureMapper
     {
         $form = (array)($flow['form'] ?? []);
         $incidentType = strtolower(trim((string)($step5Incident['incident_main'] ?? '')));
-        if (!in_array($incidentType, ['delay', 'cancellation'], true)) {
+        if (!in_array($incidentType, ['delay', 'cancellation', 'denied_boarding', 'missed_connection'], true)) {
             $incidentType = $incidentType !== '' ? $incidentType : null;
         }
 
@@ -301,6 +313,28 @@ class SessionToFixtureMapper
             'minimum_threshold_applies' => $this->normalizeNullableBool($step5Incident['minThresholdApplies'] ?? null),
             'arrival_delay_minutes' => $this->normalizeNullableInt($form['arrival_delay_minutes'] ?? null),
             'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
+            'expected_departure_delay_90' => $this->normalizeNullableBool($form['expected_departure_delay_90'] ?? null),
+            'actual_departure_delay_90' => $this->normalizeNullableBool($form['actual_departure_delay_90'] ?? null),
+            'overnight_required' => $this->normalizeNullableBool($form['overnight_required'] ?? null),
+            'informed_before_purchase' => $this->normalizeNullableBool($form['informed_before_purchase'] ?? null),
+            'passenger_fault' => $this->normalizeNullableBool($form['passenger_fault'] ?? null),
+            'weather_safety' => $this->normalizeNullableBool($form['weather_safety'] ?? null),
+            'extraordinary_circumstances' => $this->normalizeNullableBool($form['extraordinary_circumstances'] ?? null),
+            'open_ticket_without_departure_time' => $this->normalizeNullableBool($form['open_ticket_without_departure_time'] ?? null),
+            'season_ticket' => array_key_exists('season_ticket', $form)
+                ? $this->normalizeNullableBool($form['season_ticket'])
+                : (($form['ticket_upload_mode'] ?? null) === 'seasonpass'),
+            'delay_minutes_departure' => $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null),
+            'delay_minutes_arrival' => $this->normalizeNullableInt($form['delay_minutes_arrival'] ?? null),
+            'boarding_denied' => $this->normalizeNullableBool($form['boarding_denied'] ?? null),
+            'voluntary_denied_boarding' => $this->normalizeNullableBool($form['voluntary_denied_boarding'] ?? null),
+            'reroute_offered' => $this->normalizeNullableBool($form['reroute_offered'] ?? null),
+            'refund_offered' => $this->normalizeNullableBool($form['refund_offered'] ?? null),
+            'hotel_required' => $this->normalizeNullableBool($form['hotel_required'] ?? null),
+            'hotel_offered' => $this->normalizeNullableBool($form['hotel_offered'] ?? null),
+            'meal_offered' => $this->normalizeNullableBool($form['meal_offered'] ?? null),
+            'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
+            'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
         ];
     }
 

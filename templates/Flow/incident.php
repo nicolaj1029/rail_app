@@ -29,9 +29,13 @@ $multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
 if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
 $isFerry = $transportMode === 'ferry';
+$isAir = $transportMode === 'air';
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$airRights = (array)($multimodal['air_rights'] ?? []);
+$airContract = (array)($multimodal['air_contract'] ?? []);
+$airScope = (array)($multimodal['air_scope'] ?? []);
 
 // National policy hint (optional) used for TRIN 5 "national fallback" UX (e.g., DK 30 min).
 $nationalPolicy = $nationalPolicy ?? null;
@@ -73,6 +77,8 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
 <div class="flow-wrapper">
   <?php if ($isFerry): ?>
     <h1>TRIN 5 - Haendelse (ferry)</h1>
+  <?php elseif ($isAir): ?>
+    <h1>TRIN 5 - Haendelse (fly)</h1>
   <?php elseif ($isOngoing): ?>
     <h1>TRIN 5 - Forsinkelse, aflysning eller mistet forbindelse (igangvaerende rejse)</h1>
   <?php elseif ($isCompleted): ?>
@@ -213,6 +219,89 @@ $compBlockedByFM = ($exc0 === 'yes') && ($excType0 === '' || $excType0 !== 'own_
           <div>Art. 17: <?= !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']) ? 'Ja' : 'Nej' ?></div>
           <div>Art. 18: <?= !empty($ferryRights['gate_art18']) ? 'Ja' : 'Nej' ?></div>
           <div>Art. 19: <?= !empty($ferryRights['gate_art19']) ? ('Ja (' . h((string)($ferryRights['art19_comp_band'] ?? '')) . '%)') : 'Nej' ?></div>
+        </div>
+      <?php endif; ?>
+    <?php elseif ($isAir): ?>
+      <strong><span aria-hidden="true">&#x2708;</span> Haendelse (air / EC261)</strong>
+      <p class="small muted">TRIN 5 bruges til at afgore care, rerouting/refund og kompensation for flighten eller den protected connection der blev ramt.</p>
+
+      <div class="mt8">
+        <div>Haendelsestype</div>
+        <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Lang forsinkelse</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="denied_boarding" <?= $v('incident_main')==='denied_boarding'?'checked':'' ?> /> Nægtet boarding</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="missed_connection" <?= $v('incident_main')==='missed_connection'?'checked':'' ?> /> Misset protected connection</label>
+      </div>
+
+      <div class="mt8">
+        <label>Forsinkelse ved ankomst (minutter)
+          <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h($v('arrival_delay_minutes')) ?>" placeholder="185" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <label>Forsinkelse ved afgang (minutter, valgfri)
+          <input type="number" name="delay_minutes_departure" min="0" step="1" value="<?= h($v('delay_minutes_departure')) ?>" placeholder="90" />
+        </label>
+      </div>
+
+      <div class="mt8" data-show-if="incident_main:denied_boarding">
+        <div>Var boarding nægtet mod din vilje?</div>
+        <label><input type="radio" name="voluntary_denied_boarding" value="no" <?= $v('voluntary_denied_boarding')==='no'?'checked':'' ?> /> Ja, ufrivilligt</label>
+        <label class="ml8"><input type="radio" name="voluntary_denied_boarding" value="yes" <?= $v('voluntary_denied_boarding')==='yes'?'checked':'' ?> /> Nej, frivilligt</label>
+      </div>
+      <input type="hidden" name="boarding_denied" value="<?= h(in_array($v('incident_main'), ['denied_boarding'], true) ? 'yes' : $v('boarding_denied')) ?>" />
+
+      <div class="mt8" data-show-if="incident_main:missed_connection">
+        <div>Var forbindelsen beskyttet paa samme booking/PNR?</div>
+        <label><input type="radio" name="protected_connection_missed" value="yes" <?= $v('protected_connection_missed')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="protected_connection_missed" value="no" <?= $v('protected_connection_missed')==='no'?'checked':'' ?> /> Nej / uklart</label>
+      </div>
+
+      <div class="mt8">
+        <div>Tilboed operatoeren ombooking?</div>
+        <label><input type="radio" name="reroute_offered" value="yes" <?= $v('reroute_offered')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="reroute_offered" value="no" <?= $v('reroute_offered')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8" data-show-if="reroute_offered:yes">
+        <label>Forsinkelse ved ankomst efter ombooking (minutter, valgfri)
+          <input type="number" name="reroute_arrival_delay_minutes" min="0" step="1" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" placeholder="95" />
+        </label>
+      </div>
+
+      <div class="mt8">
+        <div>Tilboed operatoeren maaltider/forfriskninger?</div>
+        <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="meal_offered" value="no" <?= $v('meal_offered')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Var hotel/overnatning noedvendig?</div>
+        <label><input type="radio" name="hotel_required" value="yes" <?= $v('hotel_required')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="hotel_required" value="no" <?= $v('hotel_required')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+
+      <div class="mt8" data-show-if="hotel_required:yes">
+        <div>Tilboed operatoeren hotel?</div>
+        <label><input type="radio" name="hotel_offered" value="yes" <?= $v('hotel_offered')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="hotel_offered" value="no" <?= $v('hotel_offered')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <div class="mt8">
+        <div>Paaberaaber flyselskabet extraordinary circumstances?</div>
+        <label><input type="radio" name="extraordinary_circumstances" value="yes" <?= $v('extraordinary_circumstances')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="extraordinary_circumstances" value="no" <?= $v('extraordinary_circumstances')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+
+      <?php if (!empty($airScope) || !empty($airContract) || !empty($airRights)): ?>
+        <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <div><strong>Resolver status</strong></div>
+          <div>Scope: <?= !empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?></div>
+          <div>Claim-kanal: <?= h((string)($airContract['primary_claim_party_name'] ?? ($airContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
+          <div>Care: <?= !empty($airRights['gate_air_care']) ? 'Ja' : 'Nej' ?></div>
+          <div>Reroute/refund: <?= !empty($airRights['gate_air_reroute_refund']) ? 'Ja' : 'Nej' ?></div>
+          <div>Kompensation: <?= !empty($airRights['gate_air_compensation']) ? 'Candidate' : 'Ikke aktiveret' ?><?= !empty($airRights['air_comp_band']) ? ' - ' . h((string)$airRights['air_comp_band']) : '' ?></div>
         </div>
       <?php endif; ?>
     <?php else: ?>

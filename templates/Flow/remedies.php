@@ -24,6 +24,7 @@ $isFutureLike = ($isOngoing || $isBeforeStart);
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isFerry = ($transportMode === 'ferry');
+$isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
@@ -37,6 +38,15 @@ if ($isFerry) {
     $decisionHint = $isFutureLike ? 'Foreloebigt valg baseret paa den nuvaerende faergesituation.' : ($isCompleted ? 'Endeligt valg baseret paa hvad der skete med faergerejsen.' : '');
     $downgradeHint = '';
     $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?' : 'Havde du udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?';
+} elseif ($isAir) {
+    $remediesTitle = $isOngoing
+        ? 'TRIN 7 - Refund eller ombooking (fly, igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 7 - Refund eller ombooking (fly, afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Refund eller ombooking (fly)' : 'TRIN 7 - Refund eller ombooking (fly)'));
+    $art18Title = $isOngoing ? 'Flighten er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Flighten starter senere - hvad vil du vaelge, hvis det sker?' : 'Flighten er afsluttet - hvad skete der?');
+    $art18Help = $isFutureLike ? 'Ud fra din nuvaerende flight-situation kan refund eller ombooking vaere relevant.' : 'Ved aflysning, denied boarding eller protected missed connection kan refund eller ombooking vaere relevant efter flight-reglerne.';
+    $decisionHint = $isFutureLike ? 'Foreloebigt valg baseret paa nuvaerende flight-situation.' : ($isCompleted ? 'Endeligt valg baseret paa det afsluttede flight-forloeb.' : '');
+    $downgradeHint = '';
+    $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - ekstraudgifter som foelge af ombooking eller returnering til udgangspunktet?' : 'Havde du ekstraudgifter som foelge af ombooking eller returnering til udgangspunktet?';
 } else {
     $remediesTitle = $isOngoing
         ? 'TRIN 7 - Dine valg (igangvaerende rejse)'

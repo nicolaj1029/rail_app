@@ -1,0 +1,43 @@
+{
+  "fixture": {
+    "id": "air_denied_boarding_non_voluntary",
+    "version": 2,
+    "label": "Non-voluntary denied boarding creates compensation candidate",
+    "transport_mode": "air",
+    "journey": [],
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "SAS",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "air",
+      "incident_segment_operator": "SAS",
+      "same_pnr": true,
+      "rights_module": "air",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "incident_type": "denied_boarding",
+      "boarding_denied": true,
+      "voluntary_denied_boarding": false
+    },
+    "expected": {
+      "transport_mode": "air",
+      "air_scope.regulation_applies": true,
+      "air_rights.gate_air_denied_boarding": true,
+      "air_rights.gate_air_care": true,
+      "air_rights.gate_air_reroute_refund": true,
+      "air_rights.gate_air_compensation": true
+    }
+  }
+}

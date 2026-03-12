@@ -94,21 +94,33 @@ final class MultimodalFlowResolverTest extends TestCase
                 'ticket_no' => 'PNR-1',
                 'dep_station' => 'CPH',
                 'arr_station' => 'ARN',
+                'departure_airport_in_eu' => 'yes',
+                'arrival_airport_in_eu' => 'yes',
+                'operating_carrier_is_eu' => 'yes',
                 'incident_segment_mode' => 'air',
                 'incident_segment_operator' => 'SAS',
                 'single_txn_operator' => 'yes',
                 'through_ticket_disclosure' => 'bundled',
                 'separate_contract_notice' => 'no',
+                'same_pnr' => 'yes',
+                'incident_main' => 'cancellation',
+                'arrival_delay_minutes' => '240',
+                'reroute_arrival_delay_minutes' => '240',
             ],
             'meta' => [],
             'journey' => [],
-            'incident' => [],
-        ], false);
+            'incident' => ['main' => 'cancellation'],
+        ]);
 
         $this->assertSame('air', $result['transport_mode']);
         $this->assertSame('single_mode_single_contract', $result['contract_meta']['contract_topology']);
+        $this->assertTrue($result['air_scope']['regulation_applies']);
+        $this->assertSame('single_flight', $result['air_contract']['air_connection_type']);
         $this->assertSame('air', $result['air_contract']['rights_module']);
+        $this->assertTrue($result['air_rights']['gate_air_reroute_refund']);
+        $this->assertTrue($result['air_rights']['gate_air_compensation']);
         $this->assertSame('air', $result['claim_direction']['rights_module']);
         $this->assertContains('boarding_pass_or_pnr', $result['claim_direction']['recommended_documents']);
+        $this->assertContains('arrival_delay_or_cancellation_evidence', $result['claim_direction']['recommended_documents']);
     }
 }

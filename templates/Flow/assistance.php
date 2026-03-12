@@ -18,15 +18,16 @@ $isCompleted = ($travelState === 'completed');
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isFerry = ($transportMode === 'ferry');
+$isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $assistTitle = $isOngoing
-    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)')
-    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)') : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)'));
+    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)'))
+    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)')) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isAir ? 'TRIN 8 - Care (flight)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)')));
 $assistHint = $isOngoing
-    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).')
-    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : 'Udgifter under hele rejsen.') : '');
+    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : ($isAir ? 'Registrer maaltider, hotel og egne udgifter under flight-forloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).'))
+    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : ($isAir ? 'Registrer den care der blev tilbudt eller de udgifter du selv afholdt under flight-forloebet.' : 'Udgifter under hele rejsen.')) : '');
 $assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;

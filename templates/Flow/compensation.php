@@ -19,6 +19,9 @@ $isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$airScope = (array)($multimodal['air_scope'] ?? []);
+$airContract = (array)($multimodal['air_contract'] ?? []);
+$airRights = (array)($multimodal['air_rights'] ?? []);
 $modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
 $claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $compTitle = $isOngoing
@@ -300,9 +303,44 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <?php return; ?>
 <?php endif; ?>
 
-<?php if ($isBus || $isAir): ?>
+<?php if ($isAir): ?>
 <?php
-  $modeLabel = $isAir ? 'Fly' : 'Bus';
+  $airClaimPartyName = (string)($airContract['primary_claim_party_name'] ?? '');
+  $airClaimPartyType = (string)($airContract['primary_claim_party'] ?? '');
+  $airScopeReason = (string)($airScope['scope_exclusion_reason'] ?? '');
+  $airScopeApplies = array_key_exists('regulation_applies', $airScope) ? (bool)$airScope['regulation_applies'] : null;
+  $airCompBand = (string)($airRights['air_comp_band'] ?? ($flags['air_comp_band'] ?? 'none'));
+?>
+<div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
+  <strong>Fly-resultat</strong>
+  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for flighten eller den protected connection der blev ramt.</div>
+  <ul class="small mt8">
+    <li>Scope: <strong><?= $airScopeApplies === true ? 'omfattet' : ($airScopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $airScopeReason !== '' ? ' - ' . h($airScopeReason) : '' ?></li>
+    <li>Connection type: <strong><?= h((string)($airContract['air_connection_type'] ?? 'unknown')) ?></strong></li>
+    <li>Claim-kanal: <strong><?= h($airClaimPartyName !== '' ? $airClaimPartyName : ($airClaimPartyType !== '' ? $airClaimPartyType : 'manual_review')) ?></strong></li>
+    <li>Care: <strong><?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Reroute / refund: <strong><?= !empty($airRights['gate_air_reroute_refund']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Kompensation: <strong><?= !empty($airRights['gate_air_compensation']) ? 'candidate' : 'ikke aktiveret' ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
+    <?php if (!empty($claimDirection['recommended_documents'])): ?>
+      <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
+    <?php endif; ?>
+  </ul>
+  <?php if (!empty($airRights['gate_air_compensation'])): ?>
+    <div class="ok mt8 small">Sagen peger paa flight-kompensation som kandidat. Brug data-pack og flightdokumentation til claim-assist eller videre juridisk vurdering.</div>
+  <?php elseif (!empty($airRights['compensation_block_reason']) && $airRights['compensation_block_reason'] !== 'none'): ?>
+    <div class="hl mt8 small">Kompensation er foreloebigt blokeret af: <strong><?= h((string)$airRights['compensation_block_reason']) ?></strong>.</div>
+  <?php else: ?>
+    <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, mens flight-sagen afklares yderligere.</div>
+  <?php endif; ?>
+</div>
+</fieldset>
+<?= $this->Form->end() ?>
+<?php return; ?>
+<?php endif; ?>
+
+<?php if ($isBus): ?>
+<?php
+  $modeLabel = 'Bus';
   $claimPartyName = (string)($modeContract['primary_claim_party_name'] ?? '');
   $claimPartyType = (string)($modeContract['primary_claim_party'] ?? '');
   $scopeReason = (string)($claimDirection['scope_exclusion_reason'] ?? '');

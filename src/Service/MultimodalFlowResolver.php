@@ -37,7 +37,16 @@ final class MultimodalFlowResolver
                 $result['ferry_rights'] = (new FerryRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
             }
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['ferry_rights'] ?? []));
-        } elseif (in_array($transportMode, ['bus', 'air'], true)) {
+        } elseif ($transportMode === 'air') {
+            $scope = (new AirScopeResolver())->evaluate($scopeMeta);
+            $contract = (new AirContractResolver())->evaluate($contractMeta, $scope);
+            $result['air_scope'] = $scope;
+            $result['air_contract'] = $contract;
+            if ($includeIncident) {
+                $result['air_rights'] = (new AirRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
+            }
+            $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['air_rights'] ?? []));
+        } elseif ($transportMode === 'bus') {
             $contract = (new ModeContractResolver())->evaluate($transportMode, $contractMeta);
             $result[$transportMode . '_contract'] = $contract;
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scopeMeta, []);
@@ -188,6 +197,14 @@ final class MultimodalFlowResolver
             },
             'rights_module' => $incidentSegmentMode,
             'manual_review_required' => $contractTopology === 'unknown_manual_review',
+            'same_pnr' => $this->normalizeNullableBool($form['same_pnr'] ?? null),
+            'same_booking_reference' => $this->normalizeNullableBool($form['same_booking_reference'] ?? null),
+            'same_eticket' => $this->normalizeNullableBool($form['same_eticket'] ?? null),
+            'protected_connection_disclosed' => $this->normalizeNullableBool($form['protected_connection_disclosed'] ?? null),
+            'self_transfer_notice' => $this->normalizeNullableBool($form['self_transfer_notice'] ?? null),
+            'marketing_carrier' => $form['marketing_carrier'] ?? null,
+            'operating_carrier' => $form['operating_carrier'] ?? null,
+            'air_connection_type' => $form['air_connection_type'] ?? null,
         ];
     }
 
@@ -206,6 +223,10 @@ final class MultimodalFlowResolver
             'departure_port_in_eu' => $this->normalizeNullableBool($form['departure_port_in_eu'] ?? null),
             'arrival_port_in_eu' => $this->normalizeNullableBool($form['arrival_port_in_eu'] ?? null),
             'carrier_is_eu' => $this->normalizeNullableBool($form['carrier_is_eu'] ?? null),
+            'departure_airport_in_eu' => $this->normalizeNullableBool($form['departure_airport_in_eu'] ?? null),
+            'arrival_airport_in_eu' => $this->normalizeNullableBool($form['arrival_airport_in_eu'] ?? null),
+            'operating_carrier_is_eu' => $this->normalizeNullableBool($form['operating_carrier_is_eu'] ?? null),
+            'marketing_carrier_is_eu' => $this->normalizeNullableBool($form['marketing_carrier_is_eu'] ?? null),
             'vessel_passenger_capacity' => $this->normalizeNullableInt($form['vessel_passenger_capacity'] ?? null),
             'vessel_operational_crew' => $this->normalizeNullableInt($form['vessel_operational_crew'] ?? null),
             'route_distance_meters' => $this->normalizeNullableInt($form['route_distance_meters'] ?? null),
@@ -222,7 +243,7 @@ final class MultimodalFlowResolver
         $incident = (array)($flow['incident'] ?? []);
 
         $incidentType = strtolower(trim((string)($incident['main'] ?? ($form['incident_main'] ?? ''))));
-        if (!in_array($incidentType, ['delay', 'cancellation'], true)) {
+        if (!in_array($incidentType, ['delay', 'cancellation', 'denied_boarding', 'missed_connection'], true)) {
             $incidentType = $incidentType !== '' ? $incidentType : null;
         }
 
@@ -253,6 +274,17 @@ final class MultimodalFlowResolver
             'season_ticket' => array_key_exists('season_ticket', $form)
                 ? $this->normalizeNullableBool($form['season_ticket'])
                 : (($form['ticket_upload_mode'] ?? null) === 'seasonpass'),
+            'delay_minutes_departure' => $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null),
+            'delay_minutes_arrival' => $this->normalizeNullableInt($form['delay_minutes_arrival'] ?? null),
+            'boarding_denied' => $this->normalizeNullableBool($form['boarding_denied'] ?? null),
+            'voluntary_denied_boarding' => $this->normalizeNullableBool($form['voluntary_denied_boarding'] ?? null),
+            'reroute_offered' => $this->normalizeNullableBool($form['reroute_offered'] ?? null),
+            'refund_offered' => $this->normalizeNullableBool($form['refund_offered'] ?? null),
+            'hotel_required' => $this->normalizeNullableBool($form['hotel_required'] ?? null),
+            'hotel_offered' => $this->normalizeNullableBool($form['hotel_offered'] ?? null),
+            'meal_offered' => $this->normalizeNullableBool($form['meal_offered'] ?? null),
+            'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
+            'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
         ];
     }
 
@@ -359,6 +391,15 @@ final class MultimodalFlowResolver
             $requiredDocuments[] = 'operator_connection_or_terminal_evidence';
         } elseif ($transportMode === 'air') {
             $requiredDocuments[] = 'boarding_pass_or_pnr';
+            if (!empty($rightsResult['gate_air_denied_boarding'])) {
+                $requiredDocuments[] = 'denied_boarding_evidence';
+            }
+            if (!empty($rightsResult['gate_air_reroute_refund'])) {
+                $requiredDocuments[] = 'reroute_or_refund_evidence';
+            }
+            if (!empty($rightsResult['gate_air_compensation'])) {
+                $requiredDocuments[] = 'arrival_delay_or_cancellation_evidence';
+            }
         }
 
         return [

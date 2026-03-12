@@ -197,7 +197,28 @@ class ScenarioRunner
                 'scope_meta' => (array)($fixture['scope_meta'] ?? []),
                 'incident_meta' => (array)($fixture['incident_meta'] ?? []),
             ])['claim_direction'] ?? [];
-        } elseif (in_array($transportMode, ['bus', 'air'], true)) {
+        } elseif ($transportMode === 'air') {
+            $scopeResolver = new AirScopeResolver();
+            $actual['air_scope'] = $scopeResolver->evaluate((array)($fixture['scope_meta'] ?? []));
+            $contractResolver = new AirContractResolver();
+            $actual['air_contract'] = $contractResolver->evaluate((array)($fixture['contract_meta'] ?? []), (array)$actual['air_scope']);
+            $rightsResolver = new AirRightsEvaluator();
+            $actual['air_rights'] = $rightsResolver->evaluate(
+                (array)($fixture['incident_meta'] ?? []),
+                (array)$actual['air_scope'],
+                (array)$actual['air_contract']
+            );
+            $resolver = new MultimodalFlowResolver();
+            $actual['claim_direction'] = $resolver->evaluate([
+                'form' => ['transport_mode' => 'air'] + (array)($fixture['incident_meta'] ?? []) + (array)($fixture['scope_meta'] ?? []) + (array)($fixture['contract_meta'] ?? []),
+                'meta' => [],
+                'journey' => [],
+                'incident' => ['main' => (string)(($fixture['incident_meta']['incident_type'] ?? ''))],
+                'contract_meta' => (array)($fixture['contract_meta'] ?? []),
+                'scope_meta' => (array)($fixture['scope_meta'] ?? []),
+                'incident_meta' => (array)($fixture['incident_meta'] ?? []),
+            ])['claim_direction'] ?? [];
+        } elseif ($transportMode === 'bus') {
             $contractResolver = new ModeContractResolver();
             $actual[$transportMode . '_contract'] = $contractResolver->evaluate($transportMode, (array)($fixture['contract_meta'] ?? []));
             $resolver = new MultimodalFlowResolver();
