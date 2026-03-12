@@ -177,8 +177,10 @@ class ScenarioRunner
         }
 
         if ($transportMode === 'ferry') {
-            $resolver = new FerryScopeResolver();
-            $actual['ferry_scope'] = $resolver->evaluate((array)($fixture['scope_meta'] ?? []));
+            $scopeResolver = new FerryScopeResolver();
+            $actual['ferry_scope'] = $scopeResolver->evaluate((array)($fixture['scope_meta'] ?? []));
+            $contractResolver = new FerryContractResolver();
+            $actual['ferry_contract'] = $contractResolver->evaluate((array)($fixture['contract_meta'] ?? []), (array)$actual['ferry_scope']);
         } elseif (!empty($fixture['scope_meta']) && is_array($fixture['scope_meta'])) {
             $actual['scope_meta'] = (array)$fixture['scope_meta'];
         }
