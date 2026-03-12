@@ -172,6 +172,14 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
 <?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'remedies'], 'type' => 'file', 'novalidate' => true]) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
+<?php if ($isFerry): ?>
+<input type="hidden" name="ferry_remedy_choice" value="<?= h((string)($form['ferry_remedy_choice'] ?? $remedy ?? '')) ?>" />
+<input type="hidden" name="ferry_refund_requested" value="<?= h((string)($form['ferry_refund_requested'] ?? (($remedy ?? '') === 'refund_return' ? 'yes' : 'no'))) ?>" />
+<input type="hidden" name="ferry_reroute_choice" value="<?= h((string)($form['ferry_reroute_choice'] ?? (in_array(($remedy ?? ''), ['reroute_soonest','reroute_later'], true) ? $remedy : ''))) ?>" />
+<input type="hidden" name="ferry_return_to_departure_port_expense" value="<?= h((string)($form['ferry_return_to_departure_port_expense'] ?? ($form['return_to_origin_expense'] ?? ''))) ?>" />
+<input type="hidden" name="ferry_return_to_departure_port_amount" value="<?= h((string)($form['ferry_return_to_departure_port_amount'] ?? ($form['return_to_origin_amount'] ?? ''))) ?>" />
+<input type="hidden" name="ferry_return_to_departure_port_currency" value="<?= h((string)($form['ferry_return_to_departure_port_currency'] ?? ($form['return_to_origin_currency'] ?? ''))) ?>" />
+<?php endif; ?>
 <!-- TRIN 5 (Art.20) hint data: used only for UX hints in this step -->
 <input type="hidden" id="trin5_a20_3_self_paid_amount" value="<?= h($v('a20_3_self_paid_amount')) ?>" />
 <input type="hidden" id="trin5_a20_3_self_paid_currency" value="<?= h($v('a20_3_self_paid_currency')) ?>" />
@@ -2251,6 +2259,28 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
+        function syncFerryRemedyAliases(){
+            var ferryChoice = document.querySelector('input[name="ferry_remedy_choice"]');
+            if (!ferryChoice) { return; }
+            var currentRemedy = (document.querySelector('input[name="remedyChoice"]:checked') || {}).value || '';
+            var ferryRefund = document.querySelector('input[name="ferry_refund_requested"]');
+            var ferryReroute = document.querySelector('input[name="ferry_reroute_choice"]');
+            var ferryReturnExp = document.querySelector('input[name="ferry_return_to_departure_port_expense"]');
+            var ferryReturnAmt = document.querySelector('input[name="ferry_return_to_departure_port_amount"]');
+            var ferryReturnCur = document.querySelector('input[name="ferry_return_to_departure_port_currency"]');
+            ferryChoice.value = currentRemedy;
+            if (ferryRefund) { ferryRefund.value = currentRemedy === 'refund_return' ? 'yes' : 'no'; }
+            if (ferryReroute) { ferryReroute.value = (currentRemedy === 'reroute_soonest' || currentRemedy === 'reroute_later') ? currentRemedy : ''; }
+            var rtVal = (document.querySelector('input[name="return_to_origin_expense"]:checked') || {}).value || '';
+            if (ferryReturnExp) { ferryReturnExp.value = rtVal; }
+            var rtAmt = document.querySelector('input[name="return_to_origin_amount"]');
+            var rtCur = document.querySelector('input[name="return_to_origin_currency"]');
+            if (ferryReturnAmt) { ferryReturnAmt.value = rtAmt ? (rtAmt.value || '') : ''; }
+            if (ferryReturnCur) { ferryReturnCur.value = rtCur ? (rtCur.value || '') : ''; }
+        }
+        document.querySelectorAll('input[name="remedyChoice"], input[name="return_to_origin_expense"], input[name="return_to_origin_amount"], input[name="return_to_origin_currency"]').forEach(function(el){
+            ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, syncFerryRemedyAliases); });
+        });
     // (No class/reservation fields in TRIN 5 now)
         var advPast = document.getElementById('advPast');
         var advNow = document.getElementById('advNow');
@@ -2278,6 +2308,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ }
             }
         });
+        syncFerryRemedyAliases();
     });
 })();
 </script>

@@ -5282,6 +5282,9 @@ class FlowController extends AppController
                     else { $form[$k] = is_string($v) ? $v : (string)$v; }
                 }
             }
+            if ($this->isFerryTransportMode($form, $meta)) {
+                $this->syncFerryAliasFields($form, 'remedies');
+            }
 
             // Final destination shortcut logic (explicit only; do not trigger on assumed endpoints).
             $toDest1 = (string)($form['a20_where_ended'] ?? '');
@@ -5778,6 +5781,9 @@ class FlowController extends AppController
             foreach ($keys as $k) {
                 $v = $this->request->getData($k);
                 if ($v !== null && $v !== '') { $form[$k] = is_string($v) ? $v : (string)$v; }
+            }
+            if ($this->isFerryTransportMode($form, $meta)) {
+                $this->syncFerryAliasFields($form, 'assistance');
             }
 
             // Itemized self-paid expenses (multiple purchases/receipts)
@@ -7327,6 +7333,62 @@ class FlowController extends AppController
         } catch (\Throwable $e) { /* keep fallback */ }
         $cache = $fx;
         return $fx;
+    }
+
+    private function isFerryTransportMode(array $form, array $meta = []): bool
+    {
+        $mode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail')));
+        return $mode === 'ferry';
+    }
+
+    private function syncFerryAliasFields(array &$form, string $context): void
+    {
+        if ($context === 'remedies') {
+            if (array_key_exists('ferry_remedy_choice', $form) && $form['ferry_remedy_choice'] !== '') {
+                $form['remedyChoice'] = (string)$form['ferry_remedy_choice'];
+            }
+            if (array_key_exists('ferry_return_to_departure_port_expense', $form) && $form['ferry_return_to_departure_port_expense'] !== '') {
+                $form['return_to_origin_expense'] = (string)$form['ferry_return_to_departure_port_expense'];
+            }
+            if (array_key_exists('ferry_return_to_departure_port_amount', $form) && $form['ferry_return_to_departure_port_amount'] !== '') {
+                $form['return_to_origin_amount'] = (string)$form['ferry_return_to_departure_port_amount'];
+            }
+            if (array_key_exists('ferry_return_to_departure_port_currency', $form) && $form['ferry_return_to_departure_port_currency'] !== '') {
+                $form['return_to_origin_currency'] = (string)$form['ferry_return_to_departure_port_currency'];
+            }
+
+            $form['ferry_remedy_choice'] = (string)($form['remedyChoice'] ?? '');
+            $form['ferry_refund_requested'] = ((string)($form['remedyChoice'] ?? '') === 'refund_return') ? 'yes' : 'no';
+            $form['ferry_reroute_choice'] = in_array((string)($form['remedyChoice'] ?? ''), ['reroute_soonest', 'reroute_later'], true)
+                ? (string)$form['remedyChoice']
+                : '';
+            $form['ferry_return_to_departure_port_expense'] = (string)($form['return_to_origin_expense'] ?? '');
+            $form['ferry_return_to_departure_port_amount'] = (string)($form['return_to_origin_amount'] ?? '');
+            $form['ferry_return_to_departure_port_currency'] = (string)($form['return_to_origin_currency'] ?? '');
+            return;
+        }
+
+        if ($context === 'assistance') {
+            $map = [
+                'ferry_refreshments_offered' => 'meal_offered',
+                'ferry_refreshments_self_paid_amount' => 'meal_self_paid_amount',
+                'ferry_refreshments_self_paid_currency' => 'meal_self_paid_currency',
+                'ferry_hotel_offered' => 'hotel_offered',
+                'ferry_overnight_required' => 'overnight_needed',
+                'ferry_hotel_transport_included' => 'assistance_hotel_transport_included',
+                'ferry_hotel_self_paid_amount' => 'hotel_self_paid_amount',
+                'ferry_hotel_self_paid_currency' => 'hotel_self_paid_currency',
+                'ferry_hotel_self_paid_nights' => 'hotel_self_paid_nights',
+            ];
+            foreach ($map as $alias => $canonical) {
+                if (array_key_exists($alias, $form) && $form[$alias] !== '') {
+                    $form[$canonical] = is_string($form[$alias]) ? $form[$alias] : (string)$form[$alias];
+                }
+            }
+            foreach ($map as $alias => $canonical) {
+                $form[$alias] = is_array($form[$canonical] ?? null) ? $form[$canonical] : (string)($form[$canonical] ?? '');
+            }
+        }
     }
 
     /**

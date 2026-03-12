@@ -622,6 +622,9 @@ class SessionToFixtureMapper
         return [
             'art18_expected_delay_60' => $f['art18_expected_delay_60'] ?? null,
             'remedyChoice' => $f['remedyChoice'] ?? null,
+            'ferry_remedy_choice' => $f['ferry_remedy_choice'] ?? null,
+            'ferry_refund_requested' => $f['ferry_refund_requested'] ?? null,
+            'ferry_reroute_choice' => $f['ferry_reroute_choice'] ?? null,
 
             // Reroute now/later
             // TRIN 6 station context (separate from TRIN 5)
@@ -652,6 +655,9 @@ class SessionToFixtureMapper
             'return_to_origin_amount' => $f['return_to_origin_amount'] ?? null,
             'return_to_origin_currency' => $f['return_to_origin_currency'] ?? null,
             'return_to_origin_receipt' => $f['return_to_origin_receipt'] ?? null,
+            'ferry_return_to_departure_port_expense' => $f['ferry_return_to_departure_port_expense'] ?? null,
+            'ferry_return_to_departure_port_amount' => $f['ferry_return_to_departure_port_amount'] ?? null,
+            'ferry_return_to_departure_port_currency' => $f['ferry_return_to_departure_port_currency'] ?? null,
 
             // Delay confirmation evidence (if user has it)
             'delay_confirmation_info' => $f['delay_confirmation_info'] ?? null,
@@ -669,19 +675,25 @@ class SessionToFixtureMapper
         $f = (array)($flow['form'] ?? []);
         return [
             'meal_offered' => $f['meal_offered'] ?? null,
+            'ferry_refreshments_offered' => $f['ferry_refreshments_offered'] ?? null,
             'assistance_meals_unavailable_reason' => $f['assistance_meals_unavailable_reason'] ?? null,
             'meal_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
             'meal_self_paid_currency' => $f['meal_self_paid_currency'] ?? null,
             'meal_self_paid_receipt' => $f['meal_self_paid_receipt'] ?? null,
             'meal_self_paid_amount_items' => $f['meal_self_paid_amount_items'] ?? null,
             'meal_self_paid_receipt_items' => $f['meal_self_paid_receipt_items'] ?? null,
+            'ferry_refreshments_self_paid_amount' => $f['ferry_refreshments_self_paid_amount'] ?? null,
+            'ferry_refreshments_self_paid_currency' => $f['ferry_refreshments_self_paid_currency'] ?? null,
 
             'hotel_offered' => $f['hotel_offered'] ?? null,
+            'ferry_hotel_offered' => $f['ferry_hotel_offered'] ?? null,
             'assistance_hotel_transport_included' => $f['assistance_hotel_transport_included'] ?? null,
+            'ferry_hotel_transport_included' => $f['ferry_hotel_transport_included'] ?? null,
             'hotel_transport_self_paid_amount' => $f['hotel_transport_self_paid_amount'] ?? null,
             'hotel_transport_self_paid_currency' => $f['hotel_transport_self_paid_currency'] ?? null,
             'hotel_transport_self_paid_receipt' => $f['hotel_transport_self_paid_receipt'] ?? null,
             'overnight_needed' => $f['overnight_needed'] ?? null,
+            'ferry_overnight_required' => $f['ferry_overnight_required'] ?? null,
             'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
             'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
             'hotel_self_paid_currency' => $f['hotel_self_paid_currency'] ?? null,
@@ -689,6 +701,9 @@ class SessionToFixtureMapper
             'hotel_self_paid_amount_items' => $f['hotel_self_paid_amount_items'] ?? null,
             'hotel_self_paid_nights_items' => $f['hotel_self_paid_nights_items'] ?? null,
             'hotel_self_paid_receipt_items' => $f['hotel_self_paid_receipt_items'] ?? null,
+            'ferry_hotel_self_paid_amount' => $f['ferry_hotel_self_paid_amount'] ?? null,
+            'ferry_hotel_self_paid_currency' => $f['ferry_hotel_self_paid_currency'] ?? null,
+            'ferry_hotel_self_paid_nights' => $f['ferry_hotel_self_paid_nights'] ?? null,
 
             // PMR only
             'assistance_pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,

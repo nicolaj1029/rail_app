@@ -132,6 +132,17 @@ $hintText = function (string $key) use ($priceHints): string {
 <?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['type' => 'file', 'novalidate' => true]) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
+<?php if ($isFerry): ?>
+  <input type="hidden" name="ferry_refreshments_offered" value="<?= h((string)($form['ferry_refreshments_offered'] ?? ($form['meal_offered'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_refreshments_self_paid_amount" value="<?= h((string)($form['ferry_refreshments_self_paid_amount'] ?? ($form['meal_self_paid_amount'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_refreshments_self_paid_currency" value="<?= h((string)($form['ferry_refreshments_self_paid_currency'] ?? ($form['meal_self_paid_currency'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_offered" value="<?= h((string)($form['ferry_hotel_offered'] ?? ($form['hotel_offered'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_overnight_required" value="<?= h((string)($form['ferry_overnight_required'] ?? ($form['overnight_needed'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_transport_included" value="<?= h((string)($form['ferry_hotel_transport_included'] ?? ($form['assistance_hotel_transport_included'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_self_paid_amount" value="<?= h((string)($form['ferry_hotel_self_paid_amount'] ?? ($form['hotel_self_paid_amount'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_self_paid_currency" value="<?= h((string)($form['ferry_hotel_self_paid_currency'] ?? ($form['hotel_self_paid_currency'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_self_paid_nights" value="<?= h((string)($form['ferry_hotel_self_paid_nights'] ?? ($form['hotel_self_paid_nights'] ?? ''))) ?>" />
+<?php endif; ?>
 
 
 
@@ -626,6 +637,39 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   bindRemoveButtons();
+  function syncFerryAssistanceAliases() {
+    var ferryMeals = document.querySelector('input[name="ferry_refreshments_offered"]');
+    if (!ferryMeals) { return; }
+    var getRadio = function(name) {
+      var checked = document.querySelector('input[name="' + name + '"]:checked');
+      return checked ? (checked.value || '') : '';
+    };
+    var getValue = function(name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      return el ? (el.value || '') : '';
+    };
+    ferryMeals.value = getRadio('meal_offered');
+    var ferryMealAmt = document.querySelector('input[name="ferry_refreshments_self_paid_amount"]');
+    var ferryMealCur = document.querySelector('input[name="ferry_refreshments_self_paid_currency"]');
+    var ferryHotel = document.querySelector('input[name="ferry_hotel_offered"]');
+    var ferryNight = document.querySelector('input[name="ferry_overnight_required"]');
+    var ferryHotelTransport = document.querySelector('input[name="ferry_hotel_transport_included"]');
+    var ferryHotelAmt = document.querySelector('input[name="ferry_hotel_self_paid_amount"]');
+    var ferryHotelCur = document.querySelector('input[name="ferry_hotel_self_paid_currency"]');
+    var ferryHotelNights = document.querySelector('input[name="ferry_hotel_self_paid_nights"]');
+    if (ferryMealAmt) { ferryMealAmt.value = getValue('meal_self_paid_amount'); }
+    if (ferryMealCur) { ferryMealCur.value = getValue('meal_self_paid_currency'); }
+    if (ferryHotel) { ferryHotel.value = getRadio('hotel_offered'); }
+    if (ferryNight) { ferryNight.value = getRadio('overnight_needed'); }
+    if (ferryHotelTransport) { ferryHotelTransport.value = getRadio('assistance_hotel_transport_included'); }
+    if (ferryHotelAmt) { ferryHotelAmt.value = getValue('hotel_self_paid_amount'); }
+    if (ferryHotelCur) { ferryHotelCur.value = getValue('hotel_self_paid_currency'); }
+    if (ferryHotelNights) { ferryHotelNights.value = getValue('hotel_self_paid_nights'); }
+  }
+  document.querySelectorAll('input[name="meal_offered"], input[name="hotel_offered"], input[name="overnight_needed"], input[name="assistance_hotel_transport_included"], input[name="meal_self_paid_amount"], input[name="meal_self_paid_currency"], input[name="hotel_self_paid_amount"], input[name="hotel_self_paid_currency"], input[name="hotel_self_paid_nights"]').forEach(function(el) {
+    ['change','input','click'].forEach(function(ev){ el.addEventListener(ev, syncFerryAssistanceAliases); });
+  });
+  syncFerryAssistanceAliases();
 });
 
 </script>

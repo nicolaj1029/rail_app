@@ -1,0 +1,73 @@
+{
+  "fixture": {
+    "id": "ferry_open_ticket_exclusion",
+    "version": 2,
+    "label": "Ferry open ticket without departure time blocks Art.17-19",
+    "transport_mode": "ferry",
+    "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed",
+        "eu_only": null
+      },
+      "step2_entitlements": {
+        "operator": "Open Ferry",
+        "operator_country": "DK",
+        "seller_channel": "operator",
+        "through_ticket_disclosure": "yes",
+        "separate_contract_notice": "no",
+        "single_txn_operator": "yes"
+      },
+      "step5_incident": {
+        "incident_main": "delay"
+      }
+    },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "Open Ferry",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "ferry",
+      "incident_segment_operator": "Open Ferry",
+      "primary_claim_party": "seller",
+      "rights_module": "ferry",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "ferry",
+      "service_type": "passenger_service",
+      "departure_port_in_eu": true,
+      "arrival_port_in_eu": true,
+      "carrier_is_eu": true,
+      "departure_from_terminal": true,
+      "vessel_passenger_capacity": 250,
+      "vessel_operational_crew": 10,
+      "route_distance_meters": 12000
+    },
+    "incident_meta": {
+      "transport_mode": "ferry",
+      "incident_type": "delay",
+      "actual_departure_delay_90": true,
+      "arrival_delay_minutes": 120,
+      "scheduled_journey_duration_minutes": 240,
+      "overnight_required": false,
+      "informed_before_purchase": false,
+      "passenger_fault": false,
+      "weather_safety": false,
+      "extraordinary_circumstances": false,
+      "open_ticket_without_departure_time": true,
+      "season_ticket": false
+    },
+    "expected": {
+      "transport_mode": "ferry",
+      "ferry_rights.gate_art17_refreshments": false,
+      "ferry_rights.gate_art17_hotel": false,
+      "ferry_rights.gate_art18": false,
+      "ferry_rights.gate_art19": false,
+      "ferry_rights.gate_manual_review": false
+    }
+  }
+}
