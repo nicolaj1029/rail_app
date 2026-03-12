@@ -21,14 +21,32 @@ $isCompleted = ($travelState === 'completed');
 $isOngoing = ($travelState === 'ongoing');
 $isBeforeStart = ($travelState === 'before_start');
 $isFutureLike = ($isOngoing || $isBeforeStart);
-$remediesTitle = $isOngoing
-    ? 'TRIN 7 - Dine valg (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 7 - Dine valg (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Dine valg (rejsen starter senere)' : 'TRIN 7 - Dine valg (Art. 18)'));
-$art18Title = $isOngoing ? 'Rejsen er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Rejsen starter senere - hvad vil du vaelge, hvis det sker?' : 'Rejsen er afsluttet - hvad skete der?');
-$art18Help = $isFutureLike ? 'Ud fra din nuvaerende situation kan foelgende muligheder vaere relevante.' : 'Ved afgang, missed connection eller aflysning - ved forsinkelse paa 60+ min. tilbydes nedenstaaende muligheder.';
-$decisionHint = $isFutureLike ? 'Foreloebige valg baseret paa nuvaerende situation.' : ($isCompleted ? 'Endelige valg baseret paa hvad der skete.' : '');
-$downgradeHint = $isOngoing ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.' : 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.';
-$returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til udgangspunktet?' : 'Havde du udgifter til at komme tilbage til udgangspunktet?';
+$multimodal = (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$isFerry = ($transportMode === 'ferry');
+$ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+$ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+
+if ($isFerry) {
+    $remediesTitle = $isOngoing
+        ? 'TRIN 7 - Tilbagebetaling eller ombooking (faerge, igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 7 - Tilbagebetaling eller ombooking (faerge, afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Tilbagebetaling eller ombooking (faerge)' : 'TRIN 7 - Tilbagebetaling eller ombooking (faerge Art. 18)'));
+    $art18Title = $isOngoing ? 'Faergerejsen er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Faergerejsen starter senere - hvad vil du vaelge, hvis det sker?' : 'Faergerejsen er afsluttet - hvad skete der?');
+    $art18Help = $isFutureLike ? 'Ud fra din nuvaerende situation kan tilbagebetaling eller ombooking vaere relevant efter faergereglerne.' : 'Ved aflysning eller forsinket afgang paa mindst 90 minutter kan der vaere ret til tilbagebetaling eller ombooking efter faergeforordningen.';
+    $decisionHint = $isFutureLike ? 'Foreloebigt valg baseret paa den nuvaerende faergesituation.' : ($isCompleted ? 'Endeligt valg baseret paa hvad der skete med faergerejsen.' : '');
+    $downgradeHint = '';
+    $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?' : 'Havde du udgifter til at komme tilbage til afgangshavnen eller det aftalte udgangspunkt?';
+} else {
+    $remediesTitle = $isOngoing
+        ? 'TRIN 7 - Dine valg (igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 7 - Dine valg (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 7 - Dine valg (rejsen starter senere)' : 'TRIN 7 - Dine valg (Art. 18)'));
+    $art18Title = $isOngoing ? 'Rejsen er i gang - hvad er dit valg nu?' : ($isBeforeStart ? 'Rejsen starter senere - hvad vil du vaelge, hvis det sker?' : 'Rejsen er afsluttet - hvad skete der?');
+    $art18Help = $isFutureLike ? 'Ud fra din nuvaerende situation kan foelgende muligheder vaere relevante.' : 'Ved afgang, missed connection eller aflysning - ved forsinkelse paa 60+ min. tilbydes nedenstaaende muligheder.';
+    $decisionHint = $isFutureLike ? 'Foreloebige valg baseret paa nuvaerende situation.' : ($isCompleted ? 'Endelige valg baseret paa hvad der skete.' : '');
+    $downgradeHint = $isOngoing ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.' : 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.';
+    $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til udgangspunktet?' : 'Havde du udgifter til at komme tilbage til udgangspunktet?';
+}
 
 $segments = [];
 if (!empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) { $segments = (array)$meta['_segments_auto']; }
@@ -133,6 +151,15 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
         echo '<p class="small muted">Status: Rejsen er endnu ikke paabegyndt. Besvar ud fra, hvad du forventer at goere ved forsinkelse/aflysning.</p>';
     }
 ?>
+<?php if ($isFerry): ?>
+    <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="card-title"><span class="icon">&#9973;</span><span>Faerge-kontekst</span></div>
+        <div class="small muted mt4">TRIN 2 har placeret claim-kanalen hos <strong><?= h((string)($ferryContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler de valg, der svarer til ferry Art. 18.</div>
+        <?php if (!empty($ferryScope['scope_exclusion_reason'])): ?>
+            <div class="small muted mt8">Scope-note: <?= h((string)$ferryScope['scope_exclusion_reason']) ?></div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 <?php
     $articles = (array)($profile['articles'] ?? []);
     $showArt18  = !isset($articles['art18'])   || $articles['art18']   !== false;
@@ -180,7 +207,7 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
             <div class="small muted">Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.</div>
         <?php else: ?>
             <strong>Art. 18 afventer gating.</strong>
-            <div class="small muted">Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 18.</div>
+            <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld afgangsforsinkelse/aflysning (90 min) for at aktivere ferry Art. 18.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 18.' ?></div>
         <?php endif; ?>
     </div>
 <?php endif; ?>
@@ -217,10 +244,10 @@ $preview = round($tp * $rate * $share, 2);
         <div class="small muted" style="margin-top:6px;"><?= h($art18Help) ?></div>
         <div id="remedyHint" class="small muted mt8"></div>
         <div class="mt8" data-art="18(1)"><strong>V&aelig;lg pr&aelig;cis en mulighed</strong></div>
-        <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> Jeg &oslash;nsker refusion</label><br/>
+        <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker tilbagebetaling' : 'Jeg oensker refusion' ?></label><br/>
         <?php if (!$refundOnly): ?>
-            <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning hurtigst muligt</label><br/>
-            <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> Jeg &oslash;nsker oml&aelig;gning senere (efter eget valg)</label>
+            <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker ombooking hurtigst muligt' : 'Jeg oensker omlaegning hurtigst muligt' ?></label><br/>
+            <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker ombooking senere (efter eget valg)' : 'Jeg oensker omlaegning senere (efter eget valg)' ?></label>
         <?php endif; ?>
 
         <!-- Hidden sync to legacy hooks -->
@@ -232,7 +259,7 @@ $preview = round($tp * $rate * $share, 2);
     <div id="remedyFollowupPast" class="mt12">
         <?php $rtFlag = (string)($form['return_to_origin_expense'] ?? ''); ?>
         <div id="returnExpensePast" class="card <?= ($showArt18 && $showArt181 && $remedy==='refund_return') ? '' : 'hidden' ?>" data-art="18(1a)">
-            <div class="card-title"><span class="icon">&#8634;</span><span>Returtransport (Art. 18 stk. 1)</span></div>
+            <div class="card-title"><span class="icon">&#8634;</span><span><?= $isFerry ? 'Tilbagebetaling / retur til afgangshavn (Art. 18)' : 'Returtransport (Art. 18 stk. 1)' ?></span></div>
             <?php if ($decisionHint !== ''): ?>
                 <div class="small muted"><?= h($decisionHint) ?></div>
             <?php endif; ?>

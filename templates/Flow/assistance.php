@@ -15,12 +15,18 @@ $pmrUser      = strtolower((string)($form['pmr_user'] ?? $flags['pmr_user'] ?? '
 $travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isOngoing = ($travelState === 'ongoing');
 $isCompleted = ($travelState === 'completed');
+$multimodal = (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$isFerry = ($transportMode === 'ferry');
+$ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+$ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $assistTitle = $isOngoing
-    ? 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)');
+    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)')
+    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)') : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)'));
 $assistHint = $isOngoing
-    ? 'Udgifter indtil nu (du kan tilfoeje flere senere).'
-    : ($isCompleted ? 'Udgifter under hele rejsen.' : '');
+    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).')
+    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : 'Udgifter under hele rejsen.') : '');
 $assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -130,30 +136,40 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 <p class="small muted">
-
-  Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).
-
+  <?= $isFerry
+      ? 'Aktiveres ved aflysning eller forventet/faktisk afgangsforsinkelse paa mindst 90 minutter. Hoteldelen kan bortfalde ved vejrsikkerhed.'
+      : 'Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).' ?>
 </p>
 
 <?php if ($assistHint !== ''): ?>
   <p class="small muted"><?= h($assistHint) ?></p>
 <?php endif; ?>
 
+<?php if ($isFerry): ?>
+  <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
+    <strong>Faerge-kontekst</strong>
+    <div class="small muted mt4">Claim-kanal: <strong><?= h((string)($ferryContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler ferry Art. 17-assistance.</div>
+    <?php if (!empty($ferryScope['scope_exclusion_reason'])): ?>
+      <div class="small muted mt4">Scope-note: <?= h((string)$ferryScope['scope_exclusion_reason']) ?></div>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
+
 
 
 <?php if ($art20Partial): ?>
   <div class="card hl mt8">
-    <strong>Art. 20 er delvist aktiveret via PMR.</strong>
-    <div class="small muted">Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.</div>
+    <strong><?= $isFerry ? 'Assistance er delvist aktiveret via saerhensyn.' : 'Art. 20 er delvist aktiveret via PMR.' ?></strong>
+    <div class="small muted"><?= $isFerry ? 'Udfyld kun de dele der faktisk blev tilbudt eller maatte betales selv.' : 'Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.' ?></div>
   </div>
 <?php elseif (!$art20Active): ?>
   <div class="card hl mt8">
     <?php if ($art20Blocked): ?>
-      <strong>Art. 20 er ikke aktiveret.</strong>
-      <div class="small muted">Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.</div>
+      <strong><?= $isFerry ? 'Faerge-assistance er ikke aktiveret.' : 'Art. 20 er ikke aktiveret.' ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Betingelserne for ferry Art. 17 er ikke opfyldt ud fra dine svar i Trin 5.' : 'Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.' ?></div>
     <?php else: ?>
-      <strong>Art. 20 afventer gating.</strong>
-      <div class="small muted">Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.</div>
+      <strong><?= $isFerry ? 'Faerge-assistance afventer gating.' : 'Art. 20 afventer gating.' ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld aflysning/90-minutters afgangsforsinkelse for at aktivere ferry Art. 17.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.' ?></div>
     <?php endif; ?>
   </div>
 <?php endif; ?>
@@ -162,7 +178,9 @@ $hintText = function (string $key) use ($priceHints): string {
 
   <div class="card hl mt8">
 
-    ?? Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.
+    <?= $isFerry
+      ? 'Assistance efter ferry Art. 17 kan vaere undtaget for denne rejse. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
+      : 'Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.' ?>
 
   </div>
 
@@ -174,8 +192,8 @@ $hintText = function (string $key) use ($priceHints): string {
 
 <!-- Måltider / drikke -->
 <div class="card mt12 <?= ($assistMealsOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
-  <strong>🍽️ Måltider og drikke (Art.20)</strong>
-  <p class="small muted">Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.</p>
+  <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : 'Måltider og drikke (Art.20)' ?></strong>
+  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.' ?></p>
   <div class="mt8">
     <div>1. Fik du måltider eller forfriskninger?</div>
     <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
@@ -250,10 +268,10 @@ $hintText = function (string $key) use ($priceHints): string {
         <path d="M7 10h10a3 3 0 0 1 3 3v6h-2v-2H6v2H4v-8a3 3 0 0 1 3-3zm-1 5h12v-2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2zm1-9a2 2 0 1 1 0 4a2 2 0 0 1 0-4z"/>
       </svg>
     </span>
-    Hotel og indkvartering (Art.20)
+    <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : 'Hotel og indkvartering (Art.20)' ?>
   </strong>
 
-  <p class="small muted">Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.</p>
+  <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' ?></p>
 
   <div class="mt8">
 
@@ -403,7 +421,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
 
 
-<?php if ($pmrUser && ($art20Active || $art20Partial)): ?>
+<?php if (!$isFerry && $pmrUser && ($art20Active || $art20Partial)): ?>
 
   <div class="card mt12">
 

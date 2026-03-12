@@ -11,12 +11,18 @@ $profile = $profile ?? ['articles' => []];
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isOngoing = ($travelState === 'ongoing');
 $isCompleted = ($travelState === 'completed');
+$multimodal = (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$isFerry = ($transportMode === 'ferry');
+$ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+$ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $compTitle = $isOngoing
-    ? 'TRIN 10 - Kompensation (foreloebig)'
-    : ($isCompleted ? 'TRIN 10 - Kompensation (afsluttet rejse)' : 'TRIN 10 - Kompensation (Art. 19)');
+    ? ($isFerry ? 'TRIN 10 - Faergeresultat (foreloebigt)' : 'TRIN 10 - Kompensation (foreloebig)')
+    : ($isCompleted ? ($isFerry ? 'TRIN 10 - Faergeresultat (afsluttet rejse)' : 'TRIN 10 - Kompensation (afsluttet rejse)') : ($isFerry ? 'TRIN 10 - Faergeresultat' : 'TRIN 10 - Kompensation (Art. 19)'));
 $compHint = $isOngoing
-    ? 'Beregningen kan aendre sig, naar rejsen er afsluttet.'
-    : ($isCompleted ? 'Beregningen er baseret paa den afsluttede rejse.' : '');
+    ? ($isFerry ? 'Resultatet kan aendre sig, naar den faktiske ankomstforsinkelse er kendt.' : 'Beregningen kan aendre sig, naar rejsen er afsluttet.')
+    : ($isCompleted ? ($isFerry ? 'Resultatet er baseret paa den afsluttede faergerejse.' : 'Beregningen er baseret paa den afsluttede rejse.') : '');
 $delayAtFinal = (int)($delayAtFinal ?? 0);
 $bandAuto = (string)($bandAuto ?? '0');
 $refundChosen = (bool)($refundChosen ?? false);
@@ -252,6 +258,40 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     </div>
   <?php endif; ?>
 </div>
+
+<?php if ($isFerry): ?>
+<?php
+  $ferryBand = (string)($ferryRights['art19_comp_band'] ?? ($flags['ferry_art19_comp_band'] ?? 'none'));
+  $ferryClaimName = (string)($ferryContract['primary_claim_party_name'] ?? '');
+  $ferryClaimType = (string)($ferryContract['primary_claim_party'] ?? '');
+  $ferryScopeReason = (string)($ferryScope['scope_exclusion_reason'] ?? '');
+  $ferryApplies = array_key_exists('regulation_applies', $ferryScope) ? (bool)$ferryScope['regulation_applies'] : true;
+?>
+<div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
+  <strong>Faerge-resultat</strong>
+  <div class="small muted mt4">TRIN 10 viser her claim-assist og den juridiske retning for ferry. Den endelige pengeudregning er ikke koblet paa samme maade som rail endnu.</div>
+  <?php if ($ferryClaimName !== ''): ?>
+    <div class="small mt8">Primær claim-kanal: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
+  <?php endif; ?>
+  <ul class="small mt8">
+    <li>Scope: <strong><?= $ferryApplies ? 'omfattet' : 'ikke omfattet' ?></strong><?= $ferryScopeReason !== '' ? ' - ' . h($ferryScopeReason) : '' ?></li>
+    <li>Art. 16 information: <strong><?= !empty($ferryRights['gate_art16_notice']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Art. 17 assistance: <strong><?= !empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Art. 18 tilbagebetaling/ombooking: <strong><?= !empty($ferryRights['gate_art18']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Art. 19 kompensation: <strong><?= !empty($ferryRights['gate_art19']) ? 'relevant' : 'ikke aktiveret' ?></strong><?= $ferryBand !== '' && $ferryBand !== 'none' ? ' - band ' . h($ferryBand) . '%' : '' ?></li>
+  </ul>
+  <?php if (!empty($ferryRights['gate_art19']) && $ferryBand !== 'none'): ?>
+    <div class="ok mt8 small">Ankomstforsinkelsen peger paa ferry Art. 19 med et foreloebigt bånd paa <strong><?= h($ferryBand) ?>%</strong>.</div>
+  <?php elseif (!$ferryApplies): ?>
+    <div class="hl mt8 small">Faergeforordningen ser ikke ud til at finde anvendelse paa denne sejlads ud fra de nuvaerende scope-oplysninger.</div>
+  <?php else: ?>
+    <div class="hl mt8 small">Brug data-pack og de aktive gates ovenfor som grundlag for claim-assist eller manuel vurdering.</div>
+  <?php endif; ?>
+</div>
+</fieldset>
+<?= $this->Form->end() ?>
+<?php return; ?>
+<?php endif; ?>
 
 <?php if (!empty($seasonMode)): ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
