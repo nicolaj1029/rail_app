@@ -1638,33 +1638,33 @@ $isPreview = !empty($flowPreview);
   <?php $a12Open = (bool)$needA12; ?>
   <div class="card" style="margin-top:12px; padding:16px; border:1px solid #e5e7eb; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <strong>ðŸ“„ Art. 12 â€“ Kontraktoplysninger</strong>
+      <strong>Kontrakt og ansvar (rail / Art. 12)</strong>
       <button type="button" id="a12EditSellerBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
     </div>
     <?php
-      // Vis altid spÃ¸rgsmÃ¥lene, uanset auto-status, sÃ¥ brugeren kan rette dem
+      // Vis altid spørgsmålene, uanset auto-status, så brugeren kan rette dem
       $showSeller = true;
       $showThrough = true;
       $showSeparate = true;
-      $sellerLabel = ($sellerInf === 'operator') ? 'OperatÃ¸r (jernbane)' : (($sellerInf === 'retailer') ? 'Forhandler/rejsebureau' : 'Ukendt');
+      $sellerLabel = ($sellerInf === 'operator') ? 'Operatør (jernbane)' : (($sellerInf === 'retailer') ? 'Forhandler/rejsebureau' : 'Ukendt');
       $throughLabel = ($ttdVal === 'yes') ? 'Ja' : (($ttdVal === 'no') ? 'Nej' : 'Ukendt');
       $separateLabel = ($scnVal === 'yes') ? 'Ja' : (($scnVal === 'no') ? 'Nej' : 'Ukendt');
     ?>
     <div class="small muted" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
       <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-      <span>SÃ¦lger: <?= h($sellerLabel) ?></span>
-      <span>â€¢ GennemgÃ¥ende billet: <?= h($throughLabel) ?></span>
-      <span>â€¢ Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
+      <span>Sælger: <?= h($sellerLabel) ?></span>
+      <span>• Gennemgående billet: <?= h($throughLabel) ?></span>
+      <span>• Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
     </div>
     <?php if (!$a12Open): ?>
-      <div class="small muted" style="margin-top:6px;">(Art. 12 ser ud til at vÃ¦re dÃ¦kket af AUTO. Klik â€œRedigerâ€ hvis du vil Ã¦ndre svarene.)</div>
+      <div class="small muted" style="margin-top:6px;">(Rail Art. 12 ser ud til at være dækket af AUTO. Klik “Rediger” hvis du vil ændre svarene.)</div>
     <?php endif; ?>
 
     <div id="a12Questions" style="display:<?= $a12Open ? 'block' : 'none' ?>;">
     <div id="a12Q1" class="small" style="margin-top:10px; display:<?= $showSeller ? 'block' : 'none' ?>;">
       Hvem solgte dig hele rejsen?
       <div class="small" style="margin-top:4px;">
-        <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> OperatÃ¸r (jernbane)</label>
+        <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> Operatør (jernbane)</label>
         <label class="mr8"><input type="radio" name="seller_channel" value="retailer" <?= $sellerInf==='retailer'?'checked':'' ?> /> Forhandler/rejsebureau</label>
       </div>
     </div>
@@ -1678,7 +1678,7 @@ $isPreview = !empty($flowPreview);
     </div>
 
     <div id="a12Q2" class="small" style="margin-top:10px; display:<?= $showThrough ? 'block' : 'none' ?>;">
-      Blev det oplyst fÃ¸r kÃ¸b, at billetten var gennemgÃ¥ende?
+      Blev det oplyst før køb, at billetten var gennemgående?
       <div class="small" style="margin-top:4px;">
         <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="yes" <?= $ttdVal==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="no" <?= $ttdVal==='no'?'checked':'' ?> /> Nej</label>
@@ -1694,21 +1694,21 @@ $isPreview = !empty($flowPreview);
     </div>
     <?php $showSameTxn = ($ticketMode !== 'ticketless') && (($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no')); ?>
     <?php if ($showSameTxn): ?>
-    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter kÃ¸bt i Ã©n transaktion?</div>
+    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter købt i én transaktion?</div>
     <div class="small" style="margin-top:4px;">
       <label class="mr8"><input type="radio" name="same_transaction" value="yes" <?= $sameTxnInf==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="same_transaction" value="no" <?= $sameTxnInf==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <?php endif; ?>
-    <div class="small muted" style="margin-top:6px;">(HjÃ¦lper med at afgÃ¸re om der er gennemgÃ¥ende billet og hvem der er ansvarlig efter Art. 12.)</div>
+    <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
     </div><!-- /a12Questions -->
   </div>
   <?php endif; ?>
 
   <?php if (!empty($meta['_passengers_auto'])): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-    <strong>ðŸ‘¥ Fundne passagerer pÃ¥ billetten</strong>
-    <div class="small" style="margin-top:6px;">RedigÃ©r navne og markÃ©r hvem der klager:</div>
+    <strong>Fundne passagerer på billetten</strong>
+    <div class="small" style="margin-top:6px;">Redigér navne og markér hvem der klager:</div>
     <div class="small" style="margin-top:6px;">
       <?php $paxList = (array)$meta['_passengers_auto']; ?>
       <?php foreach ($paxList as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
@@ -1722,7 +1722,7 @@ $isPreview = !empty($flowPreview);
       <?php endforeach; ?>
     </div>
     <div class="small" style="margin-top:8px;">
-      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk vÃ¦rge/ansvarlig for andre pÃ¥ billetten</label>
+      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk værge/ansvarlig for andre på billetten</label>
     </div>
   </div>
   <?php endif; ?>
