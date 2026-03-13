@@ -1,0 +1,7 @@
+{
+  "format": "json",
+  "replace": false,
+  "source_label": "osm",
+  "source_transform": "osm_elements_terminals",
+  "default_node_type": "ferry_terminal"
+}

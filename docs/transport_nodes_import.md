@@ -25,6 +25,7 @@ Der ligger foruddefinerede profiler i `config/data/transport_node_import_profile
 
 - `air_ourairports`
 - `ferry_unlocode`
+- `ferry_osm_terminals`
 - `bus_osm`
 
 Profilerne udfylder standardfelter for de mest realistiske kilder. CLI-flag kan stadig overstyre profilværdier.
@@ -76,6 +77,24 @@ php bin/cake.php transport_nodes_import `
   --mode ferry `
   --source data\ports.csv `
   --profile ferry_unlocode
+```
+
+### Ferry terminals / OSM Overpass JSON
+
+```powershell
+php bin/cake.php transport_nodes_import `
+  --mode ferry `
+  --source data\ferry_terminals.json `
+  --profile ferry_osm_terminals
+```
+
+Ved store OSM-terminalfiler kan det være nødvendigt at hæve memory-limit midlertidigt:
+
+```powershell
+php -d memory_limit=512M bin/cake.php transport_nodes_import `
+  --mode ferry `
+  --source data\ferry_terminals.json `
+  --profile ferry_osm_terminals
 ```
 
 ### Bus terminals / OSM or GTFS-derived JSON

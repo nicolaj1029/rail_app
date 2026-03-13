@@ -107,6 +107,13 @@ final class TransportNodeImportService
             throw new RuntimeException('JSON source must decode to an array');
         }
 
+        if (isset($decoded['elements']) && is_array($decoded['elements'])) {
+            $decoded = $decoded['elements'];
+        }
+        if (!array_is_list($decoded)) {
+            throw new RuntimeException('JSON source must decode to an array of rows');
+        }
+
         $rows = [];
         foreach ($decoded as $row) {
             if (!is_array($row)) {
@@ -256,6 +263,7 @@ final class TransportNodeImportService
 
         return match ($transform) {
             'unlocode_ports' => $this->transformUnlocodePortRow($row),
+            'osm_elements_terminals' => $this->transformOsmTerminalRow($row, $options),
             default => $row,
         };
     }
@@ -297,6 +305,62 @@ final class TransportNodeImportService
             'lon' => $lon,
             'city' => $name,
             'node_type' => $nodeType,
+            'aliases' => $aliases,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>|null
+     */
+    private function transformOsmTerminalRow(array $row, array $options): ?array
+    {
+        $tags = isset($row['tags']) && is_array($row['tags']) ? $row['tags'] : [];
+        $amenity = strtolower(trim((string)($tags['amenity'] ?? '')));
+        $publicTransport = strtolower(trim((string)($tags['public_transport'] ?? '')));
+        $ferry = strtolower(trim((string)($tags['ferry'] ?? '')));
+        if ($amenity !== 'ferry_terminal' && $publicTransport !== 'station' && $ferry !== 'yes') {
+            return null;
+        }
+
+        $name = trim((string)($tags['name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $country = strtoupper(trim((string)($tags['addr:country'] ?? $tags['is_in:country_code'] ?? '')));
+        if ($country === '' && !empty($options['default_country'])) {
+            $country = strtoupper(trim((string)$options['default_country']));
+        }
+
+        $lat = $this->asFloat($row['lat'] ?? ($row['center']['lat'] ?? null));
+        $lon = $this->asFloat($row['lon'] ?? ($row['center']['lon'] ?? null));
+        $code = trim((string)($tags['ref'] ?? ''));
+        if ($code === '') {
+            $code = 'OSM-' . (string)($row['type'] ?? 'node') . '-' . (string)($row['id'] ?? '');
+        }
+
+        $aliases = [];
+        foreach (['name:en', 'official_name', 'short_name'] as $aliasKey) {
+            $alias = trim((string)($tags[$aliasKey] ?? ''));
+            if ($alias !== '' && mb_strtolower($alias) !== mb_strtolower($name)) {
+                $aliases[] = $alias;
+            }
+        }
+
+        $city = trim((string)($tags['addr:city'] ?? $tags['is_in:city'] ?? ''));
+        $parentName = trim((string)($tags['harbour'] ?? $tags['port'] ?? ''));
+
+        return [
+            'name' => $name,
+            'country' => $country,
+            'code' => $code,
+            'lat' => $lat,
+            'lon' => $lon,
+            'city' => $city,
+            'node_type' => 'ferry_terminal',
+            'parent_name' => $parentName,
             'aliases' => $aliases,
         ];
     }
