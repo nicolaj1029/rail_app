@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /** @var \App\View\AppView $this */
 $compute = $compute ?? [];
 $form = $form ?? [];
@@ -19,7 +19,7 @@ $isFerry = $transportMode === 'ferry';
 $isBus = $transportMode === 'bus';
 $isAir = $transportMode === 'air';
 $isRail = $transportMode === 'rail';
-$seasonSupported = $isRail;
+$seasonSupported = in_array($transportMode, ['rail', 'ferry'], true);
 if (!$seasonSupported && $ticketMode === 'seasonpass') { $ticketMode = 'ticket'; }
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
@@ -31,7 +31,7 @@ $isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
 <style>
-  /* Skjul PMR/cykel i Trin 2 – håndteres i Trin 3 */
+  /* Skjul PMR/cykel i Trin 2 â€“ hÃ¥ndteres i Trin 3 */
   #pmrFlowCard, #bikeFlowCard { display:none !important; }
   .fe-wrapper { max-width: 1200px; margin: 0 auto; }
   .fe-wide { width: 100%; }
@@ -68,7 +68,7 @@ $isPreview = !empty($flowPreview);
 <div class="fe-header">
   <div class="fe-step">Trin 2</div>
   <h1 class="fe-title">Billet (upload eller ticketless)</h1>
-  <p class="fe-sub">Upload billetter eller udfyld minimum uden billet. Sidepanelet viser løbende dine rettigheder.</p>
+  <p class="fe-sub">Upload billetter eller udfyld minimum uden billet. Sidepanelet viser lÃ¸bende dine rettigheder.</p>
 </div>
 <?php
   // UI banners derived from exemption profile (global notices)
@@ -120,12 +120,12 @@ $isPreview = !empty($flowPreview);
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <div class="fe-wrapper">
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
-    <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
-    <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.' ?></div>
+    <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller fÃ¦rgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
+    <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'VÃ¦lg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'VÃ¦lg ticketless hvis du vil fortsÃ¦tte uden upload. Du kan altid tilfÃ¸je booking eller dokumentation senere.' ?></div>
     <div class="small" style="margin-top:8px;">
-      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/færgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/fÃ¦rgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
-      <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
+      <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser pÃ¥ pendler-/periodekort</label>
     </div>
   </div>
 
@@ -140,7 +140,7 @@ $isPreview = !empty($flowPreview);
     </div>
   </div>
 
-  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isBus || $isAir) ? '' : ' display:none;' ?>">
+  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= (($isBus || $isAir) && $ticketMode !== 'ticketless') ? '' : ' display:none;' ?>">
     <strong><?= $isAir ? 'Fly: booking og ansvar' : 'Bus: booking og ansvar' ?></strong>
     <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Her afklarer vi protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Her afklarer vi regular service-scope, claim-kanal og hvilket busmodul der skal bruges senere.' ?></div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -283,7 +283,7 @@ $isPreview = !empty($flowPreview);
     <?php endif; ?>
   </div>
 
-  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $isFerry ? '' : ' display:none;' ?>">
+  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isFerry && $ticketMode !== 'ticketless') ? '' : ' display:none;' ?>">
     <strong>Faerge: scope og ansvar</strong>
     <div class="small muted" style="margin-top:6px;">Her afklarer vi om faergeforordningen finder anvendelse, om problemet ligger paa faergedelen, og hvem claimet som udgangspunkt skal rettes mod. Handicap/PMR kommer senere.</div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -347,7 +347,7 @@ $isPreview = !empty($flowPreview);
     <?php if (!empty($ferryScope) || !empty($ferryContract)): ?>
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
         <div><strong>Foreloebig vurdering</strong></div>
-        <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' – ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
+        <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' â€“ ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
         <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
         <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
         <div>Rettighedsmodul: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
@@ -367,16 +367,16 @@ $isPreview = !empty($flowPreview);
     $seasonTo = (string)($season['valid_to'] ?? '');
   ?>
   <div class="card" id="seasonPassCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $seasonHas ? '' : ' display:none;' ?>">
-    <div class="section-title">Pendler-/periodekort (abonnement)</div>
-    <div class="small muted" style="margin-top:6px;">Hvis ja, bruger vi operatørens egen ordning (Art. 19, stk. 2). Små forsinkelser (&lt; 60 min) kan typisk kumuleres i gyldighedsperioden.</div>
+    <div class="section-title"><?= $isFerry ? 'Abonnement / periodekort (fÃ¦rge)' : 'Pendler-/periodekort (abonnement)' ?></div>
+    <div class="small muted" style="margin-top:6px;"><?= $isFerry ? 'Hvis ja, bruger vi transport?rens egen kompensationsordning for abonnement/periodekort. Forsinkede ankomster i gyldighedsperioden kan udl?se passende kompensation efter operat?rens regler.' : 'Hvis ja, bruger vi operat??rens egen ordning (Art. 19, stk. 2). Sm?? forsinkelser (&lt; 60 min) kan typisk kumuleres i gyldighedsperioden.' ?></div>
     <input type="hidden" name="season_pass_has" id="seasonPassHas" value="<?= $seasonHas ? '1' : '0' ?>" />
     <fieldset id="seasonPassFieldset" style="border:0; padding:0; margin:0;" <?= $seasonHas ? '' : 'disabled' ?>>
       <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
         <label>Type (valgfri)
-          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="Pendler / Periode / årskort" />
+          <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="<?= $isFerry ? 'Periodekort / abonnement / klippekort' : 'Pendler / Periode / ??rskort' ?>" />
         </label>
-        <label>Operatør (valgfri)
-          <input type="text" name="season_pass_operator" list="operatorSuggestions" value="<?= h($seasonOp) ?>" placeholder="DSB / DB / SNCF …" />
+        <label><?= $isFerry ? 'Transport??r / carrier (valgfri)' : 'Operat??r (valgfri)' ?>
+          <input type="text" name="season_pass_operator" list="operatorSuggestions" value="<?= h($seasonOp) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines / ForSea' : 'DSB / DB / SNCF ?' ?>" />
         </label>
         <label>Gyldig fra (valgfri)
           <input type="date" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" />
@@ -389,10 +389,10 @@ $isPreview = !empty($flowPreview);
 
     <?php $spFiles = (array)($meta['season_pass_files'] ?? []); ?>
     <div class="mt8" style="margin-top:12px;">
-      <div class="small"><strong>Upload pendlerkort/abonnement (valgfrit)</strong></div>
-      <div class="small muted" style="margin-top:4px;">Brug fx screenshot fra operatør-app, PDF, eller billede af kort. Understøtter PDF, JPG, PNG, PKPASS, TXT.</div>
+      <div class="small"><strong><?= $isFerry ? 'Upload abonnement / periodekort (valgfrit)' : 'Upload pendlerkort/abonnement (valgfrit)' ?></strong></div>
+      <div class="small muted" style="margin-top:4px;"><?= $isFerry ? 'Brug fx screenshot fra carrier-app, PDF, bookingbekr??ftelse eller billede af kort. Underst??tter PDF, JPG, PNG, PKPASS, TXT.' : 'Brug fx screenshot fra operat??r-app, PDF, eller billede af kort. Underst??tter PDF, JPG, PNG, PKPASS, TXT.' ?></div>
       <div class="upload-actions" style="margin-top:8px;">
-        <button type="button" id="addSeasonPassFilesBtn" class="button">Tilføj filer</button>
+        <button type="button" id="addSeasonPassFilesBtn" class="button">TilfÃ¸j filer</button>
         <button type="button" id="clearSeasonPassFilesBtn" class="button button-outline">Fjern alle</button>
       </div>
       <input type="file" id="seasonPassFilesInput" name="season_pass_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
@@ -413,7 +413,7 @@ $isPreview = !empty($flowPreview);
   </div>
   <?php $pcVal = (string)($form['purchaseChannel'] ?? ''); ?>
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px; display:none;">
-    <strong>Hvor blev billetten købt?</strong>
+    <strong>Hvor blev billetten kÃ¸bt?</strong>
     <div class="small" style="margin-top:6px;">
       <label class="mr8"><input type="radio" name="purchaseChannel" value="web_app" <?= $pcVal==='web_app'?'checked':'' ?> /> Online / app</label>
       <label class="mr8"><input type="radio" name="purchaseChannel" value="station" <?= $pcVal==='station'?'checked':'' ?> /> Station / automat</label>
@@ -422,12 +422,12 @@ $isPreview = !empty($flowPreview);
     </div>
   </div>
   <div class="card" id="ticketUploadCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= ($ticketMode==='ticketless' || $ticketMode==='seasonpass')?' display:none;':'' ?>">
-    <div class="section-title"><?= $isAir ? 'Booking / billetter' : ($isFerry ? 'Booking / færgebilletter' : ($isBus ? 'Booking / billetter' : 'Billetter')) ?></div>
+    <div class="section-title"><?= $isAir ? 'Booking / billetter' : ($isFerry ? 'Booking / fÃ¦rgebilletter' : ($isBus ? 'Booking / billetter' : 'Billetter')) ?></div>
   <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
-      <div class="upload-title">Slip filer her eller klik for at tilføje</div>
-      <div class="small muted" style="margin-top:6px;">Understøtter PDF, JPG, PNG, PKPASS, TXT</div>
+      <div class="upload-title">Slip filer her eller klik for at tilfÃ¸je</div>
+      <div class="small muted" style="margin-top:6px;">UnderstÃ¸tter PDF, JPG, PNG, PKPASS, TXT</div>
       <div class="upload-actions">
-        <button type="button" id="addFilesBtn" class="button">Tilføj filer</button>
+        <button type="button" id="addFilesBtn" class="button">TilfÃ¸j filer</button>
         <button type="button" id="clearFilesBtn" class="button button-outline">Fjern alle</button>
       </div>
     </div>
@@ -438,10 +438,11 @@ $isPreview = !empty($flowPreview);
   </div>
 
   <div class="card" id="ticketlessCard" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?'':' display:none;' ?>">
-    <div class="section-title">Ticketless (minimum)</div>
-    <div class="small muted" style="margin-top:6px;">Udfyld det du ved. Pris er valgfri (procent beregnes altid).</div>
+    <div class="section-title"><?= $isFerry ? 'Ticketless færge (minimum)' : ($isBus ? 'Ticketless bus (minimum)' : ($isAir ? 'Ticketless fly (minimum)' : 'Ticketless (minimum)')) ?></div>
+    <div class="small muted" style="margin-top:6px;"><?= $isFerry ? 'Udfyld havne, scope og carrier først. Pris er valgfri og bruges kun hvis du kender den.' : ($isBus ? 'Udfyld rute, scope og operatør. Pris er valgfri og bruges kun hvis du kender den.' : ($isAir ? 'Udfyld lufthavne, bookingstruktur og carrier. Pris er valgfri og bruges kun hvis du kender den.' : 'Udfyld det du ved. Pris er valgfri (procent beregnes altid).')) ?></div>
     <fieldset id="ticketlessFieldset" <?= $ticketMode==='ticketless' ? '' : 'disabled' ?> style="border:0; padding:0; margin:0;">
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+      <?php if ($isRail): ?>
       <label>Land (ISO2)
         <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
         <input type="hidden" name="operator_country_assumed" value="<?= h($tlCountryAssumed) ?>" />
@@ -449,13 +450,13 @@ $isPreview = !empty($flowPreview);
       <label>Scope
         <?php $sc = (string)($form['scope_choice'] ?? ''); ?>
         <select name="scope_choice">
-          <option value="">Vælg...</option>
+          <option value="">VÃ¦lg...</option>
           <option value="regional" <?= $sc==='regional'?'selected':'' ?>>Regional/lokaltog</option>
           <option value="long_distance" <?= $sc==='long_distance'?'selected':'' ?>>Langdistance</option>
           <option value="international" <?= $sc==='international'?'selected':'' ?>>International</option>
         </select>
       </label>
-      <label>Operatør (valgfri)
+      <label>OperatÃ¸r (valgfri)
         <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx DSB, DB, SJ" />
       </label>
       <label>Produkt (valgfri)
@@ -468,7 +469,6 @@ $isPreview = !empty($flowPreview);
           <option value="1" <?= $fc==='1'?'selected':'' ?>>1. klasse</option>
           <option value="2" <?= $fc==='2'?'selected':'' ?>>2. klasse</option>
           <option value="other" <?= $fc==='other'?'selected':'' ?>>Andet</option>
-          <option value="unknown" <?= $fc==='unknown'?'selected':'' ?>>Ved ikke</option>
         </select>
       </label>
       <label>Plads/komfort (valgfri)
@@ -480,7 +480,6 @@ $isPreview = !empty($flowPreview);
           <option value="couchette" <?= $bst==='couchette'?'selected':'' ?>>Liggevogn</option>
           <option value="sleeper" <?= $bst==='sleeper'?'selected':'' ?>>Sovevogn</option>
           <option value="none" <?= $bst==='none'?'selected':'' ?>>Ingen (ukendt)</option>
-          <option value="unknown" <?= $bst==='unknown'?'selected':'' ?>>Ved ikke</option>
         </select>
       </label>
       <label>Afgangsstation
@@ -512,6 +511,189 @@ $isPreview = !empty($flowPreview);
       <label>Planlagt ankomsttid (valgfri)
         <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
+      <?php elseif ($isFerry): ?>
+      <label>Servicetype
+        <?php $serviceTypeTl = (string)($form['service_type'] ?? 'passenger_service'); ?>
+        <select name="service_type">
+          <option value="passenger_service" <?= $serviceTypeTl==='passenger_service'?'selected':'' ?>>Passenger service</option>
+          <option value="cruise" <?= $serviceTypeTl==='cruise'?'selected':'' ?>>Cruise</option>
+          <option value="excursion" <?= $serviceTypeTl==='excursion'?'selected':'' ?>>Excursion</option>
+          <option value="sightseeing" <?= $serviceTypeTl==='sightseeing'?'selected':'' ?>>Sightseeing</option>
+        </select>
+      </label>
+      <label>Carrier / transportør
+        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx Scandlines" />
+      </label>
+      <label>Produkt / overfart (valgfri)
+        <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx Helsingør-Helsingborg" />
+      </label>
+      <label>Afgangshavn
+        <input type="text" name="dep_station" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx Helsingør" />
+      </label>
+      <label>Ankomsthavn
+        <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx Helsingborg" />
+      </label>
+      <label>Afgangshavn i EU?
+        <?php $depPortEu = (string)($form['departure_port_in_eu'] ?? 'yes'); ?>
+        <select name="departure_port_in_eu">
+          <option value="yes" <?= $depPortEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $depPortEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ankomsthavn i EU?
+        <?php $arrPortEu = (string)($form['arrival_port_in_eu'] ?? 'yes'); ?>
+        <select name="arrival_port_in_eu">
+          <option value="yes" <?= $arrPortEu==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $arrPortEu==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Carrier er EU-operatør?
+        <?php $carrierEuTl = (string)($form['carrier_is_eu'] ?? 'yes'); ?>
+        <select name="carrier_is_eu">
+          <option value="yes" <?= $carrierEuTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $carrierEuTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Fra havneterminal?
+        <?php $depTerminalTl = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
+        <select name="departure_from_terminal">
+          <option value="yes" <?= $depTerminalTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $depTerminalTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ruteafstand i meter (valgfri)
+        <input type="number" name="route_distance_meters" min="0" step="1" value="<?= h((string)($form['route_distance_meters'] ?? '')) ?>" placeholder="10000" />
+      </label>
+      <label>Passagerkapacitet (valgfri)
+        <input type="number" name="vessel_passenger_capacity" min="0" step="1" value="<?= h((string)($form['vessel_passenger_capacity'] ?? '')) ?>" placeholder="200" />
+      </label>
+      <label>Operationel besætning (valgfri)
+        <input type="number" name="vessel_operational_crew" min="0" step="1" value="<?= h((string)($form['vessel_operational_crew'] ?? '')) ?>" placeholder="12" />
+      </label>
+      <label>Planlagt afgangsdato
+        <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
+      </label>
+      <label>Planlagt afgangstid (valgfri)
+        <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <label>Planlagt ankomsttid (valgfri)
+        <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <?php elseif ($isBus): ?>
+      <label>Land (ISO2)
+        <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
+        <input type="hidden" name="operator_country_assumed" value="<?= h($tlCountryAssumed) ?>" />
+      </label>
+      <label>Regular service?
+        <?php $busRegularTl = (string)($form['bus_regular_service'] ?? 'yes'); ?>
+        <select name="bus_regular_service">
+          <option value="yes" <?= $busRegularTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $busRegularTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Operatør
+        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx FlixBus" />
+      </label>
+      <label>Produkt (valgfri)
+        <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx Ekspres" />
+      </label>
+      <label>Afgangssted / terminal
+        <input type="text" name="dep_station" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx Odense station" />
+      </label>
+      <label>Ankomststed / terminal
+        <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx Aarhus busterminal" />
+      </label>
+      <label>Fra terminal?
+        <?php $busTerminalTl = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
+        <select name="departure_from_terminal">
+          <option value="yes" <?= $busTerminalTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $busTerminalTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Planlagt distance (km)
+        <input type="number" name="scheduled_distance_km" min="0" step="1" value="<?= h((string)($form['scheduled_distance_km'] ?? '')) ?>" placeholder="320" />
+      </label>
+      <label>Planlagt afgangsdato
+        <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
+      </label>
+      <label>Planlagt afgangstid (valgfri)
+        <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <label>Planlagt ankomsttid (valgfri)
+        <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <?php elseif ($isAir): ?>
+      <label>Afgangslufthavn
+        <input type="text" name="dep_station" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx CPH" />
+      </label>
+      <label>Ankomstlufthavn
+        <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx ARN" />
+      </label>
+      <label>Marketing carrier
+        <input type="text" name="marketing_carrier" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
+      </label>
+      <label>Operating carrier
+        <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
+      </label>
+      <label>Afgangslufthavn i EU?
+        <?php $airDepEuTl = (string)($form['departure_airport_in_eu'] ?? 'yes'); ?>
+        <select name="departure_airport_in_eu">
+          <option value="yes" <?= $airDepEuTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $airDepEuTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ankomstlufthavn i EU?
+        <?php $airArrEuTl = (string)($form['arrival_airport_in_eu'] ?? 'yes'); ?>
+        <select name="arrival_airport_in_eu">
+          <option value="yes" <?= $airArrEuTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $airArrEuTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Operating carrier er EU-operatør?
+        <?php $opCarrierEuTl = (string)($form['operating_carrier_is_eu'] ?? 'yes'); ?>
+        <select name="operating_carrier_is_eu">
+          <option value="yes" <?= $opCarrierEuTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $opCarrierEuTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Same PNR?
+        <?php $samePnrTl = (string)($form['same_pnr'] ?? 'yes'); ?>
+        <select name="same_pnr">
+          <option value="yes" <?= $samePnrTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $samePnrTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Same bookingreference?
+        <?php $sameBookingTl = (string)($form['same_booking_reference'] ?? 'yes'); ?>
+        <select name="same_booking_reference">
+          <option value="yes" <?= $sameBookingTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameBookingTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Same e-ticket?
+        <?php $sameEticketTl = (string)($form['same_eticket'] ?? 'yes'); ?>
+        <select name="same_eticket">
+          <option value="yes" <?= $sameEticketTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameEticketTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Self-transfer oplyst før køb?
+        <?php $selfTransferNoticeTl = (string)($form['self_transfer_notice'] ?? 'no'); ?>
+        <select name="self_transfer_notice">
+          <option value="yes" <?= $selfTransferNoticeTl==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $selfTransferNoticeTl==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Planlagt afgangsdato
+        <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
+      </label>
+      <label>Planlagt afgangstid (valgfri)
+        <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <label>Planlagt ankomsttid (valgfri)
+        <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+      </label>
+      <?php endif; ?>
     </div>
 
     <datalist id="operatorSuggestions">
@@ -579,7 +761,7 @@ $isPreview = !empty($flowPreview);
             <?php endif; ?>
             <?php if (!empty($t['passengers'])): ?>
               <details style="margin-top:6px;">
-                <summary>Redigér passagerer</summary>
+                <summary>RedigÃ©r passagerer</summary>
                 <?php foreach ((array)$t['passengers'] as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
                   <div style="margin-top:6px;">
                     <label>Navn
@@ -599,15 +781,15 @@ $isPreview = !empty($flowPreview);
   </div>
   <?php endif; ?>
 
-  <!-- Art. 12 blok (behold auto + rediger) vises længere nede -->
+  <!-- Art. 12 blok (behold auto + rediger) vises lÃ¦ngere nede -->
 
-  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1–3.5)</button>
+  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1â€“3.5)</button>
   <div id="journeyFields" style="display:none;">
   <fieldset id="journeyFieldsFieldset" <?= $ticketMode==='ticketless' ? 'disabled' : '' ?> style="border:0; padding:0; margin:0;">
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>3.1. Name of railway undertaking:</strong>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-      <label>Operatør
+      <label>OperatÃ¸r
         <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" />
       </label>
       <label>Land
@@ -676,7 +858,7 @@ $isPreview = !empty($flowPreview);
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="small muted" style="margin-top:4px;">Vælg valuta hvis auto-detektion ikke rammer rigtigt.</div>
+        <div class="small muted" style="margin-top:4px;">VÃ¦lg valuta hvis auto-detektion ikke rammer rigtigt.</div>
       </label>
       <?php
         // Build journey summary + missed-connection station choices with both arrival and next departure times
@@ -724,7 +906,7 @@ $isPreview = !empty($flowPreview);
                 if ($m1 !== null && $m2 !== null) { $lay = $m2 - $m1; if ($lay < 0) { $lay += 24*60; } }
                 $label = $toName;
                 if ($arr || $nextDep) {
-                  $label .= ' (ank. ' . ($arr ?: '-') . ' • afg. ' . ($nextDep ?: '-') . (($lay !== null && $lay >= 0 && $lay <= 360) ? (', ophold ' . $lay . ' min') : '') . ')';
+                  $label .= ' (ank. ' . ($arr ?: '-') . ' â€¢ afg. ' . ($nextDep ?: '-') . (($lay !== null && $lay >= 0 && $lay <= 360) ? (', ophold ' . $lay . ' min') : '') . ')';
                 }
                 // Append MCT judgement if available
                 $ev = $mctByStation[$norm($toName)] ?? null;
@@ -772,12 +954,12 @@ $isPreview = !empty($flowPreview);
           return $v;
         };
       ?>
-      <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflæst fra billetten)</strong></div>
+      <div class="small" style="margin-top:10px;"><strong>Rejseplan (aflÃ¦st fra billetten)</strong></div>
       <div class="small" style="overflow:auto;">
         <table id="mcJourneyTable" class="fe-table">
           <thead>
             <tr>
-              <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Strækning</th>
+              <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">StrÃ¦kning</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Afgang</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
               <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
@@ -787,7 +969,7 @@ $isPreview = !empty($flowPreview);
           <tbody>
             <?php foreach ($journeyRowsInline as $idx => $r): ?>
               <?php
-                // Brug gemt værdi, ellers evt. auto-detektion; fald ikke tilbage til "købt"-valg
+                // Brug gemt vÃ¦rdi, ellers evt. auto-detektion; fald ikke tilbage til "kÃ¸bt"-valg
                 $deliveredValRaw = (string)($form['leg_class_delivered'][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ''));
                 $deliveredVal = $normClassInline($deliveredValRaw);
                 $downgVal = isset($form['leg_downgraded'][$idx]) && $form['leg_downgraded'][$idx] === '1';
@@ -814,7 +996,7 @@ $isPreview = !empty($flowPreview);
         </div>
       <?php endif; ?>
       <?php if (empty($mcChoicesInline)): ?>
-        <div class="small muted" style="margin-top:8px;">Ingen skift fundet – punkt 3.5 vises kun, når der er et skift i rejsen.</div>
+        <div class="small muted" style="margin-top:8px;">Ingen skift fundet â€“ punkt 3.5 vises kun, nÃ¥r der er et skift i rejsen.</div>
       <?php endif; ?>
       </div>
     <?php endif; ?>
@@ -859,44 +1041,44 @@ $isPreview = !empty($flowPreview);
   ?>
   <?php if ($showPmr): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="pmrFlowCard">
-    <strong>♿ PMR/handicap (Art. 18 og 20)</strong>
+    <strong>â™¿ PMR/handicap (Art. 18 og 20)</strong>
     <?php if ($pmrAutoBadgeFlag): $confVal = (string)($pmrAuto['confidence'] ?? ''); ?>
       <div class="small" style="margin-top:6px;">
         <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
         <?php if ($confVal !== ''): ?>
           <span class="badge" style="margin-left:6px;border:1px solid #d0d7de;background:#f6f8fa;">conf: <?= h($confVal) ?></span>
         <?php endif; ?>
-        Vi har fundet PMR/assistance i billetten – du kan have ekstra rettigheder.
+        Vi har fundet PMR/assistance i billetten â€“ du kan have ekstra rettigheder.
       </div>
     <?php endif; ?>
     <div class="small" style="margin-top:8px;">
-      <div><strong>Vi har registreret følgende oplysninger om handicap på billetten – ret venligst, hvis noget ikke er korrekt.</strong></div>
-      <div><strong>Spm 1.</strong> Har du et handicap eller nedsat mobilitet, som krævede assistance?</div>
+      <div><strong>Vi har registreret fÃ¸lgende oplysninger om handicap pÃ¥ billetten â€“ ret venligst, hvis noget ikke er korrekt.</strong></div>
+      <div><strong>Spm 1.</strong> Har du et handicap eller nedsat mobilitet, som krÃ¦vede assistance?</div>
       <label class="mr8"><input type="radio" name="pmr_user" value="yes" <?= $pmrUserVal==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="pmr_user" value="no" <?= $pmrUserVal==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <div id="pmrQBooked" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 2.</strong> Bestilte du assistance før rejsen?</div>
+      <div><strong>Spm 2.</strong> Bestilte du assistance fÃ¸r rejsen?</div>
       <label class="mr8"><input type="radio" name="pmr_booked" value="yes" <?= $pmrBookedVal==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="pmr_booked" value="no" <?= $pmrBookedVal==='no'?'checked':'' ?> /> Nej</label>
-      <label class="mr8"><input type="radio" name="pmr_booked" value="refused" <?= $pmrBookedVal==='refused'?'checked':'' ?> /> Forsøgte men fik afslag</label>
+      <label class="mr8"><input type="radio" name="pmr_booked" value="refused" <?= $pmrBookedVal==='refused'?'checked':'' ?> /> ForsÃ¸gte men fik afslag</label>
     </div>
     <div id="pmrQDelivered" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes' && $pmrBookedVal!=='no')?'block':'none' ?>;">
       <div><strong>Spm 3.</strong> Blev den bestilte assistance leveret?</div>
       <select name="pmr_delivered_status">
-        <option value="">- vælg -</option>
+        <option value="">- vÃ¦lg -</option>
         <option value="yes_full" <?= $pmrDeliveredVal==='yes_full'?'selected':'' ?>>Ja, fuldt ud</option>
         <option value="partial" <?= $pmrDeliveredVal==='partial'?'selected':'' ?>>Delvist</option>
         <option value="no" <?= $pmrDeliveredVal==='no'?'selected':'' ?>>Nej</option>
       </select>
     </div>
     <div id="pmrQPromised" class="small" style="margin-top:8px; display:<?= ($pmrUserVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 4.</strong> Manglede der PMR-faciliteter, som var lovet før købet?</div>
+      <div><strong>Spm 4.</strong> Manglede der PMR-faciliteter, som var lovet fÃ¸r kÃ¸bet?</div>
       <label class="mr8"><input type="radio" name="pmr_promised_missing" value="yes" <?= $pmrPromisedMissingVal==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="pmr_promised_missing" value="no" <?= $pmrPromisedMissingVal==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <div id="pmrQDetails" class="small" style="margin-top:8px; display:<?= ($pmrPromisedMissingVal==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 5.</strong> Hvilke faciliteter manglede? (rampe, skiltning, lift …)</div>
+      <div><strong>Spm 5.</strong> Hvilke faciliteter manglede? (rampe, skiltning, lift â€¦)</div>
       <textarea name="pmr_facility_details" rows="2" style="width:100%;" placeholder="Beskriv kort"><?= h($pmrFacilityDetails) ?></textarea>
     </div>
   </div>
@@ -905,7 +1087,7 @@ $isPreview = !empty($flowPreview);
   <?php
     // Bike flow visibility gating: show the block and preselect if OCR detected a bike on ticket
     $bikeAuto = (array)($meta['_bike_detection'] ?? []);
-  // Normaliser cykel auto-detektion så både positiv og negativ auto-default kan forfylde radio-valg
+  // Normaliser cykel auto-detektion sÃ¥ bÃ¥de positiv og negativ auto-default kan forfylde radio-valg
   $bikeBookedAutoRaw = (string)($meta['_auto']['bike_booked']['value'] ?? ($meta['bike_booked'] ?? ''));
   $bikeBookedAutoNorm = strtolower($bikeBookedAutoRaw);
   if ($bikeBookedAutoNorm === 'ja') $bikeBookedAutoNorm = 'yes';
@@ -920,22 +1102,22 @@ $isPreview = !empty($flowPreview);
     $bikeReasonType = strtolower((string)($meta['bike_refusal_reason_type'] ?? ''));
   ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;" id="bikeFlowCard">
-    <strong>🚲 Cykel på rejsen (Artikel 6)</strong>
+    <strong>ðŸš² Cykel pÃ¥ rejsen (Artikel 6)</strong>
     <?php if (!empty($bikeAuto)): ?>
       <div class="small" style="margin-top:6px;">
         <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har registreret følgende oplysninger om cyklen på billetten – ret venligst, hvis noget ikke stemmer.
+        Vi har registreret fÃ¸lgende oplysninger om cyklen pÃ¥ billetten â€“ ret venligst, hvis noget ikke stemmer.
         <?php if (!empty($bikeAuto['count'])): ?><span class="ml8">(antal: <?= (int)$bikeAuto['count'] ?>)</span><?php endif; ?>
       </div>
     <?php endif; ?>
     <div class="small" style="margin-top:8px;">
-      <div><strong>Spm 1.</strong> Havde du en cykel med på rejsen?</div>
+      <div><strong>Spm 1.</strong> Havde du en cykel med pÃ¥ rejsen?</div>
   <?php $w = $bikeWas !== '' ? $bikeWas : ($bikeBookedAutoNorm==='yes' ? 'yes' : ($bikeBookedAutoNorm==='no' ? 'no' : 'no')); ?>
       <label class="mr8"><input type="radio" name="bike_was_present" value="yes" <?= $w==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="bike_was_present" value="no" <?= $w==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <div class="small" id="bikeQ2" style="margin-top:8px; display:<?= ($w==='yes')?'block':'none' ?>;">
-      <div><strong>Spm 2.</strong> Er det cyklen eller håndteringen af cyklen, der har forsinket dig?</div>
+      <div><strong>Spm 2.</strong> Er det cyklen eller hÃ¥ndteringen af cyklen, der har forsinket dig?</div>
       <label class="mr8"><input type="radio" name="bike_caused_issue" value="yes" <?= $bikeCause==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="bike_caused_issue" value="no" <?= $bikeCause==='no'?'checked':'' ?> /> Nej</label>
     </div>
@@ -946,17 +1128,17 @@ $isPreview = !empty($flowPreview);
         <label class="mr8"><input type="radio" name="bike_reservation_made" value="no" <?= $bikeResMade==='no'?'checked':'' ?> /> Nej</label>
       </div>
       <div id="bikeQ3B" class="small" style="margin-top:8px; display:<?= ($bikeResMade==='no')?'block':'none' ?>;">
-        <div><strong>Spm 3B.</strong> Var det et tog, hvor der ikke krævedes cykelreservation?</div>
+        <div><strong>Spm 3B.</strong> Var det et tog, hvor der ikke krÃ¦vedes cykelreservation?</div>
         <label class="mr8"><input type="radio" name="bike_reservation_required" value="yes" <?= $bikeResReq==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="bike_reservation_required" value="no" <?= $bikeResReq==='no'?'checked':'' ?> /> Nej</label>
       </div>
       <div id="bikeQ4" class="small" style="margin-top:8px;">
-        <div><strong>Spm 4.</strong> Blev du nægtet at tage cyklen med?</div>
+        <div><strong>Spm 4.</strong> Blev du nÃ¦gtet at tage cyklen med?</div>
         <label class="mr8"><input type="radio" name="bike_denied_boarding" value="yes" <?= $bikeDenied==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="bike_denied_boarding" value="no" <?= $bikeDenied==='no'?'checked':'' ?> /> Nej</label>
       </div>
       <div id="bikeQ5" class="small" style="margin-top:8px; display:<?= ($bikeDenied==='yes')?'block':'none' ?>;">
-        <div><strong>Spm 5.</strong> Blev du informeret om, hvorfor du ikke måtte tage cyklen med?</div>
+        <div><strong>Spm 5.</strong> Blev du informeret om, hvorfor du ikke mÃ¥tte tage cyklen med?</div>
         <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="yes" <?= $bikeReasonProv==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="bike_refusal_reason_provided" value="no" <?= $bikeReasonProv==='no'?'checked':'' ?> /> Nej</label>
       </div>
@@ -964,10 +1146,10 @@ $isPreview = !empty($flowPreview);
         <div><strong>Spm 6.</strong> Hvad var begrundelsen for afvisningen?</div>
         <?php $opt = $bikeReasonType; ?>
         <select name="bike_refusal_reason_type">
-          <option value="">- vælg -</option>
+          <option value="">- vÃ¦lg -</option>
           <option value="capacity" <?= $opt==='capacity'?'selected':'' ?>>Pladsmangel / Spidsbelastning</option>
           <option value="equipment" <?= $opt==='equipment'?'selected':'' ?>>Teknisk udstyr tillader det ikke</option>
-          <option value="weight_dim" <?= $opt==='weight_dim'?'selected':'' ?>>Vægt eller dimensioner</option>
+          <option value="weight_dim" <?= $opt==='weight_dim'?'selected':'' ?>>VÃ¦gt eller dimensioner</option>
           <option value="other" <?= $opt==='other'?'selected':'' ?>>Andet</option>
           <option value="unknown" <?= $opt==='unknown'?'selected':'' ?>>Ved ikke</option>
         </select>
@@ -976,24 +1158,24 @@ $isPreview = !empty($flowPreview);
   </div>
 
   <?php
-    // 3) Billetpriser og fleksibilitet (Art. 9) – show simple Qs with auto-prefill
+    // 3) Billetpriser og fleksibilitet (Art. 9) â€“ show simple Qs with auto-prefill
     $fftVal = (string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? ''));
     $tsVal = (string)($meta['train_specificity'] ?? ($meta['_auto']['train_specificity']['value'] ?? 'unknown'));
     $hasAutoPricing = !empty($meta['_auto']['fare_flex_type']['value'] ?? null) || !empty($meta['_auto']['train_specificity']['value'] ?? null);
   ?>
   <?php if ($showArt9_1): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; display:none;" id="pricingBlock" data-art="9(1)">
-    <strong>💶 3) Billetpriser og fleksibilitet (Art. 9 stk. 1)</strong>
+    <strong>ðŸ’¶ 3) Billetpriser og fleksibilitet (Art. 9 stk. 1)</strong>
     <?php if ($hasAutoPricing): ?>
       <div class="small" style="margin-top:6px;">
         <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-        Vi har registreret følgende oplysninger om købstype og togbinding – ret venligst, hvis noget ikke stemmer.
+        Vi har registreret fÃ¸lgende oplysninger om kÃ¸bstype og togbinding â€“ ret venligst, hvis noget ikke stemmer.
       </div>
     <?php endif; ?>
-    <div class="mt8 small">1. Købstype (fleksibilitet)</div>
+    <div class="mt8 small">1. KÃ¸bstype (fleksibilitet)</div>
     <?php $curFft = strtolower($fftVal); ?>
     <select name="fare_flex_type">
-      <option value="" <?= $curFft===''?'selected':'' ?>>- vælg -</option>
+      <option value="" <?= $curFft===''?'selected':'' ?>>- vÃ¦lg -</option>
       <option value="nonflex" <?= $curFft==='nonflex'?'selected':'' ?>>Standard/Non-flex</option>
       <option value="semiflex" <?= $curFft==='semiflex'?'selected':'' ?>>Semi-flex</option>
       <option value="flex" <?= $curFft==='flex'?'selected':'' ?>>Flex</option>
@@ -1002,10 +1184,10 @@ $isPreview = !empty($flowPreview);
     </select>
 
     <div id="pricingQ2" class="mt8" style="display:none;">
-      <div class="small">2. Gælder billetten kun for specifikt tog?</div>
+      <div class="small">2. GÃ¦lder billetten kun for specifikt tog?</div>
       <?php $curTs = strtolower($tsVal ?: 'unknown'); ?>
       <label class="small"><input type="radio" name="train_specificity" value="specific" <?= $curTs==='specific'?'checked':'' ?> /> Kun specifikt tog</label>
-      <label class="small ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> Vilkårlig afgang samme dag</label>
+      <label class="small ml8"><input type="radio" name="train_specificity" value="any_day" <?= $curTs==='any_day'?'checked':'' ?> /> VilkÃ¥rlig afgang samme dag</label>
     </div>
   </div>
   <?php else: ?>
@@ -1062,8 +1244,8 @@ $isPreview = !empty($flowPreview);
     <?php endif; ?>
   </div>
   <?php
-    // 7) Afbrydelser/forsinkelser før køb (Art. 9(1))
-    // Q1 vises altid; Q2+Q3 vises når Q1=Ja. Q3 kun hvis Art. 10 gælder (realtime information).
+    // 7) Afbrydelser/forsinkelser fÃ¸r kÃ¸b (Art. 9(1))
+    // Q1 vises altid; Q2+Q3 vises nÃ¥r Q1=Ja. Q3 kun hvis Art. 10 gÃ¦lder (realtime information).
     $art10Applies = $profile['articles']['art10'] ?? true;
     $pid = (string)($form['preinformed_disruption'] ?? ($art9['hooks']['preinformed_disruption'] ?? ''));
     $pic = (string)($form['preinfo_channel'] ?? ($art9['hooks']['preinfo_channel'] ?? ''));
@@ -1071,8 +1253,8 @@ $isPreview = !empty($flowPreview);
   ?>
   <?php if ($showArt9_1): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; display:none;" id="disruptionBlock" data-art="9(1)">
-    <strong>⏱️ 7) Afbrydelser/forsinkelser – oplyst før køb (Art. 9 stk. 1)</strong>
-    <div class="small" style="margin-top:6px;">1. Var der meddelt afbrydelse/forsinkelse før dit køb?</div>
+    <strong>â±ï¸ 7) Afbrydelser/forsinkelser â€“ oplyst fÃ¸r kÃ¸b (Art. 9 stk. 1)</strong>
+    <div class="small" style="margin-top:6px;">1. Var der meddelt afbrydelse/forsinkelse fÃ¸r dit kÃ¸b?</div>
     <div class="small" style="margin-top:4px;">
       <label class="mr8"><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
@@ -1080,26 +1262,26 @@ $isPreview = !empty($flowPreview);
     <div id="disQ2" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
       <div>2. Hvis ja: Hvor blev det vist?</div>
       <select name="preinfo_channel">
-        <option value="" <?= $pic===''?'selected':'' ?>>- vælg -</option>
+        <option value="" <?= $pic===''?'selected':'' ?>>- vÃ¦lg -</option>
         <option value="journey_planner" <?= $pic==='journey_planner'?'selected':'' ?>>Rejseplan</option>
-        <option value="operator_site_app" <?= $pic==='operator_site_app'?'selected':'' ?>>Operatør-site/app</option>
+        <option value="operator_site_app" <?= $pic==='operator_site_app'?'selected':'' ?>>OperatÃ¸r-site/app</option>
         <option value="ticket_overview" <?= $pic==='ticket_overview'?'selected':'' ?>>Billetoverblik</option>
         <option value="other" <?= $pic==='other'?'selected':'' ?>>Andet</option>
       </select>
     </div>
     <?php if ($art10Applies): ?>
     <div id="disQ3" class="small" style="margin-top:8px; display:<?= $pid==='yes'?'block':'none' ?>;">
-      <div>3. Så du realtime-opdateringer under rejsen?</div>
+      <div>3. SÃ¥ du realtime-opdateringer under rejsen?</div>
       <label class="mr8"><input type="radio" name="realtime_info_seen" value="app" <?= $ris==='app'?'checked':'' ?> /> Ja, i app</label>
       <label class="mr8"><input type="radio" name="realtime_info_seen" value="on_train" <?= $ris==='on_train'?'checked':'' ?> /> Ja, i toget</label>
-      <label class="mr8"><input type="radio" name="realtime_info_seen" value="station" <?= $ris==='station'?'checked':'' ?> /> Ja, på station</label>
+      <label class="mr8"><input type="radio" name="realtime_info_seen" value="station" <?= $ris==='station'?'checked':'' ?> /> Ja, pÃ¥ station</label>
       <label class="mr8"><input type="radio" name="realtime_info_seen" value="no" <?= $ris==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <?php endif; ?>
-    <div id="disruptionReqError" class="small" style="margin-top:8px; color:#b33; display:none;">Udfyld venligst punkt 7: marker om der var oplyst forsinkelse før køb<?= $art10Applies ? ' (og besvar opfølgning)' : '' ?>.</div>
+    <div id="disruptionReqError" class="small" style="margin-top:8px; color:#b33; display:none;">Udfyld venligst punkt 7: marker om der var oplyst forsinkelse fÃ¸r kÃ¸b<?= $art10Applies ? ' (og besvar opfÃ¸lgning)' : '' ?>.</div>
   </div>
   <?php else: ?>
-    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Oplysningspligt før køb (Art. 9 stk. 1) er undtaget – vi behøver ikke disse svar.</div>
+    <div class="small" style="margin-top:12px; background:#f6f7f9; border:1px solid #e2e6ea; padding:6px; border-radius:6px;">Oplysningspligt fÃ¸r kÃ¸b (Art. 9 stk. 1) er undtaget â€“ vi behÃ¸ver ikke disse svar.</div>
   <?php endif; ?>
 
   <?php
@@ -1138,33 +1320,33 @@ $isPreview = !empty($flowPreview);
   <?php $a12Open = (bool)$needA12; ?>
   <div class="card" style="margin-top:12px; padding:16px; border:1px solid #e5e7eb; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <strong>📄 Art. 12 – Kontraktoplysninger</strong>
+      <strong>ðŸ“„ Art. 12 â€“ Kontraktoplysninger</strong>
       <button type="button" id="a12EditSellerBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
     </div>
     <?php
-      // Vis altid spørgsmålene, uanset auto-status, så brugeren kan rette dem
+      // Vis altid spÃ¸rgsmÃ¥lene, uanset auto-status, sÃ¥ brugeren kan rette dem
       $showSeller = true;
       $showThrough = true;
       $showSeparate = true;
-      $sellerLabel = ($sellerInf === 'operator') ? 'Operatør (jernbane)' : (($sellerInf === 'retailer') ? 'Forhandler/rejsebureau' : 'Ukendt');
+      $sellerLabel = ($sellerInf === 'operator') ? 'OperatÃ¸r (jernbane)' : (($sellerInf === 'retailer') ? 'Forhandler/rejsebureau' : 'Ukendt');
       $throughLabel = ($ttdVal === 'yes') ? 'Ja' : (($ttdVal === 'no') ? 'Nej' : 'Ukendt');
       $separateLabel = ($scnVal === 'yes') ? 'Ja' : (($scnVal === 'no') ? 'Nej' : 'Ukendt');
     ?>
     <div class="small muted" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
       <span class="badge" style="background:#eef; border:1px solid #ccd; border-radius:999px; padding:2px 8px; font-size:12px;">Auto</span>
-      <span>Sælger: <?= h($sellerLabel) ?></span>
-      <span>• Gennemgående billet: <?= h($throughLabel) ?></span>
-      <span>• Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
+      <span>SÃ¦lger: <?= h($sellerLabel) ?></span>
+      <span>â€¢ GennemgÃ¥ende billet: <?= h($throughLabel) ?></span>
+      <span>â€¢ Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
     </div>
     <?php if (!$a12Open): ?>
-      <div class="small muted" style="margin-top:6px;">(Art. 12 ser ud til at være dækket af AUTO. Klik “Rediger” hvis du vil ændre svarene.)</div>
+      <div class="small muted" style="margin-top:6px;">(Art. 12 ser ud til at vÃ¦re dÃ¦kket af AUTO. Klik â€œRedigerâ€ hvis du vil Ã¦ndre svarene.)</div>
     <?php endif; ?>
 
     <div id="a12Questions" style="display:<?= $a12Open ? 'block' : 'none' ?>;">
     <div id="a12Q1" class="small" style="margin-top:10px; display:<?= $showSeller ? 'block' : 'none' ?>;">
       Hvem solgte dig hele rejsen?
       <div class="small" style="margin-top:4px;">
-        <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> Operatør (jernbane)</label>
+        <label class="mr8"><input type="radio" name="seller_channel" value="operator" <?= $sellerInf==='operator'?'checked':'' ?> /> OperatÃ¸r (jernbane)</label>
         <label class="mr8"><input type="radio" name="seller_channel" value="retailer" <?= $sellerInf==='retailer'?'checked':'' ?> /> Forhandler/rejsebureau</label>
       </div>
     </div>
@@ -1178,7 +1360,7 @@ $isPreview = !empty($flowPreview);
     </div>
 
     <div id="a12Q2" class="small" style="margin-top:10px; display:<?= $showThrough ? 'block' : 'none' ?>;">
-      Blev det oplyst før køb, at billetten var gennemgående?
+      Blev det oplyst fÃ¸r kÃ¸b, at billetten var gennemgÃ¥ende?
       <div class="small" style="margin-top:4px;">
         <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="yes" <?= $ttdVal==='yes'?'checked':'' ?> /> Ja</label>
         <label class="mr8"><input type="radio" name="through_ticket_disclosure" value="no" <?= $ttdVal==='no'?'checked':'' ?> /> Nej</label>
@@ -1194,21 +1376,21 @@ $isPreview = !empty($flowPreview);
     </div>
     <?php $showSameTxn = ($ticketMode !== 'ticketless') && (($pnrCountInline > 1) || (strtolower((string)($meta['shared_pnr_scope'] ?? '')) === 'no')); ?>
     <?php if ($showSameTxn): ?>
-    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter købt i én transaktion?</div>
+    <div class="small" style="margin-top:10px;">Hvis der er flere PNR'er: Var alle billetter kÃ¸bt i Ã©n transaktion?</div>
     <div class="small" style="margin-top:4px;">
       <label class="mr8"><input type="radio" name="same_transaction" value="yes" <?= $sameTxnInf==='yes'?'checked':'' ?> /> Ja</label>
       <label class="mr8"><input type="radio" name="same_transaction" value="no" <?= $sameTxnInf==='no'?'checked':'' ?> /> Nej</label>
     </div>
     <?php endif; ?>
-    <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
+    <div class="small muted" style="margin-top:6px;">(HjÃ¦lper med at afgÃ¸re om der er gennemgÃ¥ende billet og hvem der er ansvarlig efter Art. 12.)</div>
     </div><!-- /a12Questions -->
   </div>
   <?php endif; ?>
 
   <?php if (!empty($meta['_passengers_auto'])): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-    <strong>👥 Fundne passagerer på billetten</strong>
-    <div class="small" style="margin-top:6px;">Redigér navne og markér hvem der klager:</div>
+    <strong>ðŸ‘¥ Fundne passagerer pÃ¥ billetten</strong>
+    <div class="small" style="margin-top:6px;">RedigÃ©r navne og markÃ©r hvem der klager:</div>
     <div class="small" style="margin-top:6px;">
       <?php $paxList = (array)$meta['_passengers_auto']; ?>
       <?php foreach ($paxList as $i => $p): $nameVal = (string)($p['name'] ?? ''); $age = (string)($p['age_category'] ?? 'unknown'); $isC = !empty($p['is_claimant']); ?>
@@ -1222,7 +1404,7 @@ $isPreview = !empty($flowPreview);
       <?php endforeach; ?>
     </div>
     <div class="small" style="margin-top:8px;">
-      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk værge/ansvarlig for andre på billetten</label>
+      <label><input type="checkbox" name="claimant_is_legal_representative" value="1" <?= !empty($meta['claimant_is_legal_representative']) ? 'checked' : '' ?> /> Jeg er juridisk vÃ¦rge/ansvarlig for andre pÃ¥ billetten</label>
     </div>
   </div>
   <?php endif; ?>
@@ -1239,9 +1421,9 @@ $isPreview = !empty($flowPreview);
   <?php if ($showSE150): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>SE-specifik undtagelse</strong>
-    <div class="small" style="margin-top:6px;">Gælder kun for regionale rejser under 150 km.</div>
+    <div class="small" style="margin-top:6px;">GÃ¦lder kun for regionale rejser under 150 km.</div>
     <label class="small" style="margin-top:6px; display:inline-block;">
-      <input type="checkbox" name="se_under_150km" value="1" <?= !empty($journey['se_under_150km']) ? 'checked' : '' ?> onchange="this.form.submit()" /> Strækningen er under 150 km
+      <input type="checkbox" name="se_under_150km" value="1" <?= !empty($journey['se_under_150km']) ? 'checked' : '' ?> onchange="this.form.submit()" /> StrÃ¦kningen er under 150 km
     </label>
   </div>
   <?php endif; ?>
@@ -1250,8 +1432,8 @@ $isPreview = !empty($flowPreview);
 
   <div class="actions-row" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
     <a href="<?= $this->Url->build(['action' => 'start']) ?>" class="button" style="background:#eee; color:#333;">Tilbage</a>
-    <button type="submit" name="continue" value="1" class="button">Fortsæt</button>
-    <!-- Removed duplicate 'Kendt før køb?' checkbox; use Section 7 radios above (preinformed_disruption) -->
+    <button type="submit" name="continue" value="1" class="button">FortsÃ¦t</button>
+    <!-- Removed duplicate 'Kendt fÃ¸r kÃ¸b?' checkbox; use Section 7 radios above (preinformed_disruption) -->
   </div>
   <!-- Afslut samlet wrapper for centrering -->
 </div>
@@ -1271,14 +1453,14 @@ $isPreview = !empty($flowPreview);
       $logsDbg = (array)($meta['logs'] ?? []);
       $ocrText = (string)($meta['_ocr_text'] ?? '');
     ?>
-    <div class="small" style="margin-top:10px;"><strong>🛠️ Parser/segments</strong></div>
+    <div class="small" style="margin-top:10px;"><strong>ðŸ› ï¸ Parser/segments</strong></div>
     <div class="small" style="margin-top:4px;">Segments auto: <code><?= (int)count($segAutoDbg) ?></code></div>
     <?php if (!empty($segAutoDbg)): ?>
       <ul class="small" style="margin-top:4px; padding-left:16px;">
         <?php foreach (array_slice($segAutoDbg, 0, 5) as $s): $from=(string)($s['from']??''); $to=(string)($s['to']??''); $d=(string)($s['schedDep']??''); $a=(string)($s['schedArr']??''); ?>
-          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'→'.$a:''))) ?></li>
+          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'â†’'.$a:''))) ?></li>
         <?php endforeach; ?>
-        <?php if (count($segAutoDbg) > 5): ?><li>…</li><?php endif; ?>
+        <?php if (count($segAutoDbg) > 5): ?><li>â€¦</li><?php endif; ?>
       </ul>
     <?php endif; ?>
 
@@ -1286,9 +1468,9 @@ $isPreview = !empty($flowPreview);
       <div class="small" style="margin-top:8px;">LLM forslag til segments: <code><?= (int)count($segLlmSuggestDbg) ?></code></div>
       <ul class="small" style="margin-top:4px; padding-left:16px;">
         <?php foreach (array_slice($segLlmSuggestDbg, 0, 5) as $s): $from=(string)($s['from']??''); $to=(string)($s['to']??''); $d=(string)($s['schedDep']??''); $a=(string)($s['schedArr']??''); ?>
-          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'→'.$a:''))) ?></li>
+          <li><?= h(trim($from . ' ? ' . $to)) ?> <?= h(trim($d . ($a!==''?'â†’'.$a:''))) ?></li>
         <?php endforeach; ?>
-        <?php if (count($segLlmSuggestDbg) > 5): ?><li>…</li><?php endif; ?>
+        <?php if (count($segLlmSuggestDbg) > 5): ?><li>â€¦</li><?php endif; ?>
       </ul>
     <?php endif; ?>
 
@@ -1303,7 +1485,7 @@ $isPreview = !empty($flowPreview);
 
     <?php if ($ocrText !== ''): ?>
       <details style="margin-top:8px;">
-        <summary class="small"><strong>OCR (første 600 tegn)</strong></summary>
+        <summary class="small"><strong>OCR (fÃ¸rste 600 tegn)</strong></summary>
         <pre style="white-space:pre-wrap; background:#f3f6ff; padding:6px; border-radius:6px; max-height:240px; overflow:auto;"><?= h(mb_substr($ocrText, 0, 600, 'UTF-8')) ?></pre>
       </details>
     <?php endif; ?>
@@ -1330,7 +1512,7 @@ $isPreview = !empty($flowPreview);
   <div id="hooksPanel">
     <?= $this->element('hooks_panel', compact('profile','art12','art9','refund','refusion','form','meta','groupedTickets','euOnlySuggested','euOnlyReason','journey','formDecision') + ['showFormDecision' => true, 'showArt12Section' => false, 'hidePmrBike' => true]) ?>
   </div>
-  <div class="small muted" style="margin-top:6px;">Sidepanelet opdateres automatisk ved ændringer.</div>
+  <div class="small muted" style="margin-top:6px;">Sidepanelet opdateres automatisk ved Ã¦ndringer.</div>
   <div class="small" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
     <a href="<?= $this->Url->build($this->getRequest()->getPath() . '?debug=1') ?>">Vis mere debug</a>
     <label style="margin-left:auto;"><input type="checkbox" id="toggleDebugChk" <?= $this->getRequest()->getQuery('debug') ? 'checked' : '' ?> /> Debug</label>
@@ -1408,7 +1590,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       function render(stations){
         box.innerHTML = '';
         if (!stations || !stations.length) { hide(); return; }
-	        // Prefer "station" results to reduce noise for city-level queries (e.g., Düsseldorf).
+	        // Prefer "station" results to reduce noise for city-level queries (e.g., DÃ¼sseldorf).
 	        const stStations = stations.filter(st => String(st && st.type || '').toLowerCase() === 'station');
 	        const stOthers = stations.filter(st => String(st && st.type || '').toLowerCase() !== 'station');
 	        const shown = (stStations.length >= 5) ? stStations : stStations.concat(stOthers);
@@ -1419,12 +1601,12 @@ if ($a12Applies === false && !empty($contractsView)) {
           const nm = (st && st.name) ? String(st.name) : '';
           const cc = (st && st.country) ? String(st.country) : '';
           const tp = (st && st.type) ? String(st.type) : '';
-	          // Avoid rows with no name (e.g., "DE · HALT"): always render a visible label.
+	          // Avoid rows with no name (e.g., "DE Â· HALT"): always render a visible label.
 	          btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
           if (cc || tp) {
             const meta = document.createElement('div');
             meta.className = 'muted';
-	            meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' · ');
+	            meta.textContent = [cc, niceType(tp)].filter(Boolean).join(' Â· ');
             btn.appendChild(document.createElement('br'));
             btn.appendChild(meta);
           }
@@ -1439,6 +1621,9 @@ if ($a12Applies === false && !empty($contractsView)) {
 	      }
 
       async function fetchStations(){
+        const modeRadio = document.querySelector('input[name="transport_mode"]:checked');
+        const transportMode = modeRadio ? String(modeRadio.value || 'rail') : 'rail';
+        if (transportMode !== 'rail') { hide(); return; }
         const q = (input.value || '').trim();
         if (q.length < 2) { hide(); return; }
         const cc = (ccInput && (ccInput.value || '')) ? String(ccInput.value).trim().toUpperCase() : '';
@@ -1599,7 +1784,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = mode === 'ticketless';
       const transportMode = radioVal('transport_mode') || 'rail';
-      const seasonAllowed = transportMode === 'rail';
+      const seasonAllowed = transportMode === 'rail' || transportMode === 'ferry';
       const isSeason = seasonAllowed && mode === 'seasonpass';
       show(uploadCard, mode === 'ticket');
       show(ticketlessCard, isTicketless);
@@ -1633,8 +1818,10 @@ if ($a12Applies === false && !empty($contractsView)) {
     }
     function updateTransportMode(){
       const mode = radioVal('transport_mode') || 'rail';
-      show(ferryScopeCard, mode === 'ferry');
-      show(modeContractCard, mode === 'bus' || mode === 'air');
+      const ticketMode = radioVal('ticket_upload_mode') || 'ticket';
+      const isTicketless = ticketMode === 'ticketless';
+      show(ferryScopeCard, mode === 'ferry' && !isTicketless);
+      show(modeContractCard, (mode === 'bus' || mode === 'air') && !isTicketless);
       show(art12Card, mode === 'rail');
     }
 
@@ -1648,7 +1835,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     updateTransportMode();
     updatePriceKnown();
   })();
-  // Toggle journey fields 3.1–3.5
+  // Toggle journey fields 3.1â€“3.5
   const toggleBtn = document.getElementById('toggleJourneyFields');
   const jf = document.getElementById('journeyFields');
   const openJourneyFields = () => { if (jf) { jf.style.display = 'block'; } };
@@ -1658,8 +1845,8 @@ if ($a12Applies === false && !empty($contractsView)) {
     const isOpen = (jf.style.display !== 'none' && jf.style.display !== '');
     toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     toggleBtn.textContent = isOpen
-      ? 'Vis/skjul rejsefelter (3.1â€“3.5) â€“ skjul'
-      : 'Vis/skjul rejsefelter (3.1â€“3.5) â€“ vis';
+      ? 'Vis/skjul rejsefelter (3.1Ã¢â‚¬â€œ3.5) Ã¢â‚¬â€œ skjul'
+      : 'Vis/skjul rejsefelter (3.1Ã¢â‚¬â€œ3.5) Ã¢â‚¬â€œ vis';
   };
   const hasTickets = !!(toggleBtn && toggleBtn.dataset.hasTickets === '1');
   if (toggleBtn && jf) {
@@ -1970,7 +2157,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   a12Init.showThrough = (document.getElementById('a12Q2')?.style.display === 'block');
   a12Init.showSeparate = (document.getElementById('a12Q3')?.style.display === 'block');
   function updateA12(){
-    // Alle spørgsmål vises nu altid; bevar funktionen for fremtidig udvidelse
+    // Alle spÃ¸rgsmÃ¥l vises nu altid; bevar funktionen for fremtidig udvidelse
     const q1 = document.getElementById('a12Q1');
     const q2 = document.getElementById('a12Q2');
     const q3 = document.getElementById('a12Q3');
