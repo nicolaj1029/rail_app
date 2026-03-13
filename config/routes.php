@@ -254,6 +254,7 @@ return function (RouteBuilder $routes): void {
         // Stations endpoint for geofencing
         $builder->connect('/stations', ['controller' => 'Stations', 'action' => 'index']);
         $builder->connect('/stations/search', ['controller' => 'Stations', 'action' => 'search']);
+        $builder->connect('/transport-nodes/search', ['controller' => 'TransportNodes', 'action' => 'search']);
         // Events logging
         $builder->connect('/events', ['controller' => 'Events', 'action' => 'index']);
         $builder->connect('/events/add', ['controller' => 'Events', 'action' => 'add']);

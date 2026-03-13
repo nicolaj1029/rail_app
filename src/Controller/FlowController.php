@@ -1461,6 +1461,11 @@ class FlowController extends AppController
                 // Station metadata (set by autocomplete; improves stability for ticketless and later distance/scope logic)
                 'dep_station_osm_id','dep_station_lat','dep_station_lon','dep_station_country','dep_station_type','dep_station_source',
                 'arr_station_osm_id','arr_station_lat','arr_station_lon','arr_station_country','arr_station_type','arr_station_source',
+                // Generic multimodal lookup metadata (ports, airports, bus terminals/stops)
+                'dep_station_lookup_id','dep_station_lookup_code','dep_station_lookup_mode','dep_station_lookup_country','dep_station_lookup_in_eu',
+                'dep_station_lookup_node_type','dep_station_lookup_parent','dep_station_lookup_source','dep_station_lookup_lat','dep_station_lookup_lon',
+                'arr_station_lookup_id','arr_station_lookup_code','arr_station_lookup_mode','arr_station_lookup_country','arr_station_lookup_in_eu',
+                'arr_station_lookup_node_type','arr_station_lookup_parent','arr_station_lookup_source','arr_station_lookup_lat','arr_station_lookup_lon',
                 'train_no','ticket_no','price','price_currency','price_known','scope_choice','ticket_upload_mode',
                 'incident_segment_mode','incident_segment_operator',
                 'service_type','departure_from_terminal','departure_port_in_eu','arrival_port_in_eu','carrier_is_eu',

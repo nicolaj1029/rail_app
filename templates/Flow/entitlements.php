@@ -35,9 +35,11 @@ $isPreview = !empty($flowPreview);
   #pmrFlowCard, #bikeFlowCard { display:none !important; }
   .fe-wrapper { max-width: 1200px; margin: 0 auto; }
   .fe-wide { width: 100%; }
-  /* Ticketless station autocomplete */
+  /* TRIN 2 node autocomplete */
   #ticketlessCard label { position: relative; }
-  #ticketlessCard .station-suggest {
+  #ticketlessCard .station-suggest,
+  #ticketlessCard .node-suggest,
+  #modeJourneyFields .node-suggest {
     position: absolute;
     left: 0;
     right: 0;
@@ -50,7 +52,9 @@ $isPreview = !empty($flowPreview);
     max-height: 220px;
     overflow: auto;
   }
-  #ticketlessCard .station-suggest button {
+  #ticketlessCard .station-suggest button,
+  #ticketlessCard .node-suggest button,
+  #modeJourneyFields .node-suggest button {
     width: 100%;
     text-align: left;
     border: 0;
@@ -60,10 +64,18 @@ $isPreview = !empty($flowPreview);
     font-size: 14px;
     color: #111 !important;
   }
-  #ticketlessCard .station-suggest button:hover { background: #f6f6f6; color: #111 !important; }
-  #ticketlessCard .station-suggest button:active { color: #111 !important; }
-  #ticketlessCard .station-suggest button:focus { outline: none; background: #f1f3f5; color: #111 !important; }
-  #ticketlessCard .station-suggest .muted { color: #666; font-size: 12px; }
+  #ticketlessCard .station-suggest button:hover,
+  #ticketlessCard .node-suggest button:hover,
+  #modeJourneyFields .node-suggest button:hover { background: #f6f6f6; color: #111 !important; }
+  #ticketlessCard .station-suggest button:active,
+  #ticketlessCard .node-suggest button:active,
+  #modeJourneyFields .node-suggest button:active { color: #111 !important; }
+  #ticketlessCard .station-suggest button:focus,
+  #ticketlessCard .node-suggest button:focus,
+  #modeJourneyFields .node-suggest button:focus { outline: none; background: #f1f3f5; color: #111 !important; }
+  #ticketlessCard .station-suggest .muted,
+  #ticketlessCard .node-suggest .muted,
+  #modeJourneyFields .node-suggest .muted { color: #666; font-size: 12px; }
 </style>
 <div class="fe-header">
   <div class="fe-step">Trin 2</div>
@@ -95,6 +107,7 @@ $isPreview = !empty($flowPreview);
   $contractOptions = $contractOptions ?? [];
   // Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
   $stationsSearchUrl = $this->Url->build('/api/stations/search');
+  $transportNodesSearchUrl = $this->Url->build('/api/transport-nodes/search');
   // Offline operator/product catalog for ticketless suggestions (no tokens / no external calls).
   $opCatalog = new \App\Service\OperatorCatalog();
   $opsByCountry = (array)$opCatalog->getOperators();
@@ -139,6 +152,26 @@ $isPreview = !empty($flowPreview);
       <label class="mr8"><input type="radio" name="transport_mode" value="air" <?= $transportMode==='air'?'checked':'' ?> /> Fly</label>
     </div>
   </div>
+  <input type="hidden" name="dep_station_lookup_id" value="<?= h((string)($form['dep_station_lookup_id'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_code" value="<?= h((string)($form['dep_station_lookup_code'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_mode" value="<?= h((string)($form['dep_station_lookup_mode'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_country" value="<?= h((string)($form['dep_station_lookup_country'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_in_eu" value="<?= h((string)($form['dep_station_lookup_in_eu'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_node_type" value="<?= h((string)($form['dep_station_lookup_node_type'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_parent" value="<?= h((string)($form['dep_station_lookup_parent'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_source" value="<?= h((string)($form['dep_station_lookup_source'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_lat" value="<?= h((string)($form['dep_station_lookup_lat'] ?? '')) ?>" />
+  <input type="hidden" name="dep_station_lookup_lon" value="<?= h((string)($form['dep_station_lookup_lon'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_id" value="<?= h((string)($form['arr_station_lookup_id'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_code" value="<?= h((string)($form['arr_station_lookup_code'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_mode" value="<?= h((string)($form['arr_station_lookup_mode'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_country" value="<?= h((string)($form['arr_station_lookup_country'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_in_eu" value="<?= h((string)($form['arr_station_lookup_in_eu'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_node_type" value="<?= h((string)($form['arr_station_lookup_node_type'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_parent" value="<?= h((string)($form['arr_station_lookup_parent'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_source" value="<?= h((string)($form['arr_station_lookup_source'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_lat" value="<?= h((string)($form['arr_station_lookup_lat'] ?? '')) ?>" />
+  <input type="hidden" name="arr_station_lookup_lon" value="<?= h((string)($form['arr_station_lookup_lon'] ?? '')) ?>" />
 
   <?php if (!$isRail): ?>
   <?php
@@ -1849,9 +1882,134 @@ if ($a12Applies === false && !empty($contractsView)) {
 (function(){
   const form = document.getElementById('entitlementsForm');
   const stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
+  const transportNodesSearchUrl = <?= json_encode((string)$transportNodesSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
   const productsByOperator = <?= json_encode($productsByOperator, JSON_UNESCAPED_UNICODE) ?>;
   const operatorToCountry = <?= json_encode($operatorToCountry, JSON_UNESCAPED_UNICODE) ?>;
   const countryToCurrency = <?= json_encode($countryToCurrency, JSON_UNESCAPED_UNICODE) ?>;
+
+  function currentTransportMode() {
+    const checked = form ? form.querySelector('input[name="transport_mode"]:checked') : null;
+    return checked ? String(checked.value || 'rail') : 'rail';
+  }
+
+  function setFieldValue(name, value) {
+    if (!form) return;
+    form.querySelectorAll('[name="' + name + '"]').forEach((node) => {
+      if (!node) return;
+      node.value = value;
+    });
+  }
+
+  function getFieldValue(name) {
+    if (!form) return '';
+    const enabled = Array.from(form.querySelectorAll('[name="' + name + '"]')).find((node) => !node.disabled);
+    if (enabled) return String(enabled.value || '');
+    const any = form.querySelector('[name="' + name + '"]');
+    return any ? String(any.value || '') : '';
+  }
+
+  function parseMaybeNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    const toRad = (deg) => deg * Math.PI / 180;
+    const earth = 6371000;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(earth * c);
+  }
+
+  function genericLookupMeta(name) {
+    const prefix = name === 'dep_station' ? 'dep_station_lookup_' : 'arr_station_lookup_';
+    return {
+      id: form.querySelector('input[name="' + prefix + 'id"]'),
+      code: form.querySelector('input[name="' + prefix + 'code"]'),
+      mode: form.querySelector('input[name="' + prefix + 'mode"]'),
+      country: form.querySelector('input[name="' + prefix + 'country"]'),
+      inEu: form.querySelector('input[name="' + prefix + 'in_eu"]'),
+      nodeType: form.querySelector('input[name="' + prefix + 'node_type"]'),
+      parent: form.querySelector('input[name="' + prefix + 'parent"]'),
+      source: form.querySelector('input[name="' + prefix + 'source"]'),
+      lat: form.querySelector('input[name="' + prefix + 'lat"]'),
+      lon: form.querySelector('input[name="' + prefix + 'lon"]')
+    };
+  }
+
+  function clearGenericLookupMeta(name) {
+    const meta = genericLookupMeta(name);
+    Object.values(meta).forEach((node) => {
+      if (node) node.value = '';
+    });
+  }
+
+  function setGenericLookupMeta(name, node) {
+    const meta = genericLookupMeta(name);
+    if (!node) {
+      clearGenericLookupMeta(name);
+      return;
+    }
+    if (meta.id) meta.id.value = node.id ? String(node.id) : '';
+    if (meta.code) meta.code.value = node.code ? String(node.code) : '';
+    if (meta.mode) meta.mode.value = node.mode ? String(node.mode) : '';
+    if (meta.country) meta.country.value = node.country ? String(node.country) : '';
+    if (meta.inEu) meta.inEu.value = node.in_eu === true ? 'yes' : (node.in_eu === false ? 'no' : '');
+    if (meta.nodeType) meta.nodeType.value = node.node_type ? String(node.node_type) : '';
+    if (meta.parent) meta.parent.value = node.parent_name ? String(node.parent_name) : '';
+    if (meta.source) meta.source.value = node.source ? String(node.source) : '';
+    if (meta.lat) meta.lat.value = node.lat !== undefined && node.lat !== null ? String(node.lat) : '';
+    if (meta.lon) meta.lon.value = node.lon !== undefined && node.lon !== null ? String(node.lon) : '';
+  }
+
+  function deriveScopeFromNodes() {
+    const mode = currentTransportMode();
+    const depMeta = genericLookupMeta('dep_station');
+    const arrMeta = genericLookupMeta('arr_station');
+    const depInEu = depMeta.inEu && depMeta.inEu.value ? depMeta.inEu.value : '';
+    const arrInEu = arrMeta.inEu && arrMeta.inEu.value ? arrMeta.inEu.value : '';
+    const depType = depMeta.nodeType && depMeta.nodeType.value ? depMeta.nodeType.value.toLowerCase() : '';
+    const depLat = parseMaybeNumber(depMeta.lat && depMeta.lat.value);
+    const depLon = parseMaybeNumber(depMeta.lon && depMeta.lon.value);
+    const arrLat = parseMaybeNumber(arrMeta.lat && arrMeta.lat.value);
+    const arrLon = parseMaybeNumber(arrMeta.lon && arrMeta.lon.value);
+
+    if (mode === 'ferry') {
+      if (depInEu) setFieldValue('departure_port_in_eu', depInEu);
+      if (arrInEu) setFieldValue('arrival_port_in_eu', arrInEu);
+      if (depType === 'ferry_terminal' || depType === 'terminal') {
+        setFieldValue('departure_from_terminal', 'yes');
+      }
+      const currentDistance = (getFieldValue('route_distance_meters') || '').trim();
+      if (currentDistance === '' && depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
+        setFieldValue('route_distance_meters', String(haversineMeters(depLat, depLon, arrLat, arrLon)));
+      }
+      return;
+    }
+
+    if (mode === 'bus') {
+      if (depInEu) setFieldValue('boarding_in_eu', depInEu);
+      if (arrInEu) setFieldValue('alighting_in_eu', arrInEu);
+      if (depType === 'terminal' || depType === 'bus_terminal') {
+        setFieldValue('departure_from_terminal', 'yes');
+      }
+      const currentDistance = (getFieldValue('scheduled_distance_km') || '').trim();
+      if (currentDistance === '' && depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
+        const km = Math.max(1, Math.round(haversineMeters(depLat, depLon, arrLat, arrLon) / 1000));
+        setFieldValue('scheduled_distance_km', String(km));
+      }
+      return;
+    }
+
+    if (mode === 'air') {
+      if (depInEu) setFieldValue('departure_airport_in_eu', depInEu);
+      if (arrInEu) setFieldValue('arrival_airport_in_eu', arrInEu);
+    }
+  }
 
   // Ticketless station autocomplete (offline station DB via /api/stations/search)
   (function(){
@@ -1994,6 +2152,127 @@ if ($a12Applies === false && !empty($contractsView)) {
 
     setup('dep_station');
     setup('arr_station');
+  })();
+
+  // Multimodal node autocomplete for ferry ports, bus stops/terminals and airports.
+  (function(){
+    if (!form || !transportNodesSearchUrl) return;
+    const inputs = Array.from(form.querySelectorAll('input[name="dep_station"], input[name="arr_station"]'));
+    if (!inputs.length) return;
+    const state = new WeakMap();
+
+    function shouldUseTransportNodes(input) {
+      if (!input || input.disabled) return false;
+      const mode = currentTransportMode();
+      return mode === 'ferry' || mode === 'bus' || mode === 'air';
+    }
+
+    function ensureBox(input) {
+      const label = input.closest('label');
+      if (!label) return null;
+      let box = label.querySelector('.node-suggest[data-for="' + input.name + '"]');
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'node-suggest';
+        box.dataset.for = input.name;
+        box.style.display = 'none';
+        label.appendChild(box);
+      }
+      return box;
+    }
+
+    function hide(box) {
+      if (!box) return;
+      box.style.display = 'none';
+      box.innerHTML = '';
+    }
+
+    function render(box, input, nodes) {
+      if (!box) return;
+      box.innerHTML = '';
+      if (!nodes || !nodes.length) { hide(box); return; }
+      nodes.slice(0, 10).forEach((node) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.appendChild(document.createTextNode(node.name || '(ukendt sted)'));
+        const metaBits = [];
+        if (node.code) metaBits.push(String(node.code));
+        if (node.country) metaBits.push(String(node.country));
+        if (node.parent_name) metaBits.push(String(node.parent_name));
+        if (node.node_type) metaBits.push(String(node.node_type).replace(/_/g, ' '));
+        if (metaBits.length) {
+          const meta = document.createElement('div');
+          meta.className = 'muted';
+          meta.textContent = metaBits.join(' · ');
+          btn.appendChild(document.createElement('br'));
+          btn.appendChild(meta);
+        }
+        btn.addEventListener('click', () => {
+          form.querySelectorAll('input[name="' + input.name + '"]').forEach((field) => {
+            field.value = node.name ? String(node.name) : '';
+          });
+          setGenericLookupMeta(input.name, node);
+          deriveScopeFromNodes();
+          hide(box);
+        });
+        box.appendChild(btn);
+      });
+      box.style.display = 'block';
+    }
+
+    async function fetchNodes(input, box) {
+      if (!shouldUseTransportNodes(input)) { hide(box); return; }
+      const q = String(input.value || '').trim();
+      if (q.length < 2) { hide(box); return; }
+      const mode = currentTransportMode();
+      const country = String(getFieldValue('operator_country') || '').trim().toUpperCase();
+      const url = new URL(transportNodesSearchUrl, window.location.origin);
+      url.searchParams.set('mode', mode);
+      url.searchParams.set('q', q);
+      if (country && mode === 'bus') {
+        url.searchParams.set('country', country);
+      }
+      url.searchParams.set('limit', '10');
+
+      let localState = state.get(input);
+      if (!localState) {
+        localState = { timer: null, ctrl: null };
+        state.set(input, localState);
+      }
+      if (localState.ctrl) {
+        try { localState.ctrl.abort(); } catch (e) {}
+      }
+      localState.ctrl = new AbortController();
+
+      try {
+        const res = await fetch(url.toString(), { signal: localState.ctrl.signal, headers: { 'Accept': 'application/json' } });
+        if (!res.ok) { hide(box); return; }
+        const js = await res.json();
+        const nodes = js && js.data && Array.isArray(js.data.nodes) ? js.data.nodes : [];
+        render(box, input, nodes);
+      } catch (e) {
+        hide(box);
+      }
+    }
+
+    inputs.forEach((input) => {
+      const box = ensureBox(input);
+      if (!box) return;
+      let localState = { timer: null, ctrl: null };
+      state.set(input, localState);
+      input.addEventListener('input', () => {
+        if (!shouldUseTransportNodes(input)) { hide(box); return; }
+        clearGenericLookupMeta(input.name);
+        if (localState.timer) clearTimeout(localState.timer);
+        localState.timer = setTimeout(() => fetchNodes(input, box), 180);
+      });
+      input.addEventListener('focus', () => {
+        if (!shouldUseTransportNodes(input)) { hide(box); return; }
+        if (box.innerHTML.trim() !== '') box.style.display = 'block';
+      });
+      input.addEventListener('blur', () => setTimeout(() => hide(box), 180));
+      box.addEventListener('mousedown', (e) => e.preventDefault());
+    });
   })();
 
   // Ticketless operator/product suggestions + lightweight autofill (offline catalog)
