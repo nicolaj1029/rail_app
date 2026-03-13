@@ -140,6 +140,99 @@ $isPreview = !empty($flowPreview);
     </div>
   </div>
 
+  <?php if (!$isRail): ?>
+  <?php
+    $sellerChannelMode = (string)($form['seller_channel'] ?? 'operator');
+    $sameBookingMode = (string)($form['shared_pnr_scope'] ?? 'yes');
+    $sameTransactionMode = (string)($form['same_transaction'] ?? 'yes');
+    $separateNoticeMode = (string)($form['separate_contract_notice'] ?? 'no');
+    $modeIncidentSegmentTop = (string)($form['incident_segment_mode'] ?? ($isFerry ? ($ferryContract['rights_module'] ?? 'ferry') : ($modeContract['rights_module'] ?? $transportMode)));
+    $modeProblemOperatorTop = (string)($form['incident_segment_operator'] ?? ($isFerry ? ($ferryContract['primary_claim_party_name'] ?? '') : ($modeContract['primary_claim_party_name'] ?? '')));
+  ?>
+  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
+    <strong>Kontrakt og ansvar</strong>
+    <div class="small muted" style="margin-top:6px;">Fælles multimodal kontraktblok. Bruges til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt.</div>
+    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+      <label>Hvem solgte hele rejsen?
+        <select name="seller_channel">
+          <option value="operator" <?= $sellerChannelMode==='operator'?'selected':'' ?>>Operatør / carrier</option>
+          <option value="retailer" <?= $sellerChannelMode==='retailer'?'selected':'' ?>>Billetudsteder / platform</option>
+          <option value="agency" <?= $sellerChannelMode==='agency'?'selected':'' ?>>Rejsebureau</option>
+          <option value="tour_operator" <?= $sellerChannelMode==='tour_operator'?'selected':'' ?>>Tour operator</option>
+        </select>
+      </label>
+      <label>Samme booking / reference?
+        <select name="shared_pnr_scope">
+          <option value="yes" <?= $sameBookingMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameBookingMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Købt i én handelstransaktion?
+        <select name="same_transaction">
+          <option value="yes" <?= $sameTransactionMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameTransactionMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <?php if ($isAir): ?>
+      <?php $samePnrMode = (string)($form['same_pnr'] ?? 'yes'); ?>
+      <label>Same PNR?
+        <select name="same_pnr">
+          <option value="yes" <?= $samePnrMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $samePnrMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <?php $sameBookingReferenceMode = (string)($form['same_booking_reference'] ?? 'yes'); ?>
+      <label>Same bookingreference?
+        <select name="same_booking_reference">
+          <option value="yes" <?= $sameBookingReferenceMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameBookingReferenceMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <?php $sameEticketMode = (string)($form['same_eticket'] ?? 'yes'); ?>
+      <label>Same e-ticket?
+        <select name="same_eticket">
+          <option value="yes" <?= $sameEticketMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $sameEticketMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <?php $selfTransferNoticeMode = (string)($form['self_transfer_notice'] ?? 'no'); ?>
+      <label>Self-transfer oplyst før køb?
+        <select name="self_transfer_notice">
+          <option value="yes" <?= $selfTransferNoticeMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $selfTransferNoticeMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <?php endif; ?>
+      <label>Separate kontrakter oplyst?
+        <select name="separate_contract_notice">
+          <option value="yes" <?= $separateNoticeMode==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $separateNoticeMode==='no'?'selected':'' ?>>Nej</option>
+        </select>
+      </label>
+      <label>Ramt segment
+        <select name="incident_segment_mode">
+          <option value="<?= h($transportMode) ?>" <?= $modeIncidentSegmentTop===$transportMode?'selected':'' ?>><?= $isFerry ? 'Færge' : ($isBus ? 'Bus' : 'Fly') ?></option>
+          <option value="rail" <?= $modeIncidentSegmentTop==='rail'?'selected':'' ?>>Tog</option>
+          <option value="ferry" <?= $modeIncidentSegmentTop==='ferry'?'selected':'' ?>>Færge</option>
+          <option value="bus" <?= $modeIncidentSegmentTop==='bus'?'selected':'' ?>>Bus</option>
+          <option value="air" <?= $modeIncidentSegmentTop==='air'?'selected':'' ?>>Fly</option>
+        </select>
+      </label>
+      <label>Problem-operatør (valgfri)
+        <input type="text" name="incident_segment_operator" value="<?= h($modeProblemOperatorTop) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
+      </label>
+    </div>
+    <?php if (!empty($ferryContract) || !empty($modeContract) || !empty($claimDirection)): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <div><strong>Foreløbig vurdering</strong></div>
+        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
+        <div>Claim-kanal: <?= h((string)(($isFerry ? ($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? null)) : ($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? null))) ?? 'manual_review')) ?></div>
+        <div>Rettighedsmodul: <?= h((string)(($isFerry ? ($ferryContract['rights_module'] ?? 'ferry') : ($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))))) ?></div>
+      </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
   <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px; display:none;">
     <strong><?= $isAir ? 'Fly: booking og ansvar' : 'Bus: booking og ansvar' ?></strong>
     <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Her afklarer vi protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Her afklarer vi regular service-scope, claim-kanal og hvilket busmodul der skal bruges senere.' ?></div>
@@ -614,64 +707,7 @@ $isPreview = !empty($flowPreview);
     </div>
 
     <?php if (!$isRail): ?>
-      <div class="small" style="margin-top:14px; font-weight:600;">2. Kontrakt og ansvar</div>
-      <div class="small muted" style="margin-top:4px;">Bruges til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt.</div>
-      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-        <?php $sellerChannelTl = (string)($form['seller_channel'] ?? 'operator'); ?>
-        <label>Hvem solgte hele rejsen?
-          <select name="seller_channel">
-            <option value="operator" <?= $sellerChannelTl==='operator'?'selected':'' ?>>Operatør / carrier</option>
-            <option value="retailer" <?= $sellerChannelTl==='retailer'?'selected':'' ?>>Billetudsteder / platform</option>
-            <option value="agency" <?= $sellerChannelTl==='agency'?'selected':'' ?>>Rejsebureau</option>
-            <option value="tour_operator" <?= $sellerChannelTl==='tour_operator'?'selected':'' ?>>Tour operator</option>
-          </select>
-        </label>
-        <?php if ($isAir): ?>
-          <?php $samePnrTl = (string)($form['same_pnr'] ?? 'yes'); ?>
-          <label>Same PNR?
-            <select name="same_pnr">
-              <option value="yes" <?= $samePnrTl==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $samePnrTl==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $sameBookingTl = (string)($form['same_booking_reference'] ?? 'yes'); ?>
-          <label>Same bookingreference?
-            <select name="same_booking_reference">
-              <option value="yes" <?= $sameBookingTl==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $sameBookingTl==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $sameEticketTl = (string)($form['same_eticket'] ?? 'yes'); ?>
-          <label>Same e-ticket?
-            <select name="same_eticket">
-              <option value="yes" <?= $sameEticketTl==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $sameEticketTl==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $selfTransferNoticeTl = (string)($form['self_transfer_notice'] ?? 'no'); ?>
-          <label>Self-transfer oplyst før køb?
-            <select name="self_transfer_notice">
-              <option value="yes" <?= $selfTransferNoticeTl==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $selfTransferNoticeTl==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-        <?php endif; ?>
-        <label>Ramt segment
-          <?php $ticketlessIncidentSegment = (string)($form['incident_segment_mode'] ?? $transportMode); ?>
-          <select name="incident_segment_mode">
-            <option value="<?= h($transportMode) ?>" <?= $ticketlessIncidentSegment===$transportMode?'selected':'' ?>><?= $isFerry ? 'Færge' : ($isBus ? 'Bus' : 'Fly') ?></option>
-            <option value="rail" <?= $ticketlessIncidentSegment==='rail'?'selected':'' ?>>Tog</option>
-            <option value="ferry" <?= $ticketlessIncidentSegment==='ferry'?'selected':'' ?>>Færge</option>
-            <option value="bus" <?= $ticketlessIncidentSegment==='bus'?'selected':'' ?>>Bus</option>
-            <option value="air" <?= $ticketlessIncidentSegment==='air'?'selected':'' ?>>Fly</option>
-          </select>
-        </label>
-        <label>Problem-operatør (valgfri)
-          <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
-        </label>
-      </div>
-
-      <div class="small" style="margin-top:14px; font-weight:600;">3. Scopefelter</div>
+      <div class="small" style="margin-top:14px; font-weight:600;">2. Scopefelter</div>
       <div class="small muted" style="margin-top:4px;">Bruges til at afgøre om forordningen gælder og hvilke undtagelser der kan være relevante.</div>
       <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
         <?php if ($isFerry): ?>
@@ -1139,63 +1175,7 @@ $isPreview = !empty($flowPreview);
           </div>
         </label>
       </div>
-      <div class="small" style="margin-top:14px; font-weight:600;">2. Kontrakt og ansvar</div>
-      <div class="small muted" style="margin-top:4px;">Bruges til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt.</div>
-      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-        <?php $sellerChannelUpload = (string)($form['seller_channel'] ?? 'operator'); ?>
-        <label>Hvem solgte hele rejsen?
-          <select name="seller_channel">
-            <option value="operator" <?= $sellerChannelUpload==='operator'?'selected':'' ?>>Operatør / carrier</option>
-            <option value="retailer" <?= $sellerChannelUpload==='retailer'?'selected':'' ?>>Billetudsteder / platform</option>
-            <option value="agency" <?= $sellerChannelUpload==='agency'?'selected':'' ?>>Rejsebureau</option>
-            <option value="tour_operator" <?= $sellerChannelUpload==='tour_operator'?'selected':'' ?>>Tour operator</option>
-          </select>
-        </label>
-        <?php if ($isAir): ?>
-          <?php $samePnrUpload = (string)($form['same_pnr'] ?? 'yes'); ?>
-          <label>Same PNR?
-            <select name="same_pnr">
-              <option value="yes" <?= $samePnrUpload==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $samePnrUpload==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $sameBookingUpload = (string)($form['same_booking_reference'] ?? 'yes'); ?>
-          <label>Same bookingreference?
-            <select name="same_booking_reference">
-              <option value="yes" <?= $sameBookingUpload==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $sameBookingUpload==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $sameEticketUpload = (string)($form['same_eticket'] ?? 'yes'); ?>
-          <label>Same e-ticket?
-            <select name="same_eticket">
-              <option value="yes" <?= $sameEticketUpload==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $sameEticketUpload==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-          <?php $selfTransferNoticeUpload = (string)($form['self_transfer_notice'] ?? 'no'); ?>
-          <label>Self-transfer oplyst før køb?
-            <select name="self_transfer_notice">
-              <option value="yes" <?= $selfTransferNoticeUpload==='yes'?'selected':'' ?>>Ja</option>
-              <option value="no" <?= $selfTransferNoticeUpload==='no'?'selected':'' ?>>Nej</option>
-            </select>
-          </label>
-        <?php endif; ?>
-        <label>Ramt segment
-          <?php $modeIncidentSegmentUpload = (string)($form['incident_segment_mode'] ?? ($modeContract['rights_module'] ?? $transportMode)); ?>
-          <select name="incident_segment_mode">
-            <option value="<?= h($transportMode) ?>" <?= $modeIncidentSegmentUpload===$transportMode?'selected':'' ?>><?= $isFerry ? 'Færge' : ($isBus ? 'Bus' : 'Fly') ?></option>
-            <option value="rail" <?= $modeIncidentSegmentUpload==='rail'?'selected':'' ?>>Tog</option>
-            <option value="ferry" <?= $modeIncidentSegmentUpload==='ferry'?'selected':'' ?>>Færge</option>
-            <option value="bus" <?= $modeIncidentSegmentUpload==='bus'?'selected':'' ?>>Bus</option>
-            <option value="air" <?= $modeIncidentSegmentUpload==='air'?'selected':'' ?>>Fly</option>
-          </select>
-        </label>
-        <label>Problem-operatør (valgfri)
-          <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? ($modeContract['primary_claim_party_name'] ?? ''))) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
-        </label>
-      </div>
-      <div class="small" style="margin-top:14px; font-weight:600;">3. Scopefelter</div>
+      <div class="small" style="margin-top:14px; font-weight:600;">2. Scopefelter</div>
       <div class="small muted" style="margin-top:4px;">Bruges til at afgøre om forordningen gælder og hvilke undtagelser der kan være relevante.</div>
       <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
         <?php if ($isFerry): ?>
