@@ -106,4 +106,40 @@ final class TransportNodeImportServiceTest extends TestCase
         $this->assertSame('Big Airport', $saved[0]['name']);
         @unlink($source);
     }
+
+    public function testImportCanTransformUnlocodePorts(): void
+    {
+        $source = TMP . 'transport_nodes_ferry_unlocode_' . uniqid('', true) . '.csv';
+        file_put_contents($source, implode("\n", [
+            'Change,Country,Location,Name,NameWoDiacritics,Subdivision,Status,Function,Date,IATA,Coordinates,Remarks',
+            ',DK,CPH,Copenhagen,Copenhagen,,AI,1-3-----,--34-6--,,5538N 01234E,',
+            ',DK,AAL,Aalborg,Aalborg,,AI,--3-----,--34-6--,,5703N 00955E,',
+        ]));
+
+        $service = new TransportNodeImportService($this->target);
+        $result = $service->import('ferry', $source, [
+            'format' => 'csv',
+            'replace' => true,
+            'source_label' => 'unlocode',
+            'source_transform' => 'unlocode_ports',
+            'name_col' => 'name',
+            'country_col' => 'country',
+            'code_col' => 'locode',
+            'lat_col' => 'lat',
+            'lon_col' => 'lon',
+            'city_col' => 'city',
+            'node_type_col' => 'node_type',
+            'aliases_col' => 'aliases',
+            'default_node_type' => 'port',
+        ]);
+
+        $this->assertSame(1, $result['added']);
+        $saved = json_decode((string)file_get_contents($this->target), true);
+        $this->assertCount(1, $saved);
+        $this->assertSame('ferry', $saved[0]['mode']);
+        $this->assertSame('DKCPH', $saved[0]['code']);
+        $this->assertSame(55.633333, $saved[0]['lat']);
+        $this->assertSame(12.566667, $saved[0]['lon']);
+        @unlink($source);
+    }
 }

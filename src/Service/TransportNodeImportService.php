@@ -166,6 +166,11 @@ final class TransportNodeImportService
      */
     private function normalizeRow(string $mode, array $row, array $options): ?array
     {
+        $row = $this->transformRow($row, $options);
+        if ($row === null) {
+            return null;
+        }
+
         if (!$this->passesFilters($row, $options)) {
             return null;
         }
@@ -235,6 +240,87 @@ final class TransportNodeImportService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>|null
+     */
+    private function transformRow(array $row, array $options): ?array
+    {
+        $transform = strtolower(trim((string)($options['source_transform'] ?? '')));
+        if ($transform === '') {
+            return $row;
+        }
+
+        return match ($transform) {
+            'unlocode_ports' => $this->transformUnlocodePortRow($row),
+            default => $row,
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>|null
+     */
+    private function transformUnlocodePortRow(array $row): ?array
+    {
+        $country = strtoupper(trim((string)($row['Country'] ?? '')));
+        $location = strtoupper(trim((string)($row['Location'] ?? '')));
+        $name = trim((string)($row['Name'] ?? ''));
+        $function = trim((string)($row['Function'] ?? ''));
+        if ($country === '' || $location === '' || $name === '') {
+            return null;
+        }
+        if (strpos($function, '1') === false) {
+            return null;
+        }
+
+        [$lat, $lon] = $this->parseUnlocodeCoordinates((string)($row['Coordinates'] ?? ''));
+        $nameWoDiacritics = trim((string)($row['NameWoDiacritics'] ?? ''));
+        $aliases = [];
+        if ($nameWoDiacritics !== '' && mb_strtolower($nameWoDiacritics) !== mb_strtolower($name)) {
+            $aliases[] = $nameWoDiacritics;
+        }
+
+        $nodeType = 'port';
+        if (strpos($function, '8') !== false) {
+            $nodeType = 'ferry_terminal';
+        }
+
+        return [
+            'name' => $name,
+            'country' => $country,
+            'locode' => $country . $location,
+            'lat' => $lat,
+            'lon' => $lon,
+            'city' => $name,
+            'node_type' => $nodeType,
+            'aliases' => $aliases,
+        ];
+    }
+
+    /**
+     * @return array{0:?float,1:?float}
+     */
+    private function parseUnlocodeCoordinates(string $raw): array
+    {
+        $value = strtoupper(trim($raw));
+        if (!preg_match('/^(\d{2})(\d{2})([NS])\s+(\d{3})(\d{2})([EW])$/', $value, $m)) {
+            return [null, null];
+        }
+
+        $lat = ((int)$m[1]) + (((int)$m[2]) / 60);
+        $lon = ((int)$m[4]) + (((int)$m[5]) / 60);
+        if ($m[3] === 'S') {
+            $lat *= -1;
+        }
+        if ($m[6] === 'W') {
+            $lon *= -1;
+        }
+
+        return [round($lat, 6), round($lon, 6)];
     }
 
     /**

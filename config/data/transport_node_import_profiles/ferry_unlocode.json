@@ -2,6 +2,7 @@
   "format": "csv",
   "replace": true,
   "source_label": "unlocode",
+  "source_transform": "unlocode_ports",
   "name_col": "name",
   "country_col": "country",
   "code_col": "locode",
