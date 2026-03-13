@@ -1,0 +1,205 @@
+{
+  "operators": [
+    {
+      "mode": "rail",
+      "name": "DSB",
+      "aliases": ["dsb", "danske statsbaner"],
+      "country_code": "DK",
+      "is_eu_operator": true,
+      "operator_type": "railway_undertaking",
+      "metadata": {
+        "products": ["IC", "Lyn", "Regional"],
+        "season_supported": true
+      }
+    },
+    {
+      "mode": "rail",
+      "name": "Deutsche Bahn",
+      "aliases": ["db", "deutsche bahn", "db fernverkehr"],
+      "country_code": "DE",
+      "is_eu_operator": true,
+      "operator_type": "railway_undertaking",
+      "metadata": {
+        "products": ["ICE", "IC", "EC", "RE"],
+        "season_supported": true
+      }
+    },
+    {
+      "mode": "ferry",
+      "name": "Scandlines",
+      "aliases": ["scandlines"],
+      "country_code": "DK",
+      "is_eu_operator": true,
+      "operator_type": "ferry_carrier",
+      "metadata": {
+        "service_type_hints": ["passenger_service"],
+        "subscription_supported": true
+      }
+    },
+    {
+      "mode": "ferry",
+      "name": "DFDS",
+      "aliases": ["dfds", "dfds seaways"],
+      "country_code": "DK",
+      "is_eu_operator": true,
+      "operator_type": "ferry_carrier",
+      "metadata": {
+        "service_type_hints": ["passenger_service", "cruise"],
+        "subscription_supported": true
+      }
+    },
+    {
+      "mode": "ferry",
+      "name": "Øresundslinjen",
+      "aliases": ["oresundslinjen", "øresundslinjen", "forsea", "forsea ferries"],
+      "country_code": "DK",
+      "is_eu_operator": true,
+      "operator_type": "ferry_carrier",
+      "metadata": {
+        "service_type_hints": ["passenger_service"],
+        "subscription_supported": true
+      }
+    },
+    {
+      "mode": "air",
+      "name": "SAS",
+      "aliases": ["sas", "skandinavian airlines", "sk"],
+      "country_code": "DK",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "SK",
+        "icao_code": "SAS"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "Lufthansa",
+      "aliases": ["lufthansa", "lh"],
+      "country_code": "DE",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "LH",
+        "icao_code": "DLH"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "KLM",
+      "aliases": ["klm", "kl"],
+      "country_code": "NL",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "KL",
+        "icao_code": "KLM"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "Ryanair",
+      "aliases": ["ryanair", "fr"],
+      "country_code": "IE",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "FR",
+        "icao_code": "RYR"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "Norwegian Air Shuttle",
+      "aliases": ["norwegian", "norwegian air shuttle", "dy"],
+      "country_code": "NO",
+      "is_eu_operator": false,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "DY",
+        "icao_code": "NAX"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "easyJet",
+      "aliases": ["easyjet", "u2"],
+      "country_code": "GB",
+      "is_eu_operator": false,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "U2",
+        "icao_code": "EZY"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "Wizz Air",
+      "aliases": ["wizz air", "wizz", "w6"],
+      "country_code": "HU",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "W6",
+        "icao_code": "WZZ"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "British Airways",
+      "aliases": ["british airways", "ba"],
+      "country_code": "GB",
+      "is_eu_operator": false,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "BA",
+        "icao_code": "BAW"
+      }
+    },
+    {
+      "mode": "air",
+      "name": "CityJet",
+      "aliases": ["cityjet", "wx"],
+      "country_code": "IE",
+      "is_eu_operator": true,
+      "operator_type": "airline",
+      "metadata": {
+        "iata_code": "WX",
+        "icao_code": "BCY"
+      }
+    },
+    {
+      "mode": "bus",
+      "name": "FlixBus",
+      "aliases": ["flixbus", "flix bus"],
+      "country_code": "DE",
+      "is_eu_operator": true,
+      "operator_type": "bus_operator",
+      "metadata": {
+        "regular_service_hints": [true]
+      }
+    },
+    {
+      "mode": "bus",
+      "name": "Eurolines",
+      "aliases": ["eurolines"],
+      "country_code": "FR",
+      "is_eu_operator": true,
+      "operator_type": "bus_operator",
+      "metadata": {
+        "regular_service_hints": [true]
+      }
+    },
+    {
+      "mode": "bus",
+      "name": "Vy Bus4You",
+      "aliases": ["vy bus4you", "bus4you", "nettbuss"],
+      "country_code": "NO",
+      "is_eu_operator": false,
+      "operator_type": "bus_operator",
+      "metadata": {
+        "regular_service_hints": [true]
+      }
+    }
+  ]
+}

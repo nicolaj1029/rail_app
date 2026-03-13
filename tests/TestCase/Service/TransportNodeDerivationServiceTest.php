@@ -68,4 +68,31 @@ final class TransportNodeDerivationServiceTest extends TestCase
         self::assertSame('no', $out['arrival_airport_in_eu']);
         self::assertSame('air', $out['incident_segment_mode']);
     }
+
+    public function testDerivesOperatorMetadataFromRegistry(): void
+    {
+        $service = new TransportNodeDerivationService();
+
+        $ferry = $service->derive([
+            'transport_mode' => 'ferry',
+            'operator' => 'Scandlines',
+        ]);
+        self::assertSame('DK', $ferry['operator_country']);
+        self::assertSame('yes', $ferry['carrier_is_eu']);
+
+        $air = $service->derive([
+            'transport_mode' => 'air',
+            'operating_carrier' => 'SK',
+            'marketing_carrier' => 'British Airways',
+        ]);
+        self::assertSame('DK', $air['operator_country']);
+        self::assertSame('yes', $air['operating_carrier_is_eu']);
+        self::assertSame('no', $air['marketing_carrier_is_eu']);
+
+        $bus = $service->derive([
+            'transport_mode' => 'bus',
+            'operator' => 'FlixBus',
+        ]);
+        self::assertSame('DE', $bus['operator_country']);
+    }
 }

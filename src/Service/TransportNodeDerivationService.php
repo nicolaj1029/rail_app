@@ -5,6 +5,12 @@ namespace App\Service;
 
 final class TransportNodeDerivationService
 {
+    public function __construct(
+        private ?TransportOperatorRegistry $operatorRegistry = null
+    ) {
+        $this->operatorRegistry ??= new TransportOperatorRegistry();
+    }
+
     /**
      * @param array<string,mixed> $form
      * @return array<string,mixed>
@@ -24,6 +30,7 @@ final class TransportNodeDerivationService
         }
 
         if ($mode === 'ferry') {
+            $form = $this->deriveOperatorDefaults($form, 'ferry', ['operator', 'incident_segment_operator']);
             if (($form['departure_port_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
                 $form['departure_port_in_eu'] = $dep['in_eu'];
             }
@@ -40,7 +47,13 @@ final class TransportNodeDerivationService
                 }
             }
             if (($form['carrier_is_eu'] ?? '') === '') {
-                $carrierIsEu = $this->deriveEuFromCountry((string)($form['operator_country'] ?? ''));
+                $carrierIsEu = $this->operatorRegistry->deriveEuFlag('ferry', (string)($form['operator'] ?? ''));
+                if ($carrierIsEu === null) {
+                    $carrierIsEu = $this->operatorRegistry->deriveEuFlag('ferry', (string)($form['incident_segment_operator'] ?? ''));
+                }
+                if ($carrierIsEu === null) {
+                    $carrierIsEu = $this->deriveEuFromCountry((string)($form['operator_country'] ?? ''));
+                }
                 if ($carrierIsEu !== null) {
                     $form['carrier_is_eu'] = $carrierIsEu ? 'yes' : 'no';
                 }
@@ -50,6 +63,7 @@ final class TransportNodeDerivationService
         }
 
         if ($mode === 'bus') {
+            $form = $this->deriveOperatorDefaults($form, 'bus', ['operator', 'incident_segment_operator']);
             if (($form['boarding_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
                 $form['boarding_in_eu'] = $dep['in_eu'];
             }
@@ -69,11 +83,53 @@ final class TransportNodeDerivationService
             return $form;
         }
 
+        $form = $this->deriveOperatorDefaults($form, 'air', ['operating_carrier', 'marketing_carrier', 'operator', 'incident_segment_operator']);
         if (($form['departure_airport_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
             $form['departure_airport_in_eu'] = $dep['in_eu'];
         }
         if (($form['arrival_airport_in_eu'] ?? '') === '' && $arr['in_eu'] !== '') {
             $form['arrival_airport_in_eu'] = $arr['in_eu'];
+        }
+        if (($form['operating_carrier_is_eu'] ?? '') === '') {
+            $opIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['operating_carrier'] ?? ''));
+            if ($opIsEu !== null) {
+                $form['operating_carrier_is_eu'] = $opIsEu ? 'yes' : 'no';
+            }
+        }
+        if (($form['marketing_carrier_is_eu'] ?? '') === '') {
+            $marketingIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['marketing_carrier'] ?? ''));
+            if ($marketingIsEu !== null) {
+                $form['marketing_carrier_is_eu'] = $marketingIsEu ? 'yes' : 'no';
+            }
+        }
+
+        return $form;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<int,string> $candidateKeys
+     * @return array<string,mixed>
+     */
+    private function deriveOperatorDefaults(array $form, string $mode, array $candidateKeys): array
+    {
+        $candidate = '';
+        foreach ($candidateKeys as $key) {
+            $value = trim((string)($form[$key] ?? ''));
+            if ($value !== '') {
+                $candidate = $value;
+                break;
+            }
+        }
+        if ($candidate === '') {
+            return $form;
+        }
+
+        if (($form['operator_country'] ?? '') === '') {
+            $country = $this->operatorRegistry->deriveCountryCode($mode, $candidate);
+            if ($country !== null) {
+                $form['operator_country'] = $country;
+            }
         }
 
         return $form;
