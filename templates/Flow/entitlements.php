@@ -18,6 +18,9 @@ if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportM
 $isFerry = $transportMode === 'ferry';
 $isBus = $transportMode === 'bus';
 $isAir = $transportMode === 'air';
+$isRail = $transportMode === 'rail';
+$seasonSupported = $isRail;
+if (!$seasonSupported && $ticketMode === 'seasonpass') { $ticketMode = 'ticket'; }
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
@@ -117,12 +120,12 @@ $isPreview = !empty($flowPreview);
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <div class="fe-wrapper">
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
-    <strong>Har du en billet du kan uploade?</strong>
-    <div class="small muted" style="margin-top:6px;">Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.</div>
+    <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
+    <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.' ?></div>
     <div class="small" style="margin-top:8px;">
-      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> Ja, jeg kan uploade billet</label>
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/færgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
-      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
+      <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
     </div>
   </div>
 
@@ -163,10 +166,9 @@ $isPreview = !empty($flowPreview);
           <option value="no" <?= $opCarrierEu==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <label>Marketing carrier er EU-operatoer? (valgfri)
-        <?php $mkCarrierEu = (string)($form['marketing_carrier_is_eu'] ?? ''); ?>
+      <label>Marketing carrier er EU-operatoer?
+        <?php $mkCarrierEu = (string)($form['marketing_carrier_is_eu'] ?? 'yes'); ?>
         <select name="marketing_carrier_is_eu">
-          <option value="" <?= $mkCarrierEu===''?'selected':'' ?>>Ukendt</option>
           <option value="yes" <?= $mkCarrierEu==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $mkCarrierEu==='no'?'selected':'' ?>>Nej</option>
         </select>
@@ -181,33 +183,29 @@ $isPreview = !empty($flowPreview);
         </select>
       </label>
       <label>Same PNR?
-        <?php $samePnr = (string)($form['same_pnr'] ?? ''); ?>
+        <?php $samePnr = (string)($form['same_pnr'] ?? 'yes'); ?>
         <select name="same_pnr">
-          <option value="" <?= $samePnr===''?'selected':'' ?>>Ukendt</option>
           <option value="yes" <?= $samePnr==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $samePnr==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
       <label>Same bookingreference?
-        <?php $sameBooking = (string)($form['same_booking_reference'] ?? ''); ?>
+        <?php $sameBooking = (string)($form['same_booking_reference'] ?? 'yes'); ?>
         <select name="same_booking_reference">
-          <option value="" <?= $sameBooking===''?'selected':'' ?>>Ukendt</option>
           <option value="yes" <?= $sameBooking==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameBooking==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
       <label>Same e-ticket?
-        <?php $sameEticket = (string)($form['same_eticket'] ?? ''); ?>
+        <?php $sameEticket = (string)($form['same_eticket'] ?? 'yes'); ?>
         <select name="same_eticket">
-          <option value="" <?= $sameEticket===''?'selected':'' ?>>Ukendt</option>
           <option value="yes" <?= $sameEticket==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameEticket==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
       <label>Self-transfer oplyst foer koeb?
-        <?php $selfTransferNotice = (string)($form['self_transfer_notice'] ?? ''); ?>
+        <?php $selfTransferNotice = (string)($form['self_transfer_notice'] ?? 'no'); ?>
         <select name="self_transfer_notice">
-          <option value="" <?= $selfTransferNotice===''?'selected':'' ?>>Ukendt</option>
           <option value="yes" <?= $selfTransferNotice==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $selfTransferNotice==='no'?'selected':'' ?>>Nej</option>
         </select>
@@ -270,11 +268,11 @@ $isPreview = !empty($flowPreview);
         <div><strong>Foreloebig vurdering</strong></div>
         <?php if ($isAir): ?>
           <div>Scope: <?= array_key_exists('regulation_applies', $airScope) ? (!empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($airScope['scope_basis']) ? ' - ' . h((string)$airScope['scope_basis']) : '' ?></div>
-          <div>Forbindelse: <?= h((string)($modeContract['air_connection_type'] ?? 'unknown')) ?></div>
+          <div>Forbindelse: <?= h((string)($modeContract['air_connection_type'] ?? 'Auto')) ?></div>
         <?php elseif ($isBus): ?>
           <div>Scope: <?= array_key_exists('regulation_applies', $busScope) ? (!empty($busScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($busScope['scope_basis']) ? ' - ' . h((string)$busScope['scope_basis']) : '' ?></div>
         <?php endif; ?>
-        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
         <div>Claim-kanal: <?= h((string)($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
         <div>Rettighedsmodul: <?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></div>
         <?php if (!empty($claimDirection['recommended_documents'])): ?>
@@ -350,7 +348,7 @@ $isPreview = !empty($flowPreview);
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
         <div><strong>Foreloebig vurdering</strong></div>
         <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' – ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
-        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'unknown')) ?></div>
+        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
         <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
         <div>Rettighedsmodul: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
         <div class="muted" style="margin-top:6px;">Hvis kontrakten er samlet, kan claim-kanalen vaere rederiet eller saelgeren, selv om selve rettighedsmodulet ligger paa den ramte transportdel.</div>
@@ -424,7 +422,7 @@ $isPreview = !empty($flowPreview);
     </div>
   </div>
   <div class="card" id="ticketUploadCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= ($ticketMode==='ticketless' || $ticketMode==='seasonpass')?' display:none;':'' ?>">
-    <div class="section-title">Billetter</div>
+    <div class="section-title"><?= $isAir ? 'Booking / billetter' : ($isFerry ? 'Booking / færgebilletter' : ($isBus ? 'Booking / billetter' : 'Billetter')) ?></div>
   <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
       <div class="upload-title">Slip filer her eller klik for at tilføje</div>
       <div class="small muted" style="margin-top:6px;">Understøtter PDF, JPG, PNG, PKPASS, TXT</div>
@@ -1133,8 +1131,9 @@ $isPreview = !empty($flowPreview);
       $pnrCountInline = count($pnrSet);
     } catch (\Throwable $e) { $pnrCountInline = 0; }
   ?>
+  <?php if ($isRail): ?>
   <?php
-    // Vis altid Art.12-blokken (også når auto vurderer, at intet mangler), så brugeren kan redigere.
+    // Vis kun Art.12-blokken for rail, hvor den fungerer som rail-specialregel i TRIN 2.
   ?>
   <?php $a12Open = (bool)$needA12; ?>
   <div class="card" style="margin-top:12px; padding:16px; border:1px solid #e5e7eb; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
@@ -1204,8 +1203,7 @@ $isPreview = !empty($flowPreview);
     <div class="small muted" style="margin-top:6px;">(Hjælper med at afgøre om der er gennemgående billet og hvem der er ansvarlig efter Art. 12.)</div>
     </div><!-- /a12Questions -->
   </div>
-
-  
+  <?php endif; ?>
 
   <?php if (!empty($meta['_passengers_auto'])): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
@@ -1580,6 +1578,8 @@ if ($a12Applies === false && !empty($contractsView)) {
     const uploadCard = document.getElementById('ticketUploadCard');
     const ticketlessCard = document.getElementById('ticketlessCard');
     const seasonCard = document.getElementById('seasonPassCard');
+    const seasonOptionWrap = document.getElementById('seasonPassOptionWrap');
+    const art12Card = document.getElementById('art12MinimalBlock');
     const ferryScopeCard = document.getElementById('ferryScopeCard');
     const modeContractCard = document.getElementById('modeContractCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
@@ -1598,16 +1598,24 @@ if ($a12Applies === false && !empty($contractsView)) {
     function updateTicketMode(){
       const mode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = mode === 'ticketless';
-      const isSeason = mode === 'seasonpass';
+      const transportMode = radioVal('transport_mode') || 'rail';
+      const seasonAllowed = transportMode === 'rail';
+      const isSeason = seasonAllowed && mode === 'seasonpass';
       show(uploadCard, mode === 'ticket');
       show(ticketlessCard, isTicketless);
       show(seasonCard, isSeason);
+      show(seasonOptionWrap, seasonAllowed);
       // Prevent duplicate-name inputs from overwriting each other on submit.
       // Also keep the currently visible mode editable without requiring a round-trip.
       if (ticketlessFs) { ticketlessFs.disabled = !isTicketless; }
       if (seasonFs) { seasonFs.disabled = !isSeason; }
       if (seasonHas) { seasonHas.value = isSeason ? '1' : '0'; }
       if (journeyFieldsFs) { journeyFieldsFs.disabled = isTicketless; }
+      if (!seasonAllowed && mode === 'seasonpass') {
+        const ticketRadio = form.querySelector('input[name="ticket_upload_mode"][value="ticket"]');
+        if (ticketRadio) { ticketRadio.checked = true; }
+        return updateTicketMode();
+      }
       // In ticketless mode we always want Art.12 questions available, even before the first submit.
       if (a12Qs && (isTicketless || isSeason)) { a12Qs.style.display = 'block'; }
     }
@@ -1627,6 +1635,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('transport_mode') || 'rail';
       show(ferryScopeCard, mode === 'ferry');
       show(modeContractCard, mode === 'bus' || mode === 'air');
+      show(art12Card, mode === 'rail');
     }
 
     form.addEventListener('change', (e)=>{
@@ -2022,3 +2031,4 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
 })();
 </script>
+
