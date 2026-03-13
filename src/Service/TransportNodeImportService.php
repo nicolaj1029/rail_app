@@ -166,6 +166,10 @@ final class TransportNodeImportService
      */
     private function normalizeRow(string $mode, array $row, array $options): ?array
     {
+        if (!$this->passesFilters($row, $options)) {
+            return null;
+        }
+
         $name = trim((string)$this->pick($row, ['name', (string)($options['name_col'] ?? '')]));
         if ($name === '') {
             return null;
@@ -231,6 +235,35 @@ final class TransportNodeImportService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $options
+     */
+    private function passesFilters(array $row, array $options): bool
+    {
+        if (!empty($options['require_code'])) {
+            $code = trim((string)$this->pick($row, ['code', 'iata_code', 'icao_code', 'locode', (string)($options['code_col'] ?? '')]));
+            if ($code === '') {
+                return false;
+            }
+        }
+
+        $filterCol = trim((string)($options['filter_col'] ?? ''));
+        $filterAllow = $options['filter_allow'] ?? [];
+        if ($filterCol !== '' && is_array($filterAllow) && $filterAllow !== []) {
+            $value = strtolower(trim((string)($row[$filterCol] ?? '')));
+            $allowed = array_map(
+                static fn($item): string => strtolower(trim((string)$item)),
+                $filterAllow
+            );
+            if ($value === '' || !in_array($value, $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

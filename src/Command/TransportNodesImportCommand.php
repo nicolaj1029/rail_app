@@ -35,7 +35,10 @@ final class TransportNodesImportCommand extends BaseCommand
             ->addOption('aliases-col', ['help' => 'CSV/JSON field for aliases (comma/semicolon/pipe separated)'])
             ->addOption('in-eu-col', ['help' => 'CSV/JSON field for explicit EU flag'])
             ->addOption('delimiter', ['help' => 'CSV delimiter, default comma'])
-            ->addOption('default-node-type', ['help' => 'Fallback node type if source lacks it']);
+            ->addOption('default-node-type', ['help' => 'Fallback node type if source lacks it'])
+            ->addOption('require-code', ['boolean' => true, 'default' => false, 'help' => 'Skip rows without a usable code'])
+            ->addOption('filter-col', ['help' => 'Optional source column to filter by'])
+            ->addOption('filter-allow', ['help' => 'Comma-separated list of allowed values for filter-col']);
 
         return $parser;
     }
@@ -95,6 +98,9 @@ final class TransportNodesImportCommand extends BaseCommand
             'in_eu_col' => (string)($args->getOption('in-eu-col') ?? ''),
             'delimiter' => (string)($args->getOption('delimiter') ?? ''),
             'default_node_type' => (string)($args->getOption('default-node-type') ?? ''),
+            'require_code' => (bool)$args->getOption('require-code'),
+            'filter_col' => (string)($args->getOption('filter-col') ?? ''),
+            'filter_allow' => $this->parseListOption((string)($args->getOption('filter-allow') ?? '')),
         ];
 
         foreach ($cliOptions as $key => $value) {
@@ -105,6 +111,22 @@ final class TransportNodesImportCommand extends BaseCommand
         }
 
         return $profile;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function parseListOption(string $value): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn(string $item): string => trim($item),
+            explode(',', $value)
+        )));
     }
 
     /**

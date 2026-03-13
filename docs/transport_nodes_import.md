@@ -1,4 +1,4 @@
-# Transport node import
+ï»¿# Transport node import
 
 Dette projekt bruger `config/data/transport_nodes.json` som lookup-lag for multimodal autocomplete i `TRIN 2` for:
 
@@ -6,7 +6,7 @@ Dette projekt bruger `config/data/transport_nodes.json` som lookup-lag for multi
 - `bus`
 - `air`
 
-Rail beholder sit separate stationsdatasæt.
+Rail beholder sit separate stationsdatasÃ¦t.
 
 ## Kommando
 
@@ -14,10 +14,10 @@ Rail beholder sit separate stationsdatasæt.
 php bin/cake.php transport_nodes_import --mode ferry --source data\ports.csv --profile ferry_unlocode
 ```
 
-## Understøttede formater
+## UnderstÃ¸ttede formater
 
-- `json` — array af objekter
-- `csv` — header-row + data rows
+- `json` â€” array af objekter
+- `csv` â€” header-row + data rows
 
 ## Import-profiler
 
@@ -27,11 +27,17 @@ Der ligger foruddefinerede profiler i `config/data/transport_node_import_profile
 - `ferry_unlocode`
 - `bus_osm`
 
-Profilerne udfylder standardfelter for de mest realistiske kilder. CLI-flag kan stadig overstyre profilværdier.
+Profilerne udfylder standardfelter for de mest realistiske kilder. CLI-flag kan stadig overstyre profilvÃ¦rdier.
+
+Profiler kan ogsÃ¥ sÃ¦tte simple filtre, fx:
+
+- `require_code`
+- `filter_col`
+- `filter_allow`
 
 ## Minimumsfelter
 
-Importeren forsøger at normalisere disse felter:
+Importeren forsÃ¸ger at normalisere disse felter:
 
 - `name`
 - `country`
@@ -61,6 +67,8 @@ php bin/cake.php transport_nodes_import `
   --profile air_ourairports
 ```
 
+`air_ourairports` filtrerer automatisk til `medium_airport` og `large_airport` og krÃ¦ver en brugbar IATA-kode.
+
 ### Ports / UN LOCODE-derived CSV
 
 ```powershell
@@ -87,7 +95,7 @@ Eksempelskabeloner ligger i `docs/transport_node_sources/`:
 - `ports_unlocode_template.csv`
 - `bus_nodes_osm_template.json`
 
-De er kun skabeloner. De skal erstattes af rigtige eksportfiler før import.
+De er kun skabeloner. De skal erstattes af rigtige eksportfiler fÃ¸r import.
 
 ## Realistisk source-strategi
 
@@ -103,10 +111,10 @@ De er kun skabeloner. De skal erstattes af rigtige eksportfiler før import.
 - baseline geografi: `OSM`
 - service metadata: `GTFS / NeTEx / National Access Points`
 
-## Bemærkning
+## BemÃ¦rkning
 
-Denne importer er bevidst generisk og lokal-first. Den downloader ikke selv data. Formålet er at kunne:
+Denne importer er bevidst generisk og lokal-first. Den downloader ikke selv data. FormÃ¥let er at kunne:
 
-1. normalisere forskellige kilder til én fælles fil
+1. normalisere forskellige kilder til Ã©n fÃ¦lles fil
 2. udskifte seed-data gradvist
 3. holde autocomplete og scope-afledning stabilt

@@ -71,4 +71,39 @@ final class TransportNodeImportServiceTest extends TestCase
         $this->assertTrue($saved[0]['in_eu']);
         @unlink($source);
     }
+
+    public function testImportCanFilterRowsByTypeAndRequireCode(): void
+    {
+        $source = TMP . 'transport_nodes_air_filter_' . uniqid('', true) . '.csv';
+        file_put_contents($source, implode("\n", [
+            'name,iso_country,iata_code,latitude_deg,longitude_deg,municipality,type',
+            'Big Airport,DK,CPH,55.6,12.6,Copenhagen,large_airport',
+            'Medium Without Code,SE,,59.6,17.9,Stockholm,medium_airport',
+            'Small Airport,DK,STA,55.0,12.0,Town,small_airport',
+        ]));
+
+        $service = new TransportNodeImportService($this->target);
+        $result = $service->import('air', $source, [
+            'format' => 'csv',
+            'replace' => true,
+            'source_label' => 'ourairports',
+            'name_col' => 'name',
+            'country_col' => 'iso_country',
+            'code_col' => 'iata_code',
+            'lat_col' => 'latitude_deg',
+            'lon_col' => 'longitude_deg',
+            'city_col' => 'municipality',
+            'default_node_type' => 'airport',
+            'require_code' => true,
+            'filter_col' => 'type',
+            'filter_allow' => ['large_airport', 'medium_airport'],
+        ]);
+
+        $this->assertSame(1, $result['added']);
+        $saved = json_decode((string)file_get_contents($this->target), true);
+        $this->assertCount(1, $saved);
+        $this->assertSame('CPH', $saved[0]['code']);
+        $this->assertSame('Big Airport', $saved[0]['name']);
+        @unlink($source);
+    }
 }

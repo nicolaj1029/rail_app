@@ -8,5 +8,11 @@
   "lat_col": "latitude_deg",
   "lon_col": "longitude_deg",
   "city_col": "municipality",
-  "default_node_type": "airport"
+  "default_node_type": "airport",
+  "require_code": true,
+  "filter_col": "type",
+  "filter_allow": [
+    "large_airport",
+    "medium_airport"
+  ]
 }
