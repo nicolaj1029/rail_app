@@ -106,6 +106,15 @@ php bin/cake.php transport_nodes_import `
   --profile bus_osm
 ```
 
+Ved store OSM-busfiler kan det være nødvendigt at hæve memory-limit midlertidigt:
+
+```powershell
+php -d memory_limit=512M bin/cake.php transport_nodes_import `
+  --mode bus `
+  --source data\bus_terminals.json `
+  --profile bus_osm
+```
+
 ## Skabeloner
 
 Eksempelskabeloner ligger i `docs/transport_node_sources/`:

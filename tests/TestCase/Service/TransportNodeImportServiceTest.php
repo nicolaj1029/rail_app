@@ -183,4 +183,44 @@ final class TransportNodeImportServiceTest extends TestCase
         $this->assertSame('Helsingor Ferry Terminal', $saved[0]['aliases'][0]);
         @unlink($source);
     }
+
+    public function testImportCanTransformOsmBusNodes(): void
+    {
+        $source = TMP . 'transport_nodes_bus_osm_' . uniqid('', true) . '.json';
+        file_put_contents($source, json_encode([
+            'elements' => [
+                [
+                    'type' => 'node',
+                    'id' => 456,
+                    'lat' => 55.676,
+                    'lon' => 12.568,
+                    'tags' => [
+                        'amenity' => 'bus_station',
+                        'name' => 'Copenhagen Coach Terminal',
+                        'name:en' => 'Copenhagen Coach Terminal',
+                        'addr:country' => 'DK',
+                        'addr:city' => 'Copenhagen',
+                        'operator' => 'FlixBus',
+                    ],
+                ],
+            ],
+        ], JSON_PRETTY_PRINT));
+
+        $service = new TransportNodeImportService($this->target);
+        $result = $service->import('bus', $source, [
+            'format' => 'json',
+            'replace' => true,
+            'source_label' => 'osm',
+            'source_transform' => 'osm_elements_bus_nodes',
+            'default_node_type' => 'terminal',
+        ]);
+
+        $this->assertSame(1, $result['added']);
+        $saved = json_decode((string)file_get_contents($this->target), true);
+        $this->assertCount(1, $saved);
+        $this->assertSame('terminal', $saved[0]['node_type']);
+        $this->assertSame('DK', $saved[0]['country']);
+        $this->assertSame('FlixBus', $saved[0]['parent_name']);
+        @unlink($source);
+    }
 }

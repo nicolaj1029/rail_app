@@ -2,6 +2,7 @@
   "format": "json",
   "replace": true,
   "source_label": "osm",
+  "source_transform": "osm_elements_bus_nodes",
   "name_col": "name",
   "country_col": "country",
   "code_col": "code",
