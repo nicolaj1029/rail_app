@@ -140,7 +140,7 @@ $isPreview = !empty($flowPreview);
     </div>
   </div>
 
-  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= (($isBus || $isAir) && $ticketMode !== 'ticketless') ? '' : ' display:none;' ?>">
+  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isBus || $isAir) ? '' : ' display:none;' ?>">
     <strong><?= $isAir ? 'Fly: booking og ansvar' : 'Bus: booking og ansvar' ?></strong>
     <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Her afklarer vi protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Her afklarer vi regular service-scope, claim-kanal og hvilket busmodul der skal bruges senere.' ?></div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -283,7 +283,7 @@ $isPreview = !empty($flowPreview);
     <?php endif; ?>
   </div>
 
-  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($isFerry && $ticketMode !== 'ticketless') ? '' : ' display:none;' ?>">
+  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $isFerry ? '' : ' display:none;' ?>">
     <strong>Faerge: scope og ansvar</strong>
     <div class="small muted" style="margin-top:6px;">Her afklarer vi om faergeforordningen finder anvendelse, om problemet ligger paa faergedelen, og hvem claimet som udgangspunkt skal rettes mod. Handicap/PMR kommer senere.</div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -783,9 +783,10 @@ $isPreview = !empty($flowPreview);
 
   <!-- Art. 12 blok (behold auto + rediger) vises lÃ¦ngere nede -->
 
-  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1â€“3.5)</button>
+  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" data-transport-mode="<?= h($transportMode) ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1â€“3.5)</button>
   <div id="journeyFields" style="display:none;">
   <fieldset id="journeyFieldsFieldset" <?= $ticketMode==='ticketless' ? 'disabled' : '' ?> style="border:0; padding:0; margin:0;">
+  <div id="railJourneyFields" style="<?= $isRail ? '' : 'display:none;' ?>">
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
     <strong>3.1. Name of railway undertaking:</strong>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
@@ -1001,6 +1002,63 @@ $isPreview = !empty($flowPreview);
       </div>
     <?php endif; ?>
   </div>
+  </div><!-- /railJourneyFields -->
+
+  <?php if ($isFerry || $isBus || $isAir): ?>
+  <div id="modeJourneyFields" style="<?= ($isFerry || $isBus || $isAir) ? '' : 'display:none;' ?>">
+    <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
+      <strong><?= $isFerry ? 'Færgebooking og rute' : ($isBus ? 'Busbooking og rute' : 'Flybooking og rute') ?></strong>
+      <div class="small muted" style="margin-top:6px;">
+        <?= $isFerry ? 'Disse felter bruges ved upload, hvis LLM/OCR ikke finder alt om carrier, havne, tider og bookingreference.' : ($isBus ? 'Disse felter bruges ved upload, hvis LLM/OCR ikke finder alt om operatør, terminaler, tider og bookingreference.' : 'Disse felter bruges ved upload, hvis LLM/OCR ikke finder alt om carrier, lufthavne, tider og bookingreference.') ?>
+      </div>
+      <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+        <label><?= $isAir ? 'Carrier / operating carrier' : ($isFerry ? 'Carrier' : 'Operatør') ?>
+          <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
+        </label>
+        <label>Produkt / bookingtype
+          <input type="text" name="operator_product" value="<?= h($meta['_auto']['operator_product']['value'] ?? ($form['operator_product'] ?? '')) ?>" placeholder="<?= $isAir ? 'Fx Economy / Flex' : 'Fx Standard ticket' ?>" />
+        </label>
+        <label><?= $isFerry ? 'Afgangshavn' : ($isBus ? 'Afgangssted / terminal' : 'Afgangslufthavn') ?>
+          <input type="text" name="dep_station" value="<?= h($meta['_auto']['dep_station']['value'] ?? ($form['dep_station'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Helsingør' : ($isBus ? 'Fx København Busterminal' : 'Fx CPH') ?>" />
+        </label>
+        <label><?= $isFerry ? 'Ankomsthavn' : ($isBus ? 'Ankomststed / terminal' : 'Ankomstlufthavn') ?>
+          <input type="text" name="arr_station" value="<?= h($meta['_auto']['arr_station']['value'] ?? ($form['arr_station'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Helsingborg' : ($isBus ? 'Fx Aarhus Rutebilstation' : 'Fx ARN') ?>" />
+        </label>
+        <label>Afgangsdato
+          <input type="text" name="dep_date" value="<?= h($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
+        </label>
+        <label>Planlagt afgangstid
+          <input type="text" name="dep_time" value="<?= h($meta['_auto']['dep_time']['value'] ?? ($form['dep_time'] ?? '')) ?>" placeholder="HH:MM" />
+        </label>
+        <label>Planlagt ankomsttid
+          <input type="text" name="arr_time" value="<?= h($meta['_auto']['arr_time']['value'] ?? ($form['arr_time'] ?? '')) ?>" placeholder="HH:MM" />
+        </label>
+        <label><?= $isAir ? 'Bookingreference / e-ticket' : 'Bookingreference / billetnummer' ?>
+          <input type="text" name="ticket_no" value="<?= h((string)($meta['_auto']['ticket_no']['value'] ?? ($form['ticket_no'] ?? ($meta['_identifiers']['pnr'] ?? ($journey['bookingRef'] ?? ''))))) ?>" />
+        </label>
+        <?php if ($isAir): ?>
+        <label>Marketing carrier
+          <input type="text" name="marketing_carrier" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
+        </label>
+        <label>Operating carrier
+          <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
+        </label>
+        <?php endif; ?>
+        <label>Pris (valgfri)
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" name="price" value="<?= h((string)($meta['_auto']['price']['value'] ?? ($form['price'] ?? ''))) ?>" placeholder="<?= $isBus ? '250 DKK' : '100 EUR' ?>" style="flex:1 1 200px;" />
+            <select name="price_currency" style="min-width:120px;">
+              <option value="">Auto</option>
+              <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF'] as $cc): ?>
+                <option value="<?= $cc ?>" <?= strtoupper((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? '')))===$cc?'selected':'' ?>><?= $cc ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </label>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
   </fieldset>
   </div><!-- /journeyFields -->
 
@@ -1772,6 +1830,8 @@ if ($a12Applies === false && !empty($contractsView)) {
     const seasonFs = document.getElementById('seasonPassFieldset');
     const seasonHas = document.getElementById('seasonPassHas');
     const journeyFieldsFs = document.getElementById('journeyFieldsFieldset');
+    const railJourneyFields = document.getElementById('railJourneyFields');
+    const modeJourneyFields = document.getElementById('modeJourneyFields');
     const a12Qs = document.getElementById('a12Questions');
 
     function radioVal(name){
@@ -1820,15 +1880,20 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('transport_mode') || 'rail';
       const ticketMode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = ticketMode === 'ticketless';
-      show(ferryScopeCard, mode === 'ferry' && !isTicketless);
-      show(modeContractCard, (mode === 'bus' || mode === 'air') && !isTicketless);
+      show(ferryScopeCard, mode === 'ferry');
+      show(modeContractCard, (mode === 'bus' || mode === 'air'));
       show(art12Card, mode === 'rail');
+      show(railJourneyFields, mode === 'rail');
+      show(modeJourneyFields, mode !== 'rail');
     }
 
     form.addEventListener('change', (e)=>{
       const nm = (e.target && (e.target.name||'')) || '';
       if (nm === 'ticket_upload_mode') updateTicketMode();
-      if (nm === 'transport_mode') updateTransportMode();
+      if (nm === 'transport_mode') {
+        updateTransportMode();
+        setTimeout(()=>form.submit(), 0);
+      }
       if (nm === 'price_known') updatePriceKnown();
     }, { passive:true });
     updateTicketMode();
@@ -1840,13 +1905,21 @@ if ($a12Applies === false && !empty($contractsView)) {
   const jf = document.getElementById('journeyFields');
   const openJourneyFields = () => { if (jf) { jf.style.display = 'block'; } };
   const closeJourneyFields = () => { if (jf) { jf.style.display = 'none'; } };
+  const journeyToggleLabel = () => {
+    if (!toggleBtn) return 'Vis/skjul rejsefelter (3.1–3.5)';
+    const mode = toggleBtn.dataset.transportMode || 'rail';
+    if (mode === 'ferry') return 'Vis/skjul booking- og havnefelter';
+    if (mode === 'bus') return 'Vis/skjul booking- og rutefelter';
+    if (mode === 'air') return 'Vis/skjul booking- og flyfelter';
+    return 'Vis/skjul rejsefelter (3.1–3.5)';
+  };
   const updateJourneyToggleUi = () => {
     if (!toggleBtn || !jf) return;
     const isOpen = (jf.style.display !== 'none' && jf.style.display !== '');
     toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     toggleBtn.textContent = isOpen
-      ? 'Vis/skjul rejsefelter (3.1Ã¢â‚¬â€œ3.5) Ã¢â‚¬â€œ skjul'
-      : 'Vis/skjul rejsefelter (3.1Ã¢â‚¬â€œ3.5) Ã¢â‚¬â€œ vis';
+      ? journeyToggleLabel() + ' – skjul'
+      : journeyToggleLabel() + ' – vis';
   };
   const hasTickets = !!(toggleBtn && toggleBtn.dataset.hasTickets === '1');
   if (toggleBtn && jf) {
@@ -1863,6 +1936,14 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
   if (hasTickets) { openJourneyFields(); }
   updateJourneyToggleUi();
+  if (form && toggleBtn) {
+    form.addEventListener('change', function(e){
+      if (e.target && e.target.name === 'transport_mode') {
+        toggleBtn.dataset.transportMode = e.target.value || 'rail';
+        updateJourneyToggleUi();
+      }
+    }, { passive:true });
+  }
   const panel = document.getElementById('hooksPanel');
   if (!form || !panel) return;
   // Upload UI wiring
