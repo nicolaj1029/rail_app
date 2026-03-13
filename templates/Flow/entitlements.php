@@ -31,7 +31,7 @@ $isPreview = !empty($flowPreview);
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
 <style>
-  /* Skjul PMR/cykel i Trin 2 â€“ hÃ¥ndteres i Trin 3 */
+  /* Skjul PMR/cykel i Trin 2 – håndteres i Trin 3 */
   #pmrFlowCard, #bikeFlowCard { display:none !important; }
   .fe-wrapper { max-width: 1200px; margin: 0 auto; }
   .fe-wide { width: 100%; }
@@ -68,7 +68,7 @@ $isPreview = !empty($flowPreview);
 <div class="fe-header">
   <div class="fe-step">Trin 2</div>
   <h1 class="fe-title">Billet (upload eller ticketless)</h1>
-  <p class="fe-sub">Upload billetter eller udfyld minimum uden billet. Sidepanelet viser lÃ¸bende dine rettigheder.</p>
+  <p class="fe-sub">Upload billetter eller udfyld minimum uden billet. Sidepanelet viser løbende dine rettigheder.</p>
 </div>
 <?php
   // UI banners derived from exemption profile (global notices)
@@ -120,21 +120,21 @@ $isPreview = !empty($flowPreview);
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <div class="fe-wrapper">
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
-    <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller fÃ¦rgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
-    <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'VÃ¦lg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'VÃ¦lg ticketless hvis du vil fortsÃ¦tte uden upload. Du kan altid tilfÃ¸je booking eller dokumentation senere.' ?></div>
+    <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
+    <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.' ?></div>
     <div class="small" style="margin-top:8px;">
-      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/fÃ¦rgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
+      <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/færgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
-      <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser pÃ¥ pendler-/periodekort</label>
+      <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
     </div>
   </div>
 
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
     <strong>Transportform</strong>
-    <div class="small muted" style="margin-top:6px;">Vaelg den transporttype hvor problemet opstod eller forventes at opsta. Det styrer scope, ansvar og hvilket regelsaet vi bruger senere i flowet.</div>
+    <div class="small muted" style="margin-top:6px;">Vælg den transporttype hvor problemet opstod eller forventes at opstå. Det styrer scope, ansvar og hvilket regelsæt vi bruger senere i flowet.</div>
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="transport_mode" value="rail" <?= $transportMode==='rail'?'checked':'' ?> /> Tog</label>
-      <label class="mr8"><input type="radio" name="transport_mode" value="ferry" <?= $transportMode==='ferry'?'checked':'' ?> /> Faerge</label>
+      <label class="mr8"><input type="radio" name="transport_mode" value="ferry" <?= $transportMode==='ferry'?'checked':'' ?> /> Færge</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="bus" <?= $transportMode==='bus'?'checked':'' ?> /> Bus</label>
       <label class="mr8"><input type="radio" name="transport_mode" value="air" <?= $transportMode==='air'?'checked':'' ?> /> Fly</label>
     </div>
@@ -862,9 +862,9 @@ $isPreview = !empty($flowPreview);
   </div>
   <?php endif; ?>
 
-  <!-- Art. 12 blok (behold auto + rediger) vises lÃ¦ngere nede -->
+  <!-- Rail-kontraktblokken vises længere nede -->
 
-  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" data-transport-mode="<?= h($transportMode) ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1â€“3.5)</button>
+  <button type="button" id="toggleJourneyFields" class="button button-outline" data-has-tickets="<?= $hasTickets ? '1' : '0' ?>" data-transport-mode="<?= h($transportMode) ?>" style="margin-top:12px; margin-bottom:8px;<?= $ticketMode==='ticketless'?' display:none;':'' ?>">Vis/skjul rejsefelter (3.1–3.5)</button>
   <div id="journeyFields" style="display:none;">
   <fieldset id="journeyFieldsFieldset" <?= $ticketMode==='ticketless' ? 'disabled' : '' ?> style="border:0; padding:0; margin:0;">
   <div id="railJourneyFields" style="<?= $isRail ? '' : 'display:none;' ?>">
