@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Example Bus Terminal",
+    "country": "DK",
+    "code": "EX-BUS-1",
+    "lat": 55.0,
+    "lon": 12.0,
+    "node_type": "terminal",
+    "city": "Copenhagen",
+    "parent_name": "",
+    "aliases": [
+      "Example Coach Station"
+    ]
+  }
+]

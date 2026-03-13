@@ -8,6 +8,7 @@ use Cake\Console\Arguments;
 use Cake\Console\BaseCommand;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
+use RuntimeException;
 
 final class TransportNodesImportCommand extends BaseCommand
 {
@@ -19,6 +20,7 @@ final class TransportNodesImportCommand extends BaseCommand
         $parser
             ->addOption('mode', ['required' => true, 'help' => 'ferry, bus or air'])
             ->addOption('source', ['required' => true, 'help' => 'Path to CSV or JSON source file'])
+            ->addOption('profile', ['help' => 'Named or file-based import profile'])
             ->addOption('format', ['default' => 'auto', 'help' => 'auto, csv or json'])
             ->addOption('replace', ['boolean' => true, 'default' => false, 'help' => 'Replace existing rows for the selected mode'])
             ->addOption('source-label', ['help' => 'Stored source label, e.g. ourairports or unlocode'])
@@ -43,23 +45,12 @@ final class TransportNodesImportCommand extends BaseCommand
         $mode = (string)$args->getOption('mode');
         $source = (string)$args->getOption('source');
 
-        $options = [
-            'format' => (string)$args->getOption('format'),
-            'replace' => (bool)$args->getOption('replace'),
-            'source_label' => (string)($args->getOption('source-label') ?? ''),
-            'name_col' => (string)($args->getOption('name-col') ?? ''),
-            'country_col' => (string)($args->getOption('country-col') ?? ''),
-            'code_col' => (string)($args->getOption('code-col') ?? ''),
-            'lat_col' => (string)($args->getOption('lat-col') ?? ''),
-            'lon_col' => (string)($args->getOption('lon-col') ?? ''),
-            'node_type_col' => (string)($args->getOption('node-type-col') ?? ''),
-            'city_col' => (string)($args->getOption('city-col') ?? ''),
-            'parent_col' => (string)($args->getOption('parent-col') ?? ''),
-            'aliases_col' => (string)($args->getOption('aliases-col') ?? ''),
-            'in_eu_col' => (string)($args->getOption('in-eu-col') ?? ''),
-            'delimiter' => (string)($args->getOption('delimiter') ?? ''),
-            'default_node_type' => (string)($args->getOption('default-node-type') ?? ''),
-        ];
+        try {
+            $options = $this->buildOptions($args);
+        } catch (\Throwable $e) {
+            $io->err($e->getMessage());
+            return static::CODE_ERROR;
+        }
 
         $service = new TransportNodeImportService();
         try {
@@ -79,5 +70,67 @@ final class TransportNodesImportCommand extends BaseCommand
         ));
 
         return static::CODE_SUCCESS;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildOptions(Arguments $args): array
+    {
+        $profile = $this->loadProfile((string)($args->getOption('profile') ?? ''));
+
+        $cliOptions = [
+            'format' => (string)$args->getOption('format'),
+            'replace' => (bool)$args->getOption('replace'),
+            'source_label' => (string)($args->getOption('source-label') ?? ''),
+            'name_col' => (string)($args->getOption('name-col') ?? ''),
+            'country_col' => (string)($args->getOption('country-col') ?? ''),
+            'code_col' => (string)($args->getOption('code-col') ?? ''),
+            'lat_col' => (string)($args->getOption('lat-col') ?? ''),
+            'lon_col' => (string)($args->getOption('lon-col') ?? ''),
+            'node_type_col' => (string)($args->getOption('node-type-col') ?? ''),
+            'city_col' => (string)($args->getOption('city-col') ?? ''),
+            'parent_col' => (string)($args->getOption('parent-col') ?? ''),
+            'aliases_col' => (string)($args->getOption('aliases-col') ?? ''),
+            'in_eu_col' => (string)($args->getOption('in-eu-col') ?? ''),
+            'delimiter' => (string)($args->getOption('delimiter') ?? ''),
+            'default_node_type' => (string)($args->getOption('default-node-type') ?? ''),
+        ];
+
+        foreach ($cliOptions as $key => $value) {
+            if ($value === '' || $value === false) {
+                continue;
+            }
+            $profile[$key] = $value;
+        }
+
+        return $profile;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function loadProfile(string $profileName): array
+    {
+        $profileName = trim($profileName);
+        if ($profileName === '') {
+            return [];
+        }
+
+        $path = $profileName;
+        if (!is_file($path)) {
+            $path = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_node_import_profiles' . DIRECTORY_SEPARATOR . $profileName . '.json';
+        }
+        if (!is_file($path)) {
+            throw new RuntimeException('import profile not found: ' . $profileName);
+        }
+
+        $raw = (string)file_get_contents($path);
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('import profile must be valid JSON object: ' . $path);
+        }
+
+        return $decoded;
     }
 }

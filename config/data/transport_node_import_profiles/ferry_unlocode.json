@@ -1,0 +1,14 @@
+{
+  "format": "csv",
+  "replace": true,
+  "source_label": "unlocode",
+  "name_col": "name",
+  "country_col": "country",
+  "code_col": "locode",
+  "lat_col": "lat",
+  "lon_col": "lon",
+  "city_col": "city",
+  "node_type_col": "node_type",
+  "aliases_col": "aliases",
+  "default_node_type": "port"
+}

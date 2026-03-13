@@ -1,0 +1,12 @@
+{
+  "format": "csv",
+  "replace": true,
+  "source_label": "ourairports",
+  "name_col": "name",
+  "country_col": "iso_country",
+  "code_col": "iata_code",
+  "lat_col": "latitude_deg",
+  "lon_col": "longitude_deg",
+  "city_col": "municipality",
+  "default_node_type": "airport"
+}

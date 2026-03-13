@@ -1,0 +1,15 @@
+{
+  "format": "json",
+  "replace": true,
+  "source_label": "osm",
+  "name_col": "name",
+  "country_col": "country",
+  "code_col": "code",
+  "lat_col": "lat",
+  "lon_col": "lon",
+  "node_type_col": "node_type",
+  "city_col": "city",
+  "parent_col": "parent_name",
+  "aliases_col": "aliases",
+  "default_node_type": "terminal"
+}
