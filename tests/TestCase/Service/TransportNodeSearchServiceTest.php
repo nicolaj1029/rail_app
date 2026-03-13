@@ -34,7 +34,7 @@ final class TransportNodeSearchServiceTest extends TestCase
 
     public function testSearchRespectsCountryFilter(): void
     {
-        $rows = $this->service->search('bus', 'ZOB', 'DE', 10);
+        $rows = $this->service->search('air', 'Aachen', 'DE', 10);
         $this->assertNotEmpty($rows);
         foreach ($rows as $row) {
             $this->assertSame('DE', $row['country']);

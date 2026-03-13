@@ -1481,6 +1481,7 @@ class FlowController extends AppController
                     $form[$k] = is_array($val) ? $val : (string)$val;
                 }
             }
+            $form = (new \App\Service\TransportNodeDerivationService())->derive($form);
             // Passenger edits if provided
             $paxIn = (array)$this->request->getData('passenger');
             if (!empty($paxIn)) { $meta['_passengers_auto'] = $paxIn; }
@@ -2698,6 +2699,7 @@ class FlowController extends AppController
                 $meta['_auto']['arr_station'] = ['value' => (string)$form['arr_station'], 'source' => 'form'];
             }
         } catch (\Throwable $e) { /* ignore */ }
+        $form = (new \App\Service\TransportNodeDerivationService())->derive($form);
 
             // Ticketless mode: when no ticket files are uploaded, synthesize minimal auto fields + a single segment
             // so exemption matrix + downstream steps can work (split flow only).
