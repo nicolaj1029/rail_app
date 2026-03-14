@@ -145,6 +145,9 @@ $isPreview = !empty($flowPreview);
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
     <strong><?= $isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')) ?></strong>
     <div class="small muted" style="margin-top:6px;"><?= $isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.' ?></div>
+    <?php if (!$isRail): ?>
+      <div class="small muted" style="margin-top:6px;">Ved upload analyserer vi først dokumenterne med LLM og den multimodale kontraktmotor. Kontrakt og ansvar vises derefter som auto-summary med STOP, hvis sagen kan afgøres tidligt.</div>
+    <?php endif; ?>
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/færgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
@@ -196,13 +199,20 @@ $isPreview = !empty($flowPreview);
     $modeDecisionNotes = array_values(array_filter(array_map('strval', (array)($contractDecision['notes'] ?? []))));
     $modeIncidentSegmentTop = (string)($form['incident_segment_mode'] ?? ($isFerry ? ($ferryContract['rights_module'] ?? 'ferry') : ($modeContract['rights_module'] ?? $transportMode)));
     $modeProblemOperatorTop = (string)($form['incident_segment_operator'] ?? ($isFerry ? ($ferryContract['primary_claim_party_name'] ?? '') : ($modeContract['primary_claim_party_name'] ?? '')));
+    $modeHasAnalysis = $hasTickets || !empty($contractDecision) || !empty($ferryContract) || !empty($modeContract) || !empty($claimDirection);
+    $modeContractVisible = $ticketMode !== 'ticket' || $modeHasAnalysis;
   ?>
-  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
+  <div class="card" id="modeContractCard" data-has-analysis="<?= $modeHasAnalysis ? '1' : '0' ?>" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $modeContractVisible ? '' : ' display:none;' ?>">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <strong>Kontrakt og ansvar (fælles multimodal)</strong>
       <button type="button" id="modeContractEditBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
     </div>
     <div class="small muted" style="margin-top:6px;">Denne blok bruges for færge, bus og fly til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt. Rail bruger fortsat Art. 12-blokken længere nede.</div>
+    <?php if (!$modeHasAnalysis && $ticketMode === 'ticket'): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        Upload først billet/booking. Når LLM og kontraktmotoren har analyseret dokumenterne, udfyldes denne blok automatisk og stopper tidligt ved klare STOP-udfald.
+      </div>
+    <?php endif; ?>
     <?php if ($modeStop): ?>
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
         <div><strong>STOP: Billet = <?= h($modeContractLabel) ?></strong></div>
@@ -2298,6 +2308,7 @@ if ($a12Applies === false && !empty($contractsView)) {
     const seasonCard = document.getElementById('seasonPassCard');
     const seasonOptionWrap = document.getElementById('seasonPassOptionWrap');
     const art12Card = document.getElementById('art12MinimalBlock');
+    const modeContractCard = document.getElementById('modeContractCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
     const ticketlessFs = document.getElementById('ticketlessFieldset');
     const seasonFs = document.getElementById('seasonPassFieldset');
@@ -2333,16 +2344,19 @@ if ($a12Applies === false && !empty($contractsView)) {
       const transportMode = radioVal('transport_mode') || 'rail';
       const seasonAllowed = transportMode === 'rail' || transportMode === 'ferry';
       const isSeason = seasonAllowed && mode === 'seasonpass';
+      const hasModeAnalysis = modeContractCard && modeContractCard.dataset.hasAnalysis === '1';
       show(uploadCard, mode === 'ticket');
       show(ticketlessCard, isTicketless);
       show(seasonCard, isSeason);
       show(seasonOptionWrap, seasonAllowed);
+      show(modeContractCard, transportMode !== 'rail' && (mode !== 'ticket' || hasModeAnalysis));
       // Prevent duplicate-name inputs from overwriting each other on submit.
       // Also keep the currently visible mode editable without requiring a round-trip.
       if (ticketlessFs) { ticketlessFs.disabled = !isTicketless; }
       if (seasonFs) { seasonFs.disabled = !isSeason; }
       if (seasonHas) { seasonHas.value = isSeason ? '1' : '0'; }
       if (journeyFieldsFs) { journeyFieldsFs.disabled = isTicketless; }
+      setDisabledWithin(modeContractCard, transportMode === 'rail' || (mode === 'ticket' && !hasModeAnalysis));
       if (!seasonAllowed && mode === 'seasonpass') {
         const ticketRadio = form.querySelector('input[name="ticket_upload_mode"][value="ticket"]');
         if (ticketRadio) { ticketRadio.checked = true; }
@@ -2368,10 +2382,13 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('transport_mode') || 'rail';
       const ticketMode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = ticketMode === 'ticketless';
+      const hasModeAnalysis = modeContractCard && modeContractCard.dataset.hasAnalysis === '1';
       show(art12Card, mode === 'rail');
       show(railJourneyFields, mode === 'rail');
       show(modeJourneyFields, mode !== 'rail');
+      show(modeContractCard, mode !== 'rail' && (ticketMode !== 'ticket' || hasModeAnalysis));
       setDisabledWithin(art12Card, mode !== 'rail');
+      setDisabledWithin(modeContractCard, mode === 'rail' || (ticketMode === 'ticket' && !hasModeAnalysis));
     }
 
     form.addEventListener('change', (e)=>{
