@@ -54,6 +54,22 @@ final class TransportNodeDerivationServiceTest extends TestCase
         self::assertSame('bus', $out['incident_segment_mode']);
     }
 
+    public function testDeriveBusFieldsCanSetNoForNonTerminal(): void
+    {
+        $service = new TransportNodeDerivationService();
+
+        $out = $service->derive([
+            'transport_mode' => 'bus',
+            'dep_station_lookup_in_eu' => 'yes',
+            'dep_station_lookup_node_type' => 'stop',
+            'arr_station_lookup_in_eu' => 'no',
+        ]);
+
+        self::assertSame('yes', $out['boarding_in_eu']);
+        self::assertSame('no', $out['alighting_in_eu']);
+        self::assertSame('no', $out['departure_from_terminal']);
+    }
+
     public function testDeriveAirFieldsFromLookupMetadata(): void
     {
         $service = new TransportNodeDerivationService();

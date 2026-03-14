@@ -131,6 +131,11 @@ $isPreview = !empty($flowPreview);
   $ferryOperators = $transportOperatorRegistry->namesByMode('ferry');
   $busOperators = $transportOperatorRegistry->namesByMode('bus');
   $airOperators = $transportOperatorRegistry->namesByMode('air');
+  $transportOperatorEntries = [
+      'ferry' => $transportOperatorRegistry->entriesByMode('ferry'),
+      'bus' => $transportOperatorRegistry->entriesByMode('bus'),
+      'air' => $transportOperatorRegistry->entriesByMode('air'),
+  ];
   $currentOperatorListId = $isRail ? 'railOperatorSuggestions' : ($isFerry ? 'ferryOperatorSuggestions' : ($isBus ? 'busOperatorSuggestions' : 'airOperatorSuggestions'));
 	?>
 <?= $this->element('flow_locked_notice') ?>
@@ -1730,6 +1735,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   const productsByOperator = <?= json_encode($productsByOperator, JSON_UNESCAPED_UNICODE) ?>;
   const operatorToCountry = <?= json_encode($operatorToCountry, JSON_UNESCAPED_UNICODE) ?>;
   const countryToCurrency = <?= json_encode($countryToCurrency, JSON_UNESCAPED_UNICODE) ?>;
+  const transportOperatorEntries = <?= json_encode($transportOperatorEntries, JSON_UNESCAPED_UNICODE) ?>;
 
   function currentTransportMode() {
     const checked = form ? form.querySelector('input[name="transport_mode"]:checked') : null;
@@ -1756,6 +1762,32 @@ if ($a12Applies === false && !empty($contractsView)) {
     if (value === null || value === undefined || value === '') return null;
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
+  }
+
+  function normalizeLookupText(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    return raw
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function findOperatorEntry(mode, text) {
+    const normalized = normalizeLookupText(text);
+    if (!normalized) return null;
+    const entries = transportOperatorEntries && transportOperatorEntries[mode] ? transportOperatorEntries[mode] : [];
+    for (const entry of entries) {
+      const names = [entry.name].concat(Array.isArray(entry.aliases) ? entry.aliases : []);
+      for (const name of names) {
+        if (normalizeLookupText(name) === normalized) {
+          return entry;
+        }
+      }
+    }
+    return null;
   }
 
   function haversineMeters(lat1, lon1, lat2, lon2) {
@@ -1825,33 +1857,72 @@ if ($a12Applies === false && !empty($contractsView)) {
     if (mode === 'ferry') {
       if (depInEu) setFieldValue('departure_port_in_eu', depInEu);
       if (arrInEu) setFieldValue('arrival_port_in_eu', arrInEu);
-      if (depType === 'ferry_terminal' || depType === 'terminal') {
-        setFieldValue('departure_from_terminal', 'yes');
+      if (depType) {
+        setFieldValue('departure_from_terminal', (depType === 'ferry_terminal' || depType === 'terminal') ? 'yes' : 'no');
       }
-      const currentDistance = (getFieldValue('route_distance_meters') || '').trim();
-      if (currentDistance === '' && depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
+      if (depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
         setFieldValue('route_distance_meters', String(haversineMeters(depLat, depLon, arrLat, arrLon)));
       }
+      deriveScopeFromOperator();
       return;
     }
 
     if (mode === 'bus') {
       if (depInEu) setFieldValue('boarding_in_eu', depInEu);
       if (arrInEu) setFieldValue('alighting_in_eu', arrInEu);
-      if (depType === 'terminal' || depType === 'bus_terminal') {
-        setFieldValue('departure_from_terminal', 'yes');
+      if (depType) {
+        setFieldValue('departure_from_terminal', (depType === 'terminal' || depType === 'bus_terminal') ? 'yes' : 'no');
       }
-      const currentDistance = (getFieldValue('scheduled_distance_km') || '').trim();
-      if (currentDistance === '' && depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
+      if (depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
         const km = Math.max(1, Math.round(haversineMeters(depLat, depLon, arrLat, arrLon) / 1000));
         setFieldValue('scheduled_distance_km', String(km));
       }
+      deriveScopeFromOperator();
       return;
     }
 
     if (mode === 'air') {
       if (depInEu) setFieldValue('departure_airport_in_eu', depInEu);
       if (arrInEu) setFieldValue('arrival_airport_in_eu', arrInEu);
+      deriveScopeFromOperator();
+    }
+  }
+
+  function deriveScopeFromOperator() {
+    const mode = currentTransportMode();
+    if (mode === 'ferry') {
+      const operator = getFieldValue('operator');
+      const entry = findOperatorEntry('ferry', operator) || findOperatorEntry('ferry', getFieldValue('incident_segment_operator'));
+      if (entry && entry.country_code) {
+        setFieldValue('operator_country', entry.country_code);
+      }
+      if (entry && entry.is_eu_operator !== null && entry.is_eu_operator !== undefined) {
+        setFieldValue('carrier_is_eu', entry.is_eu_operator ? 'yes' : 'no');
+      }
+      return;
+    }
+
+    if (mode === 'bus') {
+      const operator = getFieldValue('operator');
+      const entry = findOperatorEntry('bus', operator) || findOperatorEntry('bus', getFieldValue('incident_segment_operator'));
+      if (entry && entry.country_code) {
+        setFieldValue('operator_country', entry.country_code);
+      }
+      return;
+    }
+
+    if (mode === 'air') {
+      const operating = findOperatorEntry('air', getFieldValue('operating_carrier'));
+      const marketing = findOperatorEntry('air', getFieldValue('marketing_carrier'));
+      if (operating && operating.country_code) {
+        setFieldValue('operator_country', operating.country_code);
+      }
+      if (operating && operating.is_eu_operator !== null && operating.is_eu_operator !== undefined) {
+        setFieldValue('operating_carrier_is_eu', operating.is_eu_operator ? 'yes' : 'no');
+      }
+      if (marketing && marketing.is_eu_operator !== null && marketing.is_eu_operator !== undefined) {
+        setFieldValue('marketing_carrier_is_eu', marketing.is_eu_operator ? 'yes' : 'no');
+      }
     }
   }
 
@@ -2117,6 +2188,27 @@ if ($a12Applies === false && !empty($contractsView)) {
       input.addEventListener('blur', () => setTimeout(() => hide(box), 180));
       box.addEventListener('mousedown', (e) => e.preventDefault());
     });
+  })();
+
+  (function(){
+    if (!form) return;
+    const watchedNames = ['operator', 'incident_segment_operator', 'operating_carrier', 'marketing_carrier'];
+    watchedNames.forEach((name) => {
+      form.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
+        input.addEventListener('input', () => deriveScopeFromOperator());
+        input.addEventListener('change', () => deriveScopeFromOperator());
+      });
+    });
+
+    form.querySelectorAll('input[name="transport_mode"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        deriveScopeFromNodes();
+        deriveScopeFromOperator();
+      });
+    });
+
+    deriveScopeFromNodes();
+    deriveScopeFromOperator();
   })();
 
   // Ticketless operator/product suggestions + lightweight autofill (offline catalog)

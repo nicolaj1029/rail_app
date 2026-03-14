@@ -101,4 +101,38 @@ final class TransportOperatorRegistry
 
         return $out;
     }
+
+    /**
+     * @return array<int,array{name:string,country_code:?string,is_eu_operator:?bool,aliases:array<int,string>}>
+     */
+    public function entriesByMode(string $mode): array
+    {
+        $mode = strtolower(trim($mode));
+        if ($mode === '') {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($this->operators as $operator) {
+            if (strtolower((string)($operator['mode'] ?? '')) !== $mode) {
+                continue;
+            }
+
+            $name = trim((string)($operator['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'name' => $name,
+                'country_code' => ($country = strtoupper(trim((string)($operator['country_code'] ?? '')))) !== '' ? $country : null,
+                'is_eu_operator' => array_key_exists('is_eu_operator', $operator) ? (bool)$operator['is_eu_operator'] : null,
+                'aliases' => array_values(array_filter(array_map('strval', (array)($operator['aliases'] ?? [])), static fn(string $value): bool => trim($value) !== '')),
+            ];
+        }
+
+        usort($rows, static fn(array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+
+        return $rows;
+    }
 }

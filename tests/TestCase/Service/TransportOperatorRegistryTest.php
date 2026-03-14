@@ -37,4 +37,16 @@ final class TransportOperatorRegistryTest extends TestCase
         self::assertContains('SAS', $air);
         self::assertNotContains('Scandlines', $air);
     }
+
+    public function testReturnsModeSpecificEntries(): void
+    {
+        $registry = new TransportOperatorRegistry();
+
+        $entries = $registry->entriesByMode('ferry');
+        $scandlines = array_values(array_filter($entries, static fn(array $entry): bool => $entry['name'] === 'Scandlines'));
+
+        self::assertCount(1, $scandlines);
+        self::assertSame('DK', $scandlines[0]['country_code']);
+        self::assertTrue($scandlines[0]['is_eu_operator']);
+    }
 }

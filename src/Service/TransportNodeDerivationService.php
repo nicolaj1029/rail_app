@@ -31,20 +31,18 @@ final class TransportNodeDerivationService
 
         if ($mode === 'ferry') {
             $form = $this->deriveOperatorDefaults($form, 'ferry', ['operator', 'incident_segment_operator']);
-            if (($form['departure_port_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
+            if ($dep['in_eu'] !== '') {
                 $form['departure_port_in_eu'] = $dep['in_eu'];
             }
-            if (($form['arrival_port_in_eu'] ?? '') === '' && $arr['in_eu'] !== '') {
+            if ($arr['in_eu'] !== '') {
                 $form['arrival_port_in_eu'] = $arr['in_eu'];
             }
-            if (($form['departure_from_terminal'] ?? '') === '' && in_array($dep['node_type'], ['ferry_terminal', 'terminal'], true)) {
-                $form['departure_from_terminal'] = 'yes';
+            if ($dep['node_type'] !== '') {
+                $form['departure_from_terminal'] = in_array($dep['node_type'], ['ferry_terminal', 'terminal'], true) ? 'yes' : 'no';
             }
-            if (($form['route_distance_meters'] ?? '') === '') {
-                $meters = $this->distanceMeters($dep, $arr);
-                if ($meters !== null) {
-                    $form['route_distance_meters'] = (string)$meters;
-                }
+            $meters = $this->distanceMeters($dep, $arr);
+            if ($meters !== null) {
+                $form['route_distance_meters'] = (string)$meters;
             }
             if (($form['carrier_is_eu'] ?? '') === '') {
                 $carrierIsEu = $this->operatorRegistry->deriveEuFlag('ferry', (string)($form['operator'] ?? ''));
@@ -64,43 +62,37 @@ final class TransportNodeDerivationService
 
         if ($mode === 'bus') {
             $form = $this->deriveOperatorDefaults($form, 'bus', ['operator', 'incident_segment_operator']);
-            if (($form['boarding_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
+            if ($dep['in_eu'] !== '') {
                 $form['boarding_in_eu'] = $dep['in_eu'];
             }
-            if (($form['alighting_in_eu'] ?? '') === '' && $arr['in_eu'] !== '') {
+            if ($arr['in_eu'] !== '') {
                 $form['alighting_in_eu'] = $arr['in_eu'];
             }
-            if (($form['departure_from_terminal'] ?? '') === '' && in_array($dep['node_type'], ['terminal', 'bus_terminal'], true)) {
-                $form['departure_from_terminal'] = 'yes';
+            if ($dep['node_type'] !== '') {
+                $form['departure_from_terminal'] = in_array($dep['node_type'], ['terminal', 'bus_terminal'], true) ? 'yes' : 'no';
             }
-            if (($form['scheduled_distance_km'] ?? '') === '') {
-                $meters = $this->distanceMeters($dep, $arr);
-                if ($meters !== null) {
-                    $form['scheduled_distance_km'] = (string)max(1, (int)round($meters / 1000));
-                }
+            $meters = $this->distanceMeters($dep, $arr);
+            if ($meters !== null) {
+                $form['scheduled_distance_km'] = (string)max(1, (int)round($meters / 1000));
             }
 
             return $form;
         }
 
         $form = $this->deriveOperatorDefaults($form, 'air', ['operating_carrier', 'marketing_carrier', 'operator', 'incident_segment_operator']);
-        if (($form['departure_airport_in_eu'] ?? '') === '' && $dep['in_eu'] !== '') {
+        if ($dep['in_eu'] !== '') {
             $form['departure_airport_in_eu'] = $dep['in_eu'];
         }
-        if (($form['arrival_airport_in_eu'] ?? '') === '' && $arr['in_eu'] !== '') {
+        if ($arr['in_eu'] !== '') {
             $form['arrival_airport_in_eu'] = $arr['in_eu'];
         }
-        if (($form['operating_carrier_is_eu'] ?? '') === '') {
-            $opIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['operating_carrier'] ?? ''));
-            if ($opIsEu !== null) {
-                $form['operating_carrier_is_eu'] = $opIsEu ? 'yes' : 'no';
-            }
+        $opIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['operating_carrier'] ?? ''));
+        if ($opIsEu !== null) {
+            $form['operating_carrier_is_eu'] = $opIsEu ? 'yes' : 'no';
         }
-        if (($form['marketing_carrier_is_eu'] ?? '') === '') {
-            $marketingIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['marketing_carrier'] ?? ''));
-            if ($marketingIsEu !== null) {
-                $form['marketing_carrier_is_eu'] = $marketingIsEu ? 'yes' : 'no';
-            }
+        $marketingIsEu = $this->operatorRegistry->deriveEuFlag('air', (string)($form['marketing_carrier'] ?? ''));
+        if ($marketingIsEu !== null) {
+            $form['marketing_carrier_is_eu'] = $marketingIsEu ? 'yes' : 'no';
         }
 
         return $form;
