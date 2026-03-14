@@ -13,14 +13,21 @@ namespace App\Service;
 final class TransportNodeSearchService
 {
     private ?string $path;
+    private StationSearchService $stationSearch;
+
+    /** @var array<string,array<int,string>> */
+    private const LOCATION_ALIASES = [
+        'copenhagen' => ['København', 'Kobenhavn'],
+    ];
 
     /** @var array<int,array<string,mixed>>|null */
     private static array $cacheRowsByKey = [];
     private static array $cacheMtimeByKey = [];
 
-    public function __construct(?string $path = null)
+    public function __construct(?string $path = null, ?StationSearchService $stationSearch = null)
     {
         $this->path = $path;
+        $this->stationSearch = $stationSearch ?? new StationSearchService();
     }
 
     /**
@@ -44,79 +51,24 @@ final class TransportNodeSearchService
         }
         $limit = max(1, min(50, $limit));
 
-        $rows = $this->loadRows($mode);
-        if ($rows === []) {
-            return [];
-        }
-
         $qn = $this->norm($query);
         $qa = $this->ascii($qn);
         if ($qa === '') {
             return [];
         }
         $qWords = array_values(array_filter(explode(' ', $qa), static fn(string $word): bool => $word !== ''));
-        $scored = [];
+        $rows = $this->loadRows($mode);
+        if ($rows === []) {
+            return $mode === 'bus' ? $this->fallbackBusNodes($query, $country, $limit) : [];
+        }
 
-        foreach ($rows as $row) {
-            if (($row['mode'] ?? '') !== $mode) {
-                continue;
-            }
-            $rowCountry = strtoupper((string)($row['country'] ?? ''));
-            if ($country !== null && $rowCountry !== $country) {
-                continue;
-            }
-
-            $searchBlob = (string)($row['__search'] ?? '');
-            if ($searchBlob === '') {
-                continue;
-            }
-
-            $score = 0;
-            if ($searchBlob === $qa) {
-                $score = 100;
-            } elseif (str_starts_with($searchBlob, $qa)) {
-                $score = 92;
-            } elseif (strpos($searchBlob, $qa) !== false) {
-                $score = 80;
-            } else {
-                $hits = 0;
-                foreach ($qWords as $word) {
-                    if (strpos($searchBlob, $word) !== false) {
-                        $hits++;
-                    }
-                }
-                if ($hits === count($qWords) && $hits > 0) {
-                    $score = 65 + min(10, $hits * 2);
-                }
-            }
-
-            if ($score <= 0) {
-                continue;
-            }
-
-            $nodeType = strtolower((string)($row['node_type'] ?? ''));
-            if ($nodeType === 'airport' || $nodeType === 'ferry_terminal' || $nodeType === 'terminal') {
-                $score += 6;
-            }
-
-            $scored[] = [
-                'score' => $score,
-                'id' => (string)($row['id'] ?? ''),
-                'mode' => $mode,
-                'name' => (string)($row['name'] ?? ''),
-                'country' => $rowCountry !== '' ? $rowCountry : null,
-                'in_eu' => isset($row['in_eu']) ? (bool)$row['in_eu'] : null,
-                'code' => isset($row['code']) ? (string)$row['code'] : null,
-                'lat' => isset($row['lat']) ? (float)$row['lat'] : null,
-                'lon' => isset($row['lon']) ? (float)$row['lon'] : null,
-                'node_type' => $nodeType !== '' ? $nodeType : null,
-                'parent_name' => isset($row['parent_name']) ? (string)$row['parent_name'] : null,
-                'source' => isset($row['source']) ? (string)$row['source'] : 'seed',
-            ];
+        $scored = $this->searchRows($rows, $mode, $country, $qa, $qWords);
+        if ($scored === [] && $country !== null) {
+            $scored = $this->searchRows($rows, $mode, null, $qa, $qWords);
         }
 
         if ($scored === []) {
-            return [];
+            return $mode === 'bus' ? $this->fallbackBusNodes($query, $country, $limit) : [];
         }
 
         usort($scored, static function (array $a, array $b): int {
@@ -144,6 +96,200 @@ final class TransportNodeSearchService
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @param array<int,string> $qWords
+     * @return array<int,array<string,mixed>>
+     */
+    private function searchRows(array $rows, string $mode, ?string $country, string $qa, array $qWords): array
+    {
+        $scored = [];
+
+        foreach ($rows as $row) {
+            if (($row['mode'] ?? '') !== $mode) {
+                continue;
+            }
+            $rowCountry = strtoupper((string)($row['country'] ?? ''));
+            if ($country !== null && $rowCountry !== $country) {
+                continue;
+            }
+
+            $searchBlob = (string)($row['__search'] ?? '');
+            if ($searchBlob === '') {
+                continue;
+            }
+
+            $nameSearch = (string)($row['__name_search'] ?? '');
+            /** @var array<int,string> $aliasSearch */
+            $aliasSearch = is_array($row['__alias_search'] ?? null) ? $row['__alias_search'] : [];
+            $codeSearch = (string)($row['__code_search'] ?? '');
+            $score = $this->scoreRow($mode, $qa, $qWords, $row, $nameSearch, $aliasSearch, $codeSearch, $searchBlob);
+
+            if ($score <= 0) {
+                continue;
+            }
+
+            $nodeType = strtolower((string)($row['node_type'] ?? ''));
+
+            $scored[] = [
+                'score' => $score,
+                'id' => (string)($row['id'] ?? ''),
+                'mode' => $mode,
+                'name' => (string)($row['name'] ?? ''),
+                'country' => $rowCountry !== '' ? $rowCountry : null,
+                'in_eu' => isset($row['in_eu']) ? (bool)$row['in_eu'] : null,
+                'code' => isset($row['code']) ? (string)$row['code'] : null,
+                'lat' => isset($row['lat']) ? (float)$row['lat'] : null,
+                'lon' => isset($row['lon']) ? (float)$row['lon'] : null,
+                'node_type' => $nodeType !== '' ? $nodeType : null,
+                'parent_name' => isset($row['parent_name']) ? (string)$row['parent_name'] : null,
+                'source' => isset($row['source']) ? (string)$row['source'] : 'seed',
+            ];
+        }
+
+        return $scored;
+    }
+
+    /**
+     * @param array<int,string> $qWords
+     * @param array<int,string> $aliasSearch
+     * @param array<string,mixed> $row
+     */
+    private function scoreRow(string $mode, string $qa, array $qWords, array $row, string $nameSearch, array $aliasSearch, string $codeSearch, string $searchBlob): int
+    {
+        $score = 0;
+
+        if ($nameSearch === $qa) {
+            $score = 124;
+        } elseif ($codeSearch !== '' && $codeSearch === $qa) {
+            $score = 120;
+        } elseif ($codeSearch !== '' && str_starts_with($codeSearch, $qa)) {
+            $score = 110;
+        } elseif (in_array($qa, $aliasSearch, true)) {
+            $score = 118;
+        } elseif ($nameSearch !== '' && str_starts_with($nameSearch, $qa)) {
+            $score = 110;
+        } elseif ($this->startsWithAny($aliasSearch, $qa)) {
+            $score = 102;
+        } elseif ($nameSearch !== '' && strpos($nameSearch, $qa) !== false) {
+            $score = 94;
+        } elseif ($this->containsAny($aliasSearch, $qa)) {
+            $score = 88;
+        } elseif (strpos($searchBlob, $qa) !== false) {
+            $score = 76;
+        } else {
+            $hits = 0;
+            foreach ($qWords as $word) {
+                if (strpos($searchBlob, $word) !== false) {
+                    $hits++;
+                }
+            }
+            if ($hits === count($qWords) && $hits > 0) {
+                $score = 65 + min(10, $hits * 2);
+            }
+        }
+
+        if ($score <= 0) {
+            return 0;
+        }
+
+        $nodeType = strtolower((string)($row['node_type'] ?? ''));
+        $queryLooksLikeSinglePlace = !str_contains($qa, '-') && count($qWords) <= 2;
+        if ($queryLooksLikeSinglePlace && $nameSearch !== '' && str_contains($nameSearch, '-')) {
+            $score -= 12;
+        }
+
+        if ($mode === 'ferry') {
+            if ($queryLooksLikeSinglePlace && $nodeType === 'port') {
+                $score += 8;
+            } elseif ($nodeType === 'ferry_terminal') {
+                $score += 4;
+            }
+        } elseif ($mode === 'air' && $nodeType === 'airport') {
+            $score += 6;
+        } elseif ($mode === 'bus' && ($nodeType === 'terminal' || $nodeType === 'stop' || $nodeType === 'bus_terminal')) {
+            $score += 5;
+        }
+
+        if (((string)($row['country'] ?? '')) !== '') {
+            $score += 2;
+        }
+
+        return $score;
+    }
+
+    /**
+     * @param array<int,string> $values
+     */
+    private function startsWithAny(array $values, string $query): bool
+    {
+        foreach ($values as $value) {
+            if ($value !== '' && str_starts_with($value, $query)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<int,string> $values
+     */
+    private function containsAny(array $values, string $query): bool
+    {
+        foreach ($values as $value) {
+            if ($value !== '' && strpos($value, $query) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private function fallbackBusNodes(string $query, ?string $country, int $limit): array
+    {
+        $stations = $this->stationSearch->search($query, $country, $limit);
+        if ($stations === []) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($stations as $station) {
+            $stationCountry = isset($station['country']) ? strtoupper((string)$station['country']) : null;
+            $rows[] = [
+                'id' => 'bus-fallback-' . md5((string)($station['name'] ?? '') . '|' . (string)$stationCountry),
+                'mode' => 'bus',
+                'name' => (string)($station['name'] ?? ''),
+                'country' => $stationCountry,
+                'in_eu' => $stationCountry !== null ? $this->isEuCountry($stationCountry) : null,
+                'code' => null,
+                'lat' => isset($station['lat']) ? (float)$station['lat'] : null,
+                'lon' => isset($station['lon']) ? (float)$station['lon'] : null,
+                'node_type' => 'terminal',
+                'parent_name' => null,
+                'source' => 'rail_station_fallback',
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function isEuCountry(string $country): bool
+    {
+        static $eu = [
+            'AT' => true, 'BE' => true, 'BG' => true, 'HR' => true, 'CY' => true, 'CZ' => true,
+            'DE' => true, 'DK' => true, 'EE' => true, 'ES' => true, 'FI' => true, 'FR' => true,
+            'GR' => true, 'HU' => true, 'IE' => true, 'IT' => true, 'LT' => true, 'LU' => true,
+            'LV' => true, 'MT' => true, 'NL' => true, 'PL' => true, 'PT' => true, 'RO' => true,
+            'SE' => true, 'SI' => true, 'SK' => true,
+        ];
+
+        return isset($eu[strtoupper($country)]);
     }
 
     /**
@@ -186,12 +332,9 @@ final class TransportNodeSearchService
             }
 
             $tokens = [$name];
-            if (!empty($row['aliases']) && is_array($row['aliases'])) {
-                foreach ($row['aliases'] as $alias) {
-                    if (is_string($alias) && trim($alias) !== '') {
-                        $tokens[] = trim($alias);
-                    }
-                }
+            $aliases = $this->expandAliases($mode, $row);
+            foreach ($aliases as $alias) {
+                $tokens[] = $alias;
             }
             if (!empty($row['code'])) {
                 $tokens[] = (string)$row['code'];
@@ -205,6 +348,9 @@ final class TransportNodeSearchService
 
             $row['mode'] = $mode;
             $row['country'] = strtoupper((string)($row['country'] ?? ''));
+            $row['__name_search'] = $this->ascii($this->norm($name));
+            $row['__alias_search'] = array_values(array_filter(array_map(fn(string $value): string => $this->ascii($this->norm($value)), $aliases), static fn(string $value): bool => $value !== ''));
+            $row['__code_search'] = !empty($row['code']) ? $this->ascii($this->norm((string)$row['code'])) : '';
             $row['__search'] = $this->ascii($this->norm(implode(' ', $tokens)));
             $rows[] = $row;
         }
@@ -232,6 +378,39 @@ final class TransportNodeSearchService
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<int,string>
+     */
+    private function expandAliases(string $mode, array $row): array
+    {
+        $aliases = [];
+        if (!empty($row['aliases']) && is_array($row['aliases'])) {
+            foreach ($row['aliases'] as $alias) {
+                if (is_string($alias) && trim($alias) !== '') {
+                    $aliases[] = trim($alias);
+                }
+            }
+        }
+
+        foreach ([$row['city'] ?? null, $row['name'] ?? null] as $candidate) {
+            if (!is_string($candidate) || trim($candidate) === '') {
+                continue;
+            }
+            $key = $this->ascii($this->norm($candidate));
+            if ($key === '') {
+                continue;
+            }
+            foreach (self::LOCATION_ALIASES[$key] ?? [] as $alias) {
+                $aliases[] = $alias;
+            }
+        }
+
+        $aliases = array_values(array_unique(array_filter(array_map('trim', $aliases), static fn(string $value): bool => $value !== '')));
+
+        return $aliases;
     }
 
     private function norm(string $value): string
