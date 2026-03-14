@@ -183,8 +183,8 @@ $isPreview = !empty($flowPreview);
     $modeProblemOperatorTop = (string)($form['incident_segment_operator'] ?? ($isFerry ? ($ferryContract['primary_claim_party_name'] ?? '') : ($modeContract['primary_claim_party_name'] ?? '')));
   ?>
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
-    <strong>Kontrakt og ansvar</strong>
-    <div class="small muted" style="margin-top:6px;">Fælles multimodal kontraktblok. Bruges til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt.</div>
+    <strong>Kontrakt og ansvar (fælles multimodal)</strong>
+    <div class="small muted" style="margin-top:6px;">Denne blok bruges for færge, bus og fly til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt. Rail bruger fortsat Art. 12-blokken længere nede.</div>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <label>Hvem solgte hele rejsen?
         <select name="seller_channel">
@@ -265,222 +265,6 @@ $isPreview = !empty($flowPreview);
     <?php endif; ?>
   </div>
   <?php endif; ?>
-
-  <div class="card" id="modeContractCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px; display:none;">
-    <strong><?= $isAir ? 'Fly: booking og ansvar' : 'Bus: booking og ansvar' ?></strong>
-    <div class="small muted" style="margin-top:6px;"><?= $isAir ? 'Her afklarer vi protected connection vs. self-transfer, claim-kanal og EU-scope for flysagen.' : 'Her afklarer vi regular service-scope, claim-kanal og hvilket busmodul der skal bruges senere.' ?></div>
-    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-      <?php if ($isAir): ?>
-      <label>Afgangslufthavn i EU?
-        <?php $airDepEu = (string)($form['departure_airport_in_eu'] ?? 'yes'); ?>
-        <select name="departure_airport_in_eu">
-          <option value="yes" <?= $airDepEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $airDepEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Ankomstlufthavn i EU?
-        <?php $airArrEu = (string)($form['arrival_airport_in_eu'] ?? 'yes'); ?>
-        <select name="arrival_airport_in_eu">
-          <option value="yes" <?= $airArrEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $airArrEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Operating carrier er EU-operatoer?
-        <?php $opCarrierEu = (string)($form['operating_carrier_is_eu'] ?? 'yes'); ?>
-        <select name="operating_carrier_is_eu">
-          <option value="yes" <?= $opCarrierEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $opCarrierEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Marketing carrier er EU-operatoer?
-        <?php $mkCarrierEu = (string)($form['marketing_carrier_is_eu'] ?? 'yes'); ?>
-        <select name="marketing_carrier_is_eu">
-          <option value="yes" <?= $mkCarrierEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $mkCarrierEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Forbindelsestype
-        <?php $airConnectionType = (string)($form['air_connection_type'] ?? ($modeContract['air_connection_type'] ?? '')); ?>
-        <select name="air_connection_type">
-          <option value="">Auto / resolver</option>
-          <option value="single_flight" <?= $airConnectionType==='single_flight'?'selected':'' ?>>Enkelt flight</option>
-          <option value="protected_connection" <?= $airConnectionType==='protected_connection'?'selected':'' ?>>Protected connection</option>
-          <option value="self_transfer" <?= $airConnectionType==='self_transfer'?'selected':'' ?>>Self-transfer</option>
-        </select>
-      </label>
-      <label>Same PNR?
-        <?php $samePnr = (string)($form['same_pnr'] ?? 'yes'); ?>
-        <select name="same_pnr">
-          <option value="yes" <?= $samePnr==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $samePnr==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Same bookingreference?
-        <?php $sameBooking = (string)($form['same_booking_reference'] ?? 'yes'); ?>
-        <select name="same_booking_reference">
-          <option value="yes" <?= $sameBooking==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $sameBooking==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Same e-ticket?
-        <?php $sameEticket = (string)($form['same_eticket'] ?? 'yes'); ?>
-        <select name="same_eticket">
-          <option value="yes" <?= $sameEticket==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $sameEticket==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Self-transfer oplyst foer koeb?
-        <?php $selfTransferNotice = (string)($form['self_transfer_notice'] ?? 'no'); ?>
-        <select name="self_transfer_notice">
-          <option value="yes" <?= $selfTransferNotice==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $selfTransferNotice==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Marketing carrier
-        <input type="text" name="marketing_carrier" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
-      </label>
-      <label>Operating carrier
-        <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
-      </label>
-      <?php elseif ($isBus): ?>
-      <label>Regular service?
-        <?php $busRegular = (string)($form['bus_regular_service'] ?? 'yes'); ?>
-        <select name="bus_regular_service">
-          <option value="yes" <?= $busRegular==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $busRegular==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Boarding i EU?
-        <?php $boardingInEu = (string)($form['boarding_in_eu'] ?? 'yes'); ?>
-        <select name="boarding_in_eu">
-          <option value="yes" <?= $boardingInEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $boardingInEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Alighting i EU?
-        <?php $alightingInEu = (string)($form['alighting_in_eu'] ?? 'yes'); ?>
-        <select name="alighting_in_eu">
-          <option value="yes" <?= $alightingInEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $alightingInEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Fra terminal?
-        <?php $busTerminal = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
-        <select name="departure_from_terminal">
-          <option value="yes" <?= $busTerminal==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $busTerminal==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Planlagt distance (km)
-        <input type="number" name="scheduled_distance_km" min="0" step="1" value="<?= h((string)($form['scheduled_distance_km'] ?? '')) ?>" placeholder="320" />
-      </label>
-      <?php endif; ?>
-      <label>Ramt segment
-        <?php $modeIncidentSegment = (string)($form['incident_segment_mode'] ?? ($modeContract['rights_module'] ?? $transportMode)); ?>
-        <select name="incident_segment_mode">
-          <option value="<?= h($transportMode) ?>" <?= $modeIncidentSegment===$transportMode?'selected':'' ?>><?= $isAir ? 'Fly' : 'Bus' ?></option>
-          <option value="rail" <?= $modeIncidentSegment==='rail'?'selected':'' ?>>Tog</option>
-          <option value="ferry" <?= $modeIncidentSegment==='ferry'?'selected':'' ?>>Faerge</option>
-          <option value="bus" <?= $modeIncidentSegment==='bus'?'selected':'' ?>>Bus</option>
-          <option value="air" <?= $modeIncidentSegment==='air'?'selected':'' ?>>Fly</option>
-        </select>
-      </label>
-      <label>Problem-operatoer (valgfri)
-        <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? ($modeContract['primary_claim_party_name'] ?? ''))) ?>" placeholder="<?= $isAir ? 'Fx SAS' : 'Fx FlixBus' ?>" />
-      </label>
-    </div>
-    <?php if (!empty($modeContract) || !empty($claimDirection)): ?>
-      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
-        <div><strong>Foreloebig vurdering</strong></div>
-        <?php if ($isAir): ?>
-          <div>Scope: <?= array_key_exists('regulation_applies', $airScope) ? (!empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($airScope['scope_basis']) ? ' - ' . h((string)$airScope['scope_basis']) : '' ?></div>
-          <div>Forbindelse: <?= h((string)($modeContract['air_connection_type'] ?? 'Auto')) ?></div>
-        <?php elseif ($isBus): ?>
-          <div>Scope: <?= array_key_exists('regulation_applies', $busScope) ? (!empty($busScope['regulation_applies']) ? 'In scope' : 'Out of scope') : 'Auto' ?><?= !empty($busScope['scope_basis']) ? ' - ' . h((string)$busScope['scope_basis']) : '' ?></div>
-        <?php endif; ?>
-        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
-        <div>Claim-kanal: <?= h((string)($modeContract['primary_claim_party_name'] ?? ($modeContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
-        <div>Rettighedsmodul: <?= h((string)($modeContract['rights_module'] ?? ($claimDirection['rights_module'] ?? $transportMode))) ?></div>
-        <?php if (!empty($claimDirection['recommended_documents'])): ?>
-          <div>Anbefalet dokumentation: <?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></div>
-        <?php endif; ?>
-        <div class="muted" style="margin-top:6px;">Claim-kanal og rettighedsmodul bruges senere til at afgore hvem sagen rettes mod, og hvilke regler der vurderes efter.</div>
-      </div>
-    <?php endif; ?>
-  </div>
-
-  <div class="card" id="ferryScopeCard" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px; display:none;">
-    <strong>Faerge: scope og ansvar</strong>
-    <div class="small muted" style="margin-top:6px;">Her afklarer vi om faergeforordningen finder anvendelse, om problemet ligger paa faergedelen, og hvem claimet som udgangspunkt skal rettes mod. Handicap/PMR kommer senere.</div>
-    <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-      <label>Servicetype
-        <?php $serviceType = (string)($form['service_type'] ?? 'passenger_service'); ?>
-        <select name="service_type">
-          <option value="passenger_service" <?= $serviceType==='passenger_service'?'selected':'' ?>>Passenger service</option>
-          <option value="cruise" <?= $serviceType==='cruise'?'selected':'' ?>>Cruise</option>
-        </select>
-      </label>
-      <label>Ramt segment
-        <?php $incidentSegmentMode = (string)($form['incident_segment_mode'] ?? ($ferryContract['rights_module'] ?? 'ferry')); ?>
-        <select name="incident_segment_mode">
-          <option value="ferry" <?= $incidentSegmentMode==='ferry'?'selected':'' ?>>Faerge</option>
-          <option value="rail" <?= $incidentSegmentMode==='rail'?'selected':'' ?>>Tog</option>
-          <option value="bus" <?= $incidentSegmentMode==='bus'?'selected':'' ?>>Bus</option>
-          <option value="air" <?= $incidentSegmentMode==='air'?'selected':'' ?>>Fly</option>
-        </select>
-      </label>
-      <label>Problem-operatoer (valgfri)
-        <input type="text" name="incident_segment_operator" value="<?= h((string)($form['incident_segment_operator'] ?? ($ferryContract['primary_claim_party_name'] ?? ''))) ?>" placeholder="Fx Scandlines" />
-      </label>
-      <label>Fra havneterminal?
-        <?php $depTerminal = (string)($form['departure_from_terminal'] ?? 'yes'); ?>
-        <select name="departure_from_terminal">
-          <option value="yes" <?= $depTerminal==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $depTerminal==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Afgang i EU?
-        <?php $depEu = (string)($form['departure_port_in_eu'] ?? 'yes'); ?>
-        <select name="departure_port_in_eu">
-          <option value="yes" <?= $depEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $depEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Ankomst i EU?
-        <?php $arrEu = (string)($form['arrival_port_in_eu'] ?? 'yes'); ?>
-        <select name="arrival_port_in_eu">
-          <option value="yes" <?= $arrEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $arrEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Carrier er EU-operatoer?
-        <?php $carrierEu = (string)($form['carrier_is_eu'] ?? 'yes'); ?>
-        <select name="carrier_is_eu">
-          <option value="yes" <?= $carrierEu==='yes'?'selected':'' ?>>Ja</option>
-          <option value="no" <?= $carrierEu==='no'?'selected':'' ?>>Nej</option>
-        </select>
-      </label>
-      <label>Ruteafstand i meter (valgfri)
-        <input type="number" name="route_distance_meters" min="0" step="1" value="<?= h((string)($form['route_distance_meters'] ?? '')) ?>" placeholder="10000" />
-      </label>
-      <label>Passagerkapacitet (valgfri)
-        <input type="number" name="vessel_passenger_capacity" min="0" step="1" value="<?= h((string)($form['vessel_passenger_capacity'] ?? '')) ?>" placeholder="200" />
-      </label>
-      <label>Operationel besaetning (valgfri)
-        <input type="number" name="vessel_operational_crew" min="0" step="1" value="<?= h((string)($form['vessel_operational_crew'] ?? '')) ?>" placeholder="12" />
-      </label>
-    </div>
-    <?php if (!empty($ferryScope) || !empty($ferryContract)): ?>
-      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
-        <div><strong>Foreloebig vurdering</strong></div>
-        <div>Scope: <?= !empty($ferryScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?><?= !empty($ferryScope['scope_basis']) ? (' â€“ ' . h((string)$ferryScope['scope_basis'])) : '' ?></div>
-        <div>Kontraktstruktur: <?= h((string)($multimodal['contract_meta']['contract_topology'] ?? 'Auto')) ?></div>
-        <div>Claim-kanal: <?= h((string)($ferryContract['primary_claim_party_name'] ?? ($ferryContract['primary_claim_party'] ?? 'manual_review'))) ?></div>
-        <div>Rettighedsmodul: <?= h((string)($ferryContract['rights_module'] ?? 'ferry')) ?></div>
-        <div class="muted" style="margin-top:6px;">Hvis kontrakten er samlet, kan claim-kanalen vaere rederiet eller saelgeren, selv om selve rettighedsmodulet ligger paa den ramte transportdel.</div>
-      </div>
-    <?php endif; ?>
-  </div>
 
   <?php
     // Season/period pass (Art. 19(2)) is a top-level entitlement choice in TRIN 2
@@ -1157,9 +941,9 @@ $isPreview = !empty($flowPreview);
   <?php if ($isFerry || $isBus || $isAir): ?>
   <div id="modeJourneyFields" style="<?= ($isFerry || $isBus || $isAir) ? '' : 'display:none;' ?>">
     <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
-      <strong><?= $isFerry ? 'Færge — booking, ansvar og scope' : ($isBus ? 'Bus — booking, ansvar og scope' : 'Fly — booking, ansvar og scope') ?></strong>
+      <strong><?= $isFerry ? 'Færge — upload og basisrejse' : ($isBus ? 'Bus — upload og basisrejse' : 'Fly — upload og basisrejse') ?></strong>
       <div class="small muted" style="margin-top:6px;">
-        <?= $isFerry ? 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse, derefter kontrakt og ansvar, og til sidst scopefelter.' : ($isBus ? 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse, derefter kontrakt og ansvar, og til sidst scopefelter.' : 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse, derefter kontrakt og ansvar, og til sidst scopefelter.') ?>
+        <?= $isFerry ? 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse og derefter scopefelter. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : ($isBus ? 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse og derefter scopefelter. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : 'Ved upload bruger vi LLM først. Udfyld kun det der mangler: først basisrejse og derefter scopefelter. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.') ?>
       </div>
       <div class="small" style="margin-top:12px; font-weight:600;">1. Basisrejse</div>
       <div class="small muted" style="margin-top:4px;">Carrier/operator, fra/til, tider, bookingreference og pris.</div>
@@ -2362,8 +2146,6 @@ if ($a12Applies === false && !empty($contractsView)) {
     const seasonCard = document.getElementById('seasonPassCard');
     const seasonOptionWrap = document.getElementById('seasonPassOptionWrap');
     const art12Card = document.getElementById('art12MinimalBlock');
-    const ferryScopeCard = document.getElementById('ferryScopeCard');
-    const modeContractCard = document.getElementById('modeContractCard');
     const priceBlock = document.getElementById('ticketlessPriceBlock');
     const ticketlessFs = document.getElementById('ticketlessFieldset');
     const seasonFs = document.getElementById('seasonPassFieldset');
@@ -2416,8 +2198,6 @@ if ($a12Applies === false && !empty($contractsView)) {
       }
       // In ticketless mode we always want Art.12 questions available, even before the first submit.
       if (a12Qs && (isTicketless || isSeason)) { a12Qs.style.display = 'block'; }
-      setDisabledWithin(ferryScopeCard, true);
-      setDisabledWithin(modeContractCard, true);
       setDisabledWithin(art12Card, transportMode !== 'rail');
     }
     function updatePriceKnown(){
@@ -2436,13 +2216,9 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('transport_mode') || 'rail';
       const ticketMode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = ticketMode === 'ticketless';
-      show(ferryScopeCard, false);
-      show(modeContractCard, false);
       show(art12Card, mode === 'rail');
       show(railJourneyFields, mode === 'rail');
       show(modeJourneyFields, mode !== 'rail');
-      setDisabledWithin(ferryScopeCard, true);
-      setDisabledWithin(modeContractCard, true);
       setDisabledWithin(art12Card, mode !== 'rail');
     }
 
