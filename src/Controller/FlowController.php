@@ -1521,10 +1521,8 @@ class FlowController extends AppController
                 $meta['seller_type_operator'] = 'Nej';
                 $meta['seller_type_agency'] = 'Ja';
             }
-            // If bookingRef already present, infer single transaction by seller role
+            // If bookingRef already present, only infer shared booking/reference.
             if (!empty($journey['bookingRef'])) {
-                if (($journey['seller_type'] ?? null) === 'operator') { $meta['single_txn_operator'] = 'Ja'; }
-                elseif (($journey['seller_type'] ?? null) === 'agency') { $meta['single_txn_retailer'] = 'Ja'; }
                 $meta['single_booking_reference'] = 'Ja';
                 $meta['shared_pnr_scope'] = 'Ja';
             }
@@ -4545,14 +4543,8 @@ class FlowController extends AppController
                 $meta['seller_type_operator'] = 'Ved ikke';
                 $meta['seller_type_agency'] = 'Ved ikke';
             }
-            // If bookingRef already present, infer single transaction automatically by seller role
+            // If bookingRef already present, only infer shared booking/reference.
             if (!empty($journey['bookingRef'])) {
-                if (($journey['seller_type'] ?? null) === 'operator') {
-                    $meta['single_txn_operator'] = 'Ja';
-                } elseif (($journey['seller_type'] ?? null) === 'agency') {
-                    $meta['single_txn_retailer'] = 'Ja';
-                }
-                // Also reflect this in hook 13 for clarity
                 $meta['single_booking_reference'] = 'Ja';
                 $meta['shared_pnr_scope'] = 'Ja';
             }

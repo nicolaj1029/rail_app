@@ -6,9 +6,11 @@ namespace App\Service;
 final class TransportNodeDerivationService
 {
     public function __construct(
-        private ?TransportOperatorRegistry $operatorRegistry = null
+        private ?TransportOperatorRegistry $operatorRegistry = null,
+        private ?TransportNodeSearchService $nodeSearch = null
     ) {
         $this->operatorRegistry ??= new TransportOperatorRegistry();
+        $this->nodeSearch ??= new TransportNodeSearchService();
     }
 
     /**
@@ -22,6 +24,8 @@ final class TransportNodeDerivationService
             return $form;
         }
 
+        $form = $this->resolveLookupMeta($form, 'dep_station', $mode);
+        $form = $this->resolveLookupMeta($form, 'arr_station', $mode);
         $dep = $this->lookupMeta($form, 'dep_station');
         $arr = $this->lookupMeta($form, 'arr_station');
 
@@ -94,6 +98,42 @@ final class TransportNodeDerivationService
         if ($marketingIsEu !== null) {
             $form['marketing_carrier_is_eu'] = $marketingIsEu ? 'yes' : 'no';
         }
+
+        return $form;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array<string,mixed>
+     */
+    private function resolveLookupMeta(array $form, string $prefix, string $mode): array
+    {
+        if (trim((string)($form[$prefix . '_lookup_id'] ?? '')) !== '') {
+            return $form;
+        }
+
+        $query = trim((string)($form[$prefix] ?? ''));
+        if ($query === '') {
+            return $form;
+        }
+
+        $match = $this->nodeSearch->search($mode, $query, null, 1)[0] ?? null;
+        if (!is_array($match) || empty($match['id'])) {
+            return $form;
+        }
+
+        $form[$prefix . '_lookup_id'] = (string)($match['id'] ?? '');
+        $form[$prefix . '_lookup_code'] = (string)($match['code'] ?? '');
+        $form[$prefix . '_lookup_mode'] = (string)($match['mode'] ?? $mode);
+        $form[$prefix . '_lookup_country'] = (string)($match['country'] ?? '');
+        $form[$prefix . '_lookup_in_eu'] = array_key_exists('in_eu', $match)
+            ? ((bool)$match['in_eu'] ? 'yes' : 'no')
+            : '';
+        $form[$prefix . '_lookup_node_type'] = (string)($match['node_type'] ?? '');
+        $form[$prefix . '_lookup_parent'] = (string)($match['parent_name'] ?? '');
+        $form[$prefix . '_lookup_source'] = (string)($match['source'] ?? '');
+        $form[$prefix . '_lookup_lat'] = isset($match['lat']) && $match['lat'] !== null ? (string)$match['lat'] : '';
+        $form[$prefix . '_lookup_lon'] = isset($match['lon']) && $match['lon'] !== null ? (string)$match['lon'] : '';
 
         return $form;
     }

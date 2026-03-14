@@ -145,16 +145,14 @@ final class MultimodalFlowResolver
         $throughDisclosure = $this->normalizeDisclosure($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
         $separateNotice = $this->normalizeSeparateNotice($form['separate_contract_notice'] ?? ($meta['separate_contract_notice'] ?? null));
 
-        $ticketNo = (string)($journeyBasic['ticket_no'] ?? '');
         $sharedBookingReference = match ($sharedBookingSelection) {
             'yes' => true,
             'no' => false,
-            default => $ticketNo !== '',
+            default => null,
         };
         $singleTransaction = match (true) {
             $sameTransactionSelection === 'yes' => true,
             $sameTransactionSelection === 'no' => false,
-            $singleTxnOperator === 'yes', $singleTxnRetailer === 'yes' => true,
             $singleTxnOperator === 'no' && $singleTxnRetailer === 'no' => false,
             default => null,
         };

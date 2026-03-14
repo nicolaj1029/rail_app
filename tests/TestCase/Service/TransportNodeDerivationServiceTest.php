@@ -3,11 +3,25 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Service;
 
+use App\Service\TransportNodeSearchService;
 use App\Service\TransportNodeDerivationService;
 use Cake\TestSuite\TestCase;
 
 final class TransportNodeDerivationServiceTest extends TestCase
 {
+    private array $tmpFiles = [];
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        foreach ($this->tmpFiles as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
     public function testDeriveFerryFieldsFromLookupMetadata(): void
     {
         $service = new TransportNodeDerivationService();
@@ -110,5 +124,56 @@ final class TransportNodeDerivationServiceTest extends TestCase
             'operator' => 'FlixBus',
         ]);
         self::assertSame('DE', $bus['operator_country']);
+    }
+
+    public function testResolvesLookupMetadataFromPlaceNames(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nodes_');
+        self::assertNotFalse($path);
+        $this->tmpFiles[] = $path;
+        file_put_contents($path, json_encode([
+            [
+                'id' => 'ferry-1',
+                'mode' => 'ferry',
+                'name' => 'Ronne',
+                'country' => 'DK',
+                'in_eu' => true,
+                'code' => 'RON',
+                'lat' => 55.100,
+                'lon' => 14.700,
+                'node_type' => 'port',
+                'parent_name' => null,
+                'source' => 'test',
+            ],
+            [
+                'id' => 'ferry-2',
+                'mode' => 'ferry',
+                'name' => 'Ystad',
+                'country' => 'SE',
+                'in_eu' => true,
+                'code' => 'YST',
+                'lat' => 55.430,
+                'lon' => 13.820,
+                'node_type' => 'ferry_terminal',
+                'parent_name' => null,
+                'source' => 'test',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $search = new TransportNodeSearchService($path);
+        $service = new TransportNodeDerivationService(nodeSearch: $search);
+
+        $out = $service->derive([
+            'transport_mode' => 'ferry',
+            'operator' => 'Scandlines',
+            'dep_station' => 'Ronne',
+            'arr_station' => 'Ystad',
+        ]);
+
+        self::assertSame('ferry-1', $out['dep_station_lookup_id']);
+        self::assertSame('ferry-2', $out['arr_station_lookup_id']);
+        self::assertSame('yes', $out['departure_port_in_eu']);
+        self::assertSame('yes', $out['arrival_port_in_eu']);
+        self::assertNotEmpty($out['route_distance_meters']);
     }
 }

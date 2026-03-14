@@ -137,6 +137,8 @@ $isPreview = !empty($flowPreview);
       'air' => $transportOperatorRegistry->entriesByMode('air'),
   ];
   $currentOperatorListId = $isRail ? 'railOperatorSuggestions' : ($isFerry ? 'ferryOperatorSuggestions' : ($isBus ? 'busOperatorSuggestions' : 'airOperatorSuggestions'));
+  $depLookupId = trim((string)($form['dep_station_lookup_id'] ?? ''));
+  $arrLookupId = trim((string)($form['arr_station_lookup_id'] ?? ''));
   $depLookupInEu = strtolower(trim((string)($form['dep_station_lookup_in_eu'] ?? '')));
   $arrLookupInEu = strtolower(trim((string)($form['arr_station_lookup_in_eu'] ?? '')));
   $depLookupNodeType = strtolower(trim((string)($form['dep_station_lookup_node_type'] ?? '')));
@@ -147,6 +149,9 @@ $isPreview = !empty($flowPreview);
   $ferryCarrierEuDerived = $transportOperatorRegistry->deriveEuFlag('ferry', $currentOperatorText) ?? $transportOperatorRegistry->deriveEuFlag('ferry', $currentIncidentOperatorText);
   $airOperatingEuDerived = $transportOperatorRegistry->deriveEuFlag('air', $currentOperatingCarrier);
   $airMarketingEuDerived = $transportOperatorRegistry->deriveEuFlag('air', $currentMarketingCarrier);
+  $ferryNodeLookupResolved = $depLookupId !== '' || $arrLookupId !== '';
+  $busNodeLookupResolved = $depLookupId !== '' || $arrLookupId !== '';
+  $airNodeLookupResolved = $depLookupId !== '' || $arrLookupId !== '';
   $scopeValueLabel = static function (?string $value): string {
       $v = strtolower(trim((string)$value));
       return match ($v) {
@@ -207,9 +212,12 @@ $isPreview = !empty($flowPreview);
   <?php if (!$isRail): ?>
   <?php
     $sellerChannelMode = (string)($form['seller_channel'] ?? 'operator');
-    $sameBookingMode = (string)($form['shared_pnr_scope'] ?? 'yes');
-    $sameTransactionMode = (string)($form['same_transaction'] ?? 'yes');
-    $separateNoticeMode = (string)($form['separate_contract_notice'] ?? 'no');
+    $sameBookingResolved = $multimodal['contract_meta']['shared_booking_reference'] ?? null;
+    $sameTransactionResolved = $multimodal['contract_meta']['single_transaction'] ?? null;
+    $separateNoticeResolved = (string)($multimodal['contract_meta']['separate_contract_notice'] ?? '');
+    $sameBookingMode = (string)($form['shared_pnr_scope'] ?? ($sameBookingResolved === true ? 'yes' : ($sameBookingResolved === false ? 'no' : '')));
+    $sameTransactionMode = (string)($form['same_transaction'] ?? ($sameTransactionResolved === true ? 'yes' : ($sameTransactionResolved === false ? 'no' : '')));
+    $separateNoticeMode = (string)($form['separate_contract_notice'] ?? (in_array($separateNoticeResolved, ['yes', 'no'], true) ? $separateNoticeResolved : ''));
     $contractDecision = (array)($multimodal['contract_decision'] ?? []);
     $modeStop = (string)($contractDecision['stage'] ?? '') === 'STOP';
     $modeContractLabel = (string)($contractDecision['contract_label'] ?? 'Kræver flere svar');
@@ -254,41 +262,47 @@ $isPreview = !empty($flowPreview);
       </label>
       <label>Samme booking / reference?
         <select name="shared_pnr_scope">
+          <option value="" <?= $sameBookingMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $sameBookingMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameBookingMode==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
       <label>Købt i én handelstransaktion?
         <select name="same_transaction">
+          <option value="" <?= $sameTransactionMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $sameTransactionMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameTransactionMode==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
       <?php if ($isAir): ?>
-      <?php $samePnrMode = (string)($form['same_pnr'] ?? 'yes'); ?>
+      <?php $samePnrMode = (string)($form['same_pnr'] ?? ''); ?>
       <label>Same PNR?
         <select name="same_pnr">
+          <option value="" <?= $samePnrMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $samePnrMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $samePnrMode==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <?php $sameBookingReferenceMode = (string)($form['same_booking_reference'] ?? 'yes'); ?>
+      <?php $sameBookingReferenceMode = (string)($form['same_booking_reference'] ?? ''); ?>
       <label>Same bookingreference?
         <select name="same_booking_reference">
+          <option value="" <?= $sameBookingReferenceMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $sameBookingReferenceMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameBookingReferenceMode==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <?php $sameEticketMode = (string)($form['same_eticket'] ?? 'yes'); ?>
+      <?php $sameEticketMode = (string)($form['same_eticket'] ?? ''); ?>
       <label>Same e-ticket?
         <select name="same_eticket">
+          <option value="" <?= $sameEticketMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $sameEticketMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $sameEticketMode==='no'?'selected':'' ?>>Nej</option>
         </select>
       </label>
-      <?php $selfTransferNoticeMode = (string)($form['self_transfer_notice'] ?? 'no'); ?>
+      <?php $selfTransferNoticeMode = (string)($form['self_transfer_notice'] ?? ''); ?>
       <label>Self-transfer oplyst før køb?
         <select name="self_transfer_notice">
+          <option value="" <?= $selfTransferNoticeMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $selfTransferNoticeMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $selfTransferNoticeMode==='no'?'selected':'' ?>>Nej</option>
         </select>
@@ -296,6 +310,7 @@ $isPreview = !empty($flowPreview);
       <?php endif; ?>
       <label>Separate kontrakter oplyst?
         <select name="separate_contract_notice">
+          <option value="" <?= $separateNoticeMode===''?'selected':'' ?>>Auto / kræver svar</option>
           <option value="yes" <?= $separateNoticeMode==='yes'?'selected':'' ?>>Ja</option>
           <option value="no" <?= $separateNoticeMode==='no'?'selected':'' ?>>Nej</option>
         </select>
@@ -595,7 +610,7 @@ $isPreview = !empty($flowPreview);
           $arrPortEu = (string)($form['arrival_port_in_eu'] ?? '');
           $carrierEuTl = (string)($form['carrier_is_eu'] ?? '');
           $depTerminalTl = (string)($form['departure_from_terminal'] ?? '');
-          $ferryAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $depLookupNodeType !== '' || $ferryCarrierEuDerived !== null || (string)($form['route_distance_meters'] ?? '') !== '';
+          $ferryAutoReady = $ferryNodeLookupResolved || $ferryCarrierEuDerived !== null;
         ?>
         <?php if ($ferryAutoReady): ?>
           <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
@@ -683,7 +698,7 @@ $isPreview = !empty($flowPreview);
           $busTerminalTl = (string)($form['departure_from_terminal'] ?? '');
           $boardingTl = (string)($form['boarding_in_eu'] ?? '');
           $alightingTl = (string)($form['alighting_in_eu'] ?? '');
-          $busAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $depLookupNodeType !== '' || (string)($form['scheduled_distance_km'] ?? '') !== '';
+          $busAutoReady = $busNodeLookupResolved;
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Regular service?
@@ -758,7 +773,7 @@ $isPreview = !empty($flowPreview);
           $airArrEuTl = (string)($form['arrival_airport_in_eu'] ?? '');
           $opCarrierEuTl = (string)($form['operating_carrier_is_eu'] ?? '');
           $mkCarrierEuTl = (string)($form['marketing_carrier_is_eu'] ?? '');
-          $airAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $airOperatingEuDerived !== null || $airMarketingEuDerived !== null;
+          $airAutoReady = $airNodeLookupResolved || $airOperatingEuDerived !== null || $airMarketingEuDerived !== null;
         ?>
         <?php if ($airAutoReady): ?>
           <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
@@ -1214,7 +1229,7 @@ $isPreview = !empty($flowPreview);
           $arrPortEuUpload = (string)($form['arrival_port_in_eu'] ?? '');
           $carrierEuUpload = (string)($form['carrier_is_eu'] ?? '');
           $depTerminalUpload = (string)($form['departure_from_terminal'] ?? '');
-          $ferryUploadAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $depLookupNodeType !== '' || $ferryCarrierEuDerived !== null || (string)($form['route_distance_meters'] ?? '') !== '';
+          $ferryUploadAutoReady = $ferryNodeLookupResolved || $ferryCarrierEuDerived !== null;
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Servicetype
@@ -1312,7 +1327,7 @@ $isPreview = !empty($flowPreview);
           $busTerminalUpload = (string)($form['departure_from_terminal'] ?? '');
           $boardingInEuUpload = (string)($form['boarding_in_eu'] ?? '');
           $alightingInEuUpload = (string)($form['alighting_in_eu'] ?? '');
-          $busUploadAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $depLookupNodeType !== '' || (string)($form['scheduled_distance_km'] ?? '') !== '';
+          $busUploadAutoReady = $busNodeLookupResolved;
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Regular service?
@@ -1388,7 +1403,7 @@ $isPreview = !empty($flowPreview);
           $opCarrierEuUpload = (string)($form['operating_carrier_is_eu'] ?? '');
           $mkCarrierEuUpload = (string)($form['marketing_carrier_is_eu'] ?? '');
           $airConnectionTypeUpload = (string)($form['air_connection_type'] ?? ($modeContract['air_connection_type'] ?? ''));
-          $airUploadAutoReady = $depLookupInEu !== '' || $arrLookupInEu !== '' || $airOperatingEuDerived !== null || $airMarketingEuDerived !== null;
+          $airUploadAutoReady = $airNodeLookupResolved || $airOperatingEuDerived !== null || $airMarketingEuDerived !== null;
         ?>
         <?php if ($airUploadAutoReady): ?>
           <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">

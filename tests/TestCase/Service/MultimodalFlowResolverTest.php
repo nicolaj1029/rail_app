@@ -177,4 +177,29 @@ final class MultimodalFlowResolverTest extends TestCase
         $this->assertTrue($result['claim_direction']['contract_stop']);
         $this->assertSame('separate', $result['claim_direction']['ticket_scope']);
     }
+
+    public function testPnrAloneDoesNotImplySameTransaction(): void
+    {
+        $result = (new MultimodalFlowResolver())->evaluate([
+            'form' => [
+                'transport_mode' => 'ferry',
+                'operator' => 'Scandlines',
+                'ticket_no' => 'PNR-ONLY',
+                'dep_station' => 'Ronne',
+                'arr_station' => 'Ystad',
+                'service_type' => 'passenger_service',
+                'departure_port_in_eu' => 'yes',
+                'arrival_port_in_eu' => 'yes',
+                'carrier_is_eu' => 'yes',
+            ],
+            'meta' => [
+                'shared_pnr_scope' => 'yes',
+            ],
+            'journey' => [],
+            'incident' => [],
+        ], false);
+
+        $this->assertTrue($result['contract_meta']['shared_booking_reference']);
+        $this->assertNull($result['contract_meta']['single_transaction']);
+    }
 }
