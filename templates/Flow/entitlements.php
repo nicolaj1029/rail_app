@@ -217,10 +217,11 @@ $isPreview = !empty($flowPreview);
     $modeDecisionNotes = array_values(array_filter(array_map('strval', (array)($contractDecision['notes'] ?? []))));
     $modeIncidentSegmentTop = (string)($form['incident_segment_mode'] ?? ($isFerry ? ($ferryContract['rights_module'] ?? 'ferry') : ($modeContract['rights_module'] ?? $transportMode)));
     $modeProblemOperatorTop = (string)($form['incident_segment_operator'] ?? ($isFerry ? ($ferryContract['primary_claim_party_name'] ?? '') : ($modeContract['primary_claim_party_name'] ?? '')));
-    $modeHasAnalysis = $hasTickets || !empty($contractDecision) || !empty($ferryContract) || !empty($modeContract) || !empty($claimDirection);
+    $modeHasAnalysis = $hasTickets;
     $modeContractVisible = $ticketMode !== 'ticket' || $modeHasAnalysis;
   ?>
-  <div class="card" id="modeContractCard" data-has-analysis="<?= $modeHasAnalysis ? '1' : '0' ?>" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $modeContractVisible ? '' : ' display:none;' ?>">
+  <?php ob_start(); ?>
+  <div class="card" id="modeContractCard" data-has-analysis="<?= $modeHasAnalysis ? '1' : '0' ?>" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-top:12px; margin-bottom:12px;<?= $modeContractVisible ? '' : ' display:none;' ?>">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <strong>Kontrakt og ansvar (fælles multimodal)</strong>
       <button type="button" id="modeContractEditBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
@@ -322,6 +323,7 @@ $isPreview = !empty($flowPreview);
       </div>
     <?php endif; ?>
   </div>
+  <?php $modeContractCardHtml = (string)ob_get_clean(); ?>
   <?php endif; ?>
 
   <?php
@@ -404,6 +406,9 @@ $isPreview = !empty($flowPreview);
     <input type="file" id="ticketMulti" name="multi_ticket_upload[]" multiple accept=".pdf,.png,.jpg,.jpeg,.pkpass,.txt,image/*,application/pdf" style="display:none;" />
     <ul id="selectedFilesList" class="small file-list" style="list-style:none; padding-left:0; margin:12px 0 0 0;"></ul>
   </div>
+  <?php if (!$isRail && !empty($modeContractCardHtml)): ?>
+    <?= $modeContractCardHtml ?>
+  <?php endif; ?>
 
   <div class="card" id="ticketlessCard" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;<?= $ticketMode==='ticketless'?'':' display:none;' ?>">
     <div class="section-title"><?= $isFerry ? 'Ticketless færge' : ($isBus ? 'Ticketless bus' : ($isAir ? 'Ticketless fly' : 'Ticketless (minimum)')) ?></div>
