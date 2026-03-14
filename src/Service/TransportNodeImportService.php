@@ -85,6 +85,7 @@ final class TransportNodeImportService
             throw new RuntimeException('could not encode target JSON');
         }
         file_put_contents($this->targetPath, $json . PHP_EOL);
+        (new TransportNodeSearchIndexBuilder())->build($this->targetPath, dirname($this->targetPath));
 
         return [
             'mode' => $mode,

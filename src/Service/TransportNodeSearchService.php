@@ -12,15 +12,15 @@ namespace App\Service;
  */
 final class TransportNodeSearchService
 {
-    private string $path;
+    private ?string $path;
 
     /** @var array<int,array<string,mixed>>|null */
-    private static ?array $cacheRows = null;
-    private static ?int $cacheMtime = null;
+    private static array $cacheRowsByKey = [];
+    private static array $cacheMtimeByKey = [];
 
     public function __construct(?string $path = null)
     {
-        $this->path = $path ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json');
+        $this->path = $path;
     }
 
     /**
@@ -44,7 +44,7 @@ final class TransportNodeSearchService
         }
         $limit = max(1, min(50, $limit));
 
-        $rows = $this->loadRows();
+        $rows = $this->loadRows($mode);
         if ($rows === []) {
             return [];
         }
@@ -149,12 +149,16 @@ final class TransportNodeSearchService
     /**
      * @return array<int,array<string,mixed>>
      */
-    private function loadRows(): array
+    private function loadRows(string $mode): array
     {
-        $path = $this->path;
+        $path = $this->resolvePath($mode);
+        if ($path === null) {
+            return [];
+        }
         $mtime = is_file($path) ? (int)@filemtime($path) : null;
-        if ($mtime !== null && self::$cacheRows !== null && self::$cacheMtime === $mtime) {
-            return self::$cacheRows;
+        $cacheKey = $mode . '|' . $path;
+        if ($mtime !== null && isset(self::$cacheRowsByKey[$cacheKey]) && (self::$cacheMtimeByKey[$cacheKey] ?? null) === $mtime) {
+            return self::$cacheRowsByKey[$cacheKey];
         }
         if (!is_file($path)) {
             return [];
@@ -205,10 +209,29 @@ final class TransportNodeSearchService
             $rows[] = $row;
         }
 
-        self::$cacheRows = $rows;
-        self::$cacheMtime = $mtime;
+        self::$cacheRowsByKey[$cacheKey] = $rows;
+        self::$cacheMtimeByKey[$cacheKey] = $mtime;
 
         return $rows;
+    }
+
+    private function resolvePath(string $mode): ?string
+    {
+        if ($this->path !== null && $this->path !== '') {
+            return $this->path;
+        }
+
+        $searchPath = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes_search_' . $mode . '.json';
+        if (is_file($searchPath)) {
+            return $searchPath;
+        }
+
+        $fallbackPath = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json';
+        if (is_file($fallbackPath)) {
+            return $fallbackPath;
+        }
+
+        return null;
     }
 
     private function norm(string $value): string
