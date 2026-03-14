@@ -179,12 +179,31 @@ $isPreview = !empty($flowPreview);
     $sameBookingMode = (string)($form['shared_pnr_scope'] ?? 'yes');
     $sameTransactionMode = (string)($form['same_transaction'] ?? 'yes');
     $separateNoticeMode = (string)($form['separate_contract_notice'] ?? 'no');
+    $contractDecision = (array)($multimodal['contract_decision'] ?? []);
+    $modeStop = (string)($contractDecision['stage'] ?? '') === 'STOP';
+    $modeContractLabel = (string)($contractDecision['contract_label'] ?? 'Kræver flere svar');
+    $modeContractBasis = (string)($contractDecision['basis'] ?? 'manual_review');
+    $modeDecisionNotes = array_values(array_filter(array_map('strval', (array)($contractDecision['notes'] ?? []))));
     $modeIncidentSegmentTop = (string)($form['incident_segment_mode'] ?? ($isFerry ? ($ferryContract['rights_module'] ?? 'ferry') : ($modeContract['rights_module'] ?? $transportMode)));
     $modeProblemOperatorTop = (string)($form['incident_segment_operator'] ?? ($isFerry ? ($ferryContract['primary_claim_party_name'] ?? '') : ($modeContract['primary_claim_party_name'] ?? '')));
   ?>
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
-    <strong>Kontrakt og ansvar (fælles multimodal)</strong>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>Kontrakt og ansvar (fælles multimodal)</strong>
+      <button type="button" id="modeContractEditBtn" class="small" style="background:transparent; border:0; color:#0b5; text-decoration:underline; cursor:pointer;">Rediger</button>
+    </div>
     <div class="small muted" style="margin-top:6px;">Denne blok bruges for færge, bus og fly til at afgøre claim-kanal, samlet booking vs. separate kontrakter og hvilket segment der er ramt. Rail bruger fortsat Art. 12-blokken længere nede.</div>
+    <?php if ($modeStop): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <div><strong>STOP: Billet = <?= h($modeContractLabel) ?></strong></div>
+        <div>Grundlag: <?= h($modeContractBasis) ?></div>
+        <?php foreach ($modeDecisionNotes as $note): ?>
+          <div><?= h($note) ?></div>
+        <?php endforeach; ?>
+      </div>
+      <div class="small muted" style="margin-top:6px;">Kontraktklassifikationen er afgjort. Resten af kontraktspørgsmålene springes over, medmindre du klikker “Rediger”.</div>
+    <?php endif; ?>
+    <div id="modeContractQuestions" style="display:<?= $modeStop ? 'none' : 'block' ?>;">
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <label>Hvem solgte hele rejsen?
         <select name="seller_channel">
@@ -255,6 +274,7 @@ $isPreview = !empty($flowPreview);
         <input type="text" name="incident_segment_operator" value="<?= h($modeProblemOperatorTop) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
       </label>
     </div>
+    </div><!-- /modeContractQuestions -->
     <?php if (!empty($ferryContract) || !empty($modeContract) || !empty($claimDirection)): ?>
       <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
         <div><strong>Foreløbig vurdering</strong></div>
@@ -1440,6 +1460,14 @@ $isPreview = !empty($flowPreview);
     // Gate visibility: show if evaluator is missing any of these, or if values are unknown
     $needA12 = in_array('separate_contract_notice', $a12missing, true) || in_array('through_ticket_disclosure', $a12missing, true)
       || $scnVal==='unknown' || $ttdVal==='unknown' || $pnrScopeVal==='unknown' || $sellerInf==='unknown' || ($ticketMode === 'ticketless');
+    $a12Stop = (string)($art12flow['stage'] ?? '') === 'STOP';
+    $a12TicketScope = (string)($art12flow['ticket_scope'] ?? '');
+    $a12StopLabel = match ($a12TicketScope) {
+      'through' => 'Gennemgående billet',
+      'separate' => 'Særskilte kontrakter',
+      default => 'Kontraktklassifikation afgjort',
+    };
+    $a12Responsibility = (string)($art12flow['responsibility'] ?? '');
     // Also compute PNR count + shared scope hint for same-transaction prompt
     $pnrCountInline = 0; try {
       $pnrSet = [];
@@ -1452,7 +1480,7 @@ $isPreview = !empty($flowPreview);
   <?php
     // Vis kun Art.12-blokken for rail, hvor den fungerer som rail-specialregel i TRIN 2.
   ?>
-  <?php $a12Open = (bool)$needA12; ?>
+  <?php $a12Open = !$a12Stop && (bool)$needA12; ?>
   <div class="card" style="margin-top:12px; padding:16px; border:1px solid #e5e7eb; background:#fff; border-radius:6px;" id="art12MinimalBlock" data-art="12">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <strong>Kontrakt og ansvar (rail / Art. 12)</strong>
@@ -1473,7 +1501,19 @@ $isPreview = !empty($flowPreview);
       <span>• Gennemgående billet: <?= h($throughLabel) ?></span>
       <span>• Separate kontrakter oplyst: <?= h($separateLabel) ?></span>
     </div>
-    <?php if (!$a12Open): ?>
+    <?php if ($a12Stop): ?>
+      <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <div><strong>STOP: Billet = <?= h($a12StopLabel) ?></strong></div>
+        <?php if ($a12Responsibility !== ''): ?>
+          <div>Ansvarsspor: <?= h($a12Responsibility) ?></div>
+        <?php endif; ?>
+        <?php foreach ((array)($art12flow['notes'] ?? []) as $note): ?>
+          <div><?= h((string)$note) ?></div>
+        <?php endforeach; ?>
+      </div>
+      <div class="small muted" style="margin-top:6px;">Kontraktklassifikationen er afgjort. Resten af Art. 12-spørgsmålene springes over, medmindre du klikker “Rediger”.</div>
+    <?php endif; ?>
+    <?php if (!$a12Open && !$a12Stop): ?>
       <div class="small muted" style="margin-top:6px;">(Rail Art. 12 ser ud til at være dækket af AUTO. Klik “Rediger” hvis du vil ændre svarene.)</div>
     <?php endif; ?>
 
@@ -2590,6 +2630,17 @@ if ($a12Applies === false && !empty($contractsView)) {
       const q1 = document.getElementById('a12Q1');
       if (q1) { q1.style.display = 'block'; q1.scrollIntoView({ behavior:'smooth', block:'center' }); }
       updateA12();
+    });
+  }
+  const modeContractEditBtn = document.getElementById('modeContractEditBtn');
+  if (modeContractEditBtn) {
+    modeContractEditBtn.addEventListener('click', function(){
+      const qs = document.getElementById('modeContractQuestions');
+      if (qs) { qs.style.display = 'block'; }
+      const firstField = qs ? qs.querySelector('select, input') : null;
+      if (firstField && typeof firstField.scrollIntoView === 'function') {
+        firstField.scrollIntoView({ behavior:'smooth', block:'center' });
+      }
     });
   }
   // React when seller choice changes

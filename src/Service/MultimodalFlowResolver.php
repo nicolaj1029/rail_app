@@ -37,6 +37,7 @@ final class MultimodalFlowResolver
                 $result['ferry_rights'] = (new FerryRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
             }
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['ferry_rights'] ?? []));
+            $result['contract_decision'] = $this->buildContractDecision($transportMode, $contractMeta, $contract, $scope);
         } elseif ($transportMode === 'air') {
             $scope = (new AirScopeResolver())->evaluate($scopeMeta);
             $contract = (new AirContractResolver())->evaluate($contractMeta, $scope);
@@ -46,6 +47,7 @@ final class MultimodalFlowResolver
                 $result['air_rights'] = (new AirRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
             }
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['air_rights'] ?? []));
+            $result['contract_decision'] = $this->buildContractDecision($transportMode, $contractMeta, $contract, $scope);
         } elseif ($transportMode === 'bus') {
             $scope = (new BusScopeResolver())->evaluate($scopeMeta);
             $contract = (new ModeContractResolver())->evaluate($transportMode, $contractMeta);
@@ -55,8 +57,10 @@ final class MultimodalFlowResolver
                 $result['bus_rights'] = (new BusRightsEvaluator())->evaluate($incidentMeta, $scope, $contract);
             }
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contract, $scope, (array)($result['bus_rights'] ?? []));
+            $result['contract_decision'] = $this->buildContractDecision($transportMode, $contractMeta, $contract, $scope);
         } else {
             $result['claim_direction'] = $this->buildClaimDirection($transportMode, $contractMeta, $contractMeta, $scopeMeta, []);
+            $result['contract_decision'] = $this->buildContractDecision($transportMode, $contractMeta, $contractMeta, $scopeMeta);
         }
 
         return $result;
@@ -134,14 +138,22 @@ final class MultimodalFlowResolver
         $meta = (array)($flow['meta'] ?? []);
 
         $sellerChannel = strtolower(trim((string)($form['seller_channel'] ?? '')));
+        $sharedBookingSelection = $this->normalizeYesNoMachine($form['shared_pnr_scope'] ?? ($meta['shared_pnr_scope'] ?? null));
+        $sameTransactionSelection = $this->normalizeYesNoMachine($form['same_transaction'] ?? ($meta['same_transaction_all'] ?? null));
         $singleTxnOperator = $this->normalizeYesNoMachine($form['single_txn_operator'] ?? ($meta['single_txn_operator'] ?? null));
         $singleTxnRetailer = $this->normalizeYesNoMachine($form['single_txn_retailer'] ?? ($meta['single_txn_retailer'] ?? null));
         $throughDisclosure = $this->normalizeDisclosure($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
         $separateNotice = $this->normalizeSeparateNotice($form['separate_contract_notice'] ?? ($meta['separate_contract_notice'] ?? null));
 
         $ticketNo = (string)($journeyBasic['ticket_no'] ?? '');
-        $sharedBookingReference = $ticketNo !== '';
+        $sharedBookingReference = match ($sharedBookingSelection) {
+            'yes' => true,
+            'no' => false,
+            default => $ticketNo !== '',
+        };
         $singleTransaction = match (true) {
+            $sameTransactionSelection === 'yes' => true,
+            $sameTransactionSelection === 'no' => false,
             $singleTxnOperator === 'yes', $singleTxnRetailer === 'yes' => true,
             $singleTxnOperator === 'no' && $singleTxnRetailer === 'no' => false,
             default => null,
@@ -433,10 +445,82 @@ final class MultimodalFlowResolver
             'claim_party_type' => $claimPartyType,
             'claim_party_name' => $claimPartyName !== '' ? $claimPartyName : null,
             'rights_module' => $rightsModule,
+            'contract_stop' => (string)($contractMeta['contract_topology'] ?? '') !== 'unknown_manual_review',
+            'ticket_scope' => match ((string)($contractMeta['contract_topology'] ?? '')) {
+                'separate_contracts' => 'separate',
+                'protected_single_contract', 'single_multimodal_contract' => 'through',
+                'single_mode_single_contract' => 'single',
+                default => null,
+            },
             'manual_review_required' => $manualReview,
             'scope_applies' => array_key_exists('regulation_applies', $scopeResult) ? (bool)$scopeResult['regulation_applies'] : null,
             'scope_exclusion_reason' => (string)($scopeResult['scope_exclusion_reason'] ?? ''),
             'recommended_documents' => array_values(array_unique($requiredDocuments)),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $contractMeta
+     * @param array<string,mixed> $contractResult
+     * @param array<string,mixed> $scopeResult
+     * @return array<string,mixed>
+     */
+    private function buildContractDecision(
+        string $transportMode,
+        array $contractMeta,
+        array $contractResult,
+        array $scopeResult
+    ): array {
+        $topology = (string)($contractMeta['contract_topology'] ?? 'unknown_manual_review');
+        $claimPartyName = (string)($contractResult['primary_claim_party_name'] ?? ($contractMeta['seller_name'] ?? ''));
+        $rightsModule = (string)($contractResult['rights_module'] ?? ($contractMeta['rights_module'] ?? $transportMode));
+        $scopeApplies = array_key_exists('regulation_applies', $scopeResult) ? (bool)$scopeResult['regulation_applies'] : null;
+
+        $decision = [
+            'stage' => 'COLLECT',
+            'ticket_scope' => null,
+            'contract_label' => 'Kræver flere svar',
+            'basis' => 'manual_review',
+            'notes' => ['Kontraktstrukturen er ikke afgjort endnu.'],
+            'claim_party_name' => $claimPartyName !== '' ? $claimPartyName : null,
+            'rights_module' => $rightsModule,
+            'scope_applies' => $scopeApplies,
+        ];
+
+        switch ($topology) {
+            case 'separate_contracts':
+                $decision['stage'] = 'STOP';
+                $decision['ticket_scope'] = 'separate';
+                $decision['contract_label'] = 'Særskilte kontrakter';
+                $decision['basis'] = 'separate_contracts';
+                $decision['notes'] = ['Ansvar og kompensationsspor følger det ramte segment.'];
+                break;
+
+            case 'single_mode_single_contract':
+                $decision['stage'] = 'STOP';
+                $decision['ticket_scope'] = 'single';
+                $decision['contract_label'] = 'Samlet kontrakt';
+                $decision['basis'] = 'single_mode_single_contract';
+                $decision['notes'] = ['Rejsen behandles som én samlet kontrakt for den valgte transportform.'];
+                break;
+
+            case 'protected_single_contract':
+                $decision['stage'] = 'STOP';
+                $decision['ticket_scope'] = 'through';
+                $decision['contract_label'] = 'Beskyttet samlet booking';
+                $decision['basis'] = 'protected_single_contract';
+                $decision['notes'] = ['Forbindelsen behandles som en beskyttet samlet kontrakt.'];
+                break;
+
+            case 'single_multimodal_contract':
+                $decision['stage'] = 'STOP';
+                $decision['ticket_scope'] = 'through';
+                $decision['contract_label'] = 'Samlet multimodal kontrakt';
+                $decision['basis'] = 'single_multimodal_contract';
+                $decision['notes'] = ['Claim-kanalen følger den samlede kontrakt, mens rettighedsmodulet følger det ramte segment.'];
+                break;
+        }
+
+        return $decision;
     }
 }

@@ -55,6 +55,8 @@ final class MultimodalFlowResolverTest extends TestCase
         $this->assertTrue($result['ferry_rights']['gate_art18']);
         $this->assertTrue($result['ferry_rights']['gate_art19']);
         $this->assertSame('25', $result['ferry_rights']['art19_comp_band']);
+        $this->assertSame('STOP', $result['contract_decision']['stage']);
+        $this->assertSame('single', $result['contract_decision']['ticket_scope']);
         $this->assertSame('ferry', $result['claim_direction']['rights_module']);
     }
 
@@ -93,6 +95,8 @@ final class MultimodalFlowResolverTest extends TestCase
         $this->assertSame('bus', $result['bus_contract']['rights_module']);
         $this->assertTrue($result['bus_rights']['gate_bus_reroute_refund']);
         $this->assertTrue($result['bus_rights']['gate_bus_compensation_50']);
+        $this->assertSame('STOP', $result['contract_decision']['stage']);
+        $this->assertSame('single', $result['contract_decision']['ticket_scope']);
         $this->assertSame('bus', $result['claim_direction']['rights_module']);
         $this->assertContains('reroute_or_refund_evidence', $result['claim_direction']['recommended_documents']);
         $this->assertContains('operator_connection_or_terminal_evidence', $result['claim_direction']['recommended_documents']);
@@ -132,8 +136,45 @@ final class MultimodalFlowResolverTest extends TestCase
         $this->assertSame('air', $result['air_contract']['rights_module']);
         $this->assertTrue($result['air_rights']['gate_air_reroute_refund']);
         $this->assertTrue($result['air_rights']['gate_air_compensation']);
+        $this->assertSame('STOP', $result['contract_decision']['stage']);
+        $this->assertSame('single', $result['contract_decision']['ticket_scope']);
         $this->assertSame('air', $result['claim_direction']['rights_module']);
         $this->assertContains('boarding_pass_or_pnr', $result['claim_direction']['recommended_documents']);
         $this->assertContains('arrival_delay_or_cancellation_evidence', $result['claim_direction']['recommended_documents']);
+    }
+
+    public function testMarksSeparateContractsAsStopDecision(): void
+    {
+        $result = (new MultimodalFlowResolver())->evaluate([
+            'form' => [
+                'transport_mode' => 'ferry',
+                'operator' => 'Scandlines',
+                'dep_station' => 'Helsingor',
+                'arr_station' => 'Helsingborg',
+                'shared_pnr_scope' => 'no',
+                'same_transaction' => 'no',
+                'separate_contract_notice' => 'yes',
+                'incident_segment_mode' => 'ferry',
+                'incident_segment_operator' => 'Scandlines',
+                'service_type' => 'passenger_service',
+                'departure_port_in_eu' => 'yes',
+                'arrival_port_in_eu' => 'yes',
+                'carrier_is_eu' => 'yes',
+            ],
+            'meta' => [],
+            'journey' => [
+                'segments' => [
+                    ['from' => 'Odense', 'to' => 'Helsingor', 'mode' => 'rail'],
+                    ['from' => 'Helsingor', 'to' => 'Helsingborg', 'mode' => 'ferry'],
+                ],
+            ],
+            'incident' => [],
+        ], false);
+
+        $this->assertSame('separate_contracts', $result['contract_meta']['contract_topology']);
+        $this->assertSame('STOP', $result['contract_decision']['stage']);
+        $this->assertSame('separate', $result['contract_decision']['ticket_scope']);
+        $this->assertTrue($result['claim_direction']['contract_stop']);
+        $this->assertSame('separate', $result['claim_direction']['ticket_scope']);
     }
 }
