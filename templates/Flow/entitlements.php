@@ -110,6 +110,7 @@ $isPreview = !empty($flowPreview);
   $transportNodesSearchUrl = $this->Url->build('/api/transport-nodes/search');
   // Offline operator/product catalog for ticketless suggestions (no tokens / no external calls).
   $opCatalog = new \App\Service\OperatorCatalog();
+  $transportOperatorRegistry = new \App\Service\TransportOperatorRegistry();
   $opsByCountry = (array)$opCatalog->getOperators();
   $productsByOperator = (array)$opCatalog->getProducts();
   $countryToCurrency = ['BG'=>'BGN','CZ'=>'CZK','DK'=>'DKK','HU'=>'HUF','PL'=>'PLN','RO'=>'RON','SE'=>'SEK','NO'=>'NOK','GB'=>'GBP','CH'=>'CHF'];
@@ -127,6 +128,10 @@ $isPreview = !empty($flowPreview);
   }
   $allOperators = array_keys($operatorToCountry);
   sort($allOperators);
+  $ferryOperators = $transportOperatorRegistry->namesByMode('ferry');
+  $busOperators = $transportOperatorRegistry->namesByMode('bus');
+  $airOperators = $transportOperatorRegistry->namesByMode('air');
+  $currentOperatorListId = $isRail ? 'railOperatorSuggestions' : ($isFerry ? 'ferryOperatorSuggestions' : ($isBus ? 'busOperatorSuggestions' : 'airOperatorSuggestions'));
 	?>
 <?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['type' => 'file', 'id' => 'entitlementsForm']) ?>
@@ -306,7 +311,7 @@ $isPreview = !empty($flowPreview);
           <input type="text" name="season_pass_type" value="<?= h($seasonType) ?>" placeholder="<?= $isFerry ? 'Periodekort / abonnement / klippekort' : 'Pendler / Periode / ??rskort' ?>" />
         </label>
         <label><?= $isFerry ? 'Transport??r / carrier (valgfri)' : 'Operat??r (valgfri)' ?>
-          <input type="text" name="season_pass_operator" list="operatorSuggestions" value="<?= h($seasonOp) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines / ForSea' : 'DSB / DB / SNCF ?' ?>" />
+          <input type="text" name="season_pass_operator" list="<?= h($currentOperatorListId) ?>" value="<?= h($seasonOp) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines / ForSea' : 'DSB / DB / SNCF ?' ?>" />
         </label>
         <label>Gyldig fra (valgfri)
           <input type="date" name="season_pass_valid_from" value="<?= h($seasonFrom) ?>" />
@@ -391,7 +396,7 @@ $isPreview = !empty($flowPreview);
         </select>
       </label>
       <label>OperatÃ¸r (valgfri)
-        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx DSB, DB, SJ" />
+        <input type="text" name="operator" list="railOperatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx DSB, DB, SJ" />
       </label>
       <label>Produkt (valgfri)
         <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx IC, ICE" />
@@ -456,7 +461,7 @@ $isPreview = !empty($flowPreview);
         </select>
       </label>
       <label>Carrier / transportør
-        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx Scandlines" />
+        <input type="text" name="operator" list="ferryOperatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx Scandlines" />
       </label>
       <label>Produkt / overfart (valgfri)
         <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx Helsingør-Helsingborg" />
@@ -492,7 +497,7 @@ $isPreview = !empty($flowPreview);
         </select>
       </label>
       <label>Operatør
-        <input type="text" name="operator" list="operatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx FlixBus" />
+        <input type="text" name="operator" list="busOperatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx FlixBus" />
       </label>
       <label>Produkt (valgfri)
         <input type="text" name="operator_product" list="productSuggestions" value="<?= h($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? '')) ?>" placeholder="Fx Ekspres" />
@@ -523,10 +528,10 @@ $isPreview = !empty($flowPreview);
         <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx ARN" />
       </label>
       <label>Marketing carrier
-        <input type="text" name="marketing_carrier" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
+          <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
       </label>
       <label>Operating carrier
-        <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
+          <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
       </label>
       <label>Bookingreference / PNR (valgfri)
         <input type="text" name="ticket_no" value="<?= h((string)($form['ticket_no'] ?? ($meta['_auto']['ticket_no']['value'] ?? ''))) ?>" placeholder="Fx X7YZ12" />
@@ -650,8 +655,23 @@ $isPreview = !empty($flowPreview);
       </div>
     <?php endif; ?>
 
-    <datalist id="operatorSuggestions">
+    <datalist id="railOperatorSuggestions">
       <?php foreach ($allOperators as $opName): ?>
+        <option value="<?= h($opName) ?>"></option>
+      <?php endforeach; ?>
+    </datalist>
+    <datalist id="ferryOperatorSuggestions">
+      <?php foreach ($ferryOperators as $opName): ?>
+        <option value="<?= h($opName) ?>"></option>
+      <?php endforeach; ?>
+    </datalist>
+    <datalist id="busOperatorSuggestions">
+      <?php foreach ($busOperators as $opName): ?>
+        <option value="<?= h($opName) ?>"></option>
+      <?php endforeach; ?>
+    </datalist>
+    <datalist id="airOperatorSuggestions">
+      <?php foreach ($airOperators as $opName): ?>
         <option value="<?= h($opName) ?>"></option>
       <?php endforeach; ?>
     </datalist>
@@ -745,7 +765,7 @@ $isPreview = !empty($flowPreview);
     <strong>3.1. Name of railway undertaking:</strong>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
       <label>OperatÃ¸r
-        <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" />
+        <input type="text" name="operator" list="railOperatorSuggestions" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" />
       </label>
       <label>Land
         <input type="text" name="operator_country" value="<?= h($meta['_auto']['operator_country']['value'] ?? ($form['operator_country'] ?? '')) ?>" />
@@ -969,7 +989,7 @@ $isPreview = !empty($flowPreview);
       <div class="small muted" style="margin-top:4px;">Carrier/operator, fra/til, tider, bookingreference og pris.</div>
       <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
         <label><?= $isAir ? 'Carrier / operating carrier' : ($isFerry ? 'Carrier' : 'Operatør') ?>
-          <input type="text" name="operator" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
+          <input type="text" name="operator" list="<?= h($currentOperatorListId) ?>" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
         </label>
         <label>Produkt / bookingtype
           <input type="text" name="operator_product" value="<?= h($meta['_auto']['operator_product']['value'] ?? ($form['operator_product'] ?? '')) ?>" placeholder="<?= $isAir ? 'Fx Economy / Flex' : 'Fx Standard ticket' ?>" />
@@ -994,10 +1014,10 @@ $isPreview = !empty($flowPreview);
         </label>
         <?php if ($isAir): ?>
         <label>Marketing carrier
-          <input type="text" name="marketing_carrier" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
+          <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
         </label>
         <label>Operating carrier
-          <input type="text" name="operating_carrier" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
+          <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
         </label>
         <?php endif; ?>
         <label>Pris (valgfri)

@@ -24,4 +24,17 @@ final class TransportOperatorRegistryTest extends TestCase
         self::assertTrue($registry->deriveEuFlag('air', 'SAS'));
         self::assertFalse($registry->deriveEuFlag('air', 'British Airways'));
     }
+
+    public function testReturnsModeSpecificNames(): void
+    {
+        $registry = new TransportOperatorRegistry();
+
+        $ferry = $registry->namesByMode('ferry');
+        $air = $registry->namesByMode('air');
+
+        self::assertContains('Scandlines', $ferry);
+        self::assertNotContains('FlixBus', $ferry);
+        self::assertContains('SAS', $air);
+        self::assertNotContains('Scandlines', $air);
+    }
 }

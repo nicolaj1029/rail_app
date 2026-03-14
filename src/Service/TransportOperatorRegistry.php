@@ -74,4 +74,31 @@ final class TransportOperatorRegistry
 
         return (bool)$match['is_eu_operator'];
     }
+
+    /**
+     * @return array<int,string>
+     */
+    public function namesByMode(string $mode): array
+    {
+        $mode = strtolower(trim($mode));
+        if ($mode === '') {
+            return [];
+        }
+
+        $names = [];
+        foreach ($this->operators as $operator) {
+            if (strtolower((string)($operator['mode'] ?? '')) !== $mode) {
+                continue;
+            }
+            $name = trim((string)($operator['name'] ?? ''));
+            if ($name !== '') {
+                $names[$name] = true;
+            }
+        }
+
+        $out = array_keys($names);
+        sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $out;
+    }
 }
