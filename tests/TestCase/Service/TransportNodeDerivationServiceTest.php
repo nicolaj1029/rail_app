@@ -160,7 +160,7 @@ final class TransportNodeDerivationServiceTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR));
 
-        $search = new TransportNodeSearchService($path);
+        $search = new TransportNodeSearchService($path, null, 'disabled');
         $service = new TransportNodeDerivationService(nodeSearch: $search);
 
         $out = $service->derive([
@@ -175,5 +175,126 @@ final class TransportNodeDerivationServiceTest extends TestCase
         self::assertSame('yes', $out['departure_port_in_eu']);
         self::assertSame('yes', $out['arrival_port_in_eu']);
         self::assertNotEmpty($out['route_distance_meters']);
+    }
+
+    public function testDerivesFerryPortLookupFromSeparateTerminalSelection(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nodes_');
+        self::assertNotFalse($path);
+        $this->tmpFiles[] = $path;
+        file_put_contents($path, json_encode([
+            [
+                'id' => 'port-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor',
+                'country' => 'DK',
+                'in_eu' => true,
+                'code' => 'DKHLS',
+                'lat' => 56.0333,
+                'lon' => 12.6136,
+                'node_type' => 'port',
+                'parent_name' => null,
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor Ferry Terminal',
+                'country' => 'DK',
+                'in_eu' => true,
+                'code' => 'DKHLS-T1',
+                'lat' => 56.0350,
+                'lon' => 12.6170,
+                'node_type' => 'ferry_terminal',
+                'parent_name' => 'Helsingor',
+                'source' => 'test',
+            ],
+            [
+                'id' => 'port-helsingborg',
+                'mode' => 'ferry',
+                'name' => 'Helsingborg',
+                'country' => 'SE',
+                'in_eu' => true,
+                'code' => 'SEHEL',
+                'lat' => 56.0465,
+                'lon' => 12.6945,
+                'node_type' => 'port',
+                'parent_name' => null,
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-helsingborg',
+                'mode' => 'ferry',
+                'name' => 'Helsingborg Ferry Terminal',
+                'country' => 'SE',
+                'in_eu' => true,
+                'code' => 'SEHEL-T1',
+                'lat' => 56.0447,
+                'lon' => 12.6928,
+                'node_type' => 'ferry_terminal',
+                'parent_name' => 'Helsingborg',
+                'source' => 'test',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $search = new TransportNodeSearchService($path, null, 'disabled');
+        $service = new TransportNodeDerivationService(nodeSearch: $search);
+
+        $out = $service->derive([
+            'transport_mode' => 'ferry',
+            'operator' => 'Scandlines',
+            'dep_terminal' => 'Helsingor Ferry Terminal',
+            'arr_terminal' => 'Helsingborg Ferry Terminal',
+        ]);
+
+        self::assertSame('Helsingor', $out['dep_station']);
+        self::assertSame('Helsingborg', $out['arr_station']);
+        self::assertSame('port-helsingor', $out['dep_station_lookup_id']);
+        self::assertSame('port-helsingborg', $out['arr_station_lookup_id']);
+        self::assertSame('terminal-helsingor', $out['dep_terminal_lookup_id']);
+        self::assertSame('terminal-helsingborg', $out['arr_terminal_lookup_id']);
+        self::assertSame('yes', $out['departure_port_in_eu']);
+        self::assertSame('yes', $out['arrival_port_in_eu']);
+        self::assertSame('yes', $out['departure_from_terminal']);
+    }
+
+    public function testDerivePrefersFerryTerminalWhenTerminalFieldContainsPortNameOnly(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nodes_');
+        self::assertNotFalse($path);
+        $this->tmpFiles[] = $path;
+        file_put_contents($path, json_encode([
+            [
+                'id' => 'port-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor',
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'port',
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor Ferry Terminal',
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'ferry_terminal',
+                'parent_name' => 'Helsingor',
+                'source' => 'test',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $search = new TransportNodeSearchService($path, null, 'disabled');
+        $service = new TransportNodeDerivationService(nodeSearch: $search);
+
+        $out = $service->derive([
+            'transport_mode' => 'ferry',
+            'dep_terminal' => 'Helsingor',
+        ]);
+
+        self::assertSame('terminal-helsingor', $out['dep_terminal_lookup_id']);
+        self::assertSame('Helsingor', $out['dep_station']);
+        self::assertSame('port-helsingor', $out['dep_station_lookup_id']);
     }
 }

@@ -14,6 +14,10 @@ final class AirScopeResolver
         $departureInEu = $this->toBool($scopeMeta['departure_airport_in_eu'] ?? null);
         $arrivalInEu = $this->toBool($scopeMeta['arrival_airport_in_eu'] ?? null);
         $operatingCarrierIsEu = $this->toBool($scopeMeta['operating_carrier_is_eu'] ?? null);
+        $flightDistanceKm = $this->toInt($scopeMeta['flight_distance_km'] ?? null);
+        $airDistanceBand = $this->normalizeAirDistanceBand($scopeMeta['air_distance_band'] ?? null)
+            ?? $this->deriveAirDistanceBand($flightDistanceKm, $departureInEu === true, $arrivalInEu === true);
+        $thresholdHours = $this->delayThresholdHoursFromAirBand($airDistanceBand);
 
         $applies = false;
         $basis = 'out_of_scope';
@@ -37,7 +41,68 @@ final class AirScopeResolver
             'arrival_airport_in_eu' => $arrivalInEu,
             'operating_carrier_is_eu' => $operatingCarrierIsEu,
             'marketing_carrier_is_eu' => $this->toBool($scopeMeta['marketing_carrier_is_eu'] ?? null),
+            'flight_distance_km' => $flightDistanceKm,
+            'air_distance_band' => $airDistanceBand,
+            'air_delay_threshold_hours' => $thresholdHours,
+            'intra_eu_over_1500' => $airDistanceBand === 'intra_eu_over_1500',
         ];
+    }
+
+    private function toInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return (int)round((float)$value);
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', (string)$value);
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        return (int)$digits;
+    }
+
+    private function normalizeAirDistanceBand(mixed $value): ?string
+    {
+        $band = strtolower(trim((string)$value));
+        return in_array($band, ['up_to_1500', 'intra_eu_over_1500', 'other_1500_to_3500', 'other_over_3500'], true)
+            ? $band
+            : null;
+    }
+
+    private function deriveAirDistanceBand(?int $distanceKm, bool $departureInEu, bool $arrivalInEu): ?string
+    {
+        if ($distanceKm === null || $distanceKm <= 0) {
+            return null;
+        }
+
+        if ($distanceKm <= 1500) {
+            return 'up_to_1500';
+        }
+
+        if ($departureInEu && $arrivalInEu) {
+            return 'intra_eu_over_1500';
+        }
+
+        if ($distanceKm <= 3500) {
+            return 'other_1500_to_3500';
+        }
+
+        return 'other_over_3500';
+    }
+
+    private function delayThresholdHoursFromAirBand(?string $band): ?int
+    {
+        return match ($band) {
+            'up_to_1500' => 2,
+            'intra_eu_over_1500', 'other_1500_to_3500' => 3,
+            'other_over_3500' => 4,
+            default => null,
+        };
     }
 
     private function toBool(mixed $value): ?bool

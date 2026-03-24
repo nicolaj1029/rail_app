@@ -26,6 +26,21 @@ class SessionToFixtureMapper
         $contractMeta = $this->buildContractMeta($flow, $journeyBasic, $segments, $transportMode);
         $scopeMeta = $this->buildScopeMeta($flow, $transportMode);
         $incidentMeta = $this->buildIncidentMeta($flow, $transportMode, $step5Incident);
+        $ticketExtracts = [];
+        $groupedContracts = [];
+        $canonical = [];
+        try {
+            $multimodal = (new MultimodalFlowResolver())->evaluate($flow, false);
+            $transportMode = (string)($multimodal['transport_mode'] ?? $transportMode);
+            $contractMeta = array_replace($contractMeta, (array)($multimodal['contract_meta'] ?? []));
+            $scopeMeta = array_replace($scopeMeta, (array)($multimodal['scope_meta'] ?? []));
+            $incidentMeta = array_replace($incidentMeta, (array)($multimodal['incident_meta'] ?? []));
+            $ticketExtracts = (array)($multimodal['ticket_extracts'] ?? []);
+            $groupedContracts = (array)($multimodal['grouped_contracts'] ?? []);
+            $canonical = (array)($multimodal['canonical'] ?? []);
+        } catch (\Throwable $e) {
+            // Keep local fallback mapping if multimodal evaluation fails.
+        }
 
         return [
             'id' => 'session_' . date('Ymd_His'),
@@ -35,6 +50,9 @@ class SessionToFixtureMapper
             'journey' => $flow['journey'] ?? ($flow['meta']['journey'] ?? []),
             'journeyBasic' => $journeyBasic,
             'segments' => $segments,
+            'ticket_extracts' => $ticketExtracts,
+            'grouped_contracts' => $groupedContracts,
+            'canonical' => $canonical,
             'contract_meta' => $contractMeta,
             'scope_meta' => $scopeMeta,
             'incident_meta' => $incidentMeta,
@@ -153,6 +171,12 @@ class SessionToFixtureMapper
         $form = (array)($flow['form'] ?? []);
         $meta = (array)($flow['meta'] ?? []);
         $journey = (array)($flow['journey'] ?? ($meta['journey'] ?? []));
+        $ticketMode = strtolower(trim((string)($form['ticket_upload_mode'] ?? '')));
+        $modeSource = strtolower(trim((string)(
+            $form['transport_mode_source']
+            ?? $meta['transport_mode_source']
+            ?? ''
+        )));
 
         $candidate = strtolower(trim((string)(
             $form['transport_mode']
@@ -161,10 +185,30 @@ class SessionToFixtureMapper
             ?? ''
         )));
 
+        if ($this->isManualTransportModeAuthoritative($ticketMode, $modeSource)
+            && in_array($candidate, ['ferry', 'bus', 'air', 'rail'], true)
+        ) {
+            return $candidate;
+        }
+
+        $classifiedMode = (new ModeClassifier())->resolvePrimaryMode($flow);
+        if ($classifiedMode !== null) {
+            return $classifiedMode;
+        }
+
         return match ($candidate) {
             'ferry', 'bus', 'air', 'rail' => $candidate,
             default => 'rail',
         };
+    }
+
+    private function isManualTransportModeAuthoritative(string $ticketMode, string $modeSource): bool
+    {
+        if (in_array($ticketMode, ['ticketless', 'seasonpass'], true)) {
+            return true;
+        }
+
+        return $modeSource === 'manual';
     }
 
     /**
@@ -201,12 +245,17 @@ class SessionToFixtureMapper
         };
         $sellerName = $journeyBasic['operator'] ?? ($auto['operator']['value'] ?? null);
 
-        $journeyStructure = match (true) {
+        $manualJourneyStructure = strtolower(trim((string)($form['journey_structure'] ?? '')));
+        if (!in_array($manualJourneyStructure, ['single_segment', 'single_mode_connections', 'multimodal_connections'], true)) {
+            $manualJourneyStructure = '';
+        }
+        $journeyStructure = $manualJourneyStructure !== '' ? $manualJourneyStructure : match (true) {
             count($segments) > 1 && $transportMode === 'rail' => 'single_mode_connections',
             count($segments) > 1 => 'multimodal_connections',
             !empty($journeyBasic['dep_station']) || !empty($journeyBasic['arr_station']) => 'single_segment',
             default => 'unknown',
         };
+        $originalContractMode = $this->resolveOriginalContractMode($form, $meta, $segments, $transportMode);
 
         $contractTopology = 'unknown_manual_review';
         if ($journeyStructure === 'single_segment') {
@@ -229,6 +278,9 @@ class SessionToFixtureMapper
         if (!in_array($incidentSegmentMode, ['rail', 'ferry', 'bus', 'air'], true)) {
             $incidentSegmentMode = $transportMode;
         }
+        $claimTransportMode = $contractTopology === 'separate_contracts'
+            ? $incidentSegmentMode
+            : ($originalContractMode ?? $transportMode);
 
         $primaryClaimParty = match ($contractTopology) {
             'separate_contracts' => 'segment_operator',
@@ -243,11 +295,13 @@ class SessionToFixtureMapper
             'single_transaction' => $singleTransaction,
             'contract_structure_disclosure' => $throughDisclosure,
             'separate_contract_notice' => $separateNotice,
+            'original_contract_mode' => $originalContractMode,
             'journey_structure' => $journeyStructure,
             'contract_topology' => $contractTopology,
             'incident_segment_mode' => $incidentSegmentMode,
             'incident_segment_operator' => $form['incident_segment_operator'] ?? $journeyBasic['operator'] ?? null,
             'primary_claim_party' => $primaryClaimParty,
+            'claim_transport_mode' => $claimTransportMode,
             'rights_module' => $incidentSegmentMode,
             'manual_review_required' => $contractTopology === 'unknown_manual_review',
             'same_pnr' => $this->normalizeNullableBool($form['same_pnr'] ?? null),
@@ -279,6 +333,10 @@ class SessionToFixtureMapper
             'arrival_airport_in_eu' => $this->normalizeNullableBool($form['arrival_airport_in_eu'] ?? null),
             'operating_carrier_is_eu' => $this->normalizeNullableBool($form['operating_carrier_is_eu'] ?? null),
             'marketing_carrier_is_eu' => $this->normalizeNullableBool($form['marketing_carrier_is_eu'] ?? null),
+            'flight_distance_km' => $this->normalizeNullableInt($form['flight_distance_km'] ?? null),
+            'air_distance_band' => $form['air_distance_band'] ?? null,
+            'air_delay_threshold_hours' => $this->normalizeNullableInt($form['air_delay_threshold_hours'] ?? null),
+            'intra_eu_over_1500' => $this->normalizeNullableBool($form['intra_eu_over_1500'] ?? null),
             'bus_regular_service' => $this->normalizeNullableBool($form['bus_regular_service'] ?? null),
             'boarding_in_eu' => $this->normalizeNullableBool($form['boarding_in_eu'] ?? null),
             'alighting_in_eu' => $this->normalizeNullableBool($form['alighting_in_eu'] ?? null),
@@ -296,6 +354,14 @@ class SessionToFixtureMapper
     private function buildIncidentMeta(array $flow, string $transportMode, array $step5Incident): array
     {
         $form = (array)($flow['form'] ?? []);
+        $overnightRequired = $form['overnight_required'] ?? null;
+        if ($transportMode === 'ferry') {
+            $overnightRequired = $form['ferry_overnight_required']
+                ?? ($form['overnight_needed'] ?? ($form['overnight_required'] ?? null));
+        }
+        $passengerFault = $transportMode === 'ferry'
+            ? null
+            : $this->normalizeNullableBool($form['passenger_fault'] ?? null);
         $incidentType = strtolower(trim((string)($step5Incident['incident_main'] ?? '')));
         if (!in_array($incidentType, ['delay', 'cancellation', 'denied_boarding', 'missed_connection'], true)) {
             $incidentType = $incidentType !== '' ? $incidentType : null;
@@ -319,30 +385,55 @@ class SessionToFixtureMapper
             'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
             'expected_departure_delay_90' => $this->normalizeNullableBool($form['expected_departure_delay_90'] ?? null),
             'actual_departure_delay_90' => $this->normalizeNullableBool($form['actual_departure_delay_90'] ?? null),
-            'overnight_required' => $this->normalizeNullableBool($form['overnight_required'] ?? null),
+            'overnight_required' => $this->normalizeNullableBool($overnightRequired),
             'informed_before_purchase' => $this->normalizeNullableBool($form['informed_before_purchase'] ?? null),
-            'passenger_fault' => $this->normalizeNullableBool($form['passenger_fault'] ?? null),
+            'passenger_fault' => $passengerFault,
             'weather_safety' => $this->normalizeNullableBool($form['weather_safety'] ?? null),
             'extraordinary_circumstances' => $this->normalizeNullableBool($form['extraordinary_circumstances'] ?? null),
             'open_ticket_without_departure_time' => $this->normalizeNullableBool($form['open_ticket_without_departure_time'] ?? null),
             'season_ticket' => array_key_exists('season_ticket', $form)
                 ? $this->normalizeNullableBool($form['season_ticket'])
                 : (($form['ticket_upload_mode'] ?? null) === 'seasonpass'),
+            'delay_departure_band' => $form['delay_departure_band'] ?? null,
+            'planned_duration_band' => $form['planned_duration_band'] ?? null,
             'delay_minutes_departure' => $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null),
             'delay_minutes_arrival' => $this->normalizeNullableInt($form['delay_minutes_arrival'] ?? null),
             'boarding_denied' => $this->normalizeNullableBool($form['boarding_denied'] ?? null),
             'voluntary_denied_boarding' => $this->normalizeNullableBool($form['voluntary_denied_boarding'] ?? null),
             'reroute_offered' => $this->normalizeNullableBool($form['reroute_offered'] ?? null),
+            'cancellation_notice_band' => $form['cancellation_notice_band'] ?? null,
+            'reroute_departure_band' => $form['reroute_departure_band'] ?? null,
+            'reroute_arrival_band' => $form['reroute_arrival_band'] ?? null,
             'refund_offered' => $this->normalizeNullableBool($form['refund_offered'] ?? null),
             'hotel_required' => $this->normalizeNullableBool($form['hotel_required'] ?? null),
             'hotel_offered' => $this->normalizeNullableBool($form['hotel_offered'] ?? null),
             'meal_offered' => $this->normalizeNullableBool($form['meal_offered'] ?? null),
+            'pmr_user' => $this->normalizeNullableBool($form['pmr_user'] ?? null),
+            'ferry_pmr_companion' => $this->normalizeNullableBool($form['ferry_pmr_companion'] ?? null),
+            'ferry_pmr_service_dog' => $this->normalizeNullableBool($form['ferry_pmr_service_dog'] ?? null),
+            'ferry_pmr_notice_48h' => $this->normalizeNullableBool($form['ferry_pmr_notice_48h'] ?? null),
+            'ferry_pmr_met_checkin_time' => $this->normalizeNullableBool($form['ferry_pmr_met_checkin_time'] ?? null),
+            'ferry_pmr_assistance_delivered' => is_string($form['ferry_pmr_assistance_delivered'] ?? null) ? (string)$form['ferry_pmr_assistance_delivered'] : null,
+            'ferry_pmr_boarding_refused' => $this->normalizeNullableBool($form['ferry_pmr_boarding_refused'] ?? null),
+            'ferry_pmr_refusal_basis' => is_string($form['ferry_pmr_refusal_basis'] ?? null) ? (string)$form['ferry_pmr_refusal_basis'] : null,
+            'ferry_pmr_reason_given' => $this->normalizeNullableBool($form['ferry_pmr_reason_given'] ?? null),
+            'ferry_pmr_alternative_transport_offered' => $this->normalizeNullableBool($form['ferry_pmr_alternative_transport_offered'] ?? null),
+            'bus_pmr_companion' => $this->normalizeNullableBool($form['bus_pmr_companion'] ?? null),
+            'bus_pmr_notice_36h' => $this->normalizeNullableBool($form['bus_pmr_notice_36h'] ?? null),
+            'bus_pmr_met_terminal_time' => $this->normalizeNullableBool($form['bus_pmr_met_terminal_time'] ?? null),
+            'bus_pmr_special_seating_notified' => $this->normalizeNullableBool($form['bus_pmr_special_seating_notified'] ?? null),
+            'bus_pmr_assistance_delivered' => is_string($form['bus_pmr_assistance_delivered'] ?? null) ? (string)$form['bus_pmr_assistance_delivered'] : null,
+            'bus_pmr_boarding_refused' => $this->normalizeNullableBool($form['bus_pmr_boarding_refused'] ?? null),
+            'bus_pmr_refusal_basis' => is_string($form['bus_pmr_refusal_basis'] ?? null) ? (string)$form['bus_pmr_refusal_basis'] : null,
+            'bus_pmr_reason_given' => $this->normalizeNullableBool($form['bus_pmr_reason_given'] ?? null),
+            'bus_pmr_alternative_transport_offered' => $this->normalizeNullableBool($form['bus_pmr_alternative_transport_offered'] ?? null),
             'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
             'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
             'overbooking' => $this->normalizeNullableBool($form['overbooking'] ?? null),
             'carrier_offered_choice' => $this->normalizeNullableBool($form['carrier_offered_choice'] ?? null),
             'severe_weather' => $this->normalizeNullableBool($form['severe_weather'] ?? null),
             'major_natural_disaster' => $this->normalizeNullableBool($form['major_natural_disaster'] ?? null),
+            'missed_connection_due_to_delay' => $this->normalizeNullableBool($form['missed_connection_due_to_delay'] ?? null),
         ];
     }
 
@@ -437,6 +528,27 @@ class SessionToFixtureMapper
         $f = (array)($flow['form'] ?? []);
         return [
             'pmr_user' => $f['pmr_user'] ?? 'unknown',
+            'pmr_companion' => $f['pmr_companion'] ?? 'unknown',
+            'pmr_service_dog' => $f['pmr_service_dog'] ?? 'unknown',
+            'unaccompanied_minor' => $f['unaccompanied_minor'] ?? 'unknown',
+            'ferry_pmr_companion' => $f['ferry_pmr_companion'] ?? 'unknown',
+            'ferry_pmr_service_dog' => $f['ferry_pmr_service_dog'] ?? 'unknown',
+            'ferry_pmr_notice_48h' => $f['ferry_pmr_notice_48h'] ?? 'unknown',
+            'ferry_pmr_met_checkin_time' => $f['ferry_pmr_met_checkin_time'] ?? 'unknown',
+            'ferry_pmr_assistance_delivered' => $f['ferry_pmr_assistance_delivered'] ?? 'unknown',
+            'ferry_pmr_boarding_refused' => $f['ferry_pmr_boarding_refused'] ?? 'unknown',
+            'ferry_pmr_refusal_basis' => $f['ferry_pmr_refusal_basis'] ?? null,
+            'ferry_pmr_reason_given' => $f['ferry_pmr_reason_given'] ?? 'unknown',
+            'ferry_pmr_alternative_transport_offered' => $f['ferry_pmr_alternative_transport_offered'] ?? 'unknown',
+            'bus_pmr_companion' => $f['bus_pmr_companion'] ?? 'unknown',
+            'bus_pmr_notice_36h' => $f['bus_pmr_notice_36h'] ?? 'unknown',
+            'bus_pmr_met_terminal_time' => $f['bus_pmr_met_terminal_time'] ?? 'unknown',
+            'bus_pmr_special_seating_notified' => $f['bus_pmr_special_seating_notified'] ?? 'unknown',
+            'bus_pmr_assistance_delivered' => $f['bus_pmr_assistance_delivered'] ?? 'unknown',
+            'bus_pmr_boarding_refused' => $f['bus_pmr_boarding_refused'] ?? 'unknown',
+            'bus_pmr_refusal_basis' => $f['bus_pmr_refusal_basis'] ?? null,
+            'bus_pmr_reason_given' => $f['bus_pmr_reason_given'] ?? 'unknown',
+            'bus_pmr_alternative_transport_offered' => $f['bus_pmr_alternative_transport_offered'] ?? 'unknown',
             'pmr_booked' => $f['pmr_booked'] ?? 'unknown',
             'pmrQBooked' => $f['pmrQBooked'] ?? null,
             'pmrQDelivered' => $f['pmrQDelivered'] ?? null,
@@ -465,6 +577,13 @@ class SessionToFixtureMapper
             'bike_was_present','bike_caused_issue','bike_reservation_made','bike_reservation_required',
             'bike_denied_boarding','bike_refusal_reason_provided','bike_refusal_reason_type','bike_refusal_reason_other_text',
             'pmr_promised_missing','pmr_delivered_status','pmrQAny','pmr_any',
+            'pmr_companion','pmr_service_dog','unaccompanied_minor',
+            'ferry_pmr_companion','ferry_pmr_service_dog','ferry_pmr_notice_48h','ferry_pmr_met_checkin_time',
+            'ferry_pmr_assistance_delivered','ferry_pmr_boarding_refused','ferry_pmr_refusal_basis',
+            'ferry_pmr_reason_given','ferry_pmr_alternative_transport_offered',
+            'bus_pmr_companion','bus_pmr_notice_36h','bus_pmr_met_terminal_time','bus_pmr_special_seating_notified',
+            'bus_pmr_assistance_delivered','bus_pmr_boarding_refused','bus_pmr_refusal_basis',
+            'bus_pmr_reason_given','bus_pmr_alternative_transport_offered',
         ] as $k) {
             if (array_key_exists($k, $f)) { $out[$k] = $f[$k]; }
         }
@@ -493,7 +612,11 @@ class SessionToFixtureMapper
     private function normalizeStep3(array $step3): array
     {
         $ynKeys = [
-            'pmr_user','pmr_booked','pmr_promised_missing',
+            'pmr_user','pmr_booked','pmr_promised_missing','pmr_companion','pmr_service_dog','unaccompanied_minor',
+            'ferry_pmr_companion','ferry_pmr_service_dog','ferry_pmr_notice_48h','ferry_pmr_met_checkin_time',
+            'ferry_pmr_boarding_refused','ferry_pmr_reason_given','ferry_pmr_alternative_transport_offered',
+            'bus_pmr_companion','bus_pmr_notice_36h','bus_pmr_met_terminal_time','bus_pmr_special_seating_notified',
+            'bus_pmr_boarding_refused','bus_pmr_reason_given','bus_pmr_alternative_transport_offered',
             'bike_was_present','bike_caused_issue','bike_reservation_made','bike_reservation_required',
             'bike_denied_boarding','bike_refusal_reason_provided',
         ];
@@ -870,6 +993,7 @@ class SessionToFixtureMapper
             'price_currency' => $form['price_currency'] ?? ($auto['price_currency']['value'] ?? null),
             'price_known' => $form['price_known'] ?? null,
             'seller_channel' => $form['seller_channel'] ?? null,
+            'original_contract_mode' => $form['original_contract_mode'] ?? null,
             'through_ticket_disclosure' => $form['through_ticket_disclosure'] ?? null,
             'separate_contract_notice' => $form['separate_contract_notice'] ?? null,
             'single_txn_operator' => $form['single_txn_operator'] ?? null,
@@ -1034,9 +1158,40 @@ class SessionToFixtureMapper
             'single_booking_reference' => $pnrPresent ? 'Ja' : 'Ved ikke',
             'shared_pnr_scope' => $pnrPresent ? 'Ja' : 'Ved ikke',
             'multi_operator_trip' => $multiOps ? 'Ja' : ($operator ? 'Nej' : 'Ved ikke'),
+            'original_contract_mode' => $flow['form']['original_contract_mode'] ?? null,
             'separate_contract_notice' => 'Ved ikke',
             'through_ticket_disclosure' => 'Ved ikke',
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<int,array<string,mixed>> $segments
+     */
+    private function resolveOriginalContractMode(array $form, array $meta, array $segments, string $transportMode): ?string
+    {
+        foreach ([
+            $form['original_contract_mode'] ?? null,
+            $meta['original_contract_mode'] ?? null,
+        ] as $candidate) {
+            $normalized = strtolower(trim((string)$candidate));
+            if (in_array($normalized, ['rail', 'ferry', 'bus', 'air'], true)) {
+                return $normalized;
+            }
+        }
+
+        foreach ($segments as $segment) {
+            if (!is_array($segment)) {
+                continue;
+            }
+            $segmentMode = strtolower(trim((string)($segment['mode'] ?? '')));
+            if (in_array($segmentMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+                return $segmentMode;
+            }
+        }
+
+        return in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true) ? $transportMode : null;
     }
 
     /**
@@ -1086,6 +1241,35 @@ class SessionToFixtureMapper
         $bikeReasonType = is_string($refusalType) ? trim($refusalType) : '';
 
         $pmrUser = $toYesNoUnknown($form['pmr_user'] ?? ($flowMeta['pmr_user'] ?? null));
+        $pmrCompanion = $toYesNoUnknown($form['pmr_companion'] ?? ($flowMeta['pmr_companion'] ?? null));
+        $pmrServiceDog = $toYesNoUnknown($form['pmr_service_dog'] ?? ($flowMeta['pmr_service_dog'] ?? null));
+        $unaccompaniedMinor = $toYesNoUnknown($form['unaccompanied_minor'] ?? ($flowMeta['unaccompanied_minor'] ?? null));
+        $ferryPmrCompanion = $toYesNoUnknown($form['ferry_pmr_companion'] ?? ($flowMeta['ferry_pmr_companion'] ?? null));
+        $ferryPmrServiceDog = $toYesNoUnknown($form['ferry_pmr_service_dog'] ?? ($flowMeta['ferry_pmr_service_dog'] ?? null));
+        $ferryPmrNotice48h = $toYesNoUnknown($form['ferry_pmr_notice_48h'] ?? ($flowMeta['ferry_pmr_notice_48h'] ?? null));
+        $ferryPmrMetCheckinTime = $toYesNoUnknown($form['ferry_pmr_met_checkin_time'] ?? ($flowMeta['ferry_pmr_met_checkin_time'] ?? null));
+        $ferryPmrBoardingRefused = $toYesNoUnknown($form['ferry_pmr_boarding_refused'] ?? ($flowMeta['ferry_pmr_boarding_refused'] ?? null));
+        $ferryPmrReasonGiven = $toYesNoUnknown($form['ferry_pmr_reason_given'] ?? ($flowMeta['ferry_pmr_reason_given'] ?? null));
+        $ferryPmrAltTransport = $toYesNoUnknown($form['ferry_pmr_alternative_transport_offered'] ?? ($flowMeta['ferry_pmr_alternative_transport_offered'] ?? null));
+        $ferryPmrAssistanceDelivered = is_string($form['ferry_pmr_assistance_delivered'] ?? null)
+            ? trim((string)$form['ferry_pmr_assistance_delivered'])
+            : (is_string($flowMeta['ferry_pmr_assistance_delivered'] ?? null) ? trim((string)$flowMeta['ferry_pmr_assistance_delivered']) : 'unknown');
+        $ferryPmrRefusalBasis = is_string($form['ferry_pmr_refusal_basis'] ?? null)
+            ? trim((string)$form['ferry_pmr_refusal_basis'])
+            : (is_string($flowMeta['ferry_pmr_refusal_basis'] ?? null) ? trim((string)$flowMeta['ferry_pmr_refusal_basis']) : '');
+        $busPmrCompanion = $toYesNoUnknown($form['bus_pmr_companion'] ?? ($flowMeta['bus_pmr_companion'] ?? null));
+        $busPmrNotice36h = $toYesNoUnknown($form['bus_pmr_notice_36h'] ?? ($flowMeta['bus_pmr_notice_36h'] ?? null));
+        $busPmrMetTerminalTime = $toYesNoUnknown($form['bus_pmr_met_terminal_time'] ?? ($flowMeta['bus_pmr_met_terminal_time'] ?? null));
+        $busPmrSpecialSeatingNotified = $toYesNoUnknown($form['bus_pmr_special_seating_notified'] ?? ($flowMeta['bus_pmr_special_seating_notified'] ?? null));
+        $busPmrBoardingRefused = $toYesNoUnknown($form['bus_pmr_boarding_refused'] ?? ($flowMeta['bus_pmr_boarding_refused'] ?? null));
+        $busPmrReasonGiven = $toYesNoUnknown($form['bus_pmr_reason_given'] ?? ($flowMeta['bus_pmr_reason_given'] ?? null));
+        $busPmrAltTransport = $toYesNoUnknown($form['bus_pmr_alternative_transport_offered'] ?? ($flowMeta['bus_pmr_alternative_transport_offered'] ?? null));
+        $busPmrAssistanceDelivered = is_string($form['bus_pmr_assistance_delivered'] ?? null)
+            ? trim((string)$form['bus_pmr_assistance_delivered'])
+            : (is_string($flowMeta['bus_pmr_assistance_delivered'] ?? null) ? trim((string)$flowMeta['bus_pmr_assistance_delivered']) : 'unknown');
+        $busPmrRefusalBasis = is_string($form['bus_pmr_refusal_basis'] ?? null)
+            ? trim((string)$form['bus_pmr_refusal_basis'])
+            : (is_string($flowMeta['bus_pmr_refusal_basis'] ?? null) ? trim((string)$flowMeta['bus_pmr_refusal_basis']) : '');
         $pmrBooked = $toYesNoUnknown($form['pmr_booked'] ?? ($flowMeta['pmr_booked'] ?? null));
         $pmrPromisedMissing = $toYesNoUnknown($form['pmr_promised_missing'] ?? ($flowMeta['pmr_promised_missing'] ?? null));
         $pmrDelivered = $toYesNoUnknown($form['pmr_delivered_status'] ?? $pmrDeliveredMeta ?? ($form['pmrQDelivered'] ?? 'unknown'));
@@ -1120,6 +1304,50 @@ class SessionToFixtureMapper
                     ],
                     'art9_3' => [],
                 ],
+                'air_art11' => [
+                    'priority' => [
+                        'pmr_user' => $pmrUser,
+                        'pmr_companion' => $pmrCompanion,
+                        'pmr_service_dog' => $pmrServiceDog,
+                        'unaccompanied_minor' => $unaccompaniedMinor,
+                    ],
+                ],
+                'ferry_pmr' => [
+                    'status' => [
+                        'pmr_user' => $pmrUser,
+                        'ferry_pmr_companion' => $ferryPmrCompanion,
+                        'ferry_pmr_service_dog' => $ferryPmrServiceDog,
+                    ],
+                    'assistance' => [
+                        'ferry_pmr_notice_48h' => $ferryPmrNotice48h,
+                        'ferry_pmr_met_checkin_time' => $ferryPmrMetCheckinTime,
+                        'ferry_pmr_assistance_delivered' => $ferryPmrAssistanceDelivered,
+                    ],
+                    'boarding' => [
+                        'ferry_pmr_boarding_refused' => $ferryPmrBoardingRefused,
+                        'ferry_pmr_refusal_basis' => $ferryPmrRefusalBasis,
+                        'ferry_pmr_reason_given' => $ferryPmrReasonGiven,
+                        'ferry_pmr_alternative_transport_offered' => $ferryPmrAltTransport,
+                    ],
+                ],
+                'bus_pmr' => [
+                    'status' => [
+                        'pmr_user' => $pmrUser,
+                        'bus_pmr_companion' => $busPmrCompanion,
+                    ],
+                    'assistance' => [
+                        'bus_pmr_notice_36h' => $busPmrNotice36h,
+                        'bus_pmr_met_terminal_time' => $busPmrMetTerminalTime,
+                        'bus_pmr_special_seating_notified' => $busPmrSpecialSeatingNotified,
+                        'bus_pmr_assistance_delivered' => $busPmrAssistanceDelivered,
+                    ],
+                    'boarding' => [
+                        'bus_pmr_boarding_refused' => $busPmrBoardingRefused,
+                        'bus_pmr_refusal_basis' => $busPmrRefusalBasis,
+                        'bus_pmr_reason_given' => $busPmrReasonGiven,
+                        'bus_pmr_alternative_transport_offered' => $busPmrAltTransport,
+                    ],
+                ],
                 'preinfo' => [
                     'art9_1' => [
                         'preinformed_disruption' => $preinformed,
@@ -1139,6 +1367,27 @@ class SessionToFixtureMapper
             'preinfo_channel' => $preinfoChannel,
             'realtime_info_seen' => $realtimeSeen,
             'pmr_user' => $pmrUser,
+            'pmr_companion' => $pmrCompanion,
+            'pmr_service_dog' => $pmrServiceDog,
+            'unaccompanied_minor' => $unaccompaniedMinor,
+            'ferry_pmr_companion' => $ferryPmrCompanion,
+            'ferry_pmr_service_dog' => $ferryPmrServiceDog,
+            'ferry_pmr_notice_48h' => $ferryPmrNotice48h,
+            'ferry_pmr_met_checkin_time' => $ferryPmrMetCheckinTime,
+            'ferry_pmr_assistance_delivered' => $ferryPmrAssistanceDelivered,
+            'ferry_pmr_boarding_refused' => $ferryPmrBoardingRefused,
+            'ferry_pmr_refusal_basis' => $ferryPmrRefusalBasis,
+            'ferry_pmr_reason_given' => $ferryPmrReasonGiven,
+            'ferry_pmr_alternative_transport_offered' => $ferryPmrAltTransport,
+            'bus_pmr_companion' => $busPmrCompanion,
+            'bus_pmr_notice_36h' => $busPmrNotice36h,
+            'bus_pmr_met_terminal_time' => $busPmrMetTerminalTime,
+            'bus_pmr_special_seating_notified' => $busPmrSpecialSeatingNotified,
+            'bus_pmr_assistance_delivered' => $busPmrAssistanceDelivered,
+            'bus_pmr_boarding_refused' => $busPmrBoardingRefused,
+            'bus_pmr_refusal_basis' => $busPmrRefusalBasis,
+            'bus_pmr_reason_given' => $busPmrReasonGiven,
+            'bus_pmr_alternative_transport_offered' => $busPmrAltTransport,
             'pmr_booked' => $pmrBooked,
             'pmr_promised_missing' => $pmrPromisedMissing,
             'pmr_delivered_status' => $pmrDelivered,

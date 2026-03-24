@@ -1,13 +1,14 @@
 <?php
 /**
  * Missed connection selector (station) + journey table.
- * Expects: $meta, $form. Optional: $journeyRowsInline, $mcChoicesInline, $changeBullets.
+ * Expects: $meta, $form. Optional: $journeyRowsInline, $mcChoicesInline, $changeBullets, $groupedTickets.
  */
 $meta = $meta ?? [];
 $form = $form ?? [];
 $journeyRowsInline = $journeyRowsInline ?? [];
 $mcChoicesInline = $mcChoicesInline ?? [];
 $changeBullets = $changeBullets ?? [];
+$groupedTickets = $groupedTickets ?? [];
 // Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
 $stationsSearchUrl = $stationsSearchUrl ?? $this->Url->build('/api/stations/search');
 
@@ -42,6 +43,15 @@ $segSrc = $segLlm;
 if (empty($segLlm) || !$isChainable($segLlm)) {
     $segSrc = $segAuto;
     if (empty($segAuto) && !empty($segLlm)) { $segSrc = $segLlm; }
+}
+if (empty($segSrc) && !empty($groupedTickets)) {
+    foreach ((array)$groupedTickets as $group) {
+        $groupSegments = (array)($group['segments'] ?? []);
+        if (!empty($groupSegments)) {
+            $segSrc = $groupSegments;
+            break;
+        }
+    }
 }
 
 // Fallback build of journey rows from detected segments

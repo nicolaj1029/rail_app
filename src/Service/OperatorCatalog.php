@@ -5,21 +5,70 @@ namespace App\Service;
 
 final class OperatorCatalog
 {
-    /** @var array{name:string,aliases:string[],country:string,products:string[]}[] */
+    private const CATALOG_PATH = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_operators_catalog.json';
+
+    /** @var array{mode:string,name:string,aliases:string[],country:string,products:string[]}[] */
     private array $operators = [];
     /** @var array<string,string> */
     private array $productAliases = [];
+    /** @var array<string,mixed> */
+    private array $downgradePolicies = [];
 
     public function __construct(?string $path = null)
     {
-        $path = $path ?? (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'operators_catalog.json');
-        if (is_file($path)) {
-            $data = json_decode((string)file_get_contents($path), true);
-            if (is_array($data)) {
-                $this->operators = array_values((array)($data['operators'] ?? []));
-                $this->productAliases = (array)($data['product_aliases'] ?? []);
-            }
+        $path = $path ?? self::CATALOG_PATH;
+        $data = TransportOperatorsCatalogLoader::load($path);
+        if ($data === []) {
+            return;
         }
+
+        $this->operators = $this->normalizeOperators((array)($data['operators'] ?? []));
+        $this->productAliases = (array)($data['product_aliases'] ?? []);
+        $this->downgradePolicies = (array)($data['downgrade_policies'] ?? []);
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array{mode:string,name:string,aliases:string[],country:string,products:string[]}>
+     */
+    private function normalizeOperators(array $rows): array
+    {
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $mode = strtolower(trim((string)($row['mode'] ?? '')));
+            if (!in_array($mode, ['rail', 'ferry', 'bus', 'air'], true)) {
+                continue;
+            }
+
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $country = strtoupper(trim((string)($row['country'] ?? ($row['country_code'] ?? ''))));
+            $aliases = array_values(array_filter(
+                array_map('strval', (array)($row['aliases'] ?? [])),
+                static fn(string $value): bool => trim($value) !== ''
+            ));
+            $products = array_values(array_filter(
+                array_map('strval', (array)($row['products'] ?? (($row['metadata']['products'] ?? [])))),
+                static fn(string $value): bool => trim($value) !== ''
+            ));
+
+            $normalized[] = [
+                'mode' => $mode,
+                'name' => $name,
+                'aliases' => $aliases,
+                'country' => $country,
+                'products' => $products,
+            ];
+        }
+
+        return $normalized;
     }
 
     /** Country code => Country name (basic map) */
@@ -30,11 +79,17 @@ final class OperatorCatalog
         ];
     }
 
-    /** Country => operators (name=>name) built from JSON */
-    public function getOperators(): array
+    /**
+     * Country => operators (name=>name) built from JSON.
+     * Pass `null` to include all modes; default remains rail to preserve existing callers.
+     */
+    public function getOperators(?string $mode = 'rail'): array
     {
         $out = [];
         foreach ($this->operators as $op) {
+            if (!$this->modeMatches($op, $mode)) {
+                continue;
+            }
             $cc = strtoupper((string)($op['country'] ?? ''));
             $name = (string)($op['name'] ?? '');
             if ($cc && $name) {
@@ -46,11 +101,17 @@ final class OperatorCatalog
         return $out;
     }
 
-    /** Operator => products list built from JSON */
-    public function getProducts(): array
+    /**
+     * Operator => products list built from JSON.
+     * Pass `null` to include all modes; default remains rail to preserve existing callers.
+     */
+    public function getProducts(?string $mode = 'rail'): array
     {
         $out = [];
         foreach ($this->operators as $op) {
+            if (!$this->modeMatches($op, $mode)) {
+                continue;
+            }
             $name = (string)($op['name'] ?? '');
             if ($name) {
                 $out[$name] = array_values((array)($op['products'] ?? []));
@@ -60,10 +121,13 @@ final class OperatorCatalog
     }
 
     /** @return array{name:string,country:string}|null */
-    public function findOperator(string $text): ?array
+    public function findOperator(string $text, ?string $mode = null): ?array
     {
         $hay = (string)$text;
         foreach ($this->operators as $op) {
+            if (!$this->modeMatches($op, $mode)) {
+                continue;
+            }
             $names = array_unique(array_merge([(string)$op['name']], (array)$op['aliases']));
             foreach ($names as $nRaw) {
                 $n = trim((string)$nRaw);
@@ -79,27 +143,47 @@ final class OperatorCatalog
     }
 
     /** @return string|null */
-    public function findProduct(string $text): ?string
+    public function findProduct(string $text, ?string $mode = null): ?string
     {
         $hay = (string)$text;
-        // First pass: strict word-boundary matches for full product names
+        $products = [];
         foreach ($this->operators as $op) {
+            if (!$this->modeMatches($op, $mode)) {
+                continue;
+            }
             foreach ((array)$op['products'] as $pRaw) {
                 $p = trim((string)$pRaw);
-                if ($p === '') { continue; }
-                // Avoid extremely short products (1-letter like "R") which cause massive false positives
-                if (mb_strlen($p) < 2) { continue; }
-                // Avoid matching inside other words (e.g., TER in "international")
-                $pattern = '/(?<![A-Za-z0-9])' . preg_quote($p, '/') . '(?![A-Za-z0-9])/iu';
-                if (preg_match($pattern, $hay)) { return (string)$p; }
+                if ($p !== '') {
+                    $products[$p] = $p;
+                }
             }
         }
-        // Second pass: alias map with boundaries; skip extremely short aliases to avoid noise
-        foreach ($this->productAliases as $aliasRaw => $norm) {
+        uasort($products, static fn(string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+
+        // First pass: strict word-boundary matches for full product names, longest first.
+        foreach ($products as $product) {
+            if (mb_strlen($product) < 2) { continue; }
+            $pattern = '/(?<![A-Za-z0-9])' . preg_quote($product, '/') . '(?![A-Za-z0-9])/iu';
+            if (preg_match($pattern, $hay)) {
+                return $product;
+            }
+        }
+
+        $aliases = $this->productAliases;
+        uksort($aliases, static fn(string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+
+        // Second pass: alias map with boundaries; skip extremely short aliases to avoid noise.
+        foreach ($aliases as $aliasRaw => $norm) {
             $alias = trim((string)$aliasRaw);
             if (mb_strlen($alias) < 3) { continue; }
             $pattern = '/(?<![A-Za-z0-9])' . preg_quote($alias, '/') . '(?![A-Za-z0-9])/iu';
-            if (preg_match($pattern, $hay)) { return (string)$norm; }
+            if (!preg_match($pattern, $hay)) {
+                continue;
+            }
+            if ($mode !== null && $mode !== '' && !$this->productBelongsToMode((string)$norm, $mode)) {
+                continue;
+            }
+            return (string)$norm;
         }
         return null;
     }
@@ -108,19 +192,61 @@ final class OperatorCatalog
      * Find the operator that owns a given product name.
      * @return array{name:string,country:string}|null
      */
-    public function findOperatorByProduct(string $product): ?array
+    public function findOperatorByProduct(string $product, ?string $mode = null): ?array
     {
         $pNeedle = trim($product);
         if ($pNeedle === '') { return null; }
+        $matches = [];
         foreach ($this->operators as $op) {
+            if (!$this->modeMatches($op, $mode)) {
+                continue;
+            }
             $prods = array_map(fn($p) => (string)$p, (array)($op['products'] ?? []));
             foreach ($prods as $p) {
                 if (mb_strtolower($p) === mb_strtolower($pNeedle)) {
-                    return ['name' => (string)$op['name'], 'country' => strtoupper((string)$op['country'] ?? '')];
+                    $matches[] = ['name' => (string)$op['name'], 'country' => strtoupper((string)$op['country'] ?? '')];
+                    break;
                 }
             }
         }
-        return null;
+
+        return count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function getDowngradePolicies(): array
+    {
+        return $this->downgradePolicies;
+    }
+
+    /**
+     * @param array{mode?:string} $operator
+     */
+    private function modeMatches(array $operator, ?string $mode): bool
+    {
+        if ($mode === null || $mode === '') {
+            return true;
+        }
+
+        return strtolower((string)($operator['mode'] ?? '')) === strtolower($mode);
+    }
+
+    private function productBelongsToMode(string $product, string $mode): bool
+    {
+        foreach ($this->operators as $operator) {
+            if (!$this->modeMatches($operator, $mode)) {
+                continue;
+            }
+            foreach ((array)($operator['products'] ?? []) as $candidate) {
+                if (mb_strtolower((string)$candidate) === mb_strtolower($product)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

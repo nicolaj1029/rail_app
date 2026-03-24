@@ -20,7 +20,9 @@ class TicketJoinService
         foreach ($tickets as $ticket) {
             $pnr = (string)($ticket['bookingRef'] ?? '');
             $date = (string)($ticket['dep_date'] ?? ($ticket['segments'][0]['dep_date'] ?? ''));
-            $key = ($pnr !== '' ? $pnr : 'no_pnr') . '|' . ($date !== '' ? $date : 'no_date');
+            $key = $pnr !== ''
+                ? 'pnr|' . strtolower($pnr)
+                : 'date|' . ($date !== '' ? $date : 'no_date');
 
             if ($pnr === '' || $date === '') {
                 Log::warning('[TicketJoin] Could not group ticket – missing PNR or dep_date');

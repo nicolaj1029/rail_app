@@ -15,8 +15,6 @@ final class StationSearchService
 
     /** @var array<int,array<string,mixed>>|null */
     private static ?array $cacheRows = null;
-    /** @var array<string,array<int,array<string,mixed>>>|null */
-    private static ?array $cacheRowsByCountry = null;
     private static ?int $cacheMtime = null;
 
     public function __construct(?string $path = null)
@@ -131,54 +129,224 @@ final class StationSearchService
         $path = $this->path;
         $mtime = is_file($path) ? (int)@filemtime($path) : null;
         if ($mtime !== null && self::$cacheRows !== null && self::$cacheMtime === $mtime) {
-            if ($country !== null && self::$cacheRowsByCountry !== null) {
-                return self::$cacheRowsByCountry[$country] ?? [];
-            }
-            return self::$cacheRows;
+            return $this->filterRowsByCountry(self::$cacheRows, $country);
         }
         if (!is_file($path)) { return []; }
+
+        $firstChar = $this->firstSignificantChar($path);
+        $all = $firstChar === '['
+            ? $this->loadRowsFromStream($path)
+            : $this->loadRowsFromDecodedJson($path);
+
+        self::$cacheRows = $all;
+        self::$cacheMtime = $mtime;
+        return $this->filterRowsByCountry($all, $country);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private function loadRowsFromDecodedJson(string $path): array
+    {
         $json = (string)@file_get_contents($path);
         if ($json === '') { return []; }
+
         $data = json_decode($json, true);
+        unset($json);
         if (!is_array($data)) { return []; }
-        // Expect list; tolerate map by turning into list.
+
+        // Expect list; tolerate map by turning into compact list in-place.
         $isList = function_exists('array_is_list') ? array_is_list($data) : (array_keys($data) === range(0, count($data) - 1));
         if (!$isList) {
             $rows = [];
             foreach ($data as $k => $v) {
-                if (is_array($v) && isset($v['lat'], $v['lon'])) {
-                    $rows[] = ['name' => (string)$k, 'lat' => (float)$v['lat'], 'lon' => (float)$v['lon']];
+                if (!is_array($v)) { continue; }
+                $row = $this->compactRow([
+                    'name' => (string)$k,
+                    'lat' => $v['lat'] ?? null,
+                    'lon' => $v['lon'] ?? null,
+                    'country' => $v['country'] ?? null,
+                    'osm_id' => $v['osm_id'] ?? null,
+                    'type' => $v['type'] ?? null,
+                    'source' => $v['source'] ?? null,
+                ]);
+                if ($row !== null) {
+                    $rows[] = $row;
                 }
             }
-            $data = $rows;
+
+            return $rows;
         }
 
-        // Precompute normalized ASCII name for fast searching and build a by-country index.
-        $all = [];
-        $byCountry = [];
-        foreach ($data as $row) {
-            if (!is_array($row)) { continue; }
-            $name = (string)($row['name'] ?? ($row['station'] ?? ''));
-            if ($name === '' || !isset($row['lat'], $row['lon'])) { continue; }
-            $cc = isset($row['country']) ? strtoupper((string)$row['country']) : '';
-            $nn = $this->norm($name);
-            $na = $this->ascii($nn);
-            if ($na === '') { continue; }
-            $row['name'] = $name;
-            $row['__na'] = $na;
-            $row['__f'] = substr($na, 0, 1);
-            $all[] = $row;
-            if ($cc !== '') {
-                if (!isset($byCountry[$cc])) { $byCountry[$cc] = []; }
-                $byCountry[$cc][] = $row;
+        foreach ($data as $idx => $row) {
+            if (!is_array($row)) {
+                unset($data[$idx]);
+                continue;
+            }
+
+            $compact = $this->compactRow($row);
+            if ($compact === null) {
+                unset($data[$idx]);
+                continue;
+            }
+
+            $data[$idx] = $compact;
+        }
+
+        return array_values($data);
+    }
+
+    /**
+     * Stream top-level list JSON to keep peak memory low.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function loadRowsFromStream(string $path): array
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) { return []; }
+
+        $rows = [];
+        $buffer = '';
+        $depth = 0;
+        $capturing = false;
+        $inString = false;
+        $escape = false;
+
+        try {
+            while (($line = fgets($handle)) !== false) {
+                $length = strlen($line);
+                for ($i = 0; $i < $length; $i++) {
+                    $char = $line[$i];
+
+                    if ($capturing) {
+                        $buffer .= $char;
+                    }
+
+                    if ($inString) {
+                        if ($escape) {
+                            $escape = false;
+                            continue;
+                        }
+                        if ($char === '\\') {
+                            $escape = true;
+                            continue;
+                        }
+                        if ($char === '"') {
+                            $inString = false;
+                        }
+                        continue;
+                    }
+
+                    if ($char === '"') {
+                        $inString = true;
+                        continue;
+                    }
+
+                    if ($char === '{') {
+                        if (!$capturing) {
+                            $capturing = true;
+                            $buffer = '{';
+                            $depth = 1;
+                            continue;
+                        }
+
+                        $depth++;
+                        continue;
+                    }
+
+                    if ($char !== '}' || !$capturing) {
+                        continue;
+                    }
+
+                    $depth--;
+                    if ($depth !== 0) {
+                        continue;
+                    }
+
+                    $row = json_decode($buffer, true);
+                    if (is_array($row)) {
+                        $compact = $this->compactRow($row);
+                        if ($compact !== null) {
+                            $rows[] = $compact;
+                        }
+                    }
+
+                    $capturing = false;
+                    $buffer = '';
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return $rows;
+    }
+
+    private function firstSignificantChar(string $path): ?string
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) { return null; }
+
+        try {
+            while (($char = fgetc($handle)) !== false) {
+                if (!ctype_space($char)) {
+                    return $char;
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>|null
+     */
+    private function compactRow(array $row): ?array
+    {
+        $name = (string)($row['name'] ?? ($row['station'] ?? ''));
+        if ($name === '' || !isset($row['lat'], $row['lon'])) { return null; }
+
+        $cc = isset($row['country']) ? strtoupper((string)$row['country']) : '';
+        $nn = $this->norm($name);
+        $na = $this->ascii($nn);
+        if ($na === '') { return null; }
+
+        return [
+            'name' => $name,
+            'country' => $cc !== '' ? $cc : null,
+            'lat' => (float)$row['lat'],
+            'lon' => (float)$row['lon'],
+            'osm_id' => $row['osm_id'] ?? null,
+            'type' => isset($row['type']) ? (string)$row['type'] : null,
+            'source' => isset($row['source']) ? (string)$row['source'] : null,
+            '__na' => $na,
+            '__f' => substr($na, 0, 1),
+        ];
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function filterRowsByCountry(array $rows, ?string $country): array
+    {
+        if ($country === null || $country === '') {
+            return $rows;
+        }
+
+        $filtered = [];
+        foreach ($rows as $row) {
+            $rowCountry = strtoupper((string)($row['country'] ?? ''));
+            if ($rowCountry === $country) {
+                $filtered[] = $row;
             }
         }
 
-        self::$cacheRows = $all;
-        self::$cacheRowsByCountry = $byCountry;
-        self::$cacheMtime = $mtime;
-        if ($country !== null) { return $byCountry[$country] ?? []; }
-        return $all;
+        return $filtered;
     }
 
     private function norm(string $s): string

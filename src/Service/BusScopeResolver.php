@@ -21,9 +21,11 @@ final class BusScopeResolver
         $basis = 'out_of_scope';
         $reason = null;
 
-        if ($regularService === true && ($boardingInEu === true || $alightingInEu === true) && $distanceKm !== null && $distanceKm >= 250) {
+        if ($regularService === true && ($boardingInEu === true || $alightingInEu === true)) {
             $applies = true;
-            $basis = 'regular_service_250km_plus';
+            $basis = ($distanceKm !== null && $distanceKm >= 250)
+                ? 'regular_service_250km_plus'
+                : 'regular_service_under_250km';
         } else {
             $reason = 'outside_bus_181_2011_scope';
         }

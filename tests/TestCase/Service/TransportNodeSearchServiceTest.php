@@ -77,11 +77,139 @@ final class TransportNodeSearchServiceTest extends TestCase
             ],
         ]);
 
-        $service = new TransportNodeSearchService($path);
+        $service = new TransportNodeSearchService($path, null, 'disabled');
         $rows = $service->search('ferry', 'Helsingor', null, 5);
 
         $this->assertNotEmpty($rows);
         $this->assertSame('Helsingør', $rows[0]['name']);
+    }
+
+    public function testSearchFiltersRouteNamedFerryTerminalWhenExactPortExists(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'port-helsingor',
+                'mode' => 'ferry',
+                'name' => 'HelsingÃ¸r',
+                'aliases' => ['Helsingor'],
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'port',
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-route',
+                'mode' => 'ferry',
+                'name' => 'HelsingÃ¸r-Helsingborg',
+                'country' => '',
+                'in_eu' => false,
+                'node_type' => 'ferry_terminal',
+                'source' => 'test',
+            ],
+        ]);
+
+        $service = new TransportNodeSearchService($path, null, 'disabled');
+        $rows = $service->search('ferry', 'Helsingor', null, 5);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('HelsingÃ¸r', $rows[0]['name']);
+    }
+
+    public function testSearchEnrichesFerryTerminalEuMetadataFromMatchingPort(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'port-ystad',
+                'mode' => 'ferry',
+                'name' => 'Ystad',
+                'country' => 'SE',
+                'in_eu' => true,
+                'node_type' => 'port',
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-ystad',
+                'mode' => 'ferry',
+                'name' => 'Ystad',
+                'country' => '',
+                'in_eu' => false,
+                'node_type' => 'ferry_terminal',
+                'source' => 'test',
+            ],
+        ]);
+
+        $service = new TransportNodeSearchService($path, null, 'disabled');
+        $rows = $service->search('ferry', 'Ystad', null, 5);
+
+        $terminal = null;
+        foreach ($rows as $row) {
+            if (($row['node_type'] ?? null) === 'ferry_terminal') {
+                $terminal = $row;
+                break;
+            }
+        }
+
+        $this->assertIsArray($terminal);
+        $this->assertSame('SE', $terminal['country']);
+        $this->assertTrue((bool)$terminal['in_eu']);
+    }
+
+    public function testSearchLoadsCuratedFerryTerminalFromSeedWorkbook(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'port-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor',
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'port',
+                'source' => 'test',
+            ],
+        ]);
+        $seedPath = $this->writeTempFerrySeedWorkbook([
+            ['DK', 'Helsingor', 'Helsingor Ferry Terminal', 'ferry_terminal', 'yes', 'yes', 'manual_seed', '', 'Curated seed row'],
+        ]);
+
+        $service = new TransportNodeSearchService($path, null, $seedPath);
+        $rows = $service->search('ferry', 'Helsingor', null, 5, 'terminal');
+
+        $this->assertNotEmpty($rows);
+        $this->assertSame('ferry_terminal', $rows[0]['node_type']);
+        $this->assertSame('Helsingor Ferry Terminal', $rows[0]['name']);
+        $this->assertSame('Helsingor', $rows[0]['parent_name']);
+        $this->assertSame('manual_seed', $rows[0]['verification_status']);
+    }
+
+    public function testSearchCanPreferFerryTerminalForTerminalLookups(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'port-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor',
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'port',
+                'source' => 'test',
+            ],
+            [
+                'id' => 'terminal-helsingor',
+                'mode' => 'ferry',
+                'name' => 'Helsingor Ferry Terminal',
+                'country' => 'DK',
+                'in_eu' => true,
+                'node_type' => 'ferry_terminal',
+                'parent_name' => 'Helsingor',
+                'source' => 'test',
+            ],
+        ]);
+
+        $service = new TransportNodeSearchService($path, null, 'disabled');
+        $rows = $service->search('ferry', 'Helsingor', null, 5, 'terminal');
+
+        $this->assertNotEmpty($rows);
+        $this->assertSame('terminal-helsingor', $rows[0]['id']);
     }
 
     public function testSearchFallsBackToStationsForBus(): void
@@ -150,5 +278,40 @@ final class TransportNodeSearchServiceTest extends TestCase
         $this->tempFiles[] = $path;
 
         return $path;
+    }
+
+    /**
+     * @param array<int,array<int,string>> $rows
+     */
+    private function writeTempFerrySeedWorkbook(array $rows): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'railapp_seed_');
+        $this->assertIsString($path);
+        $xlsxPath = $path . '.xlsx';
+        @unlink($path);
+
+        $header = ['country_code', 'port_name', 'terminal_name', 'record_type', 'likely_havneterminal', 'passenger_services', 'verification_status', 'source_url', 'notes'];
+        $sheetRows = [$header, ...$rows];
+
+        $xml = '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+        foreach ($sheetRows as $rowIndex => $row) {
+            $xml .= '<row r="' . ($rowIndex + 1) . '">';
+            foreach ($row as $cellIndex => $value) {
+                $column = chr(ord('A') + $cellIndex);
+                $escaped = htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $xml .= '<c r="' . $column . ($rowIndex + 1) . '" t="inlineStr"><is><t>' . $escaped . '</t></is></c>';
+            }
+            $xml .= '</row>';
+        }
+        $xml .= '</sheetData></worksheet>';
+
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($xlsxPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE));
+        $zip->addFromString('xl/worksheets/sheet1.xml', $xml);
+        $zip->close();
+
+        $this->tempFiles[] = $xlsxPath;
+
+        return $xlsxPath;
     }
 }

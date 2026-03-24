@@ -23,7 +23,6 @@ final class FerryRightsEvaluator
         $actualDepartureDelay90 = (bool)($incidentMeta['actual_departure_delay_90'] ?? false);
         $arrivalDelayMinutes = $this->normalizeNullableInt($incidentMeta['arrival_delay_minutes'] ?? null);
         $scheduledDurationMinutes = $this->normalizeNullableInt($incidentMeta['scheduled_journey_duration_minutes'] ?? null);
-        $overnightRequired = (bool)($incidentMeta['overnight_required'] ?? false);
         $informedBeforePurchase = (bool)($incidentMeta['informed_before_purchase'] ?? false);
         $passengerFault = (bool)($incidentMeta['passenger_fault'] ?? false);
         $weatherSafety = (bool)($incidentMeta['weather_safety'] ?? false);
@@ -80,7 +79,7 @@ final class FerryRightsEvaluator
 
         if ($hasDepartureDisruption && $departureFromTerminal === true && !$openTicketWithoutDepartureTime) {
             $gateArt17Refreshments = true;
-            if ($overnightRequired && !$weatherSafety) {
+            if (!$weatherSafety) {
                 $gateArt17Hotel = true;
             }
         }

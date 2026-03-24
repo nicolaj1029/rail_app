@@ -29,9 +29,21 @@ $isAir = ($transportMode === 'air');
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+$ferryPmrRights = (array)($multimodal['ferry_pmr_rights'] ?? []);
 $busScope = (array)($multimodal['bus_scope'] ?? []);
 $busContract = (array)($multimodal['bus_contract'] ?? []);
 $busRights = (array)($multimodal['bus_rights'] ?? []);
+$busPmrRights = (array)($multimodal['bus_pmr_rights'] ?? []);
+$airRights = (array)($multimodal['air_rights'] ?? []);
+$nextAction = (
+    ((string)($flags['gate_art20'] ?? '')) === '1'
+    || ((string)($flags['gate_bus_pmr_assistance'] ?? '')) === '1'
+    || ((string)($flags['gate_bus_pmr_assistance_partial'] ?? '')) === '1'
+) ? 'assistance' : 'compensation';
+$ferryPmrRemedyActive = $ferryPmrRemedyActive ?? !empty($ferryPmrRights['gate_ferry_pmr_boarding_remedy']);
+$ferryPmrReasonNoticeActive = !empty($ferryPmrRights['gate_ferry_pmr_reason_notice']);
+$busPmrRemedyActive = $busPmrRemedyActive ?? !empty($busPmrRights['gate_bus_pmr_boarding_remedy']);
+$busPmrReasonNoticeActive = !empty($busPmrRights['gate_bus_pmr_reason_notice']);
 
 if ($isFerry) {
     $remediesTitle = $isOngoing
@@ -103,6 +115,7 @@ $stationSet = array_fill_keys($stationOptions, true);
 // Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
 $stationsSearchUrl = $this->Url->build('/api/stations/search');
 $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
+$airDelayRefundOnly = $isAir && !empty($airRights['gate_air_delay_refund_5h']) && (string)($form['incident_main'] ?? '') === 'delay';
 ?>
 
 <style>
@@ -182,6 +195,16 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
             <div class="small muted mt8">Scope-note: <?= h((string)$ferryScope['scope_exclusion_reason']) ?></div>
         <?php endif; ?>
     </div>
+    <?php if ($ferryPmrRemedyActive): ?>
+    <div class="card mt12" style="border-color:#b6d4fe;background:#eff6ff;">
+        <div class="card-title"><span class="icon">&#9855;</span><span>Ferry PMR remedy</span></div>
+        <div class="small muted mt4">Naegtet reservation eller boarding for PMR aabner et separat remedy-spor. Derfor kan du vaelge tilbagebetaling eller ombooking her, selv om almindelig ferry Art. 18 ikke er det, der aabner trinnet.</div>
+        <?php if ($ferryPmrReasonNoticeActive): ?>
+            <div class="small muted mt8">Transportoerens begrundelse ser ikke ud til at vaere givet klart, saa reason-notice-sporet er ogsaa aktivt.</div>
+        <?php endif; ?>
+        <div class="small muted mt8">Muligheden for ombooking senere vises kun i dette PMR-spor.</div>
+    </div>
+    <?php endif; ?>
 <?php elseif ($isBus): ?>
     <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="card-title"><span class="icon">&#128652;</span><span>Bus-kontekst</span></div>
@@ -193,6 +216,15 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
             <div class="small muted mt8">Der er samtidig et foreloebigt 50% kompensationsspor, hvis operatoeren ikke tilbod et valg mellem ombooking og tilbagebetaling.</div>
         <?php endif; ?>
     </div>
+    <?php if ($busPmrRemedyActive): ?>
+    <div class="card mt12" style="border-color:#b6d4fe;background:#eff6ff;">
+        <div class="card-title"><span class="icon">&#9855;</span><span>Bus PMR remedy</span></div>
+        <div class="small muted mt4">Naegtet reservation eller boarding for PMR aabner et separat remedy-spor. Derfor kan du vaelge tilbagebetaling eller alternativ transport her, selv om almindelig bus-gating ikke er det, der aabner trinnet.</div>
+        <?php if ($busPmrReasonNoticeActive): ?>
+            <div class="small muted mt8">Transportoerens skriftlige begrundelse ser ikke ud til at vaere givet klart, saa reason-notice-sporet er ogsaa aktivt.</div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 <?php endif; ?>
 <?php
     $articles = (array)($profile['articles'] ?? []);
@@ -214,9 +246,9 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
 <input type="hidden" name="ferry_return_to_departure_port_amount" value="<?= h((string)($form['ferry_return_to_departure_port_amount'] ?? ($form['return_to_origin_amount'] ?? ''))) ?>" />
 <input type="hidden" name="ferry_return_to_departure_port_currency" value="<?= h((string)($form['ferry_return_to_departure_port_currency'] ?? ($form['return_to_origin_currency'] ?? ''))) ?>" />
 <?php elseif ($isBus): ?>
-<input type="hidden" name="bus_remedy_choice" value="<?= h((string)($form['bus_remedy_choice'] ?? $remedy ?? '')) ?>" />
-<input type="hidden" name="bus_refund_requested" value="<?= h((string)($form['bus_refund_requested'] ?? (($remedy ?? '') === 'refund_return' ? 'yes' : 'no'))) ?>" />
-<input type="hidden" name="bus_reroute_choice" value="<?= h((string)($form['bus_reroute_choice'] ?? (in_array(($remedy ?? ''), ['reroute_soonest','reroute_later'], true) ? $remedy : ''))) ?>" />
+<input type="hidden" name="bus_remedy_choice" value="<?= h((string)(in_array((string)($form['remedyChoice'] ?? ''), ['refund_return', 'reroute_soonest'], true) ? $form['remedyChoice'] : '')) ?>" />
+<input type="hidden" name="bus_refund_requested" value="<?= h((string)((string)($form['remedyChoice'] ?? '') === 'refund_return' ? 'yes' : ($form['bus_refund_requested'] ?? 'no'))) ?>" />
+<input type="hidden" name="bus_reroute_choice" value="<?= h((string)((string)($form['remedyChoice'] ?? '') === 'reroute_soonest' ? 'reroute_soonest' : '')) ?>" />
 <input type="hidden" name="bus_return_to_departure_stop_expense" value="<?= h((string)($form['bus_return_to_departure_stop_expense'] ?? ($form['return_to_origin_expense'] ?? ''))) ?>" />
 <input type="hidden" name="bus_return_to_departure_stop_amount" value="<?= h((string)($form['bus_return_to_departure_stop_amount'] ?? ($form['return_to_origin_amount'] ?? ''))) ?>" />
 <input type="hidden" name="bus_return_to_departure_stop_currency" value="<?= h((string)($form['bus_return_to_departure_stop_currency'] ?? ($form['return_to_origin_currency'] ?? ''))) ?>" />
@@ -249,14 +281,14 @@ $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? (
     </div>
 <?php endif; ?>
 
-<?php if (!$art18Active): ?>
+<?php if (!$art18Active && !$ferryPmrRemedyActive && !$busPmrRemedyActive): ?>
     <div class="card mt12" style="padding:12px; border:1px solid #ddd; background:#fff3cd; border-radius:6px;">
         <?php if ($art18Blocked): ?>
             <strong>Art. 18 er ikke aktiveret.</strong>
             <div class="small muted">Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.</div>
         <?php else: ?>
             <strong>Art. 18 afventer gating.</strong>
-            <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld afgangsforsinkelse/aflysning (90 min) for at aktivere ferry Art. 18.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 18.' ?></div>
+            <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld afgangsforsinkelse/aflysning (90 min) for at aktivere ferry Art. 18.' : ($isBus ? 'Ga tilbage til Trin 5 og udfyld aflysning, overbooking eller 120-minutters forsinkelse for at aktivere bus-remedy. PMR boarding refusal aabner sit eget spor fra journey-trinnet.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 18.') ?></div>
         <?php endif; ?>
     </div>
 <?php endif; ?>
@@ -280,23 +312,39 @@ $preview = round($tp * $rate * $share, 2);
     if ($remedy === '') {
         if (($form['trip_cancelled_return_to_origin'] ?? '') === 'yes') { $remedy = 'refund_return'; }
         elseif (($form['reroute_same_conditions_soonest'] ?? '') === 'yes') { $remedy = 'reroute_soonest'; }
-        elseif (($form['reroute_later_at_choice'] ?? '') === 'yes') { $remedy = 'reroute_later'; }
+        elseif (!$isBus && (($form['reroute_later_at_choice'] ?? '') === 'yes')) { $remedy = 'reroute_later'; }
     }
-    $refundOnly = $arrivedFinalExplicit && $purposeVal === 'yes';
+    $refundOnly = ($arrivedFinalExplicit && $purposeVal === 'yes') || $airDelayRefundOnly;
     if ($refundOnly) { $remedy = 'refund_return'; }
+    if ($isBus && $remedy === 'reroute_later') { $remedy = ''; }
+    if ($isFerry && !$ferryPmrRemedyActive && $remedy === 'reroute_later') { $remedy = ''; }
+    $art18TitleResolved = $art18Title;
+    $art18HelpResolved = $airDelayRefundOnly
+        ? 'Ved forsinkelse paa mindst 5 timer kan du vaelge at opgive rejsen og faa refusion efter flight-reglerne.'
+        : $art18Help;
+    if ($isFerry && $ferryPmrRemedyActive && !$art18Active) {
+        $art18TitleResolved = 'Ferry PMR - tilbagebetaling eller ombooking';
+        $art18HelpResolved = 'Ved naegtet reservation eller boarding for PMR kan tilbagebetaling eller ombooking vaere relevant efter ferry-PMR reglerne.';
+    } elseif ($isBus && $busPmrRemedyActive && !$art18Active) {
+        $art18TitleResolved = 'Bus PMR - tilbagebetaling eller alternativ transport';
+        $art18HelpResolved = 'Ved naegtet reservation eller boarding for PMR kan tilbagebetaling eller rimelig alternativ transport vaere relevant efter busforordningen.';
+    }
+    $art18Help = $art18HelpResolved;
     $ri100 = (string)($form['reroute_info_within_100min'] ?? '');
 ?>
-    <div id="art18Wrapper" class="<?= ($art18Active || $isPreview) ? '' : 'hidden' ?>">
+    <div id="art18Wrapper" class="<?= (($art18Active || $ferryPmrRemedyActive || $busPmrRemedyActive) || $isPreview) ? '' : 'hidden' ?>">
         <div id="art18Flow">
     <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)">
-        <div class="card-title"><span class="icon">&#127919;</span><span><?= h($art18Title) ?></span></div>
-        <div class="small muted" style="margin-top:6px;"><?= h($art18Help) ?></div>
+        <div class="card-title"><span class="icon">&#127919;</span><span><?= h($art18TitleResolved) ?></span></div>
+        <div class="small muted" style="margin-top:6px;"><?= h($airDelayRefundOnly ? 'Ved forsinkelse paa mindst 5 timer kan du vælge at opgive rejsen og få refusion efter flight-reglerne.' : $art18Help) ?></div>
         <div id="remedyHint" class="small muted mt8"></div>
         <div class="mt8" data-art="18(1)"><strong>V&aelig;lg pr&aelig;cis en mulighed</strong></div>
         <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker tilbagebetaling' : 'Jeg oensker refusion' ?></label><br/>
         <?php if (!$refundOnly): ?>
             <label data-art="18(1b)"><input type="radio" name="remedyChoice" value="reroute_soonest" <?= $remedy==='reroute_soonest'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker ombooking hurtigst muligt' : 'Jeg oensker omlaegning hurtigst muligt' ?></label><br/>
+            <?php if (!$isBus && (!$isFerry || $ferryPmrRemedyActive)): ?>
             <label data-art="18(1c)"><input type="radio" name="remedyChoice" value="reroute_later" <?= $remedy==='reroute_later'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker ombooking senere (efter eget valg)' : 'Jeg oensker omlaegning senere (efter eget valg)' ?></label>
+            <?php endif; ?>
         <?php endif; ?>
 
         <!-- Hidden sync to legacy hooks -->
@@ -2316,11 +2364,11 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             var busReturnAmt = document.querySelector('input[name="bus_return_to_departure_stop_amount"]');
             var busReturnCur = document.querySelector('input[name="bus_return_to_departure_stop_currency"]');
             if (ferryChoice) { ferryChoice.value = currentRemedy; }
-            if (busChoice) { busChoice.value = currentRemedy; }
+            if (busChoice) { busChoice.value = (currentRemedy === 'refund_return' || currentRemedy === 'reroute_soonest') ? currentRemedy : ''; }
             if (ferryRefund) { ferryRefund.value = currentRemedy === 'refund_return' ? 'yes' : 'no'; }
             if (busRefund) { busRefund.value = currentRemedy === 'refund_return' ? 'yes' : 'no'; }
             if (ferryReroute) { ferryReroute.value = (currentRemedy === 'reroute_soonest' || currentRemedy === 'reroute_later') ? currentRemedy : ''; }
-            if (busReroute) { busReroute.value = (currentRemedy === 'reroute_soonest' || currentRemedy === 'reroute_later') ? currentRemedy : ''; }
+            if (busReroute) { busReroute.value = currentRemedy === 'reroute_soonest' ? 'reroute_soonest' : ''; }
             var rtVal = (document.querySelector('input[name="return_to_origin_expense"]:checked') || {}).value || '';
             if (ferryReturnExp) { ferryReturnExp.value = rtVal; }
             if (busReturnExp) { busReturnExp.value = rtVal; }
@@ -2380,7 +2428,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
     <?= $this->Html->link('Tilbage', ['action' => 'choices'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
     <?= $this->Form->button('Fortsaet', ['id' => 'remediesSubmitBtn', 'class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsaet til naeste trin', 'formnovalidate' => true]) ?>
-    <?= $this->Html->link('Spring over', ['controller' => 'Flow', 'action' => 'assistance'], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'Gaa til naeste trin uden at gemme aendringer']) ?>
+    <?= $this->Html->link('Spring over', ['controller' => 'Flow', 'action' => $nextAction], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'Gaa til naeste trin uden at gemme aendringer']) ?>
     <input type="hidden" name="_choices_submitted" value="1" />
 </div>
 

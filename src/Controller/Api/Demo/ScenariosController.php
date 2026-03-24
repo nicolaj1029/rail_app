@@ -174,6 +174,27 @@ class ScenariosController extends AppController
             ]),
             'step4_journey' => $this->pick($step4Journey, [
                 'pmr_user',
+                'pmr_companion',
+                'pmr_service_dog',
+                'unaccompanied_minor',
+                'ferry_pmr_companion',
+                'ferry_pmr_service_dog',
+                'ferry_pmr_notice_48h',
+                'ferry_pmr_met_checkin_time',
+                'ferry_pmr_assistance_delivered',
+                'ferry_pmr_boarding_refused',
+                'ferry_pmr_refusal_basis',
+                'ferry_pmr_reason_given',
+                'ferry_pmr_alternative_transport_offered',
+                'bus_pmr_companion',
+                'bus_pmr_notice_36h',
+                'bus_pmr_met_terminal_time',
+                'bus_pmr_special_seating_notified',
+                'bus_pmr_assistance_delivered',
+                'bus_pmr_boarding_refused',
+                'bus_pmr_refusal_basis',
+                'bus_pmr_reason_given',
+                'bus_pmr_alternative_transport_offered',
                 'pmr_booked',
                 'pmr_delivered_status',
                 'pmr_promised_missing',
@@ -330,24 +351,88 @@ class ScenariosController extends AppController
 
         // PMR/cykel (step 4) – important context for Art.9 rights and potential Art.18/20 activation
         if (!empty($s4Journey)) {
-            $pmrUser = (string)($s4Journey['pmr_user'] ?? '');
-            $pmrBooked = (string)($s4Journey['pmr_booked'] ?? '');
-            $pmrDelivered = (string)($s4Journey['pmr_delivered_status'] ?? '');
-            $pmrMissing = (string)($s4Journey['pmr_promised_missing'] ?? '');
-            $pmrDetails = trim((string)($s4Journey['pmr_facility_details'] ?? ''));
+            $pmrContext = !empty($s4Journey['pmr_user']) || !empty($s4Journey['pmr_booked']) || !empty($s4Journey['pmr_promised_missing'])
+                ? $s4Journey
+                : $s3Station;
+            $pmrUser = (string)($pmrContext['pmr_user'] ?? '');
+            $pmrCompanion = (string)($pmrContext['pmr_companion'] ?? '');
+            $pmrServiceDog = (string)($pmrContext['pmr_service_dog'] ?? '');
+            $unaccompaniedMinor = (string)($pmrContext['unaccompanied_minor'] ?? '');
+            $pmrBooked = (string)($pmrContext['pmr_booked'] ?? '');
+            $pmrDelivered = (string)($pmrContext['pmr_delivered_status'] ?? '');
+            $pmrMissing = (string)($pmrContext['pmr_promised_missing'] ?? '');
+            $pmrDetails = trim((string)($pmrContext['pmr_facility_details'] ?? ''));
+            $ferryPmrCompanion = (string)($pmrContext['ferry_pmr_companion'] ?? '');
+            $ferryPmrServiceDog = (string)($pmrContext['ferry_pmr_service_dog'] ?? '');
+            $ferryPmrNotice48h = (string)($pmrContext['ferry_pmr_notice_48h'] ?? '');
+            $ferryPmrMetCheckinTime = (string)($pmrContext['ferry_pmr_met_checkin_time'] ?? '');
+            $ferryPmrDelivered = (string)($pmrContext['ferry_pmr_assistance_delivered'] ?? '');
+            $ferryPmrBoardingRefused = (string)($pmrContext['ferry_pmr_boarding_refused'] ?? '');
+            $ferryPmrRefusalBasis = (string)($pmrContext['ferry_pmr_refusal_basis'] ?? '');
+            $ferryPmrReasonGiven = (string)($pmrContext['ferry_pmr_reason_given'] ?? '');
+            $ferryPmrAltTransport = (string)($pmrContext['ferry_pmr_alternative_transport_offered'] ?? '');
+            $busPmrCompanion = (string)($pmrContext['bus_pmr_companion'] ?? '');
+            $busPmrNotice36h = (string)($pmrContext['bus_pmr_notice_36h'] ?? '');
+            $busPmrMetTerminalTime = (string)($pmrContext['bus_pmr_met_terminal_time'] ?? '');
+            $busPmrSpecialSeatingNotified = (string)($pmrContext['bus_pmr_special_seating_notified'] ?? '');
+            $busPmrDelivered = (string)($pmrContext['bus_pmr_assistance_delivered'] ?? '');
+            $busPmrBoardingRefused = (string)($pmrContext['bus_pmr_boarding_refused'] ?? '');
+            $busPmrRefusalBasis = (string)($pmrContext['bus_pmr_refusal_basis'] ?? '');
+            $busPmrReasonGiven = (string)($pmrContext['bus_pmr_reason_given'] ?? '');
+            $busPmrAltTransport = (string)($pmrContext['bus_pmr_alternative_transport_offered'] ?? '');
 
             $hasPmrSignal = in_array($pmrUser, ['Ja', 'Nej'], true)
+                || in_array($pmrCompanion, ['Ja', 'Nej'], true)
+                || in_array($pmrServiceDog, ['Ja', 'Nej'], true)
+                || in_array($unaccompaniedMinor, ['Ja', 'Nej'], true)
                 || in_array($pmrBooked, ['Ja', 'Nej'], true)
                 || in_array($pmrDelivered, ['Ja', 'Nej'], true)
-                || in_array($pmrMissing, ['Ja', 'Nej'], true);
+                || in_array($pmrMissing, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrCompanion, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrServiceDog, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrNotice48h, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrMetCheckinTime, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrBoardingRefused, ['Ja', 'Nej'], true)
+                || in_array($ferryPmrReasonGiven, ['Ja', 'Nej'], true)
+                || in_array($busPmrCompanion, ['Ja', 'Nej'], true)
+                || in_array($busPmrNotice36h, ['Ja', 'Nej'], true)
+                || in_array($busPmrMetTerminalTime, ['Ja', 'Nej'], true)
+                || in_array($busPmrSpecialSeatingNotified, ['Ja', 'Nej'], true)
+                || in_array($busPmrBoardingRefused, ['Ja', 'Nej'], true)
+                || in_array($busPmrReasonGiven, ['Ja', 'Nej'], true);
 
             if ($hasPmrSignal) {
                 $lines[] = 'PMR/handicap: bruger=' . ($pmrUser !== '' ? $pmrUser : 'unknown')
+                    . ', ledsager=' . ($pmrCompanion !== '' ? $pmrCompanion : 'unknown')
+                    . ', servicehund=' . ($pmrServiceDog !== '' ? $pmrServiceDog : 'unknown')
+                    . ', uledsaget barn=' . ($unaccompaniedMinor !== '' ? $unaccompaniedMinor : 'unknown')
                     . ', assistance bestilt=' . ($pmrBooked !== '' ? $pmrBooked : 'unknown')
                     . ', leveret=' . ($pmrDelivered !== '' ? $pmrDelivered : 'unknown')
                     . ', lovet faciliteter manglede=' . ($pmrMissing !== '' ? $pmrMissing : 'unknown');
                 if ($pmrDetails !== '') {
                     $lines[] = 'PMR detaljer: ' . $pmrDetails;
+                }
+                if ($ferryPmrNotice48h !== '' || $ferryPmrDelivered !== '' || $ferryPmrBoardingRefused !== '') {
+                    $lines[] = 'Faerge PMR: ledsager=' . ($ferryPmrCompanion !== '' ? $ferryPmrCompanion : 'unknown')
+                        . ', servicehund=' . ($ferryPmrServiceDog !== '' ? $ferryPmrServiceDog : 'unknown')
+                        . ', 48t-varsel=' . ($ferryPmrNotice48h !== '' ? $ferryPmrNotice48h : 'unknown')
+                        . ', check-in-tid moedt=' . ($ferryPmrMetCheckinTime !== '' ? $ferryPmrMetCheckinTime : 'unknown')
+                        . ', assistance=' . ($ferryPmrDelivered !== '' ? $ferryPmrDelivered : 'unknown')
+                        . ', boarding naegtet=' . ($ferryPmrBoardingRefused !== '' ? $ferryPmrBoardingRefused : 'unknown')
+                        . ', begrundelse=' . ($ferryPmrRefusalBasis !== '' ? $ferryPmrRefusalBasis : 'unknown')
+                        . ', begrundelse givet=' . ($ferryPmrReasonGiven !== '' ? $ferryPmrReasonGiven : 'unknown')
+                        . ', alternativ transport=' . ($ferryPmrAltTransport !== '' ? $ferryPmrAltTransport : 'unknown');
+                }
+                if ($busPmrNotice36h !== '' || $busPmrDelivered !== '' || $busPmrBoardingRefused !== '') {
+                    $lines[] = 'Bus PMR: ledsager=' . ($busPmrCompanion !== '' ? $busPmrCompanion : 'unknown')
+                        . ', 36t-varsel=' . ($busPmrNotice36h !== '' ? $busPmrNotice36h : 'unknown')
+                        . ', terminaltid moedt=' . ($busPmrMetTerminalTime !== '' ? $busPmrMetTerminalTime : 'unknown')
+                        . ', saerlige siddebehov oplyst=' . ($busPmrSpecialSeatingNotified !== '' ? $busPmrSpecialSeatingNotified : 'unknown')
+                        . ', assistance=' . ($busPmrDelivered !== '' ? $busPmrDelivered : 'unknown')
+                        . ', boarding naegtet=' . ($busPmrBoardingRefused !== '' ? $busPmrBoardingRefused : 'unknown')
+                        . ', begrundelse=' . ($busPmrRefusalBasis !== '' ? $busPmrRefusalBasis : 'unknown')
+                        . ', begrundelse givet=' . ($busPmrReasonGiven !== '' ? $busPmrReasonGiven : 'unknown')
+                        . ', alternativ transport=' . ($busPmrAltTransport !== '' ? $busPmrAltTransport : 'unknown');
                 }
             }
 
@@ -506,6 +591,13 @@ class ScenariosController extends AppController
             ($yn($s4Journey['pmr_booked'] ?? '') === 'yes' && $yn($s4Journey['pmr_delivered_status'] ?? '') === 'no')
             || ($yn($s4Journey['pmr_promised_missing'] ?? '') === 'yes')
         );
+        $ferryPmrGate = ($yn($s4Journey['pmr_user'] ?? '') === 'yes') && (
+            in_array(strtolower(trim((string)($s4Journey['ferry_pmr_assistance_delivered'] ?? 'unknown'))), ['partial', 'none'], true)
+            || ($yn($s4Journey['ferry_pmr_boarding_refused'] ?? '') === 'yes')
+        );
+        $busPmrRemedyGate = ($yn($s4Journey['pmr_user'] ?? '') === 'yes')
+            && ($yn($s4Journey['bus_pmr_boarding_refused'] ?? '') === 'yes')
+            && ($yn($s4Journey['bus_pmr_notice_36h'] ?? '') === 'yes');
         $bikeGate = ($yn($s4Journey['bike_denied_boarding'] ?? '') === 'yes') && (
             $yn($s4Journey['bike_refusal_reason_provided'] ?? '') !== 'yes' || trim((string)($s4Journey['bike_refusal_reason_type'] ?? '')) === ''
         );
@@ -515,6 +607,8 @@ class ScenariosController extends AppController
         if ($expected60 === 'yes' || $already60 === 'yes') { $activeReasons[] = 'delay>=60'; }
         if ($incidentMissed === 'yes') { $activeReasons[] = 'missed_connection'; }
         if ($pmrGate) { $activeReasons[] = 'pmr_gate'; }
+        if ($ferryPmrGate) { $activeReasons[] = 'ferry_pmr'; }
+        if ($busPmrRemedyGate) { $activeReasons[] = 'bus_pmr'; }
         if ($bikeGate) { $activeReasons[] = 'bike_gate'; }
 
         $active = !empty($activeReasons);

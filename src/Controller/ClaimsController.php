@@ -14,8 +14,8 @@ class ClaimsController extends AppController
     {
         $catalog = new OperatorCatalog();
         $countries = $catalog->getCountries();
-        $operators = $catalog->getOperators();
-        $products = $catalog->getProducts();
+        $operators = $catalog->getOperators('rail');
+        $products = $catalog->getProducts('rail');
         $productScopes = $catalog->getProductScopes();
         // Filter: drop products in any blocked scope under its operators
         $matrix = new \App\Service\ExemptionMatrixRepository();

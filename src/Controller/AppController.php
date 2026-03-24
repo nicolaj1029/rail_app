@@ -76,6 +76,12 @@ class AppController extends Controller
                 return;
             }
             $flags = (array)$this->getRequest()->getSession()->read('flow.flags') ?: [];
+            $form = (array)$this->getRequest()->getSession()->read('flow.form') ?: [];
+            $meta = (array)$this->getRequest()->getSession()->read('flow.meta') ?: [];
+            $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+            if ($transportMode !== '') {
+                $flags['transport_mode'] = $transportMode;
+            }
             $steps = $svc->buildSteps($flags, $action);
 
             $this->set('flowSteps', $steps);

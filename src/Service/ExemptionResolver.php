@@ -9,14 +9,16 @@ namespace App\Service;
  */
 class ExemptionResolver
 {
-    private array $operators;
+    private OperatorCatalog $operatorCatalog;
+    private array $productScopes;
     private array $matrix;
     private array $national;
     private array $stationCoords = [];
 
-    public function __construct()
+    public function __construct(?OperatorCatalog $operatorCatalog = null)
     {
-        $this->operators = $this->loadJson(CONFIG . '/data/operators_catalog.json');
+        $this->operatorCatalog = $operatorCatalog ?: new OperatorCatalog();
+        $this->productScopes = $this->operatorCatalog->getProductScopes();
         $this->matrix = $this->loadJson(CONFIG . '/data/exemption_matrix.json');
         $this->national = $this->loadJson(CONFIG . '/data/national_overrides.json');
         $this->stationCoords = $this->loadStationsMap(CONFIG . '/data/stations_coords.json');
@@ -47,14 +49,11 @@ class ExemptionResolver
         $blocked = false;
         $exemptions = [];
 
-        // Try explicit product match
-        if ($country && $productKey && isset($this->operators[$country]) && is_array($this->operators[$country])) {
-            $ops = $this->operators[$country];
-            if (isset($ops[$productKey]) && is_array($ops[$productKey])) {
-                $cfg = $ops[$productKey];
-                $blocked = !empty($cfg['blocked']);
-                $exemptions = (array)($cfg['exemptions'] ?? []);
-                $scope = (string)($cfg['scope'] ?? ($cfg['conditional'] ?? null));
+        // Product scope from canonical operator catalog if it can be identified safely.
+        if ($country && $productKey && $scope === null) {
+            $catalogScope = $this->lookupCatalogScope($country, $productKey);
+            if ($catalogScope !== null) {
+                $scope = $catalogScope;
             }
         }
 
@@ -134,6 +133,23 @@ class ExemptionResolver
             if ($d >= 120) { return 'long_domestic'; }
             if ($d <= 60) { return 'regional'; }
         }
+        return null;
+    }
+
+    private function lookupCatalogScope(string $country, string $product): ?string
+    {
+        $operator = $this->operatorCatalog->findOperatorByProduct($product);
+        if ($operator === null || strtoupper((string)$operator['country']) !== $country) {
+            return null;
+        }
+
+        $rows = (array)($this->productScopes[$operator['name']] ?? []);
+        foreach ($rows as $productName => $scope) {
+            if (mb_strtolower((string)$productName) === mb_strtolower($product)) {
+                return (string)$scope;
+            }
+        }
+
         return null;
     }
 

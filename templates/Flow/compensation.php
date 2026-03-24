@@ -229,6 +229,8 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   .bad{background:#fdecea;border:1px solid #f5c6cb;padding:6px;border-radius:6px}
   .card{padding:12px;border:1px solid #ddd;background:#fff;border-radius:6px}
   .mt4{margin-top:4px}.mt8{margin-top:8px}.mt12{margin-top:12px}.ml8{margin-left:8px}
+  .widget-title{display:flex;align-items:center;gap:10px;font-weight:700}
+  .step-badge{width:28px;height:28px;border-radius:999px;background:#e9f2ff;border:1px solid #cfe0ff;color:#1e3a8a;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;line-height:1;flex:0 0 auto}
 </style>
 
 <h1><?= h($compTitle) ?></h1>
@@ -280,6 +282,23 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Faerge-resultat</strong>
   <div class="small muted mt4">TRIN 10 samler scope, claim-kanal og aktive ferry-rettigheder. Brug resultatet til claim-assist, dokumentpakke eller manuel vurdering.</div>
+  <div class="card mt12" style="border-color:#e5e7eb;background:#fff">
+    <div class="widget-title">
+      <span class="step-badge" aria-hidden="true">K</span>
+      <span>Kompensationsudregning</span>
+    </div>
+    <div class="small muted mt4">Faerge bruger ankomstforsinkelse og planlagt rejsevarighed til Art. 19-bandet, ligesom rail bruger sit kompensationstrin til den endelige beregning.</div>
+    <div class="mt8">
+      <label>Forsinkelse ved ankomst (minutter)
+        <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h((string)($form['arrival_delay_minutes'] ?? '')) ?>" placeholder="130" />
+      </label>
+    </div>
+    <div class="mt8">
+      <label>Planlagt rejsevarighed (minutter)
+        <input type="number" name="scheduled_journey_duration_minutes" min="0" step="1" value="<?= h((string)($form['scheduled_journey_duration_minutes'] ?? '')) ?>" placeholder="300" />
+      </label>
+    </div>
+  </div>
   <?php if ($ferryClaimName !== ''): ?>
     <div class="small mt8">Primær claim-kanal: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
   <?php endif; ?>
@@ -311,6 +330,58 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <div class="hl mt8 small">Faergeforordningen ser ikke ud til at finde anvendelse paa denne sejlads ud fra de nuvaerende scope-oplysninger.</div>
   <?php else: ?>
     <div class="hl mt8 small">Brug data-pack og de aktive gates ovenfor som grundlag for claim-assist eller manuel vurdering.</div>
+  <?php endif; ?>
+  <?php if (!empty($claim)): ?>
+    <?php
+      $br = (array)($claim['breakdown'] ?? []);
+      $tot = (array)($claim['totals'] ?? []);
+      $summaryCurrency = (string)($tot['currency'] ?? ($priceCurrency !== '' ? $priceCurrency : 'EUR'));
+      $refundAmount = (float)($br['refund']['amount'] ?? 0);
+      $refundBasis = (string)($br['refund']['basis'] ?? '');
+      $rerouteAmount = (float)($br['art18']['reroute_extra_costs'] ?? 0);
+      $returnAmount = (float)($br['art18']['return_to_origin'] ?? 0);
+      $compAmount = (float)($br['compensation']['amount'] ?? 0);
+      $compPct = (int)($br['compensation']['pct'] ?? 0);
+      $compBasis = (string)($br['compensation']['basis'] ?? '');
+      $expenseTotal = (float)($br['expenses']['total'] ?? 0);
+      $mealAmount = (float)($br['expenses']['meals'] ?? 0);
+      $hotelAmount = (float)($br['expenses']['hotel'] ?? 0);
+      $altTransportAmount = (float)($br['expenses']['alt_transport'] ?? 0);
+      $otherAmount = (float)($br['expenses']['other'] ?? 0);
+    ?>
+    <div class="card mt12" style="display:grid;gap:8px;">
+      <strong>Ferry okonomi</strong>
+      <div class="small muted">Art. 19 beregnes paa baggrund af den faktisk betalte billetpris fra TRIN 2. Assistance og ombooking/refusion opgoeres med samme model som rail, men vises under ferry-artiklerne.</div>
+      <div class="small">Billetpris fra TRIN 2: <strong><?= number_format($priceFromTicket, 2) ?> <?= h($priceCurrency) ?></strong></div>
+      <div style="display:grid;gap:6px;">
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Art. 18 - Tilbagebetaling / ombooking</strong></div>
+          <div class="small">Tilbagebetaling: <?= number_format($refundAmount, 2) ?> <?= h($summaryCurrency) ?><?= $refundBasis !== '' ? ' - ' . h($refundBasis) : '' ?></div>
+          <div class="small">Retur til afgangshavn/udgangspunkt: <?= number_format($returnAmount, 2) ?> <?= h($summaryCurrency) ?></div>
+          <div class="small">Ekstra omkostninger ved ombooking: <?= number_format($rerouteAmount, 2) ?> <?= h($summaryCurrency) ?></div>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Art. 17 - Assistance</strong></div>
+          <div class="small">Samlede assistanceudgifter: <?= number_format($expenseTotal, 2) ?> <?= h($summaryCurrency) ?></div>
+          <?php if ($mealAmount > 0): ?><div class="small">Maaltider/forfriskninger: <?= number_format($mealAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($hotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($hotelAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($altTransportAmount > 0): ?><div class="small">Transport: <?= number_format($altTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($otherAmount > 0): ?><div class="small">Oevrige udgifter: <?= number_format($otherAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($expenseTotal <= 0): ?><div class="small muted">Ingen assistanceudgifter registreret endnu.</div><?php endif; ?>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Art. 19 - Kompensation</strong></div>
+          <div class="small">Kompensation: <?= number_format($compAmount, 2) ?> <?= h($summaryCurrency) ?> - <?= h((string)$compPct) ?>%<?= $compBasis !== '' ? ' - ' . h($compBasis) : '' ?></div>
+          <div class="small muted">Dette er ferry-beloebet ud fra billetprisen fra TRIN 2 og det aktuelle Art. 19-band.</div>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Total og udbetaling</strong></div>
+          <div class="small">Samlet krav (brutto): <strong><?= number_format($grossAdjusted, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($serviceFee, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          <div class="small">Netto: <strong><?= number_format($netPayout, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+        </div>
+      </div>
+    </div>
   <?php endif; ?>
 </div>
 </fieldset>

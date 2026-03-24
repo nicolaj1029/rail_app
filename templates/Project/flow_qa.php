@@ -191,7 +191,7 @@
   <h2>Pendlerkort (Art. 19(2)) policy-matrix</h2>
   <p>Matrixen er et backlog-værktøj til at dække operatørers egne ordninger for periode-/abonnementskort. Start som link-only <em>stubs</em>, og opgradér til <em>verified</em> når du har primærkilder + dato + QA.</p>
   <div class="card">
-    <div class="note">Datafiler: <code>config/data/season_policy_matrix.json</code> (ordninger) + <code>config/data/operators_catalog.json</code> (operatører/aliases).</div>
+    <div class="note">Datafiler: <code>config/data/season_policy_matrix.json</code> (ordninger) + <code>config/data/transport_operators_catalog.json</code> (operatører/aliases).</div>
     <?php if (!empty($seasonCoverage) && is_array($seasonCoverage)): ?>
       <table style="margin-top:10px;">
         <thead>

@@ -10,106 +10,225 @@ namespace App\Service;
  */
 class StationGeocoder
 {
-    /** @var array<string,array{lat:float,lon:float}> */
+    /** @var array<string,int|array{0:float,1:float}> */
     private array $db = [];
 
-    /** @var array<int,array{name:string,lat:float,lon:float}> */
-    private array $rows = [];
+    private string $path = '';
 
-    /** @var array<string,array{lat:float,lon:float}>|null */
+    /** @var array<string,int|array{0:float,1:float}>|null */
     private static ?array $cacheDb = null;
-    /** @var array<int,array{name:string,lat:float,lon:float}>|null */
-    private static ?array $cacheRows = null;
+
     private static ?int $cacheMtime = null;
+    private static ?string $cachePath = null;
 
     public function __construct(?string $path = null)
     {
         $path = $path ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'stations_coords.json');
+        $this->path = $path;
         $mtime = is_file($path) ? (int)@filemtime($path) : null;
-        if ($mtime !== null && self::$cacheDb !== null && self::$cacheRows !== null && self::$cacheMtime === $mtime) {
+        if (
+            $mtime !== null &&
+            self::$cacheDb !== null &&
+            self::$cacheMtime === $mtime &&
+            self::$cachePath === $path
+        ) {
             $this->db = self::$cacheDb;
-            $this->rows = self::$cacheRows;
+
             return;
         }
 
-        $db = [];
-        $rows = [];
-        if (is_file($path)) {
-            $json = (string)file_get_contents($path);
-            $data = json_decode($json, true);
-            if (is_array($data)) {
-                // Support both shapes:
-                // 1) Map: { "København H": {"lat":..,"lon":..}, ... }
-                // 2) List: [ {"name":"København H","lat":..,"lon":..}, ... ] (current stations_coords.json)
-                $isList = function_exists('array_is_list') ? array_is_list($data) : (array_keys($data) === range(0, count($data) - 1));
-                if ($isList) {
-                    foreach ($data as $row) {
-                        if (!is_array($row)) { continue; }
-                        $name = (string)($row['name'] ?? ($row['station'] ?? ''));
-                        if ($name === '' || !isset($row['lat'], $row['lon'])) { continue; }
-                        $lat = (float)$row['lat'];
-                        $lon = (float)$row['lon'];
-                        $db[$this->norm($name)] = ['lat' => $lat, 'lon' => $lon];
-                        $rows[] = ['name' => $name, 'lat' => $lat, 'lon' => $lon];
-                    }
-                } else {
-                    foreach ($data as $k => $v) {
-                        if (is_array($v) && isset($v['lat'], $v['lon'])) {
-                            $name = (string)$k;
-                            $lat = (float)$v['lat'];
-                            $lon = (float)$v['lon'];
-                            $db[$this->norm($name)] = ['lat' => $lat, 'lon' => $lon];
-                            $rows[] = ['name' => $name, 'lat' => $lat, 'lon' => $lon];
-                        }
-                    }
-                }
-            }
-        }
-
-        $this->db = $db;
-        $this->rows = $rows;
-        self::$cacheDb = $db;
-        self::$cacheRows = $rows;
+        $this->db = [];
+        self::$cacheDb = [];
         self::$cacheMtime = $mtime;
+        self::$cachePath = $path;
     }
 
     /** @return array{lat:float,lon:float}|null */
     public function lookup(string $name): ?array
     {
         $n = $this->norm($name);
-        if (isset($this->db[$n])) { return $this->db[$n]; }
+        if (isset($this->db[$n])) {
+            $hit = $this->db[$n];
+            if (is_array($hit)) {
+                return ['lat' => $hit[0], 'lon' => $hit[1]];
+            }
+        }
+
         // Try stripping common suffix tokens
         $base = preg_replace('/\b(hbf|central(?:en)?|centralstation|station|st\.?|bahnhof|gare|c)\b/u', '', $n) ?? $n;
         $base = trim(preg_replace('/\s{2,}/u', ' ', $base) ?? $base);
-        if (isset($this->db[$base])) { return $this->db[$base]; }
-        return null;
+        if (isset($this->db[$base])) {
+            $hit = $this->db[$base];
+            if (is_array($hit)) {
+                return ['lat' => $hit[0], 'lon' => $hit[1]];
+            }
+        }
+
+        return $this->lookupFromFile($n, $base);
     }
 
     /** @return array{name:string,lat:float,lon:float,distance_m:float}|null */
     public function nearest(float $lat, float $lon, float $maxDistanceMeters = 1500.0): ?array
     {
-        $best = null;
-        $bestDistance = INF;
+        return $this->nearestFromFile($lat, $lon, $maxDistanceMeters);
+    }
 
-        foreach ($this->rows as $row) {
-            $distance = $this->distanceMeters($lat, $lon, $row['lat'], $row['lon']);
-            if ($distance > $maxDistanceMeters || $distance >= $bestDistance) {
-                continue;
-            }
-            $bestDistance = $distance;
-            $best = $row;
+    /**
+     * @return array{0:array<string,int|array{0:float,1:float}>,1:array<int,array{0:string,1:float,2:float}>}
+     */
+    private function loadFromDecodedJson(string $path, bool $withRows = true): array
+    {
+        $json = @file_get_contents($path);
+        if (!is_string($json) || $json === '') {
+            return [[], []];
         }
 
-        if ($best === null) {
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return [[], []];
+        }
+
+        $db = [];
+        $rows = [];
+        foreach ($data as $key => $value) {
+            if (is_array($value) && isset($value['lat'], $value['lon'])) {
+                $name = is_string($key) ? $key : (string)($value['name'] ?? ($value['station'] ?? ''));
+                $this->addRow($db, $rows, $name, $value['lat'], $value['lon'], $withRows);
+            }
+        }
+
+        return [$db, $rows];
+    }
+
+    /**
+     * The shipped stations file is a large top-level JSON list. Streaming the
+     * objects keeps peak memory well below the request limit.
+     *
+     * @return array{0:array<string,int|array{0:float,1:float}>,1:array<int,array{0:string,1:float,2:float}>}
+     */
+    private function loadListFromStream(string $path, bool $withRows = true): array
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return [[], []];
+        }
+
+        $db = [];
+        $rows = [];
+        $buffer = '';
+        $depth = 0;
+        $capturing = false;
+        $inString = false;
+        $escape = false;
+
+        try {
+            while (($line = fgets($handle)) !== false) {
+                $length = strlen($line);
+                for ($i = 0; $i < $length; $i++) {
+                    $char = $line[$i];
+
+                    if ($capturing) {
+                        $buffer .= $char;
+                    }
+
+                    if ($inString) {
+                        if ($escape) {
+                            $escape = false;
+                            continue;
+                        }
+                        if ($char === '\\') {
+                            $escape = true;
+                            continue;
+                        }
+                        if ($char === '"') {
+                            $inString = false;
+                        }
+                        continue;
+                    }
+
+                    if ($char === '"') {
+                        $inString = true;
+                        continue;
+                    }
+
+                    if ($char === '{') {
+                        if (!$capturing) {
+                            $capturing = true;
+                            $buffer = '{';
+                            $depth = 1;
+                            continue;
+                        }
+
+                        $depth++;
+                        continue;
+                    }
+
+                    if ($char !== '}' || !$capturing) {
+                        continue;
+                    }
+
+                    $depth--;
+                    if ($depth !== 0) {
+                        continue;
+                    }
+
+                    $row = json_decode($buffer, true);
+                    if (is_array($row)) {
+                        $name = (string)($row['name'] ?? ($row['station'] ?? ''));
+                        $this->addRow($db, $rows, $name, $row['lat'] ?? null, $row['lon'] ?? null, $withRows);
+                    }
+
+                    $capturing = false;
+                    $buffer = '';
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return [$db, $rows];
+    }
+
+    private function firstSignificantChar(string $path): ?string
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
             return null;
         }
 
-        return [
-            'name' => $best['name'],
-            'lat' => $best['lat'],
-            'lon' => $best['lon'],
-            'distance_m' => round($bestDistance, 1),
-        ];
+        try {
+            while (($char = fgetc($handle)) !== false) {
+                if (!ctype_space($char)) {
+                    return $char;
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,int|array{0:float,1:float}> $db
+     * @param array<int,array{0:string,1:float,2:float}> $rows
+     */
+    private function addRow(array &$db, array &$rows, string $name, mixed $lat, mixed $lon, bool $withRows = true): void
+    {
+        $name = trim($name);
+        if ($name === '' || !is_numeric($lat) || !is_numeric($lon)) {
+            return;
+        }
+
+        $lat = (float)$lat;
+        $lon = (float)$lon;
+        $norm = $this->norm($name);
+        if (!isset($db[$norm])) {
+            $db[$norm] = [$lat, $lon];
+        }
+        if ($withRows) {
+            $rows[] = [$name, $lat, $lon];
+        }
     }
 
     private function distanceMeters(float $lat1, float $lon1, float $lat2, float $lon2): float
@@ -127,8 +246,283 @@ class StationGeocoder
     private function norm(string $s): string
     {
         $t = mb_strtolower(trim($s), 'UTF-8');
-        $t = str_replace([' '], ' ', $t); // nbsp
-        $t = preg_replace('/\s+/', ' ', $t) ?? $t;
+        $t = str_replace(["\u{00A0}", 'Â '], ' ', $t);
+        $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
+
         return $t;
+    }
+
+    /** @return array{lat:float,lon:float}|null */
+    private function lookupFromFile(string $normalizedName, string $normalizedBase): ?array
+    {
+        if (!is_file($this->path)) {
+            return null;
+        }
+
+        $targets = array_values(array_unique(array_filter([$normalizedName, $normalizedBase])));
+        $firstChar = $this->firstSignificantChar($this->path);
+
+        if ($firstChar === '[') {
+            $handle = @fopen($this->path, 'rb');
+            if ($handle === false) {
+                return null;
+            }
+
+            $buffer = '';
+            $depth = 0;
+            $capturing = false;
+            $inString = false;
+            $escape = false;
+            try {
+                while (($line = fgets($handle)) !== false) {
+                    $length = strlen($line);
+                    for ($i = 0; $i < $length; $i++) {
+                        $char = $line[$i];
+
+                        if ($capturing) {
+                            $buffer .= $char;
+                        }
+
+                        if ($inString) {
+                            if ($escape) {
+                                $escape = false;
+                                continue;
+                            }
+                            if ($char === '\\') {
+                                $escape = true;
+                                continue;
+                            }
+                            if ($char === '"') {
+                                $inString = false;
+                            }
+                            continue;
+                        }
+
+                        if ($char === '"') {
+                            $inString = true;
+                            continue;
+                        }
+
+                        if ($char === '{') {
+                            if (!$capturing) {
+                                $capturing = true;
+                                $buffer = '{';
+                                $depth = 1;
+                                continue;
+                            }
+
+                            $depth++;
+                            continue;
+                        }
+
+                        if ($char !== '}' || !$capturing) {
+                            continue;
+                        }
+
+                        $depth--;
+                        if ($depth !== 0) {
+                            continue;
+                        }
+
+                        $row = json_decode($buffer, true);
+                        if (is_array($row)) {
+                            $name = trim((string)($row['name'] ?? ($row['station'] ?? '')));
+                            $rowLat = $row['lat'] ?? null;
+                            $rowLon = $row['lon'] ?? null;
+                            $norm = $this->norm($name);
+                            if ($name !== '' && in_array($norm, $targets, true) && is_numeric($rowLat) && is_numeric($rowLon)) {
+                                $hit = ['lat' => (float)$rowLat, 'lon' => (float)$rowLon];
+                                $this->db[$normalizedName] = [$hit['lat'], $hit['lon']];
+                                if ($normalizedBase !== '') {
+                                    $this->db[$normalizedBase] = [$hit['lat'], $hit['lon']];
+                                }
+                                self::$cacheDb = $this->db;
+
+                                return $hit;
+                            }
+                        }
+
+                        $capturing = false;
+                        $buffer = '';
+                    }
+                }
+            } finally {
+                fclose($handle);
+            }
+
+            return null;
+        }
+
+        $json = @file_get_contents($this->path);
+        if (!is_string($json) || $json === '') {
+            return null;
+        }
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        foreach ($data as $key => $value) {
+            if (!is_array($value) || !isset($value['lat'], $value['lon'])) {
+                continue;
+            }
+            $name = is_string($key) ? $key : (string)($value['name'] ?? ($value['station'] ?? ''));
+            $norm = $this->norm($name);
+            if (!in_array($norm, $targets, true) || !is_numeric($value['lat']) || !is_numeric($value['lon'])) {
+                continue;
+            }
+            $hit = ['lat' => (float)$value['lat'], 'lon' => (float)$value['lon']];
+            $this->db[$normalizedName] = [$hit['lat'], $hit['lon']];
+            if ($normalizedBase !== '') {
+                $this->db[$normalizedBase] = [$hit['lat'], $hit['lon']];
+            }
+            self::$cacheDb = $this->db;
+
+            return $hit;
+        }
+
+        return null;
+    }
+
+    /** @return array{name:string,lat:float,lon:float,distance_m:float}|null */
+    private function nearestFromFile(float $lat, float $lon, float $maxDistanceMeters): ?array
+    {
+        if (!is_file($this->path)) {
+            return null;
+        }
+
+        $bestName = null;
+        $bestLat = null;
+        $bestLon = null;
+        $bestDistance = INF;
+        $firstChar = $this->firstSignificantChar($this->path);
+        if ($firstChar === '[') {
+            $handle = @fopen($this->path, 'rb');
+            if ($handle === false) {
+                return null;
+            }
+
+            $buffer = '';
+            $depth = 0;
+            $capturing = false;
+            $inString = false;
+            $escape = false;
+            try {
+                while (($line = fgets($handle)) !== false) {
+                    $length = strlen($line);
+                    for ($i = 0; $i < $length; $i++) {
+                        $char = $line[$i];
+
+                        if ($capturing) {
+                            $buffer .= $char;
+                        }
+
+                        if ($inString) {
+                            if ($escape) {
+                                $escape = false;
+                                continue;
+                            }
+                            if ($char === '\\') {
+                                $escape = true;
+                                continue;
+                            }
+                            if ($char === '"') {
+                                $inString = false;
+                            }
+                            continue;
+                        }
+
+                        if ($char === '"') {
+                            $inString = true;
+                            continue;
+                        }
+
+                        if ($char === '{') {
+                            if (!$capturing) {
+                                $capturing = true;
+                                $buffer = '{';
+                                $depth = 1;
+                                continue;
+                            }
+
+                            $depth++;
+                            continue;
+                        }
+
+                        if ($char !== '}' || !$capturing) {
+                            continue;
+                        }
+
+                        $depth--;
+                        if ($depth !== 0) {
+                            continue;
+                        }
+
+                        $row = json_decode($buffer, true);
+                        if (is_array($row)) {
+                            $name = trim((string)($row['name'] ?? ($row['station'] ?? '')));
+                            $rowLat = $row['lat'] ?? null;
+                            $rowLon = $row['lon'] ?? null;
+                            if ($name !== '' && is_numeric($rowLat) && is_numeric($rowLon)) {
+                                $rowLat = (float)$rowLat;
+                                $rowLon = (float)$rowLon;
+                                $distance = $this->distanceMeters($lat, $lon, $rowLat, $rowLon);
+                                if ($distance <= $maxDistanceMeters && $distance < $bestDistance) {
+                                    $bestDistance = $distance;
+                                    $bestName = $name;
+                                    $bestLat = $rowLat;
+                                    $bestLon = $rowLon;
+                                }
+                            }
+                        }
+
+                        $capturing = false;
+                        $buffer = '';
+                    }
+                }
+            } finally {
+                fclose($handle);
+            }
+        } else {
+            $json = @file_get_contents($this->path);
+            if (!is_string($json) || $json === '') {
+                return null;
+            }
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                return null;
+            }
+            foreach ($data as $key => $value) {
+                if (!is_array($value) || !isset($value['lat'], $value['lon'])) {
+                    continue;
+                }
+                $name = is_string($key) ? $key : (string)($value['name'] ?? ($value['station'] ?? ''));
+                $name = trim($name);
+                if ($name === '' || !is_numeric($value['lat']) || !is_numeric($value['lon'])) {
+                    continue;
+                }
+                $rowLat = (float)$value['lat'];
+                $rowLon = (float)$value['lon'];
+                $distance = $this->distanceMeters($lat, $lon, $rowLat, $rowLon);
+                if ($distance > $maxDistanceMeters || $distance >= $bestDistance) {
+                    continue;
+                }
+                $bestDistance = $distance;
+                $bestName = $name;
+                $bestLat = $rowLat;
+                $bestLon = $rowLon;
+            }
+        }
+
+        if ($bestName === null || $bestLat === null || $bestLon === null) {
+            return null;
+        }
+
+        return [
+            'name' => $bestName,
+            'lat' => $bestLat,
+            'lon' => $bestLon,
+            'distance_m' => round($bestDistance, 1),
+        ];
     }
 }

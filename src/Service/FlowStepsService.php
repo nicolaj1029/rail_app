@@ -23,9 +23,10 @@ final class FlowStepsService
         ['id' => 'start',       'num' => 1,  'title' => 'Start & Rejsestatus',                            'action' => 'start',       'doneFlag' => 'step1_done',  'prereqFlags' => []],
         ['id' => 'entitlements','num' => 2,  'title' => 'Billet / Ticketless + Grunddata',               'action' => 'entitlements','doneFlag' => 'step2_done',  'prereqFlags' => ['step1_done']],
         // NOTE: Step 3/4 are intentionally ordered as station -> journey (and the step3_done/step4_done meanings follow that order).
-        ['id' => 'station',     'num' => 3,  'title' => 'Transport fra station? (Art. 20(3))',           'action' => 'station',     'doneFlag' => 'step3_done',  'prereqFlags' => ['step2_done']],
-        ['id' => 'journey',     'num' => 4,  'title' => 'Rejseplan + Kontrakt (Art. 12) + PMR/Cykel',    'action' => 'journey',     'doneFlag' => 'step4_done',  'prereqFlags' => ['step3_done']],
-        ['id' => 'incident',    'num' => 5,  'title' => 'Haendelse + Gating (Art. 18/20 + national)',    'action' => 'incident',    'doneFlag' => 'step5_done',  'prereqFlags' => ['step4_done']],
+        ['id' => 'station',     'num' => 3,  'title' => 'Foerste ramte segment',                          'action' => 'station',     'doneFlag' => 'step3_done',  'prereqFlags' => ['step2_done']],
+        ['id' => 'railstranding','num' => '3.5', 'title' => 'Strandet paa station/sporet',               'action' => 'railstranding','doneFlag' => 'step35_done','prereqFlags' => ['step2_done']],
+        ['id' => 'journey',     'num' => 4,  'title' => 'Mode-specifik gating',                           'action' => 'journey',     'doneFlag' => 'step4_done',  'prereqFlags' => ['step3_done']],
+        ['id' => 'incident',    'num' => 5,  'title' => 'Haendelseskede + gating',                        'action' => 'incident',    'doneFlag' => 'step5_done',  'prereqFlags' => ['step4_done']],
         // Gate flags are written by TRIN 5 (incident) to prevent users from editing downstream steps
         // when Art. 18/20 is not active. Locked steps can still be previewed via ?preview=1.
         ['id' => 'choices',     'num' => 6,  'title' => 'Strandet paa sporet? + Hvor endte du (Art. 20(2)(c))', 'action' => 'choices', 'doneFlag' => 'step6_done',  'prereqFlags' => ['step5_done', 'gate_art20_2c']],
@@ -48,9 +49,23 @@ final class FlowStepsService
         $gateArt18 = ((string)($flags['gate_art18'] ?? '')) === '1';
         $gateArt20 = ((string)($flags['gate_art20'] ?? '')) === '1';
         $gateArt20_2c = ((string)($flags['gate_art20_2c'] ?? '')) === '1';
+        $gateFerryPmrRemedy = ((string)($flags['gate_ferry_pmr_remedy'] ?? '')) === '1';
+        $gateBusPmrRemedy = ((string)($flags['gate_bus_pmr_remedy'] ?? '')) === '1';
+        $gateBusPmrAssistance = ((string)($flags['gate_bus_pmr_assistance'] ?? '')) === '1';
+        $gateBusPmrAssistancePartial = ((string)($flags['gate_bus_pmr_assistance_partial'] ?? '')) === '1';
         $gateSeasonPass = ((string)($flags['gate_season_pass'] ?? '')) === '1';
         $gateDowngrade = ((string)($flags['gate_downgrade'] ?? '')) === '1';
         $step5Done = ((string)($flags['step5_done'] ?? '')) === '1';
+        $transportMode = strtolower((string)($flags['transport_mode'] ?? ''));
+        if (!in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+            $transportMode = '';
+        }
+        $isFerry = $transportMode === 'ferry';
+        $gatingMode = strtolower((string)($flags['gating_mode'] ?? ($flags['initial_incident_mode'] ?? $transportMode)));
+        if (!in_array($gatingMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+            $gatingMode = '';
+        }
+        $needsRouter = ((string)($flags['needs_initial_incident_router'] ?? '')) === '1';
 
         $out = [];
         foreach (self::STEPS as $s) {
@@ -61,22 +76,71 @@ final class FlowStepsService
             $prereqFlags = $s['prereqFlags'];
             $visible = true;
             switch ((string)($s['action'] ?? '')) {
+                case 'station':
+                    $s['title'] = 'Foerste ramte segment';
+                    $visible = (($needsRouter && $transportMode !== 'air') || $isCurrent);
+                    break;
+                case 'railstranding':
+                    $visible = $gatingMode === 'rail' || $isCurrent;
+                    $prereqFlags = ($needsRouter && $transportMode !== 'air') ? ['step3_done'] : ['step2_done'];
+                    break;
+                case 'journey':
+                    if ($gatingMode === 'rail') {
+                        $prereqFlags = ['step35_done'];
+                    } elseif ($transportMode === 'air') {
+                        $prereqFlags = ['step2_done'];
+                    } else {
+                        $prereqFlags = $needsRouter ? ['step3_done'] : ['step2_done'];
+                    }
+                    $s['title'] = match ($gatingMode) {
+                        'ferry' => 'Ferry gating + PMR',
+                        'bus' => 'Bus gating + PMR',
+                        'air' => 'Air gating + saerlige behov',
+                        'rail' => 'Rail gating + strandet + PMR/Cykel',
+                        default => 'Mode-specifik gating',
+                    };
+                    break;
                 case 'choices':
+                    $s['title'] = ($gatingMode === 'rail')
+                        ? 'Strandet paa station/sporet'
+                        : 'Transport til/fra strandet sted';
                     // TRIN 6 only matters when Art.20(2)(c) transport/stranding is active.
                     $visible = $gateArt20_2c || $done || $isCurrent;
                     break;
                 case 'remedies':
                     // TRIN 7 should not be forced via TRIN 6 unless TRIN 6 is actually applicable.
-                    $prereqFlags = ['step5_done', 'gate_art18'];
-                    if ($gateArt20_2c) {
-                        $prereqFlags[] = 'step6_done';
+                    if ($gatingMode === 'ferry') {
+                        $prereqFlags = ['step5_done'];
+                        if ($gateArt20_2c && !($gateFerryPmrRemedy && !$gateArt18)) {
+                            $prereqFlags[] = 'step6_done';
+                        }
+                        $visible = $gateArt18 || $gateFerryPmrRemedy || $done || $isCurrent;
+                    } elseif ($gatingMode === 'bus') {
+                        $prereqFlags = ['step5_done'];
+                        if ($gateArt20_2c && !($gateBusPmrRemedy && !$gateArt18)) {
+                            $prereqFlags[] = 'step6_done';
+                        }
+                        $visible = $gateArt18 || $gateBusPmrRemedy || $done || $isCurrent;
+                    } else {
+                        $prereqFlags = ['step5_done', 'gate_art18'];
+                        if ($gateArt20_2c) {
+                            $prereqFlags[] = 'step6_done';
+                        }
+                        $visible = $gateArt18 || $done || $isCurrent;
                     }
-                    $visible = $gateArt18 || $done || $isCurrent;
                     break;
                 case 'assistance':
                     // TRIN 8 depends on Art.20 gate, not on completing Art.18 remedies.
-                    $prereqFlags = ['step5_done', 'gate_art20'];
-                    $visible = $gateArt20 || $done || $isCurrent;
+                    if ($gatingMode === 'bus') {
+                        $prereqFlags = ['step5_done'];
+                        if (!$gateBusPmrAssistance && !$gateBusPmrAssistancePartial) {
+                            $prereqFlags[] = 'gate_art20';
+                        }
+                        $visible = $gateArt20 || $gateBusPmrAssistance || $gateBusPmrAssistancePartial || $done || $isCurrent;
+                    } else {
+                        $prereqFlags = ['step5_done', 'gate_art20'];
+                        $visible = $gateArt20 || $done || $isCurrent;
+                    }
                     break;
                 case 'downgrade':
                     // TRIN 9 only when downgrade is relevant (or already completed/current).

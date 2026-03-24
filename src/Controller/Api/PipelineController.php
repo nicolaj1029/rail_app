@@ -185,13 +185,9 @@ class PipelineController extends AppController
         $art9Meta = $meta + (array)($payload['art9_meta'] ?? []);
         // Load operators catalog for evaluator policies (downgrade, supplements)
         try {
-            $opsPath = ROOT . DS . 'config' . DS . 'data' . DS . 'operators_catalog.json';
-            if (file_exists($opsPath)) {
-                $opsJson = (string)file_get_contents($opsPath);
-                $opsData = json_decode($opsJson, true);
-                if (is_array($opsData) && isset($opsData['downgrade_policies'])) {
-                    $meta['_operators_catalog'] = (array)$opsData['downgrade_policies'];
-                }
+            $downgradePolicies = (new \App\Service\OperatorCatalog())->getDowngradePolicies();
+            if ($downgradePolicies !== []) {
+                $meta['_operators_catalog'] = $downgradePolicies;
             }
         } catch (\Throwable $e) {
             // Non-fatal; evaluators will fall back

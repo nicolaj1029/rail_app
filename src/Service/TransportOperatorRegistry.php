@@ -5,22 +5,92 @@ namespace App\Service;
 
 final class TransportOperatorRegistry
 {
+    private const CATALOG_PATH = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_operators_catalog.json';
+
     /** @var array<int,array<string,mixed>> */
     private array $operators = [];
 
     public function __construct(?string $path = null)
     {
-        $path = $path ?? (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_operator_registry.json');
-        if (!is_file($path)) {
+        $path = $path ?? self::CATALOG_PATH;
+        $data = TransportOperatorsCatalogLoader::load($path);
+        if ($data === []) {
             return;
         }
 
-        $data = json_decode((string)file_get_contents($path), true);
-        if (!is_array($data)) {
-            return;
+        $this->operators = $this->normalizeOperators((array)($data['operators'] ?? []));
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function normalizeOperators(array $rows): array
+    {
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $mode = strtolower(trim((string)($row['mode'] ?? '')));
+            if (!in_array($mode, ['rail', 'ferry', 'bus', 'air'], true)) {
+                continue;
+            }
+
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $countryCode = strtoupper(trim((string)($row['country_code'] ?? ($row['country'] ?? ''))));
+            $metadata = is_array($row['metadata'] ?? null) ? (array)$row['metadata'] : [];
+            $products = array_values(array_filter(
+                array_map('strval', (array)($row['products'] ?? ($metadata['products'] ?? []))),
+                static fn(string $value): bool => trim($value) !== ''
+            ));
+            if ($products !== [] && !isset($metadata['products'])) {
+                $metadata['products'] = $products;
+            }
+
+            $normalized[] = [
+                'mode' => $mode,
+                'name' => $name,
+                'aliases' => array_values(array_filter(
+                    array_map('strval', (array)($row['aliases'] ?? [])),
+                    static fn(string $value): bool => trim($value) !== ''
+                )),
+                'country_code' => $countryCode,
+                'is_eu_operator' => array_key_exists('is_eu_operator', $row)
+                    ? (bool)$row['is_eu_operator']
+                    : $this->isEuCountryCode($countryCode),
+                'operator_type' => trim((string)($row['operator_type'] ?? $this->defaultOperatorType($mode))),
+                'metadata' => $metadata,
+                'products' => $products,
+            ];
         }
 
-        $this->operators = array_values((array)($data['operators'] ?? []));
+        return $normalized;
+    }
+
+    private function defaultOperatorType(string $mode): string
+    {
+        return match ($mode) {
+            'rail' => 'railway_undertaking',
+            'ferry' => 'ferry_carrier',
+            'bus' => 'bus_operator',
+            'air' => 'airline',
+            default => 'operator',
+        };
+    }
+
+    private function isEuCountryCode(string $countryCode): bool
+    {
+        return in_array($countryCode, [
+            'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+            'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
+            'SI', 'ES', 'SE',
+        ], true);
     }
 
     /**
@@ -45,6 +115,12 @@ final class TransportOperatorRegistry
             foreach ($names as $name) {
                 $name = trim($name);
                 if ($name === '') {
+                    continue;
+                }
+                if (mb_strlen($name) < 3) {
+                    if (mb_strtolower($needle) === mb_strtolower($name)) {
+                        return $operator;
+                    }
                     continue;
                 }
                 $pattern = '/(?<![A-Za-z0-9])' . preg_quote($name, '/') . '(?![A-Za-z0-9])/iu';
@@ -73,6 +149,50 @@ final class TransportOperatorRegistry
         }
 
         return (bool)$match['is_eu_operator'];
+    }
+
+    public function detectModeByName(string $text): ?string
+    {
+        $needle = trim($text);
+        if ($needle === '') {
+            return null;
+        }
+
+        $matches = [];
+        foreach ($this->operators as $operator) {
+            $mode = strtolower(trim((string)($operator['mode'] ?? '')));
+            if (!in_array($mode, ['ferry', 'bus', 'air', 'rail'], true)) {
+                continue;
+            }
+            $names = array_unique(array_merge(
+                [(string)($operator['name'] ?? '')],
+                array_map('strval', (array)($operator['aliases'] ?? []))
+            ));
+            foreach ($names as $name) {
+                $name = trim($name);
+                if ($name === '') {
+                    continue;
+                }
+                if (mb_strlen($name) < 3) {
+                    if (mb_strtolower($needle) === mb_strtolower($name)) {
+                        $matches[$mode] = true;
+                        break;
+                    }
+                    continue;
+                }
+                $pattern = '/(?<![A-Za-z0-9])' . preg_quote($name, '/') . '(?![A-Za-z0-9])/iu';
+                if (preg_match($pattern, $needle)) {
+                    $matches[$mode] = true;
+                    break;
+                }
+            }
+        }
+
+        if (count($matches) === 1) {
+            return (string)array_key_first($matches);
+        }
+
+        return null;
     }
 
     /**

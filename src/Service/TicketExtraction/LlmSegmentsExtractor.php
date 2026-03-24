@@ -60,7 +60,7 @@ final class LlmSegmentsExtractor
             }
 
             $messages = [
-                ['role' => 'system', 'content' => 'You extract journey segments from EU train tickets. Output strict JSON only.'],
+                ['role' => 'system', 'content' => 'You extract journey segments from passenger travel documents for rail, ferry, bus, and air. Output strict JSON only.'],
                 ['role' => 'user', 'content' => $prompt],
             ];
 
@@ -113,12 +113,13 @@ final class LlmSegmentsExtractor
         ];
         $schemaText = json_encode($schema, JSON_UNESCAPED_SLASHES);
         return <<<EOT
-Extract the train journey segments from the OCR text.
+Extract the journey segments from the OCR text.
 Return STRICT JSON with key "segments" as an array of objects with keys:
 {$schemaText}
 
 Rules:
 - A segment is from one station to the next change/destination.
+- The document may be rail, ferry, bus, or air. Only fill trainNo when it is clearly a rail leg.
 - Use 24h HH:MM for times when present, else empty string.
 - Use ISO YYYY-MM-DD for dates when present, else empty string.
 - Only fill classPurchased/reservationPurchased if clearly stated on the ticket for that leg; otherwise return empty string.

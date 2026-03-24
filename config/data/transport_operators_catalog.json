@@ -1,0 +1,1271 @@
+{
+    "operators":  [
+                      {
+                          "mode":  "rail",
+                          "name":  "SNCF",
+                          "aliases":  [
+                                          "sncf",
+                                          "voyages sncf",
+                                          "inoui",
+                                          "oui.sncf",
+                                          "sncf connect"
+                                      ],
+                          "country_code":  "FR",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "TGV",
+                                           "TER",
+                                           "IntercitÃƒÂ©s",
+                                           "TGV INOUI",
+                                           "OUIGO"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Deutsche Bahn",
+                          "aliases":  [
+                                          "db",
+                                          "db fernverkehr",
+                                          "deutsche bahn"
+                                      ],
+                          "country_code":  "DE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "ICE",
+                                           "IC",
+                                           "EC",
+                                           "RE"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "DSB",
+                          "aliases":  [
+                                          "dsb"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "Lyn",
+                                           "R"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "SJ",
+                          "aliases":  [
+                                          "sj ab",
+                                          "sj"
+                                      ],
+                          "country_code":  "SE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "SnabbtÃƒÂ¥g",
+                                           "IC",
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Ãƒâ€“BB",
+                          "aliases":  [
+                                          "oebb",
+                                          "ÃƒÂ¶bb",
+                                          "oebb pj",
+                                          "oebbpj"
+                                      ],
+                          "country_code":  "AT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Railjet",
+                                           "RJ",
+                                           "Nightjet",
+                                           "NJ",
+                                           "EC",
+                                           "IC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "SBB CFF FFS",
+                          "aliases":  [
+                                          "sbb",
+                                          "cff",
+                                          "ffs"
+                                      ],
+                          "country_code":  "CH",
+                          "is_eu_operator":  false,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "IR",
+                                           "EC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Trenitalia",
+                          "aliases":  [
+                                          "trenitalia",
+                                          "fs"
+                                      ],
+                          "country_code":  "IT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Frecciarossa",
+                                           "FR",
+                                           "Frecciargento",
+                                           "FA",
+                                           "Frecciabianca",
+                                           "FB",
+                                           "IC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Renfe",
+                          "aliases":  [
+                                          "renfe"
+                                      ],
+                          "country_code":  "ES",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "AVE",
+                                           "Alvia",
+                                           "Avlo",
+                                           "IC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "NS",
+                          "aliases":  [
+                                          "ns"
+                                      ],
+                          "country_code":  "NL",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "Sprinter"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "PKP Intercity",
+                          "aliases":  [
+                                          "pkp",
+                                          "pkp ic",
+                                          "intercity",
+                                          "pkp intercity"
+                                      ],
+                          "country_code":  "PL",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "EIP",
+                                           "EIC",
+                                           "IC",
+                                           "TLK"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "SNCB/NMBS",
+                          "aliases":  [
+                                          "sncb",
+                                          "nmbs"
+                                      ],
+                          "country_code":  "BE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "S",
+                                           "P"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Ã„Å’D",
+                          "aliases":  [
+                                          "cd",
+                                          "ceske drahy",
+                                          "Ã„Âd"
+                                      ],
+                          "country_code":  "CZ",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "EC",
+                                           "IC",
+                                           "RJ"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "ZSSK",
+                          "aliases":  [
+                                          "zssk"
+                                      ],
+                          "country_code":  "SK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "R"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "VR",
+                          "aliases":  [
+                                          "vr"
+                                      ],
+                          "country_code":  "FI",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "Pendolino"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Eurostar",
+                          "aliases":  [
+                                          "eurostar",
+                                          "es"
+                                      ],
+                          "country_code":  "GB",
+                          "is_eu_operator":  false,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Eurostar"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Thalys",
+                          "aliases":  [
+                                          "thalys"
+                                      ],
+                          "country_code":  "FR",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Thalys"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "BDZ",
+                          "aliases":  [
+                                          "bdz",
+                                          "bulgarian state railways"
+                                      ],
+                          "country_code":  "BG",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "IR",
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "HÃ…Â½PP",
+                          "aliases":  [
+                                          "hzpp",
+                                          "hÃ…Â¾pp",
+                                          "croatian railways"
+                                      ],
+                          "country_code":  "HR",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "EC",
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Elron",
+                          "aliases":  [
+                                          "elron"
+                                      ],
+                          "country_code":  "EE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Hellenic Train",
+                          "aliases":  [
+                                          "hellenic train",
+                                          "trainose"
+                                      ],
+                          "country_code":  "GR",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "InterCity",
+                                           "Regional",
+                                           "Proastiakos"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "MAV-START",
+                          "aliases":  [
+                                          "mav",
+                                          "mav-start",
+                                          "mÃƒÂ¡v-start"
+                                      ],
+                          "country_code":  "HU",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "EC",
+                                           "Railjet",
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Iarnrod Eireann",
+                          "aliases":  [
+                                          "iarnrod eireann",
+                                          "irish rail"
+                                      ],
+                          "country_code":  "IE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "InterCity",
+                                           "DART",
+                                           "Commuter"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "CFL",
+                          "aliases":  [
+                                          "cfl",
+                                          "chemins de fer luxembourgeois"
+                                      ],
+                          "country_code":  "LU",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Regional",
+                                           "IC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "LTG Link",
+                          "aliases":  [
+                                          "ltg",
+                                          "ltg link",
+                                          "lietuvos gelezinkeliai"
+                                      ],
+                          "country_code":  "LT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Regional",
+                                           "IC"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Vivi",
+                          "aliases":  [
+                                          "vivi",
+                                          "pasazieru vilciens",
+                                          "pasaÃ…Â¾ieru vilciens",
+                                          "pv"
+                                      ],
+                          "country_code":  "LV",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "CFR Calatori",
+                          "aliases":  [
+                                          "cfr",
+                                          "cfr calatori",
+                                          "cfr cÃ„Æ’lÃ„Æ’tori"
+                                      ],
+                          "country_code":  "RO",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IR",
+                                           "IC",
+                                           "R"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "CP",
+                          "aliases":  [
+                                          "cp",
+                                          "comboios de portugal"
+                                      ],
+                          "country_code":  "PT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Alfa Pendular",
+                                           "Intercidades",
+                                           "Regional",
+                                           "Urbanos"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Slovenske zeleznice",
+                          "aliases":  [
+                                          "sz",
+                                          "sÃ…Â¾",
+                                          "slovenske zeleznice",
+                                          "slovenske Ã…Â¾eleznice"
+                                      ],
+                          "country_code":  "SI",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "IC",
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Italo",
+                          "aliases":  [
+                                          "italo",
+                                          "ntv",
+                                          "italo ntv"
+                                      ],
+                          "country_code":  "IT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Italo"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "FlixTrain",
+                          "aliases":  [
+                                          "flixtrain",
+                                          "flix train"
+                                      ],
+                          "country_code":  "DE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "FlixTrain"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "WESTbahn",
+                          "aliases":  [
+                                          "westbahn"
+                                      ],
+                          "country_code":  "AT",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Westbahn"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "RegioJet",
+                          "aliases":  [
+                                          "regiojet",
+                                          "rj"
+                                      ],
+                          "country_code":  "CZ",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "RegioJet"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "LEO Express",
+                          "aliases":  [
+                                          "leo express",
+                                          "leoexpress"
+                                      ],
+                          "country_code":  "CZ",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "LEO"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "Polregio",
+                          "aliases":  [
+                                          "polregio"
+                                      ],
+                          "country_code":  "PL",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "Regional"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "rail",
+                          "name":  "iryo",
+                          "aliases":  [
+                                          "iryo"
+                                      ],
+                          "country_code":  "ES",
+                          "is_eu_operator":  true,
+                          "operator_type":  "railway_undertaking",
+                          "products":  [
+                                           "iryo"
+                                       ],
+                          "metadata":  {
+                                           "season_supported":  true
+                                       }
+                      },
+                      {
+                          "mode":  "ferry",
+                          "name":  "Scandlines",
+                          "aliases":  [
+                                          "scandlines"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "ferry_carrier",
+                          "products":  [
+                                           "Rodby-Puttgarden",
+                                           "Gedser-Rostock"
+                                       ],
+                          "metadata":  {
+                                           "subscription_supported":  true,
+                                           "service_type_hints":  [
+                                                                      "passenger_service"
+                                                                  ]
+                                       }
+                      },
+                      {
+                          "mode":  "ferry",
+                          "name":  "DFDS",
+                          "aliases":  [
+                                          "dfds",
+                                          "dfds seaways"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "ferry_carrier",
+                          "products":  [
+                                           "MiniCruise",
+                                           "Copenhagen-Oslo",
+                                           "Newcastle-Amsterdam"
+                                       ],
+                          "metadata":  {
+                                           "subscription_supported":  true,
+                                           "service_type_hints":  [
+                                                                      "passenger_service",
+                                                                      "cruise"
+                                                                  ]
+                                       }
+                      },
+                      {
+                          "mode":  "ferry",
+                          "name":  "ÃƒËœresundslinjen",
+                          "aliases":  [
+                                          "oresundslinjen",
+                                          "ÃƒÂ¸resundslinjen",
+                                          "forsea",
+                                          "forsea ferries"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "ferry_carrier",
+                          "metadata":  {
+                                           "subscription_supported":  true,
+                                           "service_type_hints":  [
+                                                                      "passenger_service"
+                                                                  ]
+                                       }
+                      },
+                      {
+                          "mode":  "ferry",
+                          "name":  "Bornholmslinjen",
+                          "aliases":  [
+                                          "bornholmslinjen",
+                                          "bornholm lines",
+                                          "bornholm express"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "ferry_carrier",
+                          "products":  [
+                                           "Ronne-Ystad",
+                                           "Ronne-Koge"
+                                       ],
+                          "metadata":  {
+                                           "subscription_supported":  true,
+                                           "service_type_hints":  [
+                                                                      "passenger_service"
+                                                                  ]
+                                       }
+                      },
+                      {
+                          "mode":  "ferry",
+                          "name":  "Molslinjen",
+                          "aliases":  [
+                                          "molslinjen",
+                                          "molslinjen a/s",
+                                          "mols-linien",
+                                          "mols linien"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "ferry_carrier",
+                          "products":  [
+                                           "Odden-Aarhus",
+                                           "Odden-Ebeltoft"
+                                       ],
+                          "metadata":  {
+                                           "subscription_supported":  true,
+                                           "service_type_hints":  [
+                                                                      "passenger_service"
+                                                                  ]
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "SAS",
+                          "aliases":  [
+                                          "sas",
+                                          "skandinavian airlines",
+                                          "sk"
+                                      ],
+                          "country_code":  "DK",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "SAS Go",
+                                           "SAS Plus",
+                                           "SAS Business"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "SK",
+                                           "icao_code":  "SAS"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "Lufthansa",
+                          "aliases":  [
+                                          "lufthansa",
+                                          "lh"
+                                      ],
+                          "country_code":  "DE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "metadata":  {
+                                           "iata_code":  "LH",
+                                           "icao_code":  "DLH"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "KLM",
+                          "aliases":  [
+                                          "klm",
+                                          "kl"
+                                      ],
+                          "country_code":  "NL",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "Premium Comfort"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "KL",
+                                           "icao_code":  "KLM"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "Ryanair",
+                          "aliases":  [
+                                          "ryanair",
+                                          "fr"
+                                      ],
+                          "country_code":  "IE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "Flexi Plus"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "FR",
+                                           "icao_code":  "RYR"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "Norwegian Air Shuttle",
+                          "aliases":  [
+                                          "norwegian",
+                                          "norwegian air shuttle",
+                                          "dy"
+                                      ],
+                          "country_code":  "NO",
+                          "is_eu_operator":  false,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "LowFare",
+                                           "LowFare+",
+                                           "Norwegian Flex"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "DY",
+                                           "icao_code":  "NAX"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "easyJet",
+                          "aliases":  [
+                                          "easyjet",
+                                          "u2"
+                                      ],
+                          "country_code":  "GB",
+                          "is_eu_operator":  false,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "Standard Plus",
+                                           "Flexi Fare"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "U2",
+                                           "icao_code":  "EZY"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "Wizz Air",
+                          "aliases":  [
+                                          "wizz air",
+                                          "wizz",
+                                          "w6"
+                                      ],
+                          "country_code":  "HU",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "WIZZ Go",
+                                           "WIZZ Plus"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "W6",
+                                           "icao_code":  "WZZ"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "British Airways",
+                          "aliases":  [
+                                          "british airways",
+                                          "ba"
+                                      ],
+                          "country_code":  "GB",
+                          "is_eu_operator":  false,
+                          "operator_type":  "airline",
+                          "products":  [
+                                           "Euro Traveller",
+                                           "Club Europe",
+                                           "World Traveller",
+                                           "World Traveller Plus",
+                                           "Club World"
+                                       ],
+                          "metadata":  {
+                                           "iata_code":  "BA",
+                                           "icao_code":  "BAW"
+                                       }
+                      },
+                      {
+                          "mode":  "air",
+                          "name":  "CityJet",
+                          "aliases":  [
+                                          "cityjet",
+                                          "wx"
+                                      ],
+                          "country_code":  "IE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "airline",
+                          "metadata":  {
+                                           "iata_code":  "WX",
+                                           "icao_code":  "BCY"
+                                       }
+                      },
+                      {
+                          "mode":  "bus",
+                          "name":  "FlixBus",
+                          "aliases":  [
+                                          "flixbus",
+                                          "flix bus"
+                                      ],
+                          "country_code":  "DE",
+                          "is_eu_operator":  true,
+                          "operator_type":  "bus_operator",
+                          "products":  [
+                                           "InterFlix",
+                                           "FlixBus Flex"
+                                       ],
+                          "metadata":  {
+                                           "regular_service_hints":  [
+                                                                         true
+                                                                     ]
+                                       }
+                      },
+                      {
+                          "mode":  "bus",
+                          "name":  "Eurolines",
+                          "aliases":  [
+                                          "eurolines"
+                                      ],
+                          "country_code":  "FR",
+                          "is_eu_operator":  true,
+                          "operator_type":  "bus_operator",
+                          "metadata":  {
+                                           "regular_service_hints":  [
+                                                                         true
+                                                                     ]
+                                       }
+                      },
+                      {
+                          "mode":  "bus",
+                          "name":  "Vy Bus4You",
+                          "aliases":  [
+                                          "vy bus4you",
+                                          "bus4you",
+                                          "nettbuss"
+                                      ],
+                          "country_code":  "NO",
+                          "is_eu_operator":  false,
+                          "operator_type":  "bus_operator",
+                          "metadata":  {
+                                           "regular_service_hints":  [
+                                                                         true
+                                                                     ]
+                                       }
+                      }
+                  ],
+    "product_aliases":  {
+                            "tgv":  "TGV",
+                            "inoui":  "TGV INOUI",
+                            "ouigo":  "OUIGO",
+                            "ice":  "ICE",
+                            "ic":  "IC",
+                            "ec":  "EC",
+                            "re":  "RE",
+                            "rj":  "Railjet",
+                            "railjet":  "Railjet",
+                            "nj":  "Nightjet",
+                            "nightjet":  "Nightjet",
+                            "ave":  "AVE",
+                            "fr":  "Frecciarossa",
+                            "fa":  "Frecciargento",
+                            "fb":  "Frecciabianca",
+                            "pendolino":  "Pendolino",
+                            "sas go":  "SAS Go",
+                            "sas plus":  "SAS Plus",
+                            "sas business":  "SAS Business",
+                            "premium comfort":  "Premium Comfort",
+                            "flexi plus":  "Flexi Plus",
+                            "lowfare":  "LowFare",
+                            "lowfare+":  "LowFare+",
+                            "lowfare plus":  "LowFare+",
+                            "norwegian flex":  "Norwegian Flex",
+                            "standard plus":  "Standard Plus",
+                            "flexi fare":  "Flexi Fare",
+                            "wizz go":  "WIZZ Go",
+                            "wizz plus":  "WIZZ Plus",
+                            "euro traveller":  "Euro Traveller",
+                            "club europe":  "Club Europe",
+                            "world traveller":  "World Traveller",
+                            "world traveller plus":  "World Traveller Plus",
+                            "club world":  "Club World",
+                            "interflix":  "InterFlix",
+                            "flixbus flex":  "FlixBus Flex",
+                            "minicruise":  "MiniCruise",
+                            "mini cruise":  "MiniCruise",
+                            "copenhagen-oslo":  "Copenhagen-Oslo",
+                            "newcastle-amsterdam":  "Newcastle-Amsterdam",
+                            "rodby-puttgarden":  "Rodby-Puttgarden",
+                            "gedser-rostock":  "Gedser-Rostock",
+                            "ronne-ystad":  "Ronne-Ystad",
+                            "ronne-koge":  "Ronne-Koge",
+                            "odden-aarhus":  "Odden-Aarhus",
+                            "odden-ebeltoft":  "Odden-Ebeltoft"
+                        },
+    "downgrade_policies":  {
+                               "SNCF":  {
+                                            "downgrade_rules":  {
+                                                                    "method":  "tariff",
+                                                                    "notes":  "Refund difference between purchased and delivered class per affected leg; no fixed % publicly standard"
+                                                                },
+                                            "supplement_map":  {
+                                                                   "seat":  {
+                                                                                "amount":  0,
+                                                                                "currency":  "EUR"
+                                                                            },
+                                                                   "couchette":  {
+                                                                                     "amount":  0,
+                                                                                     "currency":  "EUR"
+                                                                                 },
+                                                                   "sleeper":  {
+                                                                                   "amount":  0,
+                                                                                   "currency":  "EUR"
+                                                                               }
+                                                               }
+                                        },
+                               "DB":  {
+                                          "downgrade_rules":  {
+                                                                  "method":  "fixed",
+                                                                  "fixedAmount":  20,
+                                                                  "currency":  "EUR",
+                                                                  "notes":  "Sparpreis fixed comp when 1st not available"
+                                                              },
+                                          "supplement_map":  {
+                                                                 "seat":  {
+                                                                              "amount":  4,
+                                                                              "currency":  "EUR"
+                                                                          }
+                                                             }
+                                      },
+                               "DSB":  {
+                                           "downgrade_rules":  {
+                                                                   "method":  "supplement",
+                                                                   "notes":  "Refund DSB 1â€™ and seat supplements when downgraded"
+                                                               },
+                                           "supplement_map":  {
+                                                                  "dsb1":  {
+                                                                               "amount":  120,
+                                                                               "currency":  "DKK"
+                                                                           },
+                                                                  "seat":  {
+                                                                               "amount":  30,
+                                                                               "currency":  "DKK"
+                                                                           }
+                                                              }
+                                       },
+                               "SJ":  {
+                                          "downgrade_rules":  {
+                                                                  "method":  "tariff",
+                                                                  "upliftRatio":  0.5,
+                                                                  "notes":  "Default to refunding class difference; goodwill cases may pay higher"
+                                                              },
+                                          "supplement_map":  {
+                                                                 "seat":  {
+                                                                              "amount":  0,
+                                                                              "currency":  "SEK"
+                                                                          }
+                                                             }
+                                      },
+                               "OEBB":  {
+                                            "downgrade_rules":  {
+                                                                    "method":  "tariff",
+                                                                    "upliftRatio":  0.5,
+                                                                    "notes":  "Refund difference; use uplift ratio if exact tariff unknown"
+                                                                },
+                                            "supplement_map":  {
+                                                                   "couchette":  {
+                                                                                     "amount":  25,
+                                                                                     "currency":  "EUR"
+                                                                                 },
+                                                                   "sleeper":  {
+                                                                                   "amount":  50,
+                                                                                   "currency":  "EUR"
+                                                                               }
+                                                               }
+                                        },
+                               "SBB":  {
+                                           "downgrade_rules":  {
+                                                                   "method":  "tariff",
+                                                                   "notes":  "Refund difference only when train carried no 1st class at all"
+                                                               },
+                                           "supplement_map":  {
+                                                                  "seat":  {
+                                                                               "amount":  0,
+                                                                               "currency":  "CHF"
+                                                                           }
+                                                              }
+                                       },
+                               "TRENITALIA":  {
+                                                  "downgrade_rules":  {
+                                                                          "method":  "tariff",
+                                                                          "upliftRatio":  0.4,
+                                                                          "notes":  "Refund difference per leg; if unknown, use conservative uplift"
+                                                                      },
+                                                  "supplement_map":  {
+                                                                         "couchette":  {
+                                                                                           "amount":  20,
+                                                                                           "currency":  "EUR"
+                                                                                       },
+                                                                         "sleeper":  {
+                                                                                         "amount":  40,
+                                                                                         "currency":  "EUR"
+                                                                                     }
+                                                                     }
+                                              },
+                               "RENFE":  {
+                                             "downgrade_rules":  {
+                                                                     "method":  "tariff",
+                                                                     "notes":  "Often refund class difference on claim; some products restrictive"
+                                                                 },
+                                             "supplement_map":  {
+                                                                    "seat":  {
+                                                                                 "amount":  0,
+                                                                                 "currency":  "EUR"
+                                                                             }
+                                                                }
+                                         },
+                               "NS":  {
+                                          "downgrade_rules":  {
+                                                                  "method":  "prorata",
+                                                                  "upliftRatio":  0.3,
+                                                                  "notes":  "Typically no automatic compensation; fallback prorata if applicable"
+                                                              },
+                                          "supplement_map":  {
+
+                                                             }
+                                      },
+                               "PKP":  {
+                                           "downgrade_rules":  {
+                                                                   "method":  "tariff",
+                                                                   "upliftRatio":  0.5,
+                                                                   "notes":  "Refund difference (e.g., EIPâ†’EIC) per claim; percent may vary"
+                                                               },
+                                           "supplement_map":  {
+                                                                  "couchette":  {
+                                                                                    "amount":  15,
+                                                                                    "currency":  "PLN"
+                                                                                },
+                                                                  "sleeper":  {
+                                                                                  "amount":  30,
+                                                                                  "currency":  "PLN"
+                                                                              }
+                                                              }
+                                       },
+                               "SNCB":  {
+                                            "downgrade_rules":  {
+                                                                    "method":  "tariff",
+                                                                    "notes":  "Case-by-case refund of difference when lower class delivered"
+                                                                },
+                                            "supplement_map":  {
+
+                                                               }
+                                        },
+                               "CD":  {
+                                          "downgrade_rules":  {
+                                                                  "method":  "tariff",
+                                                                  "upliftRatio":  0.5,
+                                                                  "notes":  "Refund difference per SPPO; claim-based"
+                                                              },
+                                          "supplement_map":  {
+                                                                 "couchette":  {
+                                                                                   "amount":  300,
+                                                                                   "currency":  "CZK"
+                                                                               },
+                                                                 "sleeper":  {
+                                                                                 "amount":  600,
+                                                                                 "currency":  "CZK"
+                                                                             }
+                                                             }
+                                      },
+                               "ZSSK":  {
+                                            "downgrade_rules":  {
+                                                                    "method":  "tariff",
+                                                                    "upliftRatio":  0.5,
+                                                                    "notes":  "Refund difference; often via claim"
+                                                                },
+                                            "supplement_map":  {
+                                                                   "couchette":  {
+                                                                                     "amount":  10,
+                                                                                     "currency":  "EUR"
+                                                                                 },
+                                                                   "sleeper":  {
+                                                                                   "amount":  20,
+                                                                                   "currency":  "EUR"
+                                                                               }
+                                                               }
+                                        },
+                               "VR":  {
+                                          "downgrade_rules":  {
+                                                                  "method":  "tariff",
+                                                                  "notes":  "Refund 1st-class uplift when lower class delivered"
+                                                              },
+                                          "supplement_map":  {
+                                                                 "couchette":  {
+                                                                                   "amount":  0,
+                                                                                   "currency":  "EUR"
+                                                                               },
+                                                                 "sleeper":  {
+                                                                                 "amount":  0,
+                                                                                 "currency":  "EUR"
+                                                                             }
+                                                             }
+                                      },
+                               "EUROSTAR":  {
+                                                "downgrade_rules":  {
+                                                                        "method":  "fixed",
+                                                                        "fixedAmount":  0,
+                                                                        "currency":  "EUR",
+                                                                        "notes":  "Typically 50% voucher; treat via fixed method if needed"
+                                                                    },
+                                                "supplement_map":  {
+
+                                                                   }
+                                            },
+                               "THALYS":  {
+                                              "downgrade_rules":  {
+                                                                      "method":  "fixed",
+                                                                      "fixedAmount":  0,
+                                                                      "currency":  "EUR",
+                                                                      "notes":  "Historically vouchers or difference; treat similar to Eurostar post-integration"
+                                                                  },
+                                              "supplement_map":  {
+
+                                                                 }
+                                          }
+                           }
+}

@@ -17,7 +17,7 @@ class TransportNodesController extends AppController
     }
 
     /**
-     * GET /api/transport-nodes/search?mode=ferry&q=...&country=DK&limit=10
+     * GET /api/transport-nodes/search?mode=ferry&q=...&country=DK&limit=10&kind=port|terminal
      */
     public function search()
     {
@@ -46,8 +46,13 @@ class TransportNodesController extends AppController
             $limit = 50;
         }
 
+        $kind = trim((string)($this->request->getQuery('kind') ?? ''));
+        if ($kind === '') {
+            $kind = null;
+        }
+
         $service = new TransportNodeSearchService();
-        $nodes = $service->search($mode, $q, $country, $limit);
+        $nodes = $service->search($mode, $q, $country, $limit, $kind);
 
         $this->set([
             'success' => true,

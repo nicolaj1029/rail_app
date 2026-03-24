@@ -101,7 +101,7 @@ final class SeasonPolicyCatalog
         // Fallback: try mapping via OperatorCatalog canonicalization
         try {
             $cat = new OperatorCatalog();
-            $found = $cat->findOperator($opIn);
+            $found = $cat->findOperator($opIn, 'rail');
             if ($found && !empty($found['name'])) {
                 $canon = (string)$found['name'];
                 if (self::norm($canon) !== $normOp) {
@@ -124,7 +124,7 @@ final class SeasonPolicyCatalog
     public function coverageReport(?OperatorCatalog $operatorCatalog = null, bool $eu27Only = true): array
     {
         $operatorCatalog = $operatorCatalog ?: new OperatorCatalog();
-        $opsByCountry = (array)$operatorCatalog->getOperators();
+        $opsByCountry = (array)$operatorCatalog->getOperators('rail');
         $polByCountry = $this->byCountry();
 
         $countries = $eu27Only ? $this->eu27() : array_values(array_unique(array_merge(array_keys($opsByCountry), array_keys($polByCountry))));

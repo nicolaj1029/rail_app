@@ -2,6 +2,19 @@
 // Reusable hooks panel element used both on full page render and AJAX updates.
 // Expected vars: $profile, $art12, $art9, $claim, $form, $meta
 ?>
+<?php
+  $multimodalHooks = is_array($multimodal ?? null) ? (array)$multimodal : (array)($meta['_multimodal'] ?? []);
+  $hooksTransportMode = strtolower((string)($form['gating_mode'] ?? ($meta['gating_mode'] ?? ($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodalHooks['transport_mode'] ?? 'rail'))))));
+  if (!in_array($hooksTransportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+    $hooksTransportMode = 'rail';
+  }
+  $isFerryHooks = $hooksTransportMode === 'ferry';
+  $ferryScopeHooks = (array)($multimodalHooks['ferry_scope'] ?? []);
+  $ferryContractHooks = (array)($multimodalHooks['ferry_contract'] ?? []);
+  $ferryRightsHooks = (array)($multimodalHooks['ferry_rights'] ?? []);
+  $ferryIncidentHooks = (array)($multimodalHooks['incident_meta'] ?? []);
+  $ferryClaimDirectionHooks = (array)($multimodalHooks['claim_direction'] ?? []);
+?>
 <h3>Live hooks & AUTO</h3>
 <div class="small">Undtagelser (test)</div>
 <div class="small">scope: <code><?= h($profile['scope'] ?? '-') ?></code></div>
@@ -81,7 +94,47 @@
     <?php endforeach; ?>
   </ul>
 <?php endif; ?>
-<?php if (empty($hidePmrBike)): ?>
+<?php if ($isFerryHooks): ?>
+  <?php
+    $scopeBasis = (string)($ferryScopeHooks['scope_basis'] ?? '');
+    $scopeReason = (string)($ferryScopeHooks['scope_exclusion_reason'] ?? '');
+    $serviceType = (string)($ferryScopeHooks['service_type'] ?? '');
+    $depFromTerminal = $ferryScopeHooks['departure_from_terminal'] ?? null;
+    $claimParty = (string)($ferryContractHooks['primary_claim_party_name'] ?? ($ferryContractHooks['primary_claim_party'] ?? ''));
+    $rightsModule = (string)($ferryContractHooks['rights_module'] ?? '');
+    $contractTopology = (string)($multimodalHooks['contract_meta']['contract_topology'] ?? '');
+    $claimMode = (string)($ferryClaimDirectionHooks['claim_transport_mode'] ?? ($multimodalHooks['contract_meta']['claim_transport_mode'] ?? ''));
+    $depPort = (string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? ''));
+    $arrPort = (string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? ''));
+    $depTerminal = (string)($form['dep_terminal'] ?? '');
+    $arrTerminal = (string)($form['arr_terminal'] ?? '');
+    $incidentTypeFerry = (string)($ferryIncidentHooks['incident_type'] ?? '');
+    $arrDelayFerry = $ferryIncidentHooks['arrival_delay_minutes'] ?? null;
+    $schedDurationFerry = $ferryIncidentHooks['scheduled_journey_duration_minutes'] ?? null;
+    $art19BandFerry = (string)($ferryRightsHooks['art19_comp_band'] ?? 'none');
+  ?>
+  <hr/>
+  <div class="card info" style="margin:8px 0;">
+    <h4>Ferry hooks</h4>
+    <div class="small">Transport mode: <code>ferry</code></div>
+    <div class="small">Scope: <code><?= !array_key_exists('regulation_applies', $ferryScopeHooks) ? 'ukendt' : (!empty($ferryScopeHooks['regulation_applies']) ? 'omfattet' : 'ikke_omfattet') ?></code><?php if ($scopeBasis !== ''): ?> · basis: <code><?= h($scopeBasis) ?></code><?php endif; ?><?php if ($serviceType !== ''): ?> · service: <code><?= h($serviceType) ?></code><?php endif; ?></div>
+    <?php if ($scopeReason !== ''): ?>
+      <div class="small muted">scope_reason: <code><?= h($scopeReason) ?></code></div>
+    <?php endif; ?>
+    <div class="small">Port / terminal: <code><?= h($depPort !== '' ? $depPort : '-') ?></code> → <code><?= h($arrPort !== '' ? $arrPort : '-') ?></code><?php if ($depTerminal !== '' || $arrTerminal !== ''): ?> · terminaler: <code><?= h($depTerminal !== '' ? $depTerminal : '-') ?></code> → <code><?= h($arrTerminal !== '' ? $arrTerminal : '-') ?></code><?php endif; ?></div>
+    <div class="small">Departure from terminal: <code><?= $depFromTerminal === null ? 'ukendt' : ($depFromTerminal ? 'ja' : 'nej') ?></code></div>
+    <div class="small">Kontrakt: <code><?= h($contractTopology !== '' ? $contractTopology : '-') ?></code><?php if ($claimParty !== ''): ?> · claim party: <code><?= h($claimParty) ?></code><?php endif; ?><?php if ($rightsModule !== ''): ?> · rights module: <code><?= h($rightsModule) ?></code><?php endif; ?><?php if ($claimMode !== ''): ?> · claim transport: <code><?= h($claimMode) ?></code><?php endif; ?></div>
+    <div class="small">Incident: <code><?= h($incidentTypeFerry !== '' ? $incidentTypeFerry : '-') ?></code><?php if ($arrDelayFerry !== null && $arrDelayFerry !== ''): ?> · arrival delay: <code><?= h((string)$arrDelayFerry) ?></code><?php endif; ?><?php if ($schedDurationFerry !== null && $schedDurationFerry !== ''): ?> · scheduled duration: <code><?= h((string)$schedDurationFerry) ?></code><?php endif; ?></div>
+    <div class="small">Blokeringer: informed_before_purchase=<code><?= !empty($ferryIncidentHooks['informed_before_purchase']) ? 'ja' : 'nej' ?></code> · weather_safety=<code><?= !empty($ferryIncidentHooks['weather_safety']) ? 'ja' : 'nej' ?></code> · extraordinary=<code><?= !empty($ferryIncidentHooks['extraordinary_circumstances']) ? 'ja' : 'nej' ?></code> · open_ticket=<code><?= !empty($ferryIncidentHooks['open_ticket_without_departure_time']) ? 'ja' : 'nej' ?></code></div>
+    <?php if (!empty($ferryRightsHooks)): ?>
+      <div class="small">Art. 16 notice: <code><?= !empty($ferryRightsHooks['gate_art16_notice']) ? 'on' : 'off' ?></code> · Art. 17 refreshments: <code><?= !empty($ferryRightsHooks['gate_art17_refreshments']) ? 'on' : 'off' ?></code> · Art. 17 hotel: <code><?= !empty($ferryRightsHooks['gate_art17_hotel']) ? 'on' : 'off' ?></code></div>
+      <div class="small">Art. 18: <code><?= !empty($ferryRightsHooks['gate_art18']) ? 'on' : 'off' ?></code> · Art. 19: <code><?= !empty($ferryRightsHooks['gate_art19']) ? 'on' : 'off' ?></code><?php if ($art19BandFerry !== '' && $art19BandFerry !== 'none'): ?> · band: <code><?= h($art19BandFerry) ?>%</code><?php endif; ?></div>
+    <?php else: ?>
+      <div class="small muted">Ferry rights er endnu ikke evalueret i dette step.</div>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
+<?php if ($hooksTransportMode === 'rail' && empty($hidePmrBike)): ?>
 <hr/>
 <div class="small"><strong>TRIN 3</strong> · Cykel på billetten</div>
 <?php 

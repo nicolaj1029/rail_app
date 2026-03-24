@@ -1,0 +1,51 @@
+[
+  {
+    "id": "bus-seed-zob-hamburg",
+    "name": "ZOB Hamburg",
+    "aliases": ["Hamburg ZOB", "Hamburg Central Bus Station"],
+    "country": "DE",
+    "in_eu": true,
+    "lat": 53.5519464,
+    "lon": 10.0115358,
+    "node_type": "terminal",
+    "parent_name": "ZOB Hamburg GmbH",
+    "city": "Hamburg",
+    "source": "bus_seed_v1"
+  },
+  {
+    "id": "bus-seed-amsterdam-sloterdijk",
+    "name": "Amsterdam Sloterdijk",
+    "aliases": ["Amsterdam", "Sloterdijk", "Amsterdam Bus Station"],
+    "country": "NL",
+    "in_eu": true,
+    "lat": 52.3890317,
+    "lon": 4.8381062,
+    "node_type": "terminal",
+    "city": "Amsterdam",
+    "source": "bus_seed_v1"
+  },
+  {
+    "id": "bus-seed-budapest-csepel-szent-imre-ter",
+    "name": "Budapest, Csepel, Szent Imre tér",
+    "aliases": ["Budapest Csepel", "Csepel Szent Imre tér", "Budapest"],
+    "country": "HU",
+    "in_eu": true,
+    "lat": 47.430761,
+    "lon": 19.0715317,
+    "node_type": "terminal",
+    "city": "Budapest",
+    "source": "bus_seed_v1"
+  },
+  {
+    "id": "bus-seed-duisburg-hauptbahnhof",
+    "name": "Duisburg Hauptbahnhof",
+    "aliases": ["Duisburg central train station", "Duisburg Hbf", "Duisburg"],
+    "country": "DE",
+    "in_eu": true,
+    "lat": 51.4296701,
+    "lon": 6.7761771,
+    "node_type": "terminal",
+    "city": "Duisburg",
+    "source": "bus_seed_v1"
+  }
+]

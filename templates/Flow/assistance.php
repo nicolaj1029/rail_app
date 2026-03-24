@@ -16,7 +16,7 @@ $travelState  = strtolower((string)($flags['travel_state'] ?? $form['travel_stat
 $isOngoing = ($travelState === 'ongoing');
 $isCompleted = ($travelState === 'completed');
 $multimodal = (array)($meta['_multimodal'] ?? []);
-$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$transportMode = strtolower((string)($form['gating_mode'] ?? ($meta['gating_mode'] ?? ($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))))));
 $isFerry = ($transportMode === 'ferry');
 $isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
@@ -26,6 +26,14 @@ $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $busScope = (array)($multimodal['bus_scope'] ?? []);
 $busContract = (array)($multimodal['bus_contract'] ?? []);
 $busRights = (array)($multimodal['bus_rights'] ?? []);
+$busPmrRights = (array)($multimodal['bus_pmr_rights'] ?? []);
+$airScope = (array)($multimodal['air_scope'] ?? []);
+$airContract = (array)($multimodal['air_contract'] ?? []);
+$airRights = (array)($multimodal['air_rights'] ?? []);
+$airPriorityAssistGate = !empty($airRights['gate_air_art11_priority_assistance']);
+$airPmrCompanion = !empty($airRights['air_pmr_companion']);
+$airPmrServiceDog = !empty($airRights['air_pmr_service_dog']);
+$airUnaccompaniedMinor = !empty($airRights['air_unaccompanied_minor']);
 $assistTitle = $isOngoing
     ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)')))
     : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)'))) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isBus ? 'TRIN 8 - Assistance (bus)' : ($isAir ? 'TRIN 8 - Care (flight)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)'))));
@@ -41,6 +49,27 @@ $art20Active = $art20Active ?? true;
 $art20Partial = $art20Partial ?? false;
 $art20Blocked = $art20Blocked ?? false;
 $isPreview = !empty($flowPreview);
+$airNextDayDeparture = strtolower((string)($form['air_next_day_departure'] ?? ''));
+$overnightNeeded = strtolower((string)($form['overnight_needed'] ?? ''));
+$ferryMealsGateActive = ((string)($flags['gate_ferry_art17_refreshments'] ?? '') === '1') || !empty($ferryRights['gate_art17_refreshments']);
+$ferryHotelGateActive = ((string)($flags['gate_ferry_art17_hotel'] ?? '') === '1') || !empty($ferryRights['gate_art17_hotel']);
+$busMealsGateActive = ((string)($flags['gate_bus_assistance_refreshments'] ?? '') === '1') || !empty($busRights['gate_bus_assistance_refreshments']);
+$busHotelGateActive = ((string)($flags['gate_bus_assistance_hotel'] ?? '') === '1') || !empty($busRights['gate_bus_assistance_hotel']);
+$busPmrAssistGateActive = $busPmrAssistGateActive ?? (((string)($flags['gate_bus_pmr_assistance'] ?? '') === '1') || !empty($busPmrRights['gate_bus_pmr_assistance']));
+$busPmrAssistPartialActive = $busPmrAssistPartialActive ?? (((string)($flags['gate_bus_pmr_assistance_partial'] ?? '') === '1') || !empty($busPmrRights['gate_bus_pmr_assistance_partial']));
+$busPmrCompanion = !empty($busPmrRights['pmr_companion']);
+$busPmrNotice36h = !empty($busPmrRights['pmr_notice_36h']);
+$busPmrMetTerminalTime = !empty($busPmrRights['pmr_met_terminal_time']);
+$busPmrSpecialSeatingNotified = !empty($busPmrRights['pmr_special_seating_notified']);
+$modeMealsSectionVisible = $isFerry ? $ferryMealsGateActive : ($isBus ? $busMealsGateActive : true);
+$modeHotelSectionVisible = $isFerry ? $ferryHotelGateActive : ($isBus ? $busHotelGateActive : true);
+if ($isAir || $isBus) {
+  $assistMealsOff = false;
+  $assistHotelOff = false;
+  $assistTrackOff = false;
+  $assistStationOff = false;
+  $assistOff = false;
+}
 
 
 
@@ -166,7 +195,9 @@ $hintText = function (string $key) use ($priceHints): string {
       ? 'Aktiveres ved aflysning eller forventet/faktisk afgangsforsinkelse paa mindst 90 minutter. Hoteldelen kan bortfalde ved vejrsikkerhed.'
       : ($isBus
           ? 'Aktiveres ved aflysning, overbooking eller afgangsforsinkelse paa mindst 90/120 minutter. Hoteldelen kan bortfalde ved svaert vejr eller naturkatastrofe.'
-          : 'Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).') ?>
+          : ($isAir
+              ? 'Aktiveres ved delay naar Art. 6-threshold er naet, ved aflysning, naegtet boarding eller beskyttet misset forbindelse. Hotel behandles kun hvis ny afgang foerst var dagen efter.'
+              : 'Aktiveres ved forsinkelse =60 min, aflysning eller afbrudt forbindelse. Ekstraordinære forhold påvirker kun hotel-loft (max 3 nætter).')) ?>
 </p>
 
 <?php if ($assistHint !== ''): ?>
@@ -189,23 +220,29 @@ $hintText = function (string $key) use ($priceHints): string {
       <div class="small muted mt4">Scope-note: <?= h((string)$busScope['scope_exclusion_reason']) ?></div>
     <?php endif; ?>
   </div>
+<?php elseif ($isAir): ?>
+  <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
+    <strong>Air-kontekst</strong>
+    <div class="small muted mt4">Claim-kanal: <strong><?= h((string)($airContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler EC261 care efter forsinkelse, aflysning, naegtet boarding eller beskyttet misset forbindelse.</div>
+    <div class="small muted mt4">Distancekategori: <strong><?= h((string)($airScope['air_distance_band'] ?? 'ukendt')) ?></strong><?php if (!empty($airScope['air_delay_threshold_hours'])): ?>. Art. 6 threshold: <strong><?= h((string)$airScope['air_delay_threshold_hours']) ?> timer</strong><?php endif; ?>.</div>
+  </div>
 <?php endif; ?>
 
 
 
 <?php if ($art20Partial): ?>
   <div class="card hl mt8">
-      <strong><?= $isFerry ? 'Assistance er delvist aktiveret via saerhensyn.' : ($isBus ? 'Bus-assistance er delvist aktiveret.' : 'Art. 20 er delvist aktiveret via PMR.') ?></strong>
-    <div class="small muted"><?= $isFerry ? 'Udfyld kun de dele der faktisk blev tilbudt eller maatte betales selv.' : ($isBus ? 'Udfyld kun de assistanceposter der faktisk blev tilbudt eller maatte betales selv.' : 'Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.') ?></div>
+      <strong><?= $isFerry ? 'Assistance er delvist aktiveret via saerhensyn.' : ($isBus ? 'Bus-assistance er delvist aktiveret.' : ($isAir ? 'Air-care er delvist aktiveret.' : 'Art. 20 er delvist aktiveret via PMR.')) ?></strong>
+    <div class="small muted"><?= $isFerry ? 'Udfyld kun de dele der faktisk blev tilbudt eller maatte betales selv.' : ($isBus ? 'Udfyld kun de assistanceposter der faktisk blev tilbudt eller maatte betales selv.' : ($isAir ? 'Udfyld kun de care-poster der faktisk blev tilbudt eller maatte betales selv. Hotel kraever at ny forventet afgang foerst var dagen efter.' : 'Udfyld kun PMR-hensyn nedenfor. Måltider/hotel/transport vurderes først via standard hændelses-gating.')) ?></div>
   </div>
 <?php elseif (!$art20Active): ?>
   <div class="card hl mt8">
     <?php if ($art20Blocked): ?>
-      <strong><?= $isFerry ? 'Faerge-assistance er ikke aktiveret.' : ($isBus ? 'Bus-assistance er ikke aktiveret.' : 'Art. 20 er ikke aktiveret.') ?></strong>
-      <div class="small muted"><?= $isFerry ? 'Betingelserne for ferry Art. 17 er ikke opfyldt ud fra dine svar i Trin 5.' : ($isBus ? 'Betingelserne for bus-assistance er ikke opfyldt ud fra dine svar i Trin 5.' : 'Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.') ?></div>
+      <strong><?= $isFerry ? 'Faerge-assistance er ikke aktiveret.' : ($isBus ? 'Bus-assistance er ikke aktiveret.' : ($isAir ? 'Air-care er ikke aktiveret.' : 'Art. 20 er ikke aktiveret.')) ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Betingelserne for ferry Art. 17 er ikke opfyldt ud fra dine svar i Trin 5.' : ($isBus ? 'Betingelserne for bus-assistance er ikke opfyldt ud fra dine svar i Trin 5.' : ($isAir ? 'Betingelserne for air-care er ikke opfyldt ud fra dine svar i Trin 5.' : 'Betingelserne er ikke opfyldt ud fra dine svar i Trin 4.')) ?></div>
     <?php else: ?>
-      <strong><?= $isFerry ? 'Faerge-assistance afventer gating.' : ($isBus ? 'Bus-assistance afventer gating.' : 'Art. 20 afventer gating.') ?></strong>
-      <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld aflysning/90-minutters afgangsforsinkelse for at aktivere ferry Art. 17.' : ($isBus ? 'Ga tilbage til Trin 5 og udfyld aflysning, overbooking eller terminalforsinkelse for at aktivere bus-assistance.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.') ?></div>
+      <strong><?= $isFerry ? 'Faerge-assistance afventer gating.' : ($isBus ? 'Bus-assistance afventer gating.' : ($isAir ? 'Air-care afventer gating.' : 'Art. 20 afventer gating.')) ?></strong>
+      <div class="small muted"><?= $isFerry ? 'Ga tilbage til Trin 5 og udfyld aflysning/90-minutters afgangsforsinkelse for at aktivere ferry Art. 17.' : ($isBus ? 'Ga tilbage til Trin 5 og udfyld aflysning, overbooking eller terminalforsinkelse for at aktivere bus-assistance.' : ($isAir ? 'Ga tilbage til Trin 5 og udfyld air-haendelsen inkl. Art. 6 delay-threshold for at aktivere care.' : 'Ga tilbage til Trin 4 og udfyld haendelsen (inkl. 60-min. varsel), eller til Trin 3 hvis PMR/cykel skal aktivere Art. 20.')) ?></div>
     <?php endif; ?>
   </div>
 <?php endif; ?>
@@ -218,7 +255,9 @@ $hintText = function (string $key) use ($priceHints): string {
       ? 'Assistance efter ferry Art. 17 kan vaere undtaget for denne rejse. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
       : ($isBus
           ? 'Bus-assistance kan vaere undtaget for denne rejse eller denne forsinkelse. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
-          : 'Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.') ?>
+          : ($isAir
+              ? 'Air-care kan vaere begrænset i den konkrete situation. Udfyld alligevel udgifterne, saa de kan indgaa i claim-assist og manuel vurdering.'
+              : 'Assistance efter Art. 20(2) kan være undtaget for denne rejse. Udfyld alligevel udgifterne, så behandler vi dem som refusion efter de gældende regler.')) ?>
 
   </div>
 
@@ -229,9 +268,9 @@ $hintText = function (string $key) use ($priceHints): string {
 <div id="art20Core" class="<?= ($art20Active || $isPreview) ? '' : 'hidden' ?>">
 
 <!-- Måltider / drikke -->
-<div class="card mt12 <?= ($assistMealsOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
-  <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : ($isBus ? 'Maaltider og forfriskninger (bus)' : 'Måltider og drikke (Art.20)') ?></strong>
-  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : ($isBus ? 'Busoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller forsinkelse paa mindst 90 minutter, naar rejsen varer over 3 timer og assistancebetingelserne er opfyldt.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.') ?></p>
+<div class="card mt12 <?= (($assistMealsOff || !$modeMealsSectionVisible) && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
+  <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : ($isBus ? 'Maaltider og forfriskninger (bus)' : ($isAir ? 'Maaltider og forfriskninger (flight Art. 9)' : 'Måltider og drikke (Art.20)')) ?></strong>
+  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : ($isBus ? 'Busoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller forsinkelse paa mindst 90 minutter, naar rejsen varer over 3 timer og assistancebetingelserne er opfyldt.' : ($isAir ? 'Flyselskabet skal tilbyde maaltider og forfriskninger, naar din delay eller haendelse har naet den relevante Art. 6-threshold.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.')) ?></p>
   <div class="mt8">
     <div>1. Fik du måltider eller forfriskninger?</div>
     <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
@@ -298,7 +337,7 @@ $hintText = function (string $key) use ($priceHints): string {
 </div>
 <!-- Hotel / overnatning -->
 
-<div class="card mt12 <?= ($assistHotelOff && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
+<div class="card mt12 <?= (($assistHotelOff || !$modeHotelSectionVisible) && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2b),20(2)">
 
   <strong>
     <span class="icon-badge hotel" title="Hotel / indkvartering">
@@ -306,14 +345,38 @@ $hintText = function (string $key) use ($priceHints): string {
         <path d="M7 10h10a3 3 0 0 1 3 3v6h-2v-2H6v2H4v-8a3 3 0 0 1 3-3zm-1 5h12v-2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2zm1-9a2 2 0 1 1 0 4a2 2 0 0 1 0-4z"/>
       </svg>
     </span>
-    <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : ($isBus ? 'Hotel og indkvartering (bus)' : 'Hotel og indkvartering (Art.20)') ?>
+    <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : ($isBus ? 'Hotel og indkvartering (bus)' : ($isAir ? 'Hotel og indkvartering (flight Art. 9)' : 'Hotel og indkvartering (Art.20)')) ?>
   </strong>
 
-  <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' ?></p>
+  <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : ($isBus ? 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' : ($isAir ? 'Hotel og transport hertil bliver kun relevant, hvis den nye forventede afgang foerst er dagen efter den planlagte afgang.' : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.')) ?></p>
 
+  <?php if ($isAir): ?>
+  <div class="mt8">
+    <div>1. Var den nye forventede afgang foerst dagen efter den planlagte afgang?</div>
+    <label><input type="radio" name="air_next_day_departure" value="yes" <?= $airNextDayDeparture==='yes'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="air_next_day_departure" value="no" <?= $airNextDayDeparture==='no'?'checked':'' ?> /> Nej</label>
+  </div>
+  <div class="small muted mt4" data-show-if="air_next_day_departure:no">Hotel/overnatning er normalt ikke relevant i air-care, naar ny forventet afgang stadig er samme dag.</div>
+  <?php elseif ($isBus): ?>
+  <div class="mt8">
+    <div>1. Blev overnatning noedvendig pga. aflysningen eller forsinkelsen?</div>
+    <label><input type="radio" name="overnight_needed" value="yes" <?= $overnightNeeded==='yes'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="overnight_needed" value="no" <?= $overnightNeeded==='no'?'checked':'' ?> /> Nej</label>
+  </div>
+  <div class="small muted mt4" data-show-if="overnight_needed:no">Hotel og indkvartering er kun relevant i bus-flowet, hvis overnatning faktisk blev noedvendig.</div>
+  <?php elseif ($isFerry): ?>
+  <div class="mt8">
+    <div>1. Blev overnatning noedvendig pga. aflysningen eller forsinkelsen?</div>
+    <label><input type="radio" name="overnight_needed" value="yes" <?= $overnightNeeded==='yes'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="overnight_needed" value="no" <?= $overnightNeeded==='no'?'checked':'' ?> /> Nej</label>
+  </div>
+  <div class="small muted mt4" data-show-if="overnight_needed:no">Hotel og indkvartering er kun relevant i ferry-flowet, hvis overnatning faktisk blev noedvendig.</div>
+  <?php endif; ?>
+
+  <div<?= $isAir ? ' data-show-if="air_next_day_departure:yes"' : (($isFerry || $isBus) ? ' data-show-if="overnight_needed:yes"' : '') ?>>
   <div class="mt8">
 
-    <div>2. Fik du hotel/indkvartering plus transport hertil?</div>
+    <div><?= $isAir ? '2. Fik du hotel/indkvartering plus transport hertil?' : '2. Fik du hotel/indkvartering plus transport hertil?' ?></div>
 
     <label><input type="radio" name="hotel_offered" value="yes" <?= $v('hotel_offered')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -375,6 +438,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
   </div>
 
+  <?php if (!$isFerry && !$isAir): ?>
   <div class="mt4" data-show-if="hotel_offered:no">
 
     <label>Var overnatning nødvendig selvom hotel ikke blev tilbudt?
@@ -394,6 +458,7 @@ $hintText = function (string $key) use ($priceHints): string {
     </label>
 
   </div>
+  <?php endif; ?>
 
   <div class="mt8" data-show-if="hotel_offered:no">
     <div class="grid-3">
@@ -455,19 +520,48 @@ $hintText = function (string $key) use ($priceHints): string {
 
   </div>
 
+  </div>
+
 </div>
 
 
 
-<?php if (!$isFerry && $pmrUser && ($art20Active || $art20Partial)): ?>
+<?php if (($isBus && ($busPmrAssistGateActive || $busPmrAssistPartialActive)) || ($isAir && $airPriorityAssistGate) || (!$isFerry && !$isBus && $pmrUser && ($art20Active || $art20Partial))): ?>
 
   <div class="card mt12">
 
-    <strong>PMR-hensyn (Art. 20(5))</strong>
+    <strong><?= $isAir ? 'Prioriteret assistance (Art. 11)' : ($isBus ? 'PMR-assistance (bus Art. 13-15)' : 'PMR-hensyn (Art. 20(5))') ?></strong>
+
+    <?php if ($isAir): ?>
+      <div class="small muted mt8">
+        Care skal tilbydes saa hurtigt som muligt ved boardingafvisning, aflysning eller forsinkelse.
+        <?php if ($airPmrCompanion || $airPmrServiceDog || $airUnaccompaniedMinor): ?>
+          Relevant kontekst:
+          <?= h(implode(', ', array_filter([
+            $airPmrCompanion ? 'ledsager' : '',
+            $airPmrServiceDog ? 'servicehund' : '',
+            $airUnaccompaniedMinor ? 'uledsaget barn' : '',
+          ]))) ?>.
+        <?php endif; ?>
+      </div>
+    <?php elseif ($isBus): ?>
+      <div class="small muted mt8">
+        Bistand ved terminal og om bord skal ydes til PMR-passagerer, og der skal goeres rimelige anstrengelser, selv hvis 36-timers varslet ikke blev opfyldt.
+        <?php if ($busPmrCompanion || $busPmrNotice36h || $busPmrMetTerminalTime || $busPmrSpecialSeatingNotified): ?>
+          Relevant kontekst:
+          <?= h(implode(', ', array_filter([
+            $busPmrCompanion ? 'ledsager' : '',
+            $busPmrNotice36h ? '36t-varsel givet' : '',
+            $busPmrMetTerminalTime ? 'terminaltid moedt' : '',
+            $busPmrSpecialSeatingNotified ? 'saerlige siddebehov oplyst' : '',
+          ]))) ?>.
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
 
     <div class="mt8">
 
-      <span>Blev PMR-prioritet anvendt?</span>
+      <span><?= $isAir ? 'Blev prioriteret assistance anvendt saa hurtigt som muligt?' : ($isBus ? 'Blev PMR-assistance ydet ved terminalen eller om bord?' : 'Blev PMR-prioritet anvendt?') ?></span>
 
       <label><input type="radio" name="assistance_pmr_priority_applied" value="yes" <?= $v('assistance_pmr_priority_applied')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -478,7 +572,7 @@ $hintText = function (string $key) use ($priceHints): string {
 
     <div class="mt8">
 
-      <span>Blev ledsager/servicehund understøttet?</span>
+      <span><?= $isAir ? 'Blev ledsager/servicehund understoettet, naar det var relevant?' : ($isBus ? 'Blev ledsager eller saerlige behov understoettet, naar det var relevant?' : 'Blev ledsager/servicehund understøttet?') ?></span>
 
       <label><input type="radio" name="assistance_pmr_companion_supported" value="yes" <?= $v('assistance_pmr_companion_supported')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -535,7 +629,7 @@ function updateReveal() {
 
 document.addEventListener('change', function(e) {
 
-  if (['meal_offered','hotel_offered','assistance_hotel_transport_included'].includes(e.target.name)) {
+  if (['meal_offered','hotel_offered','assistance_hotel_transport_included','air_next_day_departure','overnight_needed'].includes(e.target.name)) {
 
     updateReveal();
 
@@ -672,6 +766,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var checked = document.querySelector('input[name="' + name + '"]:checked');
       return checked ? (checked.value || '') : '';
     };
+    var getChoice = function(name) {
+      var radio = getRadio(name);
+      if (radio !== '') { return radio; }
+      var el = document.querySelector('select[name="' + name + '"], input[name="' + name + '"]');
+      return el ? (el.value || '') : '';
+    };
     var getValue = function(name) {
       var el = document.querySelector('[name="' + name + '"]');
       return el ? (el.value || '') : '';
@@ -697,7 +797,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ferryMealAmt) { ferryMealAmt.value = getValue('meal_self_paid_amount'); }
     if (ferryMealCur) { ferryMealCur.value = getValue('meal_self_paid_currency'); }
     if (ferryHotel) { ferryHotel.value = getRadio('hotel_offered'); }
-    if (ferryNight) { ferryNight.value = getRadio('overnight_needed'); }
+    if (ferryNight) { ferryNight.value = getChoice('overnight_needed'); }
     if (ferryHotelTransport) { ferryHotelTransport.value = getRadio('assistance_hotel_transport_included'); }
     if (ferryHotelAmt) { ferryHotelAmt.value = getValue('hotel_self_paid_amount'); }
     if (ferryHotelCur) { ferryHotelCur.value = getValue('hotel_self_paid_currency'); }
@@ -705,13 +805,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (busMealAmt) { busMealAmt.value = getValue('meal_self_paid_amount'); }
     if (busMealCur) { busMealCur.value = getValue('meal_self_paid_currency'); }
     if (busHotel) { busHotel.value = getRadio('hotel_offered'); }
-    if (busNight) { busNight.value = getRadio('overnight_needed'); }
+    if (busNight) { busNight.value = getChoice('overnight_needed'); }
     if (busHotelTransport) { busHotelTransport.value = getRadio('assistance_hotel_transport_included'); }
     if (busHotelAmt) { busHotelAmt.value = getValue('hotel_self_paid_amount'); }
     if (busHotelCur) { busHotelCur.value = getValue('hotel_self_paid_currency'); }
     if (busHotelNights) { busHotelNights.value = getValue('hotel_self_paid_nights'); }
   }
-  document.querySelectorAll('input[name="meal_offered"], input[name="hotel_offered"], input[name="overnight_needed"], input[name="assistance_hotel_transport_included"], input[name="meal_self_paid_amount"], input[name="meal_self_paid_currency"], input[name="hotel_self_paid_amount"], input[name="hotel_self_paid_currency"], input[name="hotel_self_paid_nights"]').forEach(function(el) {
+  document.querySelectorAll('input[name="meal_offered"], input[name="hotel_offered"], input[name="overnight_needed"], select[name="overnight_needed"], input[name="assistance_hotel_transport_included"], input[name="meal_self_paid_amount"], input[name="meal_self_paid_currency"], input[name="hotel_self_paid_amount"], input[name="hotel_self_paid_currency"], input[name="hotel_self_paid_nights"]').forEach(function(el) {
     ['change','input','click'].forEach(function(ev){ el.addEventListener(ev, syncModeAssistanceAliases); });
   });
   syncModeAssistanceAliases();
