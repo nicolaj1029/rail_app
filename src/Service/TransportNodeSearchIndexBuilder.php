@@ -12,8 +12,8 @@ final class TransportNodeSearchIndexBuilder
      */
     public function build(?string $sourcePath = null, ?string $outputDir = null): array
     {
-        $sourcePath = $sourcePath ?? (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json');
-        $outputDir = $outputDir ?? (CONFIG . 'data' . DIRECTORY_SEPARATOR);
+        $sourcePath = $sourcePath ?? TransportDataPaths::transportNodes();
+        $outputDir = $outputDir ?? TransportDataPaths::nodesSearchDir();
 
         if (!is_file($sourcePath)) {
             throw new RuntimeException('transport node source not found: ' . $sourcePath);
@@ -68,10 +68,13 @@ final class TransportNodeSearchIndexBuilder
 
         $counts = [];
         foreach ($grouped as $mode => $modeRows) {
-            $targetPath = rtrim($outputDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'transport_nodes_search_' . $mode . '.json';
+            $targetPath = rtrim($outputDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $mode . '.json';
             $encoded = json_encode($modeRows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if (!is_string($encoded)) {
                 throw new RuntimeException('could not encode search index for mode: ' . $mode);
+            }
+            if (!is_dir(dirname($targetPath))) {
+                mkdir(dirname($targetPath), 0775, true);
             }
             file_put_contents($targetPath, $encoded . PHP_EOL);
             $counts[$mode] = count($modeRows);

@@ -21,7 +21,7 @@ class ExemptionResolver
         $this->productScopes = $this->operatorCatalog->getProductScopes();
         $this->matrix = $this->loadJson(CONFIG . '/data/exemption_matrix.json');
         $this->national = $this->loadJson(CONFIG . '/data/national_overrides.json');
-        $this->stationCoords = $this->loadStationsMap(CONFIG . '/data/stations_coords.json');
+        $this->stationCoords = $this->loadStationsMap(TransportDataPaths::stationsCoords());
     }
 
     /**

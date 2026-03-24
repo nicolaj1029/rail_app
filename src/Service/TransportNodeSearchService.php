@@ -7,8 +7,8 @@ namespace App\Service;
  * Multimodal node search for ferry ports/terminals, bus stops/terminals and airports.
  *
  * Rail keeps using the dedicated StationSearchService and large station dataset.
- * Non-rail modes use a smaller curated transport_nodes.json seed that can later
- * be replaced by imported datasets.
+ * Non-rail modes use curated node datasets under config/data/nodes/ that can
+ * later be replaced by imported datasets.
  */
 final class TransportNodeSearchService
 {
@@ -778,7 +778,7 @@ final class TransportNodeSearchService
 
     private function resolveBusSeedPath(): ?string
     {
-        $default = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'bus_terminal_seed_v1.json';
+        $default = TransportDataPaths::busTerminalSeed();
         if (is_file($default)) {
             return $default;
         }
@@ -1165,12 +1165,12 @@ final class TransportNodeSearchService
             return $this->path;
         }
 
-        $searchPath = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes_search_' . $mode . '.json';
+        $searchPath = TransportDataPaths::transportNodesSearch($mode);
         if (is_file($searchPath)) {
             return $searchPath;
         }
 
-        $fallbackPath = CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json';
+        $fallbackPath = TransportDataPaths::transportNodes();
         if (is_file($fallbackPath)) {
             return $fallbackPath;
         }

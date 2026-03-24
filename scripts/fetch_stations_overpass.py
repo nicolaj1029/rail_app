@@ -1,9 +1,9 @@
 """
 Fetch all railway stations/halts for EU27 countries from Overpass API and
-emit a flattened JSON file suitable for config/data/stations_coords.json.
+emit a flattened JSON file suitable for config/data/nodes/stations_coords.json.
 
 Usage:
-    python scripts/fetch_stations_overpass.py > stations_coords.json
+    python scripts/fetch_stations_overpass.py > config/data/nodes/stations_coords.json
 
 Notes:
 - Uses Overpass public endpoint; be gentle (timeout + sleep between calls).

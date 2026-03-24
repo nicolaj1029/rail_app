@@ -5,7 +5,7 @@ namespace App\Service;
 
 /**
  * Tiny offline station geocoder for distance gating.
- * - Loads config/data/stations_coords.json
+ * - Loads config/data/nodes/stations_coords.json
  * - Normalizes common suffixes/aliases (e.g., "C", "Central", "Hbf", "station")
  */
 class StationGeocoder
@@ -23,7 +23,7 @@ class StationGeocoder
 
     public function __construct(?string $path = null)
     {
-        $path = $path ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'stations_coords.json');
+        $path = $path ?: TransportDataPaths::stationsCoords();
         $this->path = $path;
         $mtime = is_file($path) ? (int)@filemtime($path) : null;
         if (

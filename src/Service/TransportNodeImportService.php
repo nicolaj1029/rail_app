@@ -11,7 +11,7 @@ final class TransportNodeImportService
 
     public function __construct(?string $targetPath = null)
     {
-        $this->targetPath = $targetPath ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json');
+        $this->targetPath = $targetPath ?: TransportDataPaths::transportNodes();
     }
 
     /**
@@ -85,7 +85,7 @@ final class TransportNodeImportService
             throw new RuntimeException('could not encode target JSON');
         }
         file_put_contents($this->targetPath, $json . PHP_EOL);
-        (new TransportNodeSearchIndexBuilder())->build($this->targetPath, dirname($this->targetPath));
+        (new TransportNodeSearchIndexBuilder())->build($this->targetPath, TransportDataPaths::nodesSearchDir());
 
         return [
             'mode' => $mode,

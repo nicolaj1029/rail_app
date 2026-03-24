@@ -1,6 +1,6 @@
 ﻿# Transport node import
 
-Dette projekt bruger `config/data/transport_nodes.json` som lookup-lag for multimodal autocomplete i `TRIN 2` for:
+Dette projekt bruger `config/data/nodes/transport_nodes.json` som lookup-lag for multimodal autocomplete i `TRIN 2` for:
 
 - `ferry`
 - `bus`

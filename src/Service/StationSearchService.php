@@ -6,7 +6,7 @@ namespace App\Service;
 /**
  * Offline station search for ticketless mode.
  *
- * Data source: config/data/stations_coords.json (list of rows).
+ * Data source: config/data/nodes/stations_coords.json (list of rows).
  * Each row should contain at least: name, lat, lon. Optional: country, osm_id, type, source.
  */
 final class StationSearchService
@@ -19,7 +19,7 @@ final class StationSearchService
 
     public function __construct(?string $path = null)
     {
-        $this->path = $path ?: (CONFIG . 'data' . DIRECTORY_SEPARATOR . 'stations_coords.json');
+        $this->path = $path ?: TransportDataPaths::stationsCoords();
     }
 
     /**

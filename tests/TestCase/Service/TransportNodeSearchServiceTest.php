@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Test\TestCase\Service;
 
 use App\Service\StationSearchService;
+use App\Service\TransportDataPaths;
 use App\Service\TransportNodeSearchService;
 use Cake\TestSuite\TestCase;
 
@@ -17,7 +18,7 @@ final class TransportNodeSearchServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new TransportNodeSearchService(CONFIG . 'data' . DIRECTORY_SEPARATOR . 'transport_nodes.json');
+        $this->service = new TransportNodeSearchService(TransportDataPaths::transportNodes());
     }
 
     protected function tearDown(): void
