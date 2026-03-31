@@ -14,6 +14,7 @@ class PassengerController extends AppController
     public function start(): void
     {
         $snapshot = $this->buildSnapshot();
+        $transportFlows = $this->buildTransportFlows();
         $quickLinks = [
             'flowStart' => Router::url('/flow/start', true),
             'flowJourney' => Router::url('/flow/journey', true),
@@ -23,7 +24,7 @@ class PassengerController extends AppController
             'claims' => Router::url('/passenger/claims', true),
         ];
 
-        $this->set(compact('snapshot', 'quickLinks'));
+        $this->set(compact('snapshot', 'quickLinks', 'transportFlows'));
     }
 
     public function review(): void
@@ -218,5 +219,60 @@ class PassengerController extends AppController
         }
 
         return $context;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildTransportFlows(): array
+    {
+        $states = [
+            'completed' => ['label' => 'Afsluttet rejse', 'cta' => 'Start afsluttet'],
+            'ongoing' => ['label' => 'Igangvaerende rejse', 'cta' => 'Start live'],
+        ];
+        $modes = [
+            'air' => [
+                'title' => 'Fly',
+                'accent' => '#0f766e',
+                'summary' => 'Kort intake nu, billet og dokumentation bagefter. Air bliver eget flow.',
+            ],
+            'rail' => [
+                'title' => 'Tog',
+                'accent' => '#1d4ed8',
+                'summary' => 'Nuvaerende togflow bevares, men klargores til senere multimodal wrapper.',
+            ],
+            'bus' => [
+                'title' => 'Bus',
+                'accent' => '#b45309',
+                'summary' => 'Busflow med egne PMR-, assistance- og compensation-spor.',
+            ],
+            'ferry' => [
+                'title' => 'Faerge',
+                'accent' => '#0369a1',
+                'summary' => 'Faergeflow med egne Art. 16-19 spor og senere multimodal samling.',
+            ],
+        ];
+
+        $cards = [];
+        foreach ($modes as $mode => $config) {
+            $links = [];
+            foreach ($states as $state => $stateConfig) {
+                $links[] = [
+                    'state' => $state,
+                    'label' => $stateConfig['label'],
+                    'cta' => $stateConfig['cta'],
+                    'href' => Router::url('/flow/' . $mode . '/' . $state, true),
+                ];
+            }
+            $cards[] = [
+                'mode' => $mode,
+                'title' => $config['title'],
+                'accent' => $config['accent'],
+                'summary' => $config['summary'],
+                'links' => $links,
+            ];
+        }
+
+        return $cards;
     }
 }

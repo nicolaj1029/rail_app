@@ -26,6 +26,9 @@ $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transpor
 $isFerry = ($transportMode === 'ferry');
 $isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
+$isAirShortView = $isAir && strtolower((string)($flags['entry_variant'] ?? '')) === 'air_short';
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
@@ -243,6 +246,15 @@ $ferryRerouteExtraAmountEur = $toEur($ferryRerouteExtraAmountCurrent, $ferryRero
 </style>
 <div class="flow-wrapper">
 <h1><?= h($remediesTitle) ?></h1>
+<?php if ($isAirShortView): ?>
+<?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+<?php elseif ($isModeSplitView): ?>
+<div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+  <?= $isOngoing
+      ? 'Denne remedies-variant er taenkt som live-stoette. Registrer kun de valg og udgifter, der er relevante nu.'
+      : 'Denne remedies-variant er taenkt til afsluttede rejser. Operative strandingsspoergsmaal er trukket vaek, saa fokus er paa de endelige remedy-valg.' ?>
+</div>
+<?php endif; ?>
 <?php
     if ($travelState === 'completed') {
         echo '<p class="small muted">Status: Rejsen er afsluttet. Besvar ud fra hvad der faktisk skete.</p>';
@@ -252,6 +264,9 @@ $ferryRerouteExtraAmountEur = $toEur($ferryRerouteExtraAmountCurrent, $ferryRero
         echo '<p class="small muted">Status: Rejsen er endnu ikke paabegyndt. Besvar ud fra, hvad du forventer at goere ved forsinkelse/aflysning.</p>';
     }
 ?>
+<?php if ($isAirShortView): ?>
+<div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Air-remedies er holdt kort her: Article 8, egen loesning og konkrete ombookingsnaere udgifter. Mere teknisk afklaring kan flyttes til sagen bagefter.</div>
+<?php endif; ?>
 <?php if ($isFerry): ?>
     <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="card-title"><span class="icon">&#9973;</span><span>Faerge-kontekst</span></div>

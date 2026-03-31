@@ -35,6 +35,14 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
         </div>
         <div class="top-nav-links">
             <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
+            <a href="<?= $this->Url->build('/flow/air/completed') ?>">Fly A</a>
+            <a href="<?= $this->Url->build('/flow/air/ongoing') ?>">Fly I</a>
+            <a href="<?= $this->Url->build('/flow/rail/completed') ?>">Tog A</a>
+            <a href="<?= $this->Url->build('/flow/rail/ongoing') ?>">Tog I</a>
+            <a href="<?= $this->Url->build('/flow/bus/completed') ?>">Bus A</a>
+            <a href="<?= $this->Url->build('/flow/bus/ongoing') ?>">Bus I</a>
+            <a href="<?= $this->Url->build('/flow/ferry/completed') ?>">Færge A</a>
+            <a href="<?= $this->Url->build('/flow/ferry/ongoing') ?>">Færge I</a>
             <a href="<?= $this->Url->build('/passenger/start') ?>">Passager</a>
             <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
             <a href="<?= $this->Url->build('/project/chat-qa') ?>">Chat QA</a>

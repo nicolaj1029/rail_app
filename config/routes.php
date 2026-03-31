@@ -113,6 +113,17 @@ return function (RouteBuilder $routes): void {
     // Streamlined flow wizard (split-flow only; legacy one-page disabled)
     $builder->connect('/flow', ['controller' => 'Flow', 'action' => 'start']);
     $builder->connect('/flow/one', ['controller' => 'Flow', 'action' => 'start']);
+    $builder->connect('/flow/{mode}', ['controller' => 'Flow', 'action' => 'entry', 'travelState' => 'completed'])
+        ->setPass(['mode', 'travelState'])
+        ->setPatterns([
+            'mode' => 'rail|bus|ferry|air',
+        ]);
+    $builder->connect('/flow/{mode}/{travelState}', ['controller' => 'Flow', 'action' => 'entry'])
+        ->setPass(['mode', 'travelState'])
+        ->setPatterns([
+            'mode' => 'rail|bus|ferry|air',
+            'travelState' => 'completed|ongoing|before_start',
+        ]);
     // Split-step flow (clearer separation)
     $builder->connect('/flow/details', ['controller' => 'Flow', 'action' => 'details']);
     $builder->connect('/flow/screening', ['controller' => 'Flow', 'action' => 'screening']);

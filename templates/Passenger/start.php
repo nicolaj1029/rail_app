@@ -2,6 +2,7 @@
 /** @var \App\View\AppView $this */
 /** @var array<string,mixed> $snapshot */
 /** @var array<string,string> $quickLinks */
+/** @var array<int,array<string,mixed>> $transportFlows */
 $nextStep = $snapshot['nextStep'] ?? null;
 $steps = (array)($snapshot['steps'] ?? []);
 $journeysApi = $this->Url->build('/api/shadow/journeys', ['fullBase' => true]);
@@ -13,9 +14,20 @@ $nextActionText = is_array($nextStep)
 ?>
 <style>
   .passenger-page { max-width: 1080px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
-  .hero { border: 1px solid #dbeafe; background: #eff6ff; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+  .hero { border: 1px solid #cce7de; background: linear-gradient(135deg, #eef8f4 0%, #f8fffd 100%); border-radius: 20px; padding: 24px; margin-bottom: 18px; }
   .hero h1 { margin: 0 0 8px; }
   .hero p { margin: 0; color: #334155; line-height: 1.5; }
+  .flow-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .flow-card { border: 1px solid #dbe3ea; border-radius: 18px; background: #fff; overflow: hidden; box-shadow: 0 8px 22px rgba(15, 23, 42, .06); }
+  .flow-card-head { padding: 16px 18px 12px; color: #fff; }
+  .flow-card-head h2 { margin: 0 0 6px; font-size: 28px; }
+  .flow-card-head p { margin: 0; color: rgba(255,255,255,.9); line-height: 1.45; min-height: 62px; }
+  .flow-card-body { padding: 16px 18px 18px; }
+  .flow-link-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .flow-link { display:block; text-decoration:none; border-radius: 14px; border: 1px solid #d7dee6; padding: 12px; color: #0f172a; background:#f8fafc; }
+  .flow-link strong { display:block; margin-bottom: 6px; }
+  .flow-link span { display:block; color:#475569; font-size: 13px; }
+  .flow-link:hover { border-color:#94a3b8; background:#fff; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
   .subgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
@@ -44,6 +56,27 @@ $nextActionText = is_array($nextStep)
     <span class="pill">Ny passageroplevelse</span>
     <h1>En enklere vej gennem sagen</h1>
     <p>Denne side er et alternativ til det eksisterende flow. Den samme motor og de samme regler bruges stadig, men indgangen er gjort mere direkte: fortsæt hvor du slap, åbn hjælpen i kontekst, eller gå direkte til pendler-sporet.</p>
+  </div>
+
+  <div class="flow-cards">
+    <?php foreach ($transportFlows as $flowCard): ?>
+      <section class="flow-card">
+        <div class="flow-card-head" style="background: <?= h((string)$flowCard['accent']) ?>;">
+          <h2><?= h((string)$flowCard['title']) ?></h2>
+          <p><?= h((string)$flowCard['summary']) ?></p>
+        </div>
+        <div class="flow-card-body">
+          <div class="flow-link-grid">
+            <?php foreach ((array)$flowCard['links'] as $link): ?>
+              <a class="flow-link" href="<?= h((string)$link['href']) ?>">
+                <strong><?= h((string)$link['cta']) ?></strong>
+                <span><?= h((string)$link['label']) ?></span>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      </section>
+    <?php endforeach; ?>
   </div>
 
   <div class="subgrid">

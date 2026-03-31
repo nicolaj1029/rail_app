@@ -20,6 +20,10 @@ $transportMode = strtolower((string)($form['gating_mode'] ?? ($meta['gating_mode
 $isFerry = ($transportMode === 'ferry');
 $isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
+$isAirShortView = $isAir && strtolower((string)($flags['entry_variant'] ?? '')) === 'air_short';
+$isAirShortOngoingView = $isAirShortView && $isOngoing;
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
@@ -194,6 +198,15 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 
 <h1><?= h($assistTitle) ?></h1>
+<?php if ($isAirShortView): ?>
+<?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+<?php elseif ($isModeSplitView): ?>
+<div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+  <?= $isOngoing
+      ? 'Dette assistance-trin er den igangvaerende variant. Registrer kun de ydelser eller udgifter, der er aktuelle lige nu.'
+      : 'Dette assistance-trin er den afsluttede variant. Fokus er paa de udgifter og manglende ydelser, der faktisk opstod under rejsen.' ?>
+</div>
+<?php endif; ?>
 
 <?= $this->element('flow_locked_notice') ?>
 <?= $this->Form->create(null, ['type' => 'file', 'novalidate' => true]) ?>
@@ -277,11 +290,19 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
       <div class="small muted mt4">Scope-note: <?= h((string)$busScope['scope_exclusion_reason']) ?></div>
     <?php endif; ?>
   </div>
-<?php elseif ($isAir): ?>
+<?php elseif ($isAir && !$isAirShortView): ?>
   <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
     <strong>Air-kontekst</strong>
     <div class="small muted mt4">Claim-kanal: <strong><?= h((string)($airContract['primary_claim_party_name'] ?? 'ukendt')) ?></strong>. Denne side samler EC261 care efter forsinkelse, aflysning, naegtet boarding eller beskyttet misset forbindelse.</div>
     <div class="small muted mt4">Distancekategori: <strong><?= h((string)($airScope['air_distance_band'] ?? 'ukendt')) ?></strong><?php if (!empty($airScope['air_delay_threshold_hours'])): ?>. Art. 6 threshold: <strong><?= h((string)$airScope['air_delay_threshold_hours']) ?> timer</strong><?php endif; ?>.</div>
+  </div>
+<?php elseif ($isAirShortView): ?>
+  <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
+    <strong>Air-care lige nu</strong>
+    <div class="small muted mt4">Registrer kun de udgifter eller manglende ydelser, der er relevante indtil nu. Mere dokumentation kan laegges paa sagen bagefter.</div>
+    <?php if ($isAirShortOngoingView): ?>
+      <div class="small muted mt4">Hold dette trin kort: maaltider, hotel og transport til hotel. Mere saerlige eller tekniske forhold kan vurderes senere paa sagen.</div>
+    <?php endif; ?>
   </div>
 <?php endif; ?>
 
@@ -618,7 +639,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 
 
-<?php if (($isBus && ($busPmrAssistGateActive || $busPmrAssistPartialActive)) || ($isAir && $airPriorityAssistGate) || (!$isFerry && !$isBus && $pmrUser && ($art20Active || $art20Partial))): ?>
+<?php if (($isBus && ($busPmrAssistGateActive || $busPmrAssistPartialActive)) || ($isAir && $airPriorityAssistGate && !$isAirShortOngoingView) || (!$isFerry && !$isBus && $pmrUser && ($art20Active || $art20Partial))): ?>
 
   <div class="card mt12">
 

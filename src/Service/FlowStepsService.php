@@ -61,6 +61,15 @@ final class FlowStepsService
         if (!in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
             $transportMode = '';
         }
+        $entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+        $isAirShort = $transportMode === 'air' && $entryVariant === 'air_short';
+        $isRailSplit = $transportMode === 'rail' && $entryVariant === 'rail_split';
+        $isBusSplit = $transportMode === 'bus' && $entryVariant === 'bus_split';
+        $isFerrySplit = $transportMode === 'ferry' && $entryVariant === 'ferry_split';
+        $travelState = strtolower((string)($flags['travel_state'] ?? ''));
+        $isAirShortCompleted = $isAirShort && $travelState === 'completed';
+        $isCompleted = $travelState === 'completed';
+        $isOngoing = $travelState === 'ongoing';
         $isFerry = $transportMode === 'ferry';
         $gatingMode = strtolower((string)($flags['gating_mode'] ?? ($flags['initial_incident_mode'] ?? $transportMode)));
         if (!in_array($gatingMode, ['rail', 'ferry', 'bus', 'air'], true)) {
@@ -79,14 +88,21 @@ final class FlowStepsService
             switch ((string)($s['action'] ?? '')) {
                 case 'station':
                     $s['title'] = 'Foerste ramte segment';
-                    $visible = (($needsRouter && $transportMode !== 'air') || $isCurrent);
+                    $visible = $isAirShort ? $isCurrent : (($needsRouter && $transportMode !== 'air') || $isCurrent);
                     break;
                 case 'railstranding':
-                    $visible = $gatingMode === 'rail' || $isCurrent;
+                    if ($isRailSplit && $isCompleted) {
+                        $visible = $done || $isCurrent;
+                    } else {
+                        $visible = $isAirShort ? $isCurrent : ($gatingMode === 'rail' || $isCurrent);
+                    }
                     $prereqFlags = ($needsRouter && $transportMode !== 'air') ? ['step3_done'] : ['step2_done'];
                     break;
                 case 'journey':
-                    if ($gatingMode === 'rail') {
+                    if ($isAirShort) {
+                        $visible = $isCurrent;
+                        $prereqFlags = ['step2_done'];
+                    } elseif ($gatingMode === 'rail') {
                         $prereqFlags = ['step35_done'];
                     } elseif ($transportMode === 'air') {
                         $prereqFlags = ['step2_done'];
@@ -101,12 +117,31 @@ final class FlowStepsService
                         default => 'Mode-specifik gating',
                     };
                     break;
+                case 'incident':
+                    if ($isAirShort) {
+                        $s['title'] = 'Air haendelse + foreloebig vurdering';
+                        $prereqFlags = ['step2_done'];
+                    } elseif ($isRailSplit || $isBusSplit || $isFerrySplit) {
+                        $s['title'] = match (true) {
+                            $isRailSplit && $isOngoing => 'Rail haendelse + live vurdering',
+                            $isRailSplit => 'Rail haendelse + foreloebig vurdering',
+                            $isBusSplit && $isOngoing => 'Bus haendelse + live vurdering',
+                            $isBusSplit => 'Bus haendelse + foreloebig vurdering',
+                            $isFerrySplit && $isOngoing => 'Ferry haendelse + live vurdering',
+                            default => 'Ferry haendelse + foreloebig vurdering',
+                        };
+                    }
+                    break;
                 case 'choices':
                     $s['title'] = ($gatingMode === 'rail')
-                        ? 'Strandet paa station/sporet'
-                        : 'Transport til/fra strandet sted';
+                        ? (($isRailSplit && $isOngoing) ? 'Hvor er du nu / akut transport' : 'Strandet paa station/sporet')
+                        : ((($isBusSplit || $isFerrySplit) && $isOngoing) ? 'Transport vaek/videre lige nu' : 'Transport til/fra strandet sted');
                     // TRIN 6 only matters when Art.20(2)(c) transport/stranding is active.
-                    if ($gatingMode === 'bus') {
+                    if ($isAirShort) {
+                        $visible = $isCurrent;
+                    } elseif (($isRailSplit || $isBusSplit || $isFerrySplit) && $isCompleted) {
+                        $visible = $done || $isCurrent;
+                    } elseif ($gatingMode === 'bus') {
                         $prereqFlags = ['step5_done'];
                         $visible = $gateArt20_2c || $gateBusContinuation || $done || $isCurrent;
                     } else {
@@ -127,6 +162,9 @@ final class FlowStepsService
                             $prereqFlags[] = 'step6_done';
                         }
                         $visible = $gateArt18 || $gateBusPmrRemedy || $done || $isCurrent;
+                    } elseif ($isAirShort) {
+                        $prereqFlags = ['step5_done', 'gate_art18'];
+                        $visible = $isAirShortCompleted ? $isCurrent : ($gateArt18 || $done || $isCurrent);
                     } else {
                         $prereqFlags = ['step5_done', 'gate_art18'];
                         if ($gateArt20_2c) {
@@ -143,6 +181,9 @@ final class FlowStepsService
                             $prereqFlags[] = 'gate_art20';
                         }
                         $visible = $gateArt20 || $gateBusPmrAssistance || $gateBusPmrAssistancePartial || $done || $isCurrent;
+                    } elseif ($isAirShortCompleted) {
+                        $prereqFlags = ['step5_done', 'gate_art20'];
+                        $visible = $isCurrent;
                     } else {
                         $prereqFlags = ['step5_done', 'gate_art20'];
                         $visible = $gateArt20 || $done || $isCurrent;
@@ -150,7 +191,7 @@ final class FlowStepsService
                     break;
                 case 'downgrade':
                     // TRIN 9 only when downgrade is relevant (or already completed/current).
-                    if ($gatingMode === 'bus') {
+                    if ($gatingMode === 'bus' || $isAirShort) {
                         $visible = false;
                     } else {
                         $visible = $gateDowngrade || $done || $isCurrent;

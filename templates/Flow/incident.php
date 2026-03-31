@@ -43,6 +43,10 @@ $busScope = (array)($multimodal['bus_scope'] ?? []);
 $airRights = (array)($multimodal['air_rights'] ?? []);
 $airContract = (array)($multimodal['air_contract'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
+$isAirShortView = $isAir && strtolower((string)($flags['entry_variant'] ?? '')) === 'air_short';
+$isAirShortOngoingView = $isAirShortView && $isOngoing;
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
 $airDistanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($airScope['air_distance_band'] ?? ''))));
 $airDistanceBandLabel = match ($airDistanceBand) {
     'up_to_1500' => '1500 km eller mindre',
@@ -151,6 +155,17 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     <h1>TRIN 5 - Haendelse (afsluttet rejse)</h1>
   <?php else: ?>
     <h1>TRIN 5 - Haendelse (Art. 18/20 standard gating)</h1>
+  <?php endif; ?>
+
+  <?php if ($isAirShortView): ?>
+    <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+    <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Air-incident er holdt kort her: haendelse, missed connection og kompensationsnaere fakta. Mere teknisk kontraktanalyse kan flyttes til sagen bagefter.</div>
+  <?php elseif ($isModeSplitView): ?>
+    <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+      <?= $isOngoing
+          ? 'Dette er den igangvaerende variant. Fokus er paa den aktuelle haendelse og de naeste beslutninger, ikke hele efterbehandlingen endnu.'
+          : 'Dette er den afsluttede variant. Live-/strandingsspoergsmaal er tonet ned, saa fokus er paa det endelige haendelsesforloeb.' ?>
+    </div>
   <?php endif; ?>
 
   <?= $this->element('flow_locked_notice') ?>
@@ -470,6 +485,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         <label class="ml8"><input type="radio" name="incident_main" value="denied_boarding" <?= $v('incident_main')==='denied_boarding'?'checked':'' ?> /> Boardingafvisning</label>
       </div>
 
+      <?php if (!$isAirShortOngoingView): ?>
       <div id="airCancellationNoticeCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">C</span>
@@ -485,6 +501,12 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label class="ml8"><input type="radio" name="cancellation_notice_band" value="unknown" <?= $airCancellationNoticeBand==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
       </div>
+      <?php else: ?>
+      <input type="hidden" name="cancellation_notice_band" value="" />
+      <input type="hidden" name="reroute_offered" value="" />
+      <input type="hidden" name="reroute_departure_band" value="" />
+      <input type="hidden" name="reroute_arrival_band" value="" />
+      <?php endif; ?>
 
       <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="incident_main:delay">
         <div class="widget-title">
@@ -530,7 +552,10 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         <label><input type="radio" name="protected_connection_missed" value="yes" <?= $v('protected_connection_missed')==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="protected_connection_missed" value="no" <?= $v('protected_connection_missed')==='no'?'checked':'' ?> /> Nej / uklart</label>
         <div class="mt8" data-show-if="protected_connection_missed:yes">
-          <?php if ($airConnectionNeedsFallback): ?>
+          <?php if ($isAirShortView): ?>
+          <input type="hidden" name="connection_protection_basis" value="" />
+          <div class="small muted mt4">Vi spoerger ikke ind til bookingkaeden her. Den afklaring kan flyttes til sagen bagefter.</div>
+          <?php elseif ($airConnectionNeedsFallback): ?>
           <div>Hvad bygger forbindelsen på?</div>
           <select name="connection_protection_basis">
             <option value="">- Vaelg grundlag -</option>
@@ -555,6 +580,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       <input type="hidden" name="reroute_arrival_delay_minutes" value="" />
       <?php endif; ?>
 
+      <?php if (!$isAirShortOngoingView): ?>
       <div id="airCancellationRerouteCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">R</span>
@@ -582,6 +608,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label class="ml8"><input type="radio" name="reroute_arrival_band" value="unknown" <?= $airRerouteArrivalBand==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
       </div>
+      <?php endif; ?>
 
       <div class="mt8" data-show-if="protected_connection_missed:yes">
         <label>Forsinkelse ved ankomst efter ombooking (minutter, valgfri)
@@ -589,6 +616,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         </label>
       </div>
 
+      <?php if (!$isAirShortOngoingView): ?>
       <div class="card mt12" style="border-color:#e8d7aa;background:#fffaf0">
         <div class="widget-title">
           <span class="fm-badge" title="Force majeure / extraordinary circumstances">
@@ -607,12 +635,17 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label class="ml8"><input type="radio" name="extraordinary_circumstances" value="no" <?= $v('extraordinary_circumstances')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
         </div>
       </div>
+      <?php else: ?>
+      <input type="hidden" name="extraordinary_circumstances" value="" />
+      <?php endif; ?>
 
       <input type="hidden" name="meal_offered" value="" />
       <input type="hidden" name="hotel_required" value="" />
       <input type="hidden" name="hotel_offered" value="" />
 
-      <?php if (!empty($airScope) || !empty($airContract) || !empty($airRights)): ?>
+      <?php if ($isAirShortView): ?>
+        <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Dette air-spor er gjort lettere i frontflowet. Mere teknisk kontraktanalyse og dokumentkontrol kan flyttes til sagen bagefter.</div>
+      <?php elseif (!empty($airScope) || !empty($airContract) || !empty($airRights)): ?>
         <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
           <div><strong>Resolver status</strong></div>
           <div>Scope: <?= !empty($airScope['regulation_applies']) ? 'In scope' : 'Out of scope' ?></div>

@@ -28,6 +28,27 @@ class FlowController extends AppController
             return (bool)$this->request->getSession()->read('admin.mode');
         } catch (\Throwable $e) { return false; }
     }
+
+    private function isAirShortEntry(array $flags, array $form = [], array $meta = []): bool
+    {
+        $mode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($flags['transport_mode'] ?? ''))));
+        $variant = strtolower(trim((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? ''))));
+
+        return $mode === 'air' && $variant === 'air_short';
+    }
+
+    private function getFlowTravelState(array $flags, array $form = []): string
+    {
+        $travelState = strtolower(trim((string)($flags['travel_state'] ?? ($form['travel_state'] ?? ''))));
+
+        return in_array($travelState, ['completed', 'ongoing', 'before_start'], true) ? $travelState : '';
+    }
+
+    private function isAirShortCompleted(array $flags, array $form = [], array $meta = []): bool
+    {
+        return $this->isAirShortEntry($flags, $form, $meta) && $this->getFlowTravelState($flags, $form) === 'completed';
+    }
+
     public function initialize(): void
     {
         parent::initialize();
@@ -480,6 +501,64 @@ class FlowController extends AppController
         return null;
     }
 
+    public function entry(string $mode = 'rail', string $travelState = 'completed'): \Cake\Http\Response
+    {
+        $mode = $this->normalizeTransportMode($mode);
+        if (!in_array($mode, ['rail', 'bus', 'ferry', 'air'], true)) {
+            $mode = 'rail';
+        }
+        if (!in_array($travelState, ['completed', 'ongoing', 'before_start'], true)) {
+            $travelState = 'completed';
+        }
+
+        $sess = $this->request->getSession();
+        $sess->delete('flow');
+
+        $entryVariant = match ($mode) {
+            'air' => 'air_short',
+            'rail' => 'rail_split',
+            'bus' => 'bus_split',
+            'ferry' => 'ferry_split',
+            default => 'standard',
+        };
+
+        $form = [
+            'ticket_upload_mode' => 'ticketless',
+            'transport_mode' => $mode,
+            'transport_mode_source' => 'manual',
+            'gating_mode' => $mode,
+        ];
+        $meta = [
+            'transport_mode' => $mode,
+            'transport_mode_source' => 'manual',
+            'gating_mode' => $mode,
+            'entry_mode' => $mode,
+            'entry_travel_state' => $travelState,
+            'entry_variant' => $entryVariant,
+        ];
+        $flags = [
+            'step1_done' => '1',
+            'travel_state' => $travelState,
+            'transport_mode' => $mode,
+            'gating_mode' => $mode,
+            'entry_mode' => $mode,
+            'entry_travel_state' => $travelState,
+            'entry_variant' => $entryVariant,
+        ];
+        $journey = [
+            'transport_mode' => $mode,
+            'gating_mode' => $mode,
+        ];
+
+        $sess->write('flow.form', $form);
+        $sess->write('flow.meta', $meta);
+        $sess->write('flow.flags', $flags);
+        $sess->write('flow.journey', $journey);
+        $sess->write('flow.compute', ['euOnly' => true]);
+
+        return $this->redirect(['action' => 'entitlements']);
+    }
+
     /**
      * Split-step: Transport fra station (Art.20(3)) â collected before TRIN 5 gating.
      * This step is optional (default "Nej") and only collects facts for the station-stranding scenario.
@@ -799,8 +878,10 @@ class FlowController extends AppController
         $routerType = (string)($form['initial_incident_router_type'] ?? ($meta['initial_incident_router_type'] ?? 'none'));
         $routerCandidates = (array)($meta['initial_incident_candidates'] ?? []);
 
-        // TRIN 5 prereq: TRIN 4 completed (read-only preview allowed via ?preview=1).
-        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step4_done'], 'journey');
+        // TRIN 5 prereq: normally TRIN 4 completed, but air short-flow starts TRIN 5 right after ticketless.
+        $incidentPrereqs = $this->isAirShortEntry($flags, $form, $meta) ? ['step2_done'] : ['step4_done'];
+        $incidentPrevAction = $this->isAirShortEntry($flags, $form, $meta) ? 'entitlements' : 'journey';
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs($incidentPrereqs, $incidentPrevAction);
         if ($resp) { return $resp; }
 
         $didPost = false;
@@ -1266,7 +1347,11 @@ class FlowController extends AppController
         // After POST: decide where to send the user next.
         // If gates are not met yet, keep the user in TRIN 5 (national fallback / waiting for >=60).
         if ($didPost) {
-            if ($gateArt20_2c || $busContinuation) {
+            if ($this->isAirShortCompleted($flags, $form, $meta)) {
+                return $this->redirect(['action' => 'compensation']);
+            }
+
+            if (($gateArt20_2c || $busContinuation) && !$this->isAirShortEntry($flags, $form, $meta)) {
                 return $this->redirect(['action' => 'choices']);
             }
 
@@ -4032,6 +4117,9 @@ class FlowController extends AppController
                 $session->write('flow.meta', $meta);
                 $session->write('flow.journey', $journey);
                 $session->write('flow.flags', $flags);
+                if ($this->isAirShortEntry($flags, $form, $meta) && $defaultMode === 'air') {
+                    return $this->redirect(['action' => 'incident']);
+                }
                 if ($needsRouter) {
                     return $this->redirect(['action' => 'station']);
                 }
@@ -6966,6 +7054,13 @@ class FlowController extends AppController
         $ferryPmrRemedyGate = $effectiveMode === 'ferry' && ((string)($flags['gate_ferry_pmr_remedy'] ?? '')) === '1';
         $busPmrRemedyGate = $effectiveMode === 'bus' && ((string)($flags['gate_bus_pmr_remedy'] ?? '')) === '1';
 
+        if ($this->isAirShortCompleted($flags, $form, $meta)) {
+            $flags['step7_done'] = '1';
+            $session->write('flow.flags', $flags);
+
+            return $this->redirect(['action' => 'compensation']);
+        }
+
         // If the user explicitly reached their final destination via Art.20 transport (not an assumed fallback),
         // TRIN 6 is only needed when the journey no longer had any purpose (Art.18(1)(a)).
         $toDest0 = (string)($form['a20_where_ended'] ?? '');
@@ -6983,7 +7078,11 @@ class FlowController extends AppController
             : ['step5_done', 'gate_art18'];
         [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs($remedyPrereqs, 'incident');
         if ($resp) { return $resp; }
-        if (((string)($flags['gate_art20_2c'] ?? '')) === '1' && !(($ferryPmrRemedyGate || $busPmrRemedyGate) && ((string)($flags['gate_art18'] ?? '')) !== '1')) {
+        if (
+            ((string)($flags['gate_art20_2c'] ?? '')) === '1'
+            && !$this->isAirShortEntry($flags, $form, $meta)
+            && !(($ferryPmrRemedyGate || $busPmrRemedyGate) && ((string)($flags['gate_art18'] ?? '')) !== '1')
+        ) {
             [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step6_done'], 'choices');
             if ($resp) { return $resp; }
         }
@@ -7860,6 +7959,14 @@ class FlowController extends AppController
         $busHotelGateActive = ((string)($flags['gate_bus_assistance_hotel'] ?? '') === '1') || !empty($busRights['gate_bus_assistance_hotel']);
         $busPmrAssistGateActive = ((string)($flags['gate_bus_pmr_assistance'] ?? '') === '1') || !empty($busPmrRights['gate_bus_pmr_assistance']);
         $busPmrAssistPartialActive = ((string)($flags['gate_bus_pmr_assistance_partial'] ?? '') === '1') || !empty($busPmrRights['gate_bus_pmr_assistance_partial']);
+
+        if ($this->isAirShortCompleted($flags, $form, $meta)) {
+            $flags['step8_done'] = '1';
+            $session->write('flow.flags', $flags);
+
+            return $this->redirect(['action' => 'compensation']);
+        }
+
         if ($effectiveMode === 'ferry') {
             if (!$ferryMealsGateActive) {
                 unset(
