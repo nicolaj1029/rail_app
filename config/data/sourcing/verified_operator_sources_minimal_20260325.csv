@@ -1,0 +1,36 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+aegean_airlines,air,Aegean Airlines,https://en.about.aegeanair.com/company/;https://en.about.aegeanair.com/company/conditions-notices/,high
+air_france,air,Air France,https://corporate.airfrance.com/en/about-air-france;https://partenariats.airfrance.com/en/legal/,high
+austrian_airlines,air,Austrian Airlines,https://www.austrian.com/at/en/legal;https://www.austrian.com/us/en/legal/conditions-of-carriage,high
+british_airways,air,British Airways,https://www.britishairways.com/content/en/information/legal;https://www.britishairways.com/content/en/gr/information/legal/passenger-notices,high
+cityjet,air,CityJet,https://www.cityjet.com/about-us/,high
+easyjet,air,easyJet,https://www.easyjet.com/en/terms-and-conditions;https://www.easyjet.com/en/policy/acceptable-use;https://www.easyjet.com/en/policy/registered-address;https://www.easyjet.com/ch-de/politik/privacy-notice/who-is-responsible-for-your-personal-data,high
+easyjet_europe,air,easyJet Europe,https://www.easyjet.com/ch-de/politik/privacy-notice/who-is-responsible-for-your-personal-data;https://www.easyjet.com/en/terms-and-conditions,high
+eurowings,air,Eurowings,https://www.eurowings.com/en/information/about-us/company.html;https://www.eurowings.com/es/legal/cgt-ew.html,high
+vueling,air,Vueling,https://www.vueling.com/en/customer-services/website-conditions-of-use;https://www.vueling.com/en/flying-information/passengers;https://help.vueling.com/hc/en-gb/articles/19798782326929-Conditions-of-Air-Carriage,high
+finnair,air,Finnair,https://www.finnair.com/us-en/info/terms-of-use;https://www.finnair.com/dk-da/info/transportbetingelser-og-forpligtelser-over-for-kunden/generelle-transportbetingelser-for-passagerer-og-bagage;https://www.finnair.com/de-de/info/imprint,high
+iberia,air,Iberia,https://www.iberia.com/us/bills/conditions/;https://www.iberia.com/us/passengers-rights/;https://agencias.iberia.com/en-es/paginas-legales/aviso-legal/,high
+klm,air,KLM,https://www.klm.com/information/legal;https://www.klm.com/information/legal/passenger-rights;https://www.klm.com/information/corporate/company-profile,high
+lot_polish_airlines,air,LOT Polish Airlines,https://www.lot.com/us/en;https://www.lot.com/in/en/explore/about-lot;https://www.lot.com/in/en/regulations/about-lot,high
+lufthansa,air,Lufthansa,https://www.lufthansa.com/de/en/passenger-rights.solo_continue;https://www.lufthansa.com/xx/el/imprint.html;https://www.lufthansa.com/en-us/information/legal,high
+norwegian_air_shuttle,air,Norwegian Air Shuttle,https://www.norwegian.com/us/booking/booking-information/legal/general-conditions-of-carriage/,high
+norwegian_air_sweden,air,Norwegian Air Sweden,https://www.norwegian.com/us/booking/booking-information/legal/general-conditions-of-carriage/,high
+ryanair,air,Ryanair,https://www.ryanair.com/me/en/lp/legal/terms-of-use;https://www.ryanair.com/ie/en/lp/legal/mobile-app-terms-of-use,high
+sas,air,SAS,https://www.sasgroup.net/about-sas/;https://www.sasgroup.net/about-sas/this-is-sas/,high
+tap_air_portugal,air,TAP Air Portugal,https://www.tapairportugal.com/en/terms-and-conditions,high
+wizz_air,air,Wizz Air,https://ssr-stg.wizzair.com/en-gb/information-and-services/about-us/company-information;https://ssr-stg.wizzair.com/en-gb/help-centre/delay-cancellation-and-refund/cancelled-flight/passenger-rights;https://ssr-stg.wizzair.com/en-gb/help-centre/delay-cancellation-and-refund/delayed-and-rescheduled-flight/passenger-rights,high
+alsa,bus,ALSA,https://www.alsa.com/en/legal-notice,high
+ecolines,bus,ECOLINES,https://ecolines.net/en-LV/page/about-us;https://ecolines.net/en-PL/page/transportation-of-luggage;https://ecolines.net/tickets/manage,high
+flixbus,bus,FlixBus,https://www.flixbus.com/passenger-rights,high
+lux_express,bus,Lux Express,https://luxexpress.eu/ru/transportation-rules/;https://luxexpress.eu/ru/transportation-rules/,high
+dsb,rail,DSB,https://www.dsb.dk/om-dsb/baredygtighed/samfundsansvar/,high
+flixtrain,rail,FlixTrain,https://www.flixtrain.com/tariff-provisions;https://www.flixtrain.com/terms-and-conditions;https://www.flixtrain.com/service/train-tickets;https://www.flixtrain.com/service,high
+italo,rail,Italo,https://italospa.italotreno.it/en/footer/links/legal-notes.html;https://italospa.italotreno.it/lavorare_in_italo/posizioni_aperte/direzione-legal-affairs-and-compliance.html,high
+leo_express,rail,LEO Express,https://www.leoexpress.com/en/contact/refund/compensation-for-delay,high
+pkp_intercity,rail,PKP Intercity,https://regulamin-eic.intercity.pl/;https://regulamin-eic.intercity.pl/polityka-prywatnosci.html;https://kariera.intercity.pl/job/Warszawa-Stanowisko-ds_-rozwoju-hurtowni-danych-i-narz%C4%99dzi-BI/1153596655/,high
+vr,rail,VR,https://www.vr.fi/tietosuoja;https://www.vr.fi/ehdot;https://www.vr.fi/arvonnan-saannot,high
+bornholmslinjen,ferry,Bornholmslinjen,https://www.bornholmslinjen.dk/fartplan;https://www.molslinjen.com/practical-information,high
+dfds,ferry,DFDS,https://www.dfds.com/en/passenger-ferries/passenger-information;https://www.dfds.com/en/passenger-ferries/passenger-rights;https://www.dfds.com/en/passenger-ferries/customer-service/contact,high
+molslinjen,ferry,Molslinjen,https://www.molslinjen.com/practical-information,high
+øresundslinjen,ferry,Øresundslinjen,https://www.oresundslinjen.com/about-us;https://www.oresundslinjen.com/about-us/terms-and-conditions;https://www.oresundslinjen.com/timetable;https://www.oresundslinjen.com/about-us/ferries-and-ports,high
+scandlines,ferry,Scandlines,https://www.scandlines.com/impressum/;https://www.scandlines.com/about-us/our-ferries-and-harbours/;https://www.scandlines.com/practical/;https://www.scandlines.com/terms,high

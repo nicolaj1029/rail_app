@@ -1,0 +1,7 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+ns,rail,NS,https://www.ns.nl/en/about-ns;https://www.ns.nl/en/about-ns/activities/our-mission.html;https://www.ns.nl/en/about-ns/strategy/flexible-and-versatile-travel.html,high
+trenitalia,rail,Trenitalia,https://www.trenitalia.com/en/about-us.html;https://www.trenitalia.com/trenitalia-france/informations-contacts-formulaires/informations/qui-sommes-nous.html;https://www.trenitalia.com/en/about-us/mission.html,high
+sbb_cff_ffs,rail,SBB CFF FFS,https://company.sbb.ch/en;https://company.sbb.ch/en/company/about-us.html;https://company.sbb.ch/en/the-company.html,high
+sncf,rail,SNCF,https://emploi.sncf.com/travailler-pour-le-groupe-sncf;https://archives.sncf.com/mentions-legales/;https://archives.sncf.com/who-are-we/,high
+eurostar,rail,Eurostar,https://www.eurostar.com/us-en/about-eurostar;https://www.eurostar.com/us-en/about-eurostar/our-company;https://www.eurostar.com/us-en/website-terms-and-conditions,high
+renfe,rail,Renfe,https://www.renfe.com/es/en/renfe-group/renfe-group;https://www.renfe.com/es/en/renfe-group/renfe-group/get-to-know-us/the-company;https://www.renfe.com/es/en/legal-information/renfe-operadora,high

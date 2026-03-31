@@ -369,6 +369,10 @@ final class MultimodalFlowResolver
         if (!in_array($incidentSegmentMode, ['rail', 'ferry', 'bus', 'air'], true)) {
             $incidentSegmentMode = $transportMode;
         }
+        if ($journeyStructure === 'single_segment' && in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+            $originalContractMode = $transportMode;
+            $incidentSegmentMode = $transportMode;
+        }
         $claimTransportMode = $contractTopology === 'separate_contracts'
             ? $incidentSegmentMode
             : ($originalContractMode ?? $transportMode);
@@ -762,6 +766,7 @@ final class MultimodalFlowResolver
             'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
             'expected_departure_delay_90' => $this->normalizeNullableBool($form['expected_departure_delay_90'] ?? null),
             'actual_departure_delay_90' => $this->normalizeNullableBool($form['actual_departure_delay_90'] ?? null),
+            'ferry_art16_notice_within_30min' => $this->normalizeNullableBool($form['ferry_art16_notice_within_30min'] ?? null),
             'overnight_required' => $this->normalizeNullableBool($overnightRequired),
             'informed_before_purchase' => $this->normalizeNullableBool($form['informed_before_purchase'] ?? null),
             'passenger_fault' => $passengerFault,
@@ -1012,6 +1017,7 @@ final class MultimodalFlowResolver
             'arrival_delay_minutes' => $incidentMeta['arrival_delay_minutes'] ?? null,
             'expected_departure_delay_90' => $incidentMeta['expected_departure_delay_90'] ?? null,
             'actual_departure_delay_90' => $incidentMeta['actual_departure_delay_90'] ?? null,
+            'ferry_art16_notice_within_30min' => $incidentMeta['ferry_art16_notice_within_30min'] ?? null,
             'boarding_denied' => $incidentMeta['boarding_denied'] ?? null,
             'voluntary_denied_boarding' => $incidentMeta['voluntary_denied_boarding'] ?? null,
             'pmr_user' => $incidentMeta['pmr_user'] ?? null,

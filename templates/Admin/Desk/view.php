@@ -23,6 +23,8 @@ $blockers = (array)($opsPanel['blockers'] ?? []);
 $actions = (array)($opsPanel['actions'] ?? []);
 $notes = (array)($cockpit['notes'] ?? []);
 $followUp = (array)($cockpit['follow_up'] ?? []);
+$riskPanel = (array)($cockpit['risk_panel'] ?? []);
+$riskFlags = (array)($riskPanel['flags'] ?? []);
 $playbooks = $playbooks ?? [];
 $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source) . '&id=' . urlencode($id));
 ?>
@@ -37,7 +39,10 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
   .desk-kv { display:grid; grid-template-columns: 150px 1fr; gap:8px; font-size:14px; }
   .desk-kv dt { font-weight:700; color:#0f172a; }
   .desk-kv dd { margin:0; color:#334155; }
-  .desk-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; background:#eef2ff; color:#3730a3; }
+  .desk-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; background:#eef2ff; color:#3730a3; border:1px solid transparent; }
+  .desk-risk-low { background:#ecfccb; color:#3f6212; border-color:#bef264; }
+  .desk-risk-medium { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .desk-risk-high { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
   .desk-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
   .desk-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:10px; padding:9px 12px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; text-decoration:none; cursor:pointer; }
   .desk-button.primary { background:#0f172a; color:#fff; border-color:#0f172a; }
@@ -71,6 +76,12 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
         <div class="desk-muted"><?= h((string)($item['subtitle'] ?? '')) ?></div>
         <div class="desk-toolbar">
           <span class="desk-badge"><?= h((string)($item['ops_status_label'] ?? '')) ?></span>
+          <?php if (!empty($riskPanel['evaluated'])): ?>
+            <span class="desk-badge <?= h((string)($riskPanel['badge_class'] ?? 'desk-risk-low')) ?>"><?= h((string)($riskPanel['level_label'] ?? 'Low risk')) ?></span>
+          <?php endif; ?>
+          <?php if (!empty($riskPanel['fraud_review_required'])): ?>
+            <span class="desk-badge desk-risk-high">Fraud review</span>
+          <?php endif; ?>
           <span class="desk-badge"><?= h($role === 'jurist' ? 'Jurist' : 'Operator') ?></span>
           <?php if ($roleLocked): ?>
             <span class="desk-badge"><?= h($roleLabel) ?> · <?= h($authUser !== '' ? $authUser : 'ukendt') ?></span>
@@ -301,6 +312,40 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
             </div>
           <?php endif; ?>
         </section>
+
+        <?php if (!empty($riskPanel['evaluated'])): ?>
+          <section class="desk-card">
+            <h2 class="desk-title">Risk review</h2>
+            <div class="desk-toolbar">
+              <span class="desk-badge <?= h((string)($riskPanel['badge_class'] ?? 'desk-risk-low')) ?>"><?= h((string)($riskPanel['level_label'] ?? 'Low risk')) ?></span>
+              <span class="desk-badge">Score <?= (int)($riskPanel['score'] ?? 0) ?></span>
+              <?php if (!empty($riskPanel['fraud_review_required'])): ?>
+                <span class="desk-badge desk-risk-high">Fraud review required</span>
+              <?php endif; ?>
+            </div>
+            <div class="desk-muted" style="margin-top:12px;"><?= h((string)($riskPanel['summary'] ?? '')) ?></div>
+            <div class="desk-panel-list" style="margin-top:12px;">
+              <?php if ($riskFlags === []): ?>
+                <div class="desk-panel-item">
+                  <strong>Ingen flag</strong>
+                  <div>Fase 1 fandt ingen konkrete risikosignaler.</div>
+                </div>
+              <?php endif; ?>
+              <?php foreach ($riskFlags as $flag): ?>
+                <div class="desk-panel-item <?= (($flag['severity'] ?? '') === 'high') ? 'warning' : '' ?>">
+                  <strong><?= h((string)($flag['label'] ?? 'Risk flag')) ?></strong>
+                  <div><?= h((string)($flag['detail'] ?? '')) ?></div>
+                  <div class="desk-muted">
+                    Kode: <?= h((string)($flag['code'] ?? '')) ?>
+                    <?php if (($flag['points'] ?? 0) > 0): ?>
+                      · <?= (int)$flag['points'] ?> point
+                    <?php endif; ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </section>
+        <?php endif; ?>
 
         <?php if ($attachments !== []): ?>
           <section class="desk-card">

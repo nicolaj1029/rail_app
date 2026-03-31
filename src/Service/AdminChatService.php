@@ -539,6 +539,7 @@ final class AdminChatService
             case 'reroute_same_conditions_soonest':
             case 'reroute_later_at_choice':
             case 'reroute_info_within_100min':
+            case 'air_article8_choice_offered':
             case 'reroute_extra_costs':
                 $value = $this->parseTriChoice($input);
                 if ($value === null) {
@@ -832,13 +833,18 @@ final class AdminChatService
             );
         }
 
-        if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
-            $rerouteMap = [
-                'reroute_same_conditions_soonest' => ['Blev omlaegning paa sammenlignelige vilkaar tilbudt snarest muligt?', 'Artikel 18 1 b omlaegning', '/flow/remedies'],
-                'reroute_later_at_choice' => ['Blev omlaegning paa et senere tidspunkt efter passagerens valg tilbudt?', 'Artikel 18 1 c later at choice', '/flow/remedies'],
-                'reroute_info_within_100min' => ['Kom der brugbar omlaegningsinformation inden 100 minutter?', 'Artikel 18 3 100 minutes', '/flow/remedies'],
-                'reroute_extra_costs' => ['Havde passageren ekstra omlaegningsomkostninger?', 'Artikel 18 2 reroute extra costs', '/flow/remedies'],
-            ];
+            if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
+                $transportMode = strtolower((string)($form['transport_mode'] ?? 'rail'));
+                $rerouteMap = [
+                    'reroute_same_conditions_soonest' => ['Blev omlaegning paa sammenlignelige vilkaar tilbudt snarest muligt?', 'Artikel 18 1 b omlaegning', '/flow/remedies'],
+                    'reroute_later_at_choice' => ['Blev omlaegning paa et senere tidspunkt efter passagerens valg tilbudt?', 'Artikel 18 1 c later at choice', '/flow/remedies'],
+                    'reroute_extra_costs' => ['Havde passageren ekstra omlaegningsomkostninger?', 'Artikel 18 2 reroute extra costs', '/flow/remedies'],
+                ];
+                if ($transportMode === 'air') {
+                    $rerouteMap['air_article8_choice_offered'] = ['Tilboed flyselskabet refusion eller ombooking efter article 8?', 'Article 8 remedy choice offered', '/flow/remedies'];
+                } else {
+                    $rerouteMap['reroute_info_within_100min'] = ['Kom der brugbar omlaegningsinformation inden 100 minutter?', 'Artikel 18 3 100 minutes', '/flow/remedies'];
+                }
             foreach ($rerouteMap as $key => [$prompt, $query, $path]) {
                 if (($form[$key] ?? '') === '') {
                     $questions[] = $askTri($key, $prompt, $query, $path);
@@ -1148,6 +1154,7 @@ final class AdminChatService
             'return_to_origin_amount' => 240,
             'reroute_same_conditions_soonest' => 250,
             'reroute_later_at_choice' => 260,
+            'air_article8_choice_offered' => 265,
             'reroute_info_within_100min' => 270,
             'reroute_extra_costs' => 280,
             'reroute_later_outcome' => 290,
@@ -1246,9 +1253,13 @@ final class AdminChatService
                 $rerouteTri = [
                     'reroute_same_conditions_soonest' => ['Afklar omlægning snarest', 'Det er uklart om sammenlignelig omlægning blev tilbudt snarest muligt.'],
                     'reroute_later_at_choice' => ['Afklar senere omlægning', 'Det er uklart om senere omlægning efter passagerens valg blev tilbudt.'],
-                    'reroute_info_within_100min' => ['Afklar 100-minuttersregel', 'Det er uklart om brugbar information kom inden 100 minutter.'],
                     'reroute_extra_costs' => ['Afklar ekstra omlægningsomkostninger', 'Det er uklart om omlægningen gav ekstra omkostninger.'],
                 ];
+                if ($transportMode === 'air') {
+                    $rerouteTri['air_article8_choice_offered'] = ['Afklar article 8-valg', 'Det er uklart om flyselskabet tilbÃ¸d refusion eller ombooking efter article 8.'];
+                } else {
+                    $rerouteTri['reroute_info_within_100min'] = ['Afklar 100-minuttersregel', 'Det er uklart om brugbar information kom inden 100 minutter.'];
+                }
                 foreach ($rerouteTri as $key => [$label, $detail]) {
                     if (($form[$key] ?? '') === '') {
                         $add($key, $label, $detail, '/flow/remedies', 'art18', 'important_before_export');
@@ -1682,6 +1693,7 @@ final class AdminChatService
             'reroute_later_outcome' => 'Senere omlaegningsudfald gemt.',
             'reroute_later_self_paid_amount' => 'Senere omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_later_self_paid_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_later_self_paid_currency'] ?? ''),
             'reroute_info_within_100min' => '100-minutters-oplysning gemt.',
+            'air_article8_choice_offered' => 'Article 8-valg gemt.',
             'reroute_extra_costs' => 'Ekstra omlaegningsomkostninger gemt.',
             'reroute_extra_costs_amount' => 'Ekstra omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_extra_costs_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_extra_costs_currency'] ?? ''),
             default => 'Svar gemt.',

@@ -75,6 +75,7 @@ class ScenariosController extends AppController
                     $row['computeOverrides'] = (array)($fx['computeOverrides'] ?? []);
                     $row['journeyBasic'] = (array)($fx['journeyBasic'] ?? []);
                     $row['segments'] = (array)($fx['segments'] ?? []);
+                    $row['canonical'] = (array)($fx['canonical'] ?? []);
                 }
                 if ($operatorText) {
                     $row['operator_case_text'] = $this->buildOperatorCaseText($fx, $compact ? [] : $actual);
@@ -115,6 +116,7 @@ class ScenariosController extends AppController
     private function buildWizardCompact(array $fx): array
     {
         $w = (array)($fx['wizard'] ?? []);
+        $transportMode = $this->normalizeTransportMode((string)($fx['transport_mode'] ?? 'rail'));
 
         $step1 = (array)($w['step1_start'] ?? []);
         $step2 = (array)($w['step2_entitlements'] ?? []);
@@ -173,6 +175,8 @@ class ScenariosController extends AppController
                 'handoff_station',
             ]),
             'step4_journey' => $this->pick($step4Journey, [
+                '_mode',
+                '_mode_fields',
                 'pmr_user',
                 'pmr_companion',
                 'pmr_service_dog',
@@ -204,8 +208,13 @@ class ScenariosController extends AppController
                 'bike_refusal_reason_type',
                 'fare_class_purchased',
                 'berth_seat_type',
-            ]),
+            ]) + [
+                '_mode' => (string)($step4Journey['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step4Journey['_mode_fields'] ?? []),
+            ],
             'step5_incident' => $this->pick($step5, [
+                '_mode',
+                '_mode_fields',
                 'incident_main',
                 'incident_missed',
                 'expected_delay_60',
@@ -222,8 +231,31 @@ class ScenariosController extends AppController
                 'operatorExceptionalCircumstances',
                 'operatorExceptionalType',
                 'minThresholdApplies',
-            ]),
+                'ferry_art16_notice_within_30min',
+                'vehicle_breakdown',
+                'delay_departure_band',
+                'delay_minutes_departure',
+                'planned_duration_band',
+                'missed_connection_due_to_delay',
+                'overbooking',
+                'severe_weather',
+                'major_natural_disaster',
+                'bus_incident_main',
+                'bus_delay_departure_band',
+                'bus_delay_minutes_departure',
+                'bus_planned_duration_band',
+                'bus_vehicle_breakdown',
+                'bus_missed_connection_due_to_delay',
+                'bus_overbooking',
+                'bus_severe_weather',
+                'bus_major_natural_disaster',
+            ]) + [
+                '_mode' => (string)($step5['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step5['_mode_fields'] ?? []),
+            ],
             'step6_choices' => $this->pick($step6, [
+                '_mode',
+                '_mode_fields',
                 'is_stranded_trin5',
                 'maps_opt_in_trin5',
                 'stranded_location',
@@ -241,10 +273,16 @@ class ScenariosController extends AppController
                 'a20_arrival_station_other',
                 'a20_where_ended_assumed',
                 'handoff_station',
-            ]),
+            ]) + [
+                '_mode' => (string)($step6['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step6['_mode_fields'] ?? []),
+            ],
             'step7_remedies' => $this->pick($step7, [
+                '_mode',
+                '_mode_fields',
                 'art18_expected_delay_60',
                 'remedyChoice',
+                'rail_remedy_choice',
                 // TRIN 6 station context (separate from TRIN 5)
                 'a18_from_station',
                 'a18_from_station_other',
@@ -256,10 +294,32 @@ class ScenariosController extends AppController
                 'a18_reroute_arrival_station',
                 'a18_reroute_arrival_station_other',
                 'reroute_info_within_100min',
+                'rail_reroute_info_within_100min',
                 'reroute_same_conditions_soonest',
                 'reroute_later_at_choice',
+                'air_article8_choice_offered',
+                'ferry_offer_provided',
+                'rail_offer_provided',
+                'carrier_offered_choice',
                 'self_purchased_new_ticket',
+                'rail_self_arranged_solution',
+                'air_self_arranged_reroute',
+                'ferry_self_arranged_solution',
+                'ferry_self_arranged_solution_type',
                 'self_purchase_approved_by_operator',
+                'rail_operator_confirmed_self_arranged_solution',
+                'air_airline_confirmed_self_arranged_solution',
+                'self_purchase_reason',
+                'rail_self_arranged_reason',
+                'air_self_arranged_reroute_reason',
+                'ferry_self_arranged_reason',
+                'offer_provided',
+                'air_refund_scope',
+                'air_return_to_first_departure_point',
+                'air_alternative_airport_transfer_needed',
+                'air_alternative_airport_transfer_amount',
+                'air_alternative_airport_transfer_currency',
+                'ferry_first_usable_solution_timing',
                 'reroute_extra_costs',
                 'reroute_extra_costs_amount',
                 'reroute_extra_costs_currency',
@@ -269,33 +329,56 @@ class ScenariosController extends AppController
                 'return_to_origin_expense',
                 'return_to_origin_amount',
                 'return_to_origin_currency',
-            ]),
+                'rail_return_to_origin_expense',
+                'rail_return_to_origin_amount',
+                'rail_return_to_origin_currency',
+            ]) + [
+                '_mode' => (string)($step7['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step7['_mode_fields'] ?? []),
+            ],
             'step8_assistance' => $this->pick($step8, [
+                '_mode',
+                '_mode_fields',
                 'art20_expected_delay_60',
                 'meal_offered',
+                'rail_refreshments_offered',
                 'assistance_meals_unavailable_reason',
                 'meal_self_paid_amount',
                 'meal_self_paid_currency',
                 'meal_self_paid_receipt',
+                'rail_refreshments_self_paid_amount',
+                'rail_refreshments_self_paid_currency',
                 'hotel_offered',
+                'rail_hotel_offered',
                 'assistance_hotel_transport_included',
+                'rail_hotel_transport_included',
                 'hotel_transport_self_paid_amount',
                 'hotel_transport_self_paid_currency',
                 'hotel_transport_self_paid_receipt',
                 'overnight_needed',
+                'rail_overnight_required',
                 'hotel_self_paid_nights',
                 'hotel_self_paid_amount',
                 'hotel_self_paid_currency',
                 'hotel_self_paid_receipt',
+                'rail_hotel_self_paid_amount',
+                'rail_hotel_self_paid_currency',
+                'rail_hotel_self_paid_nights',
                 'assistance_pmr_priority_applied',
                 'assistance_pmr_companion_supported',
                 'price_hints',
-            ]),
+            ]) + [
+                '_mode' => (string)($step8['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step8['_mode_fields'] ?? []),
+            ],
             'step9_downgrade' => $this->pick($step9, [
                 'downgrade_ticket_file',
                 'downgrade_occurred',
                 'downgrade_comp_basis',
                 'downgrade_segment_share',
+                'air_downgrade_booked_class',
+                'air_downgrade_flown_class',
+                'air_downgrade_refund_percent',
                 'leg_class_purchased',
                 'leg_class_delivered',
                 'leg_reservation_purchased',
@@ -304,15 +387,42 @@ class ScenariosController extends AppController
                 'leg_downgraded',
             ]),
             'step10_compensation' => $this->pick($step10, [
+                '_mode',
+                '_mode_fields',
+                'result_preview',
                 'delayAtFinalMinutes',
                 'compensationBand',
+                'rail_delay_at_final_minutes',
+                'rail_compensation_band',
                 'delayMinEU',
                 'knownDelayBeforePurchase',
                 'voucherAccepted',
                 'operatorExceptionalCircumstances',
                 'operatorExceptionalType',
                 'minThresholdApplies',
-            ]),
+                'scheduled_distance_km',
+                'vehicle_breakdown',
+                'hotel_transport_self_paid_amount',
+                'hotel_transport_self_paid_currency',
+                'bus_hotel_legal_cap_eur_per_night',
+                'bus_hotel_legal_nights_max',
+                'bus_meals_soft_cap_eur_per_delay_hour',
+                'bus_hotel_transport_soft_cap_eur',
+                'ferry_hotel_legal_cap_eur_per_night',
+                'ferry_hotel_legal_nights_max',
+                'ferry_meals_legal_rule',
+                'ferry_hotel_transport_included',
+                'ferry_refund_ticket_price_percent',
+                'ferry_refund_deadline_days',
+                'ferry_meals_soft_cap_eur_per_day',
+                'ferry_local_transport_soft_cap_eur_per_trip',
+                'ferry_local_transport_soft_cap_total_eur',
+                'ferry_taxi_soft_cap_eur',
+                'ferry_self_arranged_alt_transport_soft_cap_total_eur',
+            ]) + [
+                '_mode' => (string)($step10['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step10['_mode_fields'] ?? []),
+            ],
         ];
     }
 
@@ -324,6 +434,12 @@ class ScenariosController extends AppController
     {
         $w = (array)($fx['wizard'] ?? []);
         $jb = (array)($fx['journeyBasic'] ?? []);
+        $transportMode = $this->normalizeTransportMode((string)($fx['transport_mode'] ?? 'rail'));
+        $isFerry = $transportMode === 'ferry';
+        $strandedIntro = $isFerry ? 'Art.20(3) strandet ved havn/terminal' : 'Art.20(3) strandet paa station';
+        $strandedPlaceLabel = $isFerry ? 'Strandingshavn/-terminal' : 'Strandings-station';
+        $step7PlaceLabel = $isFerry ? 'Havn/terminal (Trin 7)' : 'Station (Trin 7)';
+        $rerouteArrivalLabel = $isFerry ? 'Omlagt til havn/terminal' : 'Omlagt til station';
         // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures.
         $s3Station = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
         $s4Journey = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
@@ -333,6 +449,11 @@ class ScenariosController extends AppController
         $s8 = (array)($w['step8_assistance'] ?? ($w['step6_assistance'] ?? []));
         $s9 = (array)($w['step9_downgrade'] ?? []);
         $s10 = (array)($w['step10_compensation'] ?? ($w['step7_compensation'] ?? []));
+        $s10ModeFields = (array)($s10['_mode_fields'] ?? []);
+        $s10ResultPreview = (array)($s10['result_preview'] ?? ($s10ModeFields[$transportMode]['result_preview'] ?? []));
+        $actualClaim = (array)($actual['claim'] ?? []);
+        $actualBreakdown = (array)($actualClaim['breakdown'] ?? []);
+        $actualTotals = (array)($actualClaim['totals'] ?? []);
 
         $lines = [];
         $lines[] = 'Sagsresume (wizard input)';
@@ -463,6 +584,24 @@ class ScenariosController extends AppController
 
         // Art.20(3) station flow (step 3)
         if (!empty($s3Station)) {
+            if ($isFerry) {
+                $stranded = (string)($s3Station['a20_station_stranded'] ?? '');
+                if ($stranded !== '') {
+                    $lines[] = $strandedIntro . ': ' . $stranded;
+                    if (!empty($s3Station['stranded_current_station'])) {
+                        $lines[] = $strandedPlaceLabel . ': ' . (string)$s3Station['stranded_current_station'];
+                    }
+                    if (!empty($s3Station['a20_3_solution_offered'])) {
+                        $lines[] = 'Tilbudt loesning: ' . (string)$s3Station['a20_3_solution_offered']
+                            . (!empty($s3Station['a20_3_solution_type']) ? ' (' . (string)$s3Station['a20_3_solution_type'] . ')' : '');
+                    }
+                    if (!empty($s3Station['a20_where_ended'])) {
+                        $end = $this->formatResolutionEndpoint((string)$s3Station['a20_where_ended'], $transportMode);
+                        $lines[] = 'Hvor endte du (Art.20): ' . $end
+                            . (!empty($s3Station['a20_arrival_station']) ? ' -> ' . (string)$s3Station['a20_arrival_station'] : '');
+                    }
+                }
+            } else {
             $stranded = (string)($s3Station['a20_station_stranded'] ?? '');
             if ($stranded !== '') {
                 $lines[] = 'Art.20(3) strandet på station: ' . $stranded;
@@ -478,6 +617,7 @@ class ScenariosController extends AppController
                     $lines[] = 'Hvor endte du (Art.20): ' . $end
                         . (!empty($s3Station['a20_arrival_station']) ? ' → ' . (string)$s3Station['a20_arrival_station'] : '');
                 }
+            }
             }
         }
 
@@ -495,10 +635,55 @@ class ScenariosController extends AppController
                 $lines[] = 'Force majeure (Art.19(10)): ' . (string)$s5['operatorExceptionalCircumstances']
                     . (!empty($s5['operatorExceptionalType']) ? ' (' . (string)$s5['operatorExceptionalType'] . ')' : '');
             }
+            if (!empty($s5['ferry_art16_notice_within_30min'])) {
+                $lines[] = 'Art.16 info inden 30 min: ' . (string)$s5['ferry_art16_notice_within_30min'];
+            }
+            if (array_key_exists('vehicle_breakdown', $s5) && (string)($s5['vehicle_breakdown'] ?? '') !== '') {
+                $lines[] = 'Bus nedbrud / uanvendelig bus: ' . (string)$s5['vehicle_breakdown'];
+            }
+            if ($transportMode === 'bus') {
+                if (array_key_exists('delay_departure_band', $s5) && (string)($s5['delay_departure_band'] ?? '') !== '') {
+                    $lines[] = 'Bus forsinkelsesniveau: ' . (string)$s5['delay_departure_band'];
+                }
+                if (array_key_exists('delay_minutes_departure', $s5) && (string)($s5['delay_minutes_departure'] ?? '') !== '') {
+                    $lines[] = 'Bus aktuel afgangsforsinkelse (min): ' . (string)$s5['delay_minutes_departure'];
+                }
+                if (array_key_exists('planned_duration_band', $s5) && (string)($s5['planned_duration_band'] ?? '') !== '') {
+                    $lines[] = 'Bus planlagt rejsevarighed: ' . (string)$s5['planned_duration_band'];
+                }
+                if (array_key_exists('missed_connection_due_to_delay', $s5) && (string)($s5['missed_connection_due_to_delay'] ?? '') !== '') {
+                    $lines[] = 'Bus mistet tilslutning pga. forsinkelse: ' . (string)$s5['missed_connection_due_to_delay'];
+                }
+                if (array_key_exists('overbooking', $s5) && (string)($s5['overbooking'] ?? '') !== '') {
+                    $lines[] = 'Bus overbooking / manglende plads: ' . (string)$s5['overbooking'];
+                }
+                if (array_key_exists('severe_weather', $s5) && (string)($s5['severe_weather'] ?? '') !== '') {
+                    $lines[] = 'Bus kraftigt vejr: ' . (string)$s5['severe_weather'];
+                }
+                if (array_key_exists('major_natural_disaster', $s5) && (string)($s5['major_natural_disaster'] ?? '') !== '') {
+                    $lines[] = 'Bus stor naturkatastrofe: ' . (string)$s5['major_natural_disaster'];
+                }
+            }
+            if ($transportMode === 'air' && !empty($s5['protected_connection_missed'])) {
+                $lines[] = 'Protected connection misset: ' . (string)$s5['protected_connection_missed'];
+            }
+            if ($transportMode === 'air' && !empty($s5['connection_protection_basis'])) {
+                $lines[] = 'Protected connection-grundlag: ' . (string)$s5['connection_protection_basis'];
+            }
         }
 
         // Art.20(2c) stuck / where ended (step 6)
         if (!empty($s6)) {
+            if ($isFerry) {
+                if (!empty($s6['blocked_train_alt_transport'])) {
+                    $lines[] = 'Art.20(2)(c) stuck: alt transport stillet: ' . (string)$s6['blocked_train_alt_transport']
+                        . (!empty($s6['assistance_alt_transport_type']) ? ' (' . $this->formatTransportChoice((string)$s6['assistance_alt_transport_type']) . ')' : '');
+                }
+                if (!empty($s6['a20_where_ended'])) {
+                    $lines[] = 'Hvor endte du (Art.20): ' . $this->formatResolutionEndpoint((string)$s6['a20_where_ended'], $transportMode)
+                        . (!empty($s6['a20_arrival_station']) ? ' -> ' . (string)$s6['a20_arrival_station'] : '');
+                }
+            } else {
             if (!empty($s6['blocked_train_alt_transport'])) {
                 $lines[] = 'Art.20(2)(c) stuck: alt transport stillet: ' . (string)$s6['blocked_train_alt_transport']
                     . (!empty($s6['assistance_alt_transport_type']) ? ' (' . (string)$s6['assistance_alt_transport_type'] . ')' : '');
@@ -507,28 +692,80 @@ class ScenariosController extends AppController
                 $lines[] = 'Hvor endte du (Art.20): ' . (string)$s6['a20_where_ended']
                     . (!empty($s6['a20_arrival_station']) ? ' → ' . (string)$s6['a20_arrival_station'] : '');
             }
+            }
         }
 
         // Remedies (step 7)
         if (!empty($s7)) {
+            if ($isFerry) {
+                if (!empty($s7['remedyChoice'])) { $lines[] = 'Art.18 valg: ' . $this->formatRemedyChoice((string)$s7['remedyChoice']); }
+                if (!empty($s7['a18_from_station'])) { $lines[] = $step7PlaceLabel . ': ' . (string)$s7['a18_from_station']; }
+                if (!empty($s7['a18_reroute_mode'])) { $lines[] = 'Omlaegning: ' . $this->formatTransportChoice((string)$s7['a18_reroute_mode']); }
+                if (!empty($s7['a18_reroute_endpoint'])) { $lines[] = 'Hvor endte omlaegningen: ' . $this->formatResolutionEndpoint((string)$s7['a18_reroute_endpoint'], $transportMode); }
+                if (!empty($s7['a18_reroute_arrival_station'])) { $lines[] = $rerouteArrivalLabel . ': ' . (string)$s7['a18_reroute_arrival_station']; }
+                if (!empty($s7['ferry_offer_provided'])) { $lines[] = 'Tilbud om videre rejse: ' . (string)$s7['ferry_offer_provided']; }
+                if (empty($s7['ferry_offer_provided']) && !empty($s7['offer_provided'])) { $lines[] = 'Tilbud om videre rejse: ' . (string)$s7['offer_provided']; }
+                if (!empty($s7['ferry_first_usable_solution_timing'])) { $lines[] = 'Foerste brugbare loesning: ' . (string)$s7['ferry_first_usable_solution_timing']; }
+                if (!empty($s7['ferry_self_arranged_solution'])) { $lines[] = 'Selv arrangeret loesning: ' . (string)$s7['ferry_self_arranged_solution']; }
+                if (!empty($s7['ferry_self_arranged_solution_type'])) { $lines[] = 'Selv valgt loesningstype: ' . (string)$s7['ferry_self_arranged_solution_type']; }
+                if (!empty($s7['ferry_self_arranged_reason'])) { $lines[] = 'Hvorfor selv fundet loesning: ' . (string)$s7['ferry_self_arranged_reason']; }
+                if (!empty($s7['reroute_info_within_100min'])) { $lines[] = 'Omlaegning meddelt inden 100 min (Art.18(3)): ' . (string)$s7['reroute_info_within_100min']; }
+                if (!empty($s7['journey_no_longer_purpose'])) { $lines[] = 'Rejsen tjente ikke laengere et formaal (Art.18(1)(a)): ' . (string)$s7['journey_no_longer_purpose']; }
+            } elseif ($transportMode === 'air') {
+            if (!empty($s7['remedyChoice'])) { $lines[] = 'Article 8-valg: ' . (string)$s7['remedyChoice']; }
+            if (!empty($s7['a18_from_station'])) { $lines[] = 'Lufthavn/sted (Trin 7): ' . (string)$s7['a18_from_station']; }
+            if (!empty($s7['air_refund_scope'])) { $lines[] = 'Refund scope: ' . (string)$s7['air_refund_scope']; }
+            if (!empty($s7['air_return_to_first_departure_point'])) { $lines[] = 'Retur til foerste afgangssted: ' . (string)$s7['air_return_to_first_departure_point']; }
+            if (!empty($s7['a18_reroute_mode'])) { $lines[] = 'Ombooking: ' . (string)$s7['a18_reroute_mode']; }
+            if (!empty($s7['a18_reroute_endpoint'])) { $lines[] = 'Hvor endte ombookingen: ' . (string)$s7['a18_reroute_endpoint']; }
+            if (!empty($s7['air_article8_choice_offered'])) { $lines[] = 'Article 8-valg tilbudt: ' . (string)$s7['air_article8_choice_offered']; }
+            if (!empty($s7['air_self_arranged_reroute'])) { $lines[] = 'Selv arrangeret ombooking: ' . (string)$s7['air_self_arranged_reroute']; }
+            if (!empty($s7['air_self_arranged_reroute_reason'])) { $lines[] = 'Hvorfor selv fundet loesning: ' . (string)$s7['air_self_arranged_reroute_reason']; }
+            if (!empty($s7['air_airline_confirmed_self_arranged_solution'])) { $lines[] = 'Flyselskabet bekraeftede loesningen: ' . (string)$s7['air_airline_confirmed_self_arranged_solution']; }
+            if (!empty($s7['air_alternative_airport_transfer_needed'])) { $lines[] = 'Alternativ lufthavn-transfer: ' . (string)$s7['air_alternative_airport_transfer_needed']; }
+            if (!empty($s7['air_alternative_airport_transfer_amount'])) { $lines[] = 'Alternativ lufthavn-transfer beloeb: ' . (string)$s7['air_alternative_airport_transfer_amount'] . ' ' . (string)($s7['air_alternative_airport_transfer_currency'] ?? ''); }
+            } else {
             if (!empty($s7['remedyChoice'])) { $lines[] = 'Art.18 valg: ' . (string)$s7['remedyChoice']; }
             if (!empty($s7['a18_from_station'])) { $lines[] = 'Station (Trin 7): ' . (string)$s7['a18_from_station']; }
             if (!empty($s7['a18_reroute_mode'])) { $lines[] = 'Omlægning: ' . (string)$s7['a18_reroute_mode']; }
             if (!empty($s7['a18_reroute_endpoint'])) { $lines[] = 'Hvor endte omlægningen: ' . (string)$s7['a18_reroute_endpoint']; }
             if (!empty($s7['a18_reroute_arrival_station'])) { $lines[] = 'Omlagt til station: ' . (string)$s7['a18_reroute_arrival_station']; }
+            if ($transportMode === 'bus' && !empty($s7['carrier_offered_choice'])) { $lines[] = 'Valg mellem tilbagebetaling og ombooking givet: ' . (string)$s7['carrier_offered_choice']; }
+            if ($transportMode === 'bus' && !empty($s7['bus_self_arranged_solution'])) { $lines[] = 'Selv arrangeret loesning: ' . (string)$s7['bus_self_arranged_solution']; }
+            if ($transportMode === 'bus' && !empty($s7['bus_self_arranged_solution_type'])) { $lines[] = 'Hvad gjorde du selv: ' . (string)$s7['bus_self_arranged_solution_type']; }
+            if ($transportMode === 'bus' && !empty($s7['bus_self_arranged_reason'])) { $lines[] = 'Hvorfor selv fundet loesning: ' . (string)$s7['bus_self_arranged_reason']; }
+            if ($transportMode === 'bus' && !empty($s7['reroute_extra_costs'])) { $lines[] = 'Merudgifter ved ombooking: ' . (string)$s7['reroute_extra_costs']; }
+            if ($transportMode === 'bus' && !empty($s7['reroute_extra_costs_type'])) { $lines[] = 'Merudgiftstype: ' . (string)$s7['reroute_extra_costs_type']; }
+            if ($transportMode === 'bus' && !empty($s7['reroute_extra_costs_amount'])) { $lines[] = 'Merudgift: ' . (string)$s7['reroute_extra_costs_amount'] . ' ' . (string)($s7['reroute_extra_costs_currency'] ?? ''); }
+            if ($transportMode === 'bus' && !empty($s7['reroute_extra_costs_description'])) { $lines[] = 'Merudgift beskrivelse: ' . (string)$s7['reroute_extra_costs_description']; }
             if (!empty($s7['reroute_info_within_100min'])) { $lines[] = 'Omlægning meddelt inden 100 min (Art.18(3)): ' . (string)$s7['reroute_info_within_100min']; }
             if (!empty($s7['journey_no_longer_purpose'])) { $lines[] = 'Rejsen tjente ikke længere et formål (Art.18(1)(a)): ' . (string)$s7['journey_no_longer_purpose']; }
+            }
         }
 
         // Assistance/expenses (step 8)
         if (!empty($s8)) {
+            if ($transportMode === 'bus' && empty($s8['meal_offered']) && !empty($s8['bus_refreshments_offered'])) { $lines[] = 'Maltider tilbudt: ' . (string)$s8['bus_refreshments_offered']; }
+            if ($transportMode === 'bus' && empty($s8['hotel_offered']) && !empty($s8['bus_hotel_offered'])) { $lines[] = 'Hotel tilbudt: ' . (string)$s8['bus_hotel_offered']; }
             if (!empty($s8['meal_offered'])) { $lines[] = 'Måltider tilbudt: ' . (string)$s8['meal_offered']; }
             if (!empty($s8['hotel_offered'])) { $lines[] = 'Hotel tilbudt: ' . (string)$s8['hotel_offered']; }
+            if ($transportMode === 'bus' && !empty($s8['assistance_pmr_priority_applied'])) { $lines[] = 'Bus PMR-assistance ydet ved terminal/ombord: ' . (string)$s8['assistance_pmr_priority_applied']; }
+            if ($transportMode === 'bus' && !empty($s8['assistance_pmr_companion_supported'])) { $lines[] = 'Bus PMR-ledsager/saerlige behov understoettet: ' . (string)$s8['assistance_pmr_companion_supported']; }
+            if ($transportMode === 'bus' && !empty($s8['assistance_pmr_dog_supported'])) { $lines[] = 'Bus PMR-servicehund understoettet: ' . (string)$s8['assistance_pmr_dog_supported']; }
         }
 
         // Downgrade (step 9)
         if (!empty($s9) && array_key_exists('downgrade_occurred', $s9)) {
             $lines[] = 'Nedgradering: ' . (string)($s9['downgrade_occurred'] ?? '');
+            if ($transportMode === 'air' && !empty($s9['air_downgrade_booked_class'])) {
+                $lines[] = 'Koebt kabineklasse: ' . (string)$s9['air_downgrade_booked_class'];
+            }
+            if ($transportMode === 'air' && !empty($s9['air_downgrade_flown_class'])) {
+                $lines[] = 'Floejet kabineklasse: ' . (string)$s9['air_downgrade_flown_class'];
+            }
+            if ($transportMode === 'air' && !empty($s9['air_downgrade_refund_percent'])) {
+                $lines[] = 'Artikel 10-refusionsprocent: ' . (string)$s9['air_downgrade_refund_percent'] . '%';
+            }
         }
 
         // Compensation (step 10)
@@ -541,9 +778,120 @@ class ScenariosController extends AppController
             }
         }
 
+        if ($transportMode === 'bus') {
+            $ticketPrice = $jb['price'] ?? null;
+            $ticketCurrency = (string)($s10ResultPreview['currency'] ?? ($jb['price_currency'] ?? ($actualTotals['currency'] ?? '')));
+            $compBreakdown = (array)($s10ResultPreview['compensation'] ?? ($actualBreakdown['compensation'] ?? []));
+            $compPct = (int)($compBreakdown['pct'] ?? 0);
+            $compAmount = $compBreakdown['amount'] ?? null;
+            $busCaps = (array)($s10ResultPreview['caps']['bus_caps'] ?? ($actualBreakdown['bus_caps'] ?? []));
+            $previewExpenses = (array)($s10ResultPreview['expenses'] ?? []);
+            $previewArt18 = (array)($s10ResultPreview['art18'] ?? []);
+            $previewTotals = (array)($s10ResultPreview['totals'] ?? $actualTotals);
+            if ($compPct === 50 && $compAmount !== null && $compAmount !== '') {
+                $pricePart = $ticketPrice !== null && $ticketPrice !== ''
+                    ? ' (50% af billetpris ' . (string)$ticketPrice . ' ' . $ticketCurrency . ')'
+                    : '';
+                $lines[] = 'Bus 50%-kompensation: ' . (string)$compAmount . ' ' . $ticketCurrency . $pricePart;
+            }
+            if (!empty($busCaps['hotel_legal_cap_amount'])) {
+                $nightsPart = !empty($busCaps['hotel_capped_nights']) ? ' (' . (string)$busCaps['hotel_capped_nights'] . ' nat' . ((int)$busCaps['hotel_capped_nights'] === 1 ? '' : 'ter') . ')' : '';
+                $perNightEur = (string)($busCaps['hotel_legal_per_night_eur'] ?? '80');
+                $lines[] = 'Bus hotel-loft: ' . $perNightEur . ' EUR pr. nat' . $nightsPart;
+            }
+            if (!empty($busCaps['hotel_cap_applied'])) {
+                $lines[] = 'Bus hotel capped: ' . (string)($busCaps['hotel_requested_amount'] ?? '') . ' -> ' . (string)($actual['claim']['breakdown']['expenses']['hotel'] ?? '') . ' ' . $ticketCurrency;
+            }
+            if (!empty($busCaps['meals_soft_cap_amount'])) {
+                $delayHoursPart = !empty($busCaps['soft_cap_delay_hours']) ? ' (' . (string)$busCaps['soft_cap_delay_hours'] . ' forsinkelsestimer)' : '';
+                $lines[] = 'Bus maaltider soft cap: ' . (string)$busCaps['meals_soft_cap_amount'] . ' ' . $ticketCurrency . $delayHoursPart;
+            }
+            if (!empty($busCaps['hotel_transport_soft_cap_amount'])) {
+                $lines[] = 'Bus hoteltransport soft cap: ' . (string)$busCaps['hotel_transport_soft_cap_amount'] . ' ' . $ticketCurrency;
+            }
+            if (!empty($busCaps['alt_transport_soft_cap_amount'])) {
+                $distancePart = isset($busCaps['soft_cap_basis_distance_km']) && $busCaps['soft_cap_basis_distance_km'] !== null && $busCaps['soft_cap_basis_distance_km'] !== ''
+                    ? ' (' . (string)$busCaps['soft_cap_basis_distance_km'] . ' km)'
+                    : '';
+                $lines[] = 'Bus alternativ transport soft cap: ' . (string)$busCaps['alt_transport_soft_cap_amount'] . ' ' . $ticketCurrency . $distancePart;
+            }
+            if (!empty($busCaps['breakdown_full_coverage'])) {
+                $lines[] = 'Busnedbrud: full coverage for videre transport';
+            }
+            if (array_key_exists('total', $previewExpenses)) {
+                $lines[] = 'Bus udgifter i alt: ' . (string)$previewExpenses['total'] . ' ' . $ticketCurrency;
+            }
+            if (!empty($previewArt18['reroute_extra_costs']) || !empty($previewArt18['return_to_origin'])) {
+                $lines[] = 'Bus Art. 19/ombooking-retur: '
+                    . (string)($previewArt18['reroute_extra_costs'] ?? 0)
+                    . ' + '
+                    . (string)($previewArt18['return_to_origin'] ?? 0)
+                    . ' '
+                    . $ticketCurrency;
+            }
+            if (array_key_exists('gross_claim', $previewTotals)) {
+                $lines[] = 'Bus samlet krav (preview): ' . (string)$previewTotals['gross_claim'] . ' ' . $ticketCurrency;
+            }
+        }
+
+        if ($transportMode === 'ferry') {
+            $ticketCurrency = (string)($jb['price_currency'] ?? ($actual['claim']['totals']['currency'] ?? 'EUR'));
+            $ferryCaps = (array)($actual['claim']['breakdown']['ferry_caps'] ?? []);
+            $ferryLegal = (array)($ferryCaps['legal'] ?? []);
+            $ferryEngine = (array)($ferryCaps['engine'] ?? []);
+            if (!empty($ferryLegal)) {
+                $lines[] = 'Ferry hotel-loft: '
+                    . (string)($ferryLegal['hotel_land_per_night_eur'] ?? 80)
+                    . ' EUR pr. nat, maks. '
+                    . (string)($ferryLegal['hotel_land_max_nights'] ?? 3)
+                    . ' naetter';
+                $lines[] = 'Ferry maaltider: lovregel = '
+                    . (string)($ferryLegal['meals_rule'] ?? 'reasonable');
+                $lines[] = 'Ferry refusion: '
+                    . (string)($ferryLegal['refund_ticket_price_percent'] ?? 100)
+                    . '% inden for '
+                    . (string)($ferryLegal['refund_deadline_days'] ?? 7)
+                    . ' dage';
+            }
+            if (!empty($ferryEngine)) {
+                $lines[] = 'Ferry soft caps: maaltider '
+                    . (string)($ferryEngine['meals_per_day_eur'] ?? 40)
+                    . ' EUR/dag, lokal transport '
+                    . (string)($ferryEngine['local_transport_per_trip_eur'] ?? 50)
+                    . ' EUR/tur, taxi '
+                    . (string)($ferryEngine['taxi_soft_cap_eur'] ?? 150)
+                    . ' EUR, alternativ transport '
+                    . (string)($ferryEngine['self_arranged_alt_transport_total_eur'] ?? 400)
+                    . ' EUR';
+            }
+            if (!empty($ferryCaps['hotel_excess_amount'])) {
+                $lines[] = 'Ferry hotel capped: over loft med '
+                    . (string)$ferryCaps['hotel_excess_amount']
+                    . ' '
+                    . $ticketCurrency;
+            }
+            if (!empty($ferryCaps['hotel_weather_blocked'])) {
+                $lines[] = 'Ferry hotelret bortfaldt pga. vejrsikkerhedsrisiko';
+            }
+            if (!empty($ferryCaps['meals_manual_review_required'])) {
+                $lines[] = 'Ferry maaltider: manuel vurdering';
+            }
+            if (!empty($ferryCaps['hotel_transport_manual_review_required'])) {
+                $lines[] = 'Ferry hoteltransport: manuel vurdering';
+            }
+            if (!empty($ferryCaps['reroute_alt_transport_manual_review_required'])) {
+                $lines[] = 'Ferry alternativ transport: manuel vurdering';
+            }
+        }
+
         // If actual claim exists, add one compact line.
-        if (isset($actual['claim']['totals']['gross_claim'])) {
-            $lines[] = 'Beregnet (pipeline): brutto ' . (string)$actual['claim']['totals']['gross_claim'] . ' ' . (string)($actual['claim']['totals']['currency'] ?? '');
+        if (isset($s10ResultPreview['totals']['gross_claim'])) {
+            $lines[] = 'Beregnet (wizard preview): brutto '
+                . (string)$s10ResultPreview['totals']['gross_claim']
+                . ' '
+                . (string)($s10ResultPreview['currency'] ?? '');
+        } elseif (isset($actualTotals['gross_claim'])) {
+            $lines[] = 'Beregnet (pipeline): brutto ' . (string)$actualTotals['gross_claim'] . ' ' . (string)($actualTotals['currency'] ?? '');
         }
 
         return implode("\n", array_values(array_filter($lines, fn($x) => trim((string)$x) !== '')));
@@ -558,6 +906,8 @@ class ScenariosController extends AppController
     {
         $w = (array)($fx['wizard'] ?? []);
         $jb = (array)($fx['journeyBasic'] ?? []);
+        $transportMode = $this->normalizeTransportMode((string)($fx['transport_mode'] ?? 'rail'));
+        $isFerry = $transportMode === 'ferry';
         // New split flow: step3_station -> step4_journey. Keep back-compat for older fixtures.
         $s3Station = (array)($w['step3_station'] ?? ($w['step4_station'] ?? []));
         $s4Journey = (array)($w['step4_journey'] ?? ($w['step3_journey'] ?? []));
@@ -697,7 +1047,7 @@ class ScenariosController extends AppController
         }
 
         $conclusion = [];
-        if ($remedy !== '') { $conclusion[] = 'Valgt Art.18-vej: ' . $remedy . '.'; }
+        if ($remedy !== '') { $conclusion[] = 'Valgt Art.18-vej: ' . $this->formatRemedyChoice($remedy) . '.'; }
         $within100 = $yn($s7['reroute_info_within_100min'] ?? '');
         $selfHelpRight = ($within100 === 'no'); // No info within 100 minutes => user may self-arrange public transport (Art.18(3)).
         if ($within100 !== 'unknown') {
@@ -726,6 +1076,7 @@ class ScenariosController extends AppController
         return [
             'active' => $active,
             'active_reasons' => $activeReasons,
+            'transport_mode' => $transportMode,
             'incident_main' => $incidentMain,
             'remedyChoice' => $remedy,
             'reroute' => [
@@ -745,6 +1096,17 @@ class ScenariosController extends AppController
                 'basis' => $clockBasis,
                 'answer' => $s7['reroute_info_within_100min'] ?? null,
                 'self_help_right' => $selfHelpRight,
+            ],
+            'display' => [
+                'transport_mode' => $this->formatTransportChoice($transportMode),
+                'place_label' => $isFerry ? 'havn/terminal' : 'station',
+                'from_place_label' => $isFerry ? 'Fra havn/terminal' : 'Fra station',
+                'return_to_place_label' => $isFerry ? 'Retur til afgangshavn/terminal' : 'Retur til afgangsstation',
+                'arrival_place_label' => $isFerry ? 'Omlagt til havn/terminal' : 'Omlagt til station',
+                'remedyChoice' => $this->formatRemedyChoice($remedy),
+                'art20_resolution_endpoint' => $this->formatResolutionEndpoint((string)($s3Station['a20_where_ended'] ?? ''), $transportMode),
+                'reroute_mode' => $this->formatTransportChoice((string)($s7['a18_reroute_mode'] ?? '')),
+                'reroute_endpoint' => $this->formatResolutionEndpoint((string)($s7['a18_reroute_endpoint'] ?? ''), $transportMode),
             ],
             'effects' => $effects,
             'notes' => $notes,
@@ -900,6 +1262,64 @@ class ScenariosController extends AppController
             $out[$k] = $v;
         }
         return $out;
+    }
+
+    private function normalizeTransportMode(?string $mode): string
+    {
+        $normalized = strtolower(trim((string)$mode));
+
+        return in_array($normalized, ['rail', 'bus', 'ferry', 'air'], true) ? $normalized : 'rail';
+    }
+
+    private function formatTransportChoice(?string $value): ?string
+    {
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return match ($normalized) {
+            'rail' => 'Tog',
+            'bus' => 'Bus',
+            'ferry' => 'Faerge',
+            'air' => 'Fly',
+            'taxi' => 'Taxi/minibus',
+            'rideshare' => 'Samkoersel/rideshare',
+            'other' => 'Andet',
+            default => trim((string)$value),
+        };
+    }
+
+    private function formatResolutionEndpoint(?string $value, string $transportMode): ?string
+    {
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        return match ($normalized) {
+            'nearest_station' => $this->normalizeTransportMode($transportMode) === 'ferry'
+                ? 'Naermeste havn/terminal'
+                : 'Naermeste station',
+            'other_departure_point' => 'Et andet egnet afgangssted',
+            'final_destination' => 'Mit endelige bestemmelsessted',
+            default => $normalized,
+        };
+    }
+
+    private function formatRemedyChoice(?string $value): ?string
+    {
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        return match ($normalized) {
+            'refund_return' => 'Tilbagebetaling',
+            'reroute_soonest' => 'Ombooking hurtigst muligt',
+            'reroute_later' => 'Ombooking senere (efter eget valg)',
+            default => $normalized,
+        };
     }
 
     /**

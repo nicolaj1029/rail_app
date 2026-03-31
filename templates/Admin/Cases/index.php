@@ -1,6 +1,19 @@
 <?php
 /** @var \Cake\View\View $this */
 /** @var \Cake\Datasource\ResultSetInterface $cases */
+$formatRemedyChoice = static function (?string $value): string {
+    $normalized = trim((string)$value);
+    if ($normalized === '') {
+        return '-';
+    }
+
+    return match ($normalized) {
+        'refund_return' => 'Tilbagebetaling',
+        'reroute_soonest' => 'Videre rejse hurtigst muligt',
+        'reroute_later' => 'Videre rejse senere (efter eget valg)',
+        default => $normalized,
+    };
+};
 ?>
 <h2>Sager</h2>
 <form method="get" class="mb8">
@@ -36,7 +49,7 @@
         <td><?= h((string)$c->passenger_name) ?></td>
         <td><?= h((string)$c->operator) ?></td>
         <td><?= h((string)$c->delay_min_eu) ?> min</td>
-        <td><?= h((string)$c->remedy_choice ?: '-') ?></td>
+        <td><?= h($formatRemedyChoice((string)$c->remedy_choice)) ?></td>
         <td><?= $c->art20_expenses_total !== null ? (h(number_format((float)$c->art20_expenses_total, 2, ',', '.')) . ' ' . h((string)$c->currency)) : '-' ?></td>
         <td><?= $c->comp_amount !== null ? (h(number_format((float)$c->comp_amount, 2, ',', '.')) . ' ' . h((string)$c->currency) . ($c->comp_band?(' ('.h((string)$c->comp_band).'%)'):'') ) : '-' ?></td>
         <td><?= $c->eu_only ? '✔' : '✖' ?></td>

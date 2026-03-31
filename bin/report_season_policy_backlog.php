@@ -11,7 +11,7 @@ declare(strict_types=1);
  */
 
 $root = dirname(__DIR__);
-$operatorsPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'operators_catalog.json';
+$operatorsPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'transport_operators_catalog.json';
 $matrixPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'season_policy_matrix.json';
 
 $asJson = in_array('--json', $argv, true);
@@ -62,7 +62,7 @@ foreach ((array)$opsJson['operators'] as $op) {
         continue;
     }
     $name = trim((string)($op['name'] ?? ''));
-    $cc = strtoupper(trim((string)($op['country'] ?? '')));
+    $cc = strtoupper(trim((string)($op['country_code'] ?? $op['country'] ?? '')));
     if ($name === '' || $cc === '') {
         continue;
     }
@@ -186,4 +186,3 @@ foreach ($report as $cc => $row) {
         fwrite(STDOUT, "  - add links: " . implode(', ', array_slice($missingLinks, 0, 8)) . (count($missingLinks) > 8 ? ' ...' : '') . "\n");
     }
 }
-

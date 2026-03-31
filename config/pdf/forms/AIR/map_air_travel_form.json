@@ -1,0 +1,83 @@
+{
+  "_meta": {
+    "file": "air_travel_form.pdf",
+    "note": "Air travel claim form overlay map",
+    "origin": "top-left",
+    "units": "pdf_points"
+  },
+  "2": {
+    "firstname": { "x": 140, "y": 96.7, "w": 150, "type": "text", "source": "firstName" },
+    "surname": { "x": 350, "y": 96.7, "w": 120, "type": "text", "source": "lastName" },
+    "address_street": { "x": 140, "y": 108.2, "w": 300, "type": "text", "source": "address_street" },
+    "postcode_city": { "x": 140, "y": 119.7, "w": 170, "type": "text", "source": "postcode_city" },
+    "country": { "x": 350, "y": 119.7, "w": 120, "type": "text", "source": "address_country" },
+    "email": { "x": 140, "y": 131.2, "w": 180, "type": "text", "source": "contact_email" },
+    "phone": { "x": 350, "y": 131.2, "w": 120, "type": "text", "source": "contact_phone" },
+    "operator": { "x": 140, "y": 180.2, "w": 150, "type": "text", "source": "operator" },
+    "flight_number": { "x": 350, "y": 180.2, "w": 120, "type": "text", "source": "flight_number" },
+    "ticket_no": { "x": 140, "y": 191.7, "w": 150, "type": "text", "source": "ticket_no" },
+    "booking_reference": { "x": 140, "y": 203.2, "w": 150, "type": "text", "source": "booking_reference" },
+    "dep_station": { "x": 140, "y": 214.7, "w": 150, "type": "text", "source": "dep_station" },
+    "arr_station": { "x": 350, "y": 214.7, "w": 150, "type": "text", "source": "arr_station" },
+    "connecting_airport": { "x": 140, "y": 226.1, "w": 150, "type": "text", "source": "missed_connection_station" },
+    "dep_date": { "x": 140, "y": 237.7, "w": 100, "type": "text", "source": "dep_date" },
+    "dep_time": { "x": 350, "y": 237.7, "w": 100, "type": "text", "source": "dep_time" },
+    "actual_dep_time": { "x": 140, "y": 249.2, "w": 100, "type": "text", "source": "actual_dep_time" },
+    "arr_time": { "x": 350, "y": 249.2, "w": 100, "type": "text", "source": "arr_time" },
+    "actual_arr_time": { "x": 140, "y": 260.6, "w": 100, "type": "text", "source": "actual_arr_time" },
+    "incident_airports": { "x": 140, "y": 272.2, "w": 300, "type": "text", "source": "incident_airports" }
+  },
+  "3": {
+    "checkin_desk_confirmed": { "x": 139.4, "y": 119.7, "type": "checkbox", "source": "air_checkin_desk_confirmed" },
+    "boarding_gate_confirmed": { "x": 139.4, "y": 180.8, "type": "checkbox", "source": "air_boarding_gate_confirmed" },
+    "rights_info_confirmed": { "x": 139.4, "y": 230.5, "type": "checkbox", "source": "air_rights_info_confirmed" },
+    "signature_name": { "x": 126.0, "y": 359.2, "w": 220, "type": "text", "source": "air_signature_name" },
+    "signature_date": { "x": 360.0, "y": 359.2, "w": 120, "type": "text", "source": "signature_date" }
+  },
+  "4": {
+    "delay_incident": { "x": 139.4, "y": 108.2, "type": "checkbox", "source": "air_delay_incident" },
+    "meal_offered": { "x": 139.4, "y": 133.0, "type": "checkbox", "source": "air_meals_offered" },
+    "refreshments_offered": { "x": 139.4, "y": 146.3, "type": "checkbox", "source": "air_refreshments_offered" },
+    "hotel_offered": { "x": 139.4, "y": 159.7, "type": "checkbox", "source": "hotel_offered" },
+    "transfer_offered": { "x": 139.4, "y": 184.4, "type": "checkbox", "source": "air_transfer_offered" },
+    "communication_offered": { "x": 139.4, "y": 209.3, "type": "checkbox", "source": "air_communication_offered" },
+    "other_services_offered": { "x": 139.4, "y": 222.6, "type": "checkbox", "source": "air_other_services_offered" },
+    "compensation_active": { "x": 139.4, "y": 295.2, "type": "checkbox", "source": "air_compensation_active" },
+    "compensation_amount": { "x": 202.3, "y": 307.0, "w": 70, "type": "text", "source": "air_compensation_amount" },
+    "refund_active": { "x": 139.4, "y": 524.6, "type": "checkbox", "source": "air_refund_active" }
+  },
+  "5": {
+    "cancellation_incident": { "x": 139.4, "y": 108.2, "type": "checkbox", "source": "air_cancellation_incident" },
+    "meal_offered": { "x": 139.4, "y": 366.1, "type": "checkbox", "source": "air_meals_offered" },
+    "refreshments_offered": { "x": 139.4, "y": 379.4, "type": "checkbox", "source": "air_refreshments_offered" },
+    "hotel_offered": { "x": 139.4, "y": 392.7, "type": "checkbox", "source": "hotel_offered" },
+    "transfer_offered": { "x": 139.4, "y": 442.3, "type": "checkbox", "source": "air_transfer_offered" },
+    "communication_offered": { "x": 139.4, "y": 467.1, "type": "checkbox", "source": "air_communication_offered" },
+    "other_services_offered": { "x": 139.4, "y": 480.4, "type": "checkbox", "source": "air_other_services_offered" },
+    "compensation_active": { "x": 139.4, "y": 530.1, "type": "checkbox", "source": "air_compensation_active" },
+    "compensation_amount": { "x": 202.3, "y": 541.9, "w": 70, "type": "text", "source": "air_compensation_amount" },
+    "refund_active": { "x": 139.4, "y": 602.7, "type": "checkbox", "source": "air_refund_active" }
+  },
+  "6": {
+    "denied_boarding_incident": { "x": 139.4, "y": 108.2, "type": "checkbox", "source": "air_denied_boarding_incident" },
+    "boarding_gate_confirmed": { "x": 139.4, "y": 171.1, "type": "checkbox", "source": "air_boarding_gate_confirmed" },
+    "rights_info_confirmed": { "x": 139.4, "y": 232.3, "type": "checkbox", "source": "air_rights_info_confirmed" },
+    "meal_offered": { "x": 139.4, "y": 381.2, "type": "checkbox", "source": "air_meals_offered" },
+    "refreshments_offered": { "x": 139.4, "y": 394.5, "type": "checkbox", "source": "air_refreshments_offered" },
+    "hotel_offered": { "x": 139.4, "y": 407.8, "type": "checkbox", "source": "hotel_offered" },
+    "transfer_offered": { "x": 139.4, "y": 432.6, "type": "checkbox", "source": "air_transfer_offered" },
+    "communication_offered": { "x": 139.4, "y": 457.4, "type": "checkbox", "source": "air_communication_offered" },
+    "other_services_offered": { "x": 139.4, "y": 470.8, "type": "checkbox", "source": "air_other_services_offered" },
+    "compensation_active": { "x": 139.4, "y": 520.4, "type": "checkbox", "source": "air_compensation_active" },
+    "compensation_amount": { "x": 202.0, "y": 532.2, "w": 70, "type": "text", "source": "air_compensation_amount" },
+    "refund_active": { "x": 139.4, "y": 593.0, "type": "checkbox", "source": "air_refund_active" }
+  },
+  "7": {
+    "booked_first": { "x": 126.0, "y": 106.5, "type": "checkbox", "source": "air_downgrade_booked_first" },
+    "booked_business": { "x": 126.0, "y": 119.8, "type": "checkbox", "source": "air_downgrade_booked_business" },
+    "flown_business": { "x": 126.0, "y": 156.1, "type": "checkbox", "source": "air_downgrade_flown_business" },
+    "flown_economy": { "x": 126.0, "y": 169.4, "type": "checkbox", "source": "air_downgrade_flown_economy" },
+    "downgrade_amount": { "x": 202.0, "y": 219.2, "w": 70, "type": "text", "source": "air_downgrade_amount" },
+    "ticket_price": { "x": 245.6, "y": 267.1, "w": 80, "type": "text", "source": "price" }
+  }
+}

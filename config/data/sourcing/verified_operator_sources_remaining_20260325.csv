@@ -1,0 +1,9 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+tallink_silja,ferry,Tallink Silja,https://clubupdate.tallinksilja.com/web/int/about-us;https://clubupdate.tallinksilja.com/en/web/int/terms-of-transport;https://clubupdate.tallinksilja.com/ko/web/int/travel-terms-and-conditions-for-individuals,high
+sindbad,bus,Sindbad,https://www.sindbad.pl/en/company/about-us;https://www.sindbad.pl/en/yourjourney/transport-regulations;https://www.sindbad.pl/en/ouroffer/international-tickets,high
+vy_bus4you,bus,Vy Bus4You,https://www.vy.no/en/the-vy-group/about-us;https://www.vy.no/en/the-vy-group/operational-business-areas;https://www.vy.no/en/customer-service/frequently-asked-questions/bus,high
+deutsche_bahn,rail,Deutsche Bahn,https://www.deutschebahn.com/en;https://ir.deutschebahn.com/en/db-group/about-us/;https://www.deutschebahn.com/en/group/business_units/,high
+eurostar,rail,Eurostar,https://www.eurostar.com/us-en/about-eurostar;https://www.eurostar.com/us-en/about-eurostar/our-company;https://www.eurostar.com/us-en/website-terms-and-conditions,high
+renfe,rail,Renfe,https://www.renfe.com/es/en/renfe-group/renfe-group;https://www.renfe.com/es/en/renfe-group/renfe-group/get-to-know-us/the-company;https://www.renfe.com/es/en/legal-information/renfe-operadora,high
+sncf,rail,SNCF,https://emploi.sncf.com/travailler-pour-le-groupe-sncf/notre-organisation;https://archives.sncf.com/mentions-legales/,high
+oebb,rail,ÖBB,https://konzern.oebb.at/en/about-the-group;https://konzern.oebb.at/en/about-the-group/organization;https://konzern.oebb.at/en/imprint,high

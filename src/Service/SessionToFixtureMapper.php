@@ -5,6 +5,20 @@ namespace App\Service;
 
 class SessionToFixtureMapper
 {
+    private const SUPPORTED_CURRENCIES = ['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'];
+    private const COUNTRY_TO_CURRENCY = [
+        'BG' => 'BGN',
+        'CZ' => 'CZK',
+        'DK' => 'DKK',
+        'HU' => 'HUF',
+        'PL' => 'PLN',
+        'RO' => 'RON',
+        'SE' => 'SEK',
+        'NO' => 'NOK',
+        'GB' => 'GBP',
+        'CH' => 'CHF',
+    ];
+
     /**
      * Map flow session to a v2 fixture skeleton.
      *
@@ -41,6 +55,19 @@ class SessionToFixtureMapper
         } catch (\Throwable $e) {
             // Keep local fallback mapping if multimodal evaluation fails.
         }
+        $canonical = $this->enrichCanonicalModeFields(
+            $canonical,
+            $transportMode,
+            $step4Journey,
+            $step5Incident,
+            $step6Choices,
+            $step7Remedies,
+            $step8Assistance,
+            $step10Comp,
+            $scopeMeta,
+            $contractMeta,
+            $incidentMeta
+        );
 
         return [
             'id' => 'session_' . date('Ymd_His'),
@@ -278,6 +305,10 @@ class SessionToFixtureMapper
         if (!in_array($incidentSegmentMode, ['rail', 'ferry', 'bus', 'air'], true)) {
             $incidentSegmentMode = $transportMode;
         }
+        if ($journeyStructure === 'single_segment' && in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+            $originalContractMode = $transportMode;
+            $incidentSegmentMode = $transportMode;
+        }
         $claimTransportMode = $contractTopology === 'separate_contracts'
             ? $incidentSegmentMode
             : ($originalContractMode ?? $transportMode);
@@ -385,6 +416,7 @@ class SessionToFixtureMapper
             'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
             'expected_departure_delay_90' => $this->normalizeNullableBool($form['expected_departure_delay_90'] ?? null),
             'actual_departure_delay_90' => $this->normalizeNullableBool($form['actual_departure_delay_90'] ?? null),
+            'ferry_art16_notice_within_30min' => $this->normalizeNullableBool($form['ferry_art16_notice_within_30min'] ?? null),
             'overnight_required' => $this->normalizeNullableBool($overnightRequired),
             'informed_before_purchase' => $this->normalizeNullableBool($form['informed_before_purchase'] ?? null),
             'passenger_fault' => $passengerFault,
@@ -396,6 +428,7 @@ class SessionToFixtureMapper
                 : (($form['ticket_upload_mode'] ?? null) === 'seasonpass'),
             'delay_departure_band' => $form['delay_departure_band'] ?? null,
             'planned_duration_band' => $form['planned_duration_band'] ?? null,
+            'vehicle_breakdown' => $this->normalizeNullableBool($form['vehicle_breakdown'] ?? null),
             'delay_minutes_departure' => $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null),
             'delay_minutes_arrival' => $this->normalizeNullableInt($form['delay_minutes_arrival'] ?? null),
             'boarding_denied' => $this->normalizeNullableBool($form['boarding_denied'] ?? null),
@@ -428,6 +461,7 @@ class SessionToFixtureMapper
             'bus_pmr_reason_given' => $this->normalizeNullableBool($form['bus_pmr_reason_given'] ?? null),
             'bus_pmr_alternative_transport_offered' => $this->normalizeNullableBool($form['bus_pmr_alternative_transport_offered'] ?? null),
             'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
+            'connection_protection_basis' => is_string($form['connection_protection_basis'] ?? null) ? (string)$form['connection_protection_basis'] : null,
             'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
             'overbooking' => $this->normalizeNullableBool($form['overbooking'] ?? null),
             'carrier_offered_choice' => $this->normalizeNullableBool($form['carrier_offered_choice'] ?? null),
@@ -600,7 +634,59 @@ class SessionToFixtureMapper
         if (!empty($extra)) {
             $base = $base + $extra;
         }
-        return $this->normalizeStep3($base);
+        $base = $this->normalizeStep3($base);
+        $transportMode = $this->detectTransportMode($flow);
+        $modeFields = [];
+        if ($transportMode === 'bus') {
+            $modeFields['bus'] = [
+                'pmr_user' => $base['pmr_user'] ?? null,
+                'pmr_companion' => $base['bus_pmr_companion'] ?? null,
+                'notice_36h' => $base['bus_pmr_notice_36h'] ?? null,
+                'met_terminal_time' => $base['bus_pmr_met_terminal_time'] ?? null,
+                'special_seating_notified' => $base['bus_pmr_special_seating_notified'] ?? null,
+                'assistance_delivered' => $base['bus_pmr_assistance_delivered'] ?? null,
+                'boarding_refused' => $base['bus_pmr_boarding_refused'] ?? null,
+                'refusal_basis' => $base['bus_pmr_refusal_basis'] ?? null,
+                'reason_given' => $base['bus_pmr_reason_given'] ?? null,
+                'alternative_transport_offered' => $base['bus_pmr_alternative_transport_offered'] ?? null,
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $modeFields['ferry'] = [
+                'pmr_user' => $base['pmr_user'] ?? null,
+                'pmr_companion' => $base['ferry_pmr_companion'] ?? null,
+                'service_dog' => $base['ferry_pmr_service_dog'] ?? null,
+                'notice_48h' => $base['ferry_pmr_notice_48h'] ?? null,
+                'met_checkin_time' => $base['ferry_pmr_met_checkin_time'] ?? null,
+                'assistance_delivered' => $base['ferry_pmr_assistance_delivered'] ?? null,
+                'boarding_refused' => $base['ferry_pmr_boarding_refused'] ?? null,
+                'refusal_basis' => $base['ferry_pmr_refusal_basis'] ?? null,
+                'reason_given' => $base['ferry_pmr_reason_given'] ?? null,
+                'alternative_transport_offered' => $base['ferry_pmr_alternative_transport_offered'] ?? null,
+            ];
+        } elseif ($transportMode === 'air') {
+            $modeFields['air'] = [
+                'pmr_user' => $base['pmr_user'] ?? null,
+                'pmr_companion' => $base['pmr_companion'] ?? null,
+                'service_dog' => $base['pmr_service_dog'] ?? null,
+                'unaccompanied_minor' => $base['unaccompanied_minor'] ?? null,
+            ];
+        } elseif ($transportMode === 'rail') {
+            $modeFields['rail'] = [
+                'pmr_user' => $base['pmr_user'] ?? null,
+                'pmr_booked' => $base['pmr_booked'] ?? null,
+                'pmr_promised_missing' => $base['pmr_promised_missing'] ?? null,
+                'pmr_companion' => $base['pmr_companion'] ?? null,
+                'service_dog' => $base['pmr_service_dog'] ?? null,
+                'bike_was_present' => $base['bike_was_present'] ?? null,
+                'bike_denied_boarding' => $base['bike_denied_boarding'] ?? null,
+                'bike_refusal_reason_provided' => $base['bike_refusal_reason_provided'] ?? null,
+                'bike_refusal_reason_type' => $base['bike_refusal_reason_type'] ?? null,
+            ];
+        }
+        return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
+        ] + $base;
     }
 
     /**
@@ -646,7 +732,23 @@ class SessionToFixtureMapper
             'remedyChoice' => $f['remedyChoice'] ?? null,
             'self_purchased_new_ticket' => $f['self_purchased_new_ticket'] ?? null,
             'self_purchase_approved_by_operator' => $f['self_purchase_approved_by_operator'] ?? null,
+            'carrier_offered_choice' => $f['carrier_offered_choice'] ?? null,
+            'air_article8_choice_offered' => $f['air_article8_choice_offered'] ?? null,
             'offer_provided' => $f['offer_provided'] ?? null,
+            'ferry_offer_provided' => $f['ferry_offer_provided'] ?? null,
+            'self_purchase_reason' => $f['self_purchase_reason'] ?? null,
+            'air_self_arranged_reroute' => $f['air_self_arranged_reroute'] ?? null,
+            'air_self_arranged_reroute_reason' => $f['air_self_arranged_reroute_reason'] ?? null,
+            'air_airline_confirmed_self_arranged_solution' => $f['air_airline_confirmed_self_arranged_solution'] ?? null,
+            'air_refund_scope' => $f['air_refund_scope'] ?? null,
+            'air_return_to_first_departure_point' => $f['air_return_to_first_departure_point'] ?? null,
+            'air_alternative_airport_transfer_needed' => $f['air_alternative_airport_transfer_needed'] ?? null,
+            'air_alternative_airport_transfer_amount' => $f['air_alternative_airport_transfer_amount'] ?? null,
+            'air_alternative_airport_transfer_currency' => $f['air_alternative_airport_transfer_currency'] ?? null,
+            'ferry_self_arranged_solution' => $f['ferry_self_arranged_solution'] ?? null,
+            'ferry_self_arranged_solution_type' => $f['ferry_self_arranged_solution_type'] ?? null,
+            'ferry_self_arranged_reason' => $f['ferry_self_arranged_reason'] ?? null,
+            'ferry_first_usable_solution_timing' => $f['ferry_first_usable_solution_timing'] ?? null,
             'reroute_same_conditions_soonest' => $f['reroute_same_conditions_soonest'] ?? null,
             'reroute_later_at_choice' => $f['reroute_later_at_choice'] ?? null,
             'reroute_info_within_100min' => $f['reroute_info_within_100min'] ?? null,
@@ -784,12 +886,89 @@ class SessionToFixtureMapper
     private function extractStep6Remedies(array $flow): array
     {
         $f = (array)($flow['form'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
+        $railValue = static function (array $form, string $canonical) use ($transportMode) {
+            return $transportMode === 'rail' ? ($form[$canonical] ?? null) : null;
+        };
+        $busValue = static function (array $form, string $alias, string $canonical) use ($transportMode) {
+            $aliasValue = $form[$alias] ?? null;
+            if ($transportMode !== 'bus') {
+                return $aliasValue;
+            }
+            if ($aliasValue === null || $aliasValue === '' || $aliasValue === 'irrelevant') {
+                return $form[$canonical] ?? null;
+            }
+            return $aliasValue;
+        };
+        $modeFields = [];
+        if ($transportMode === 'bus') {
+            $modeFields['bus'] = [
+                'remedy_choice' => $busValue($f, 'bus_remedy_choice', 'remedyChoice'),
+                'refund_requested' => (($f['bus_refund_requested'] ?? '') !== '' ? ($f['bus_refund_requested'] ?? null) : (((string)($f['remedyChoice'] ?? '') === 'refund_return') ? 'yes' : 'no')),
+                'reroute_choice' => (($f['bus_reroute_choice'] ?? '') !== '' ? ($f['bus_reroute_choice'] ?? null) : (((string)($f['remedyChoice'] ?? '') === 'reroute_soonest') ? 'reroute_soonest' : '')),
+                'carrier_offered_choice' => $busValue($f, 'bus_carrier_offered_choice', 'carrier_offered_choice'),
+                'self_arranged_solution' => $f['bus_self_arranged_solution'] ?? null,
+                'self_arranged_solution_type' => $f['bus_self_arranged_solution_type'] ?? null,
+                'self_arranged_reason' => $f['bus_self_arranged_reason'] ?? null,
+                'return_to_departure_stop_expense' => $busValue($f, 'bus_return_to_departure_stop_expense', 'return_to_origin_expense'),
+                'return_to_departure_stop_amount' => $busValue($f, 'bus_return_to_departure_stop_amount', 'return_to_origin_amount'),
+                'return_to_departure_stop_currency' => $busValue($f, 'bus_return_to_departure_stop_currency', 'return_to_origin_currency'),
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $modeFields['ferry'] = [
+                'remedy_choice' => $f['ferry_remedy_choice'] ?? null,
+                'refund_requested' => $f['ferry_refund_requested'] ?? null,
+                'reroute_choice' => $f['ferry_reroute_choice'] ?? null,
+                'offer_provided' => $f['ferry_offer_provided'] ?? null,
+                'first_usable_solution_timing' => $f['ferry_first_usable_solution_timing'] ?? null,
+                'self_arranged_solution' => $f['ferry_self_arranged_solution'] ?? null,
+                'self_arranged_solution_type' => $f['ferry_self_arranged_solution_type'] ?? null,
+                'self_arranged_reason' => $f['ferry_self_arranged_reason'] ?? null,
+                'return_to_departure_port_expense' => $f['ferry_return_to_departure_port_expense'] ?? null,
+                'return_to_departure_port_amount' => $f['ferry_return_to_departure_port_amount'] ?? null,
+                'return_to_departure_port_currency' => $f['ferry_return_to_departure_port_currency'] ?? null,
+            ];
+        } elseif ($transportMode === 'air') {
+            $modeFields['air'] = [
+                'article8_choice_offered' => $f['air_article8_choice_offered'] ?? null,
+                'self_arranged_reroute' => $f['air_self_arranged_reroute'] ?? null,
+                'self_arranged_reroute_reason' => $f['air_self_arranged_reroute_reason'] ?? null,
+                'airline_confirmed_self_arranged_solution' => $f['air_airline_confirmed_self_arranged_solution'] ?? null,
+                'refund_scope' => $f['air_refund_scope'] ?? null,
+                'return_to_first_departure_point' => $f['air_return_to_first_departure_point'] ?? null,
+                'alternative_airport_transfer_needed' => $f['air_alternative_airport_transfer_needed'] ?? null,
+                'alternative_airport_transfer_amount' => $f['air_alternative_airport_transfer_amount'] ?? null,
+                'alternative_airport_transfer_currency' => $f['air_alternative_airport_transfer_currency'] ?? null,
+            ];
+        } elseif ($transportMode === 'rail') {
+            $modeFields['rail'] = [
+                'remedy_choice' => $f['remedyChoice'] ?? null,
+                'reroute_info_within_100min' => $f['reroute_info_within_100min'] ?? null,
+                'offer_provided' => $f['offer_provided'] ?? null,
+                'self_arranged_solution' => $f['self_purchased_new_ticket'] ?? null,
+                'operator_confirmed_self_arranged_solution' => $f['self_purchase_approved_by_operator'] ?? null,
+                'self_arranged_reason' => $f['self_purchase_reason'] ?? null,
+                'return_to_origin_expense' => $f['return_to_origin_expense'] ?? null,
+                'return_to_origin_amount' => $f['return_to_origin_amount'] ?? null,
+                'return_to_origin_currency' => $f['return_to_origin_currency'] ?? null,
+            ];
+        }
         return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
             'art18_expected_delay_60' => $f['art18_expected_delay_60'] ?? null,
             'remedyChoice' => $f['remedyChoice'] ?? null,
+            'rail_remedy_choice' => $railValue($f, 'remedyChoice'),
             'ferry_remedy_choice' => $f['ferry_remedy_choice'] ?? null,
             'ferry_refund_requested' => $f['ferry_refund_requested'] ?? null,
             'ferry_reroute_choice' => $f['ferry_reroute_choice'] ?? null,
+            'bus_remedy_choice' => $busValue($f, 'bus_remedy_choice', 'remedyChoice'),
+            'bus_refund_requested' => $transportMode === 'bus'
+                ? (($f['bus_refund_requested'] ?? '') !== '' ? ($f['bus_refund_requested'] ?? null) : (((string)($f['remedyChoice'] ?? '') === 'refund_return') ? 'yes' : 'no'))
+                : ($f['bus_refund_requested'] ?? null),
+            'bus_reroute_choice' => $transportMode === 'bus'
+                ? (($f['bus_reroute_choice'] ?? '') !== '' ? ($f['bus_reroute_choice'] ?? null) : (((string)($f['remedyChoice'] ?? '') === 'reroute_soonest') ? 'reroute_soonest' : ''))
+                : ($f['bus_reroute_choice'] ?? null),
 
             // Reroute now/later
             // TRIN 6 station context (separate from TRIN 5)
@@ -802,15 +981,44 @@ class SessionToFixtureMapper
             'a18_reroute_endpoint' => $f['a18_reroute_endpoint'] ?? null,
             'a18_reroute_arrival_station' => $f['a18_reroute_arrival_station'] ?? null,
             'a18_reroute_arrival_station_other' => $f['a18_reroute_arrival_station_other'] ?? null,
+            'carrier_offered_choice' => $f['carrier_offered_choice'] ?? null,
+            'bus_carrier_offered_choice' => $busValue($f, 'bus_carrier_offered_choice', 'carrier_offered_choice'),
 
             'reroute_same_conditions_soonest' => $f['reroute_same_conditions_soonest'] ?? null,
             'reroute_later_at_choice' => $f['reroute_later_at_choice'] ?? null,
-            'reroute_info_within_100min' => $f['reroute_info_within_100min'] ?? null,
+            'reroute_info_within_100min' => $transportMode === 'air' ? null : ($f['reroute_info_within_100min'] ?? null),
+            'rail_reroute_info_within_100min' => $railValue($f, 'reroute_info_within_100min'),
             'self_purchased_new_ticket' => $f['self_purchased_new_ticket'] ?? null,
+            'rail_self_arranged_solution' => $railValue($f, 'self_purchased_new_ticket'),
             'self_purchase_approved_by_operator' => $f['self_purchase_approved_by_operator'] ?? null,
+            'rail_operator_confirmed_self_arranged_solution' => $railValue($f, 'self_purchase_approved_by_operator'),
+            'self_purchase_reason' => $f['self_purchase_reason'] ?? null,
+            'rail_self_arranged_reason' => $railValue($f, 'self_purchase_reason'),
+            'bus_self_arranged_solution' => $f['bus_self_arranged_solution'] ?? null,
+            'bus_self_arranged_solution_type' => $f['bus_self_arranged_solution_type'] ?? null,
+            'bus_self_arranged_reason' => $f['bus_self_arranged_reason'] ?? null,
+            'air_article8_choice_offered' => $f['air_article8_choice_offered'] ?? null,
+            'air_self_arranged_reroute' => $f['air_self_arranged_reroute'] ?? null,
+            'air_self_arranged_reroute_reason' => $f['air_self_arranged_reroute_reason'] ?? null,
+            'air_airline_confirmed_self_arranged_solution' => $f['air_airline_confirmed_self_arranged_solution'] ?? null,
+            'air_refund_scope' => $f['air_refund_scope'] ?? null,
+            'air_return_to_first_departure_point' => $f['air_return_to_first_departure_point'] ?? null,
+            'air_alternative_airport_transfer_needed' => $f['air_alternative_airport_transfer_needed'] ?? null,
+            'air_alternative_airport_transfer_amount' => $f['air_alternative_airport_transfer_amount'] ?? null,
+            'air_alternative_airport_transfer_currency' => $f['air_alternative_airport_transfer_currency'] ?? null,
+            'offer_provided' => $f['offer_provided'] ?? null,
+            'rail_offer_provided' => $railValue($f, 'offer_provided'),
+            'ferry_offer_provided' => $f['ferry_offer_provided'] ?? null,
+            'ferry_self_arranged_solution' => $f['ferry_self_arranged_solution'] ?? null,
+            'ferry_self_arranged_solution_type' => $f['ferry_self_arranged_solution_type'] ?? null,
+            'ferry_self_arranged_reason' => $f['ferry_self_arranged_reason'] ?? null,
+            'ferry_first_usable_solution_timing' => $f['ferry_first_usable_solution_timing'] ?? null,
             'reroute_extra_costs' => $f['reroute_extra_costs'] ?? null,
+            'reroute_extra_costs_type' => $f['reroute_extra_costs_type'] ?? null,
             'reroute_extra_costs_amount' => $f['reroute_extra_costs_amount'] ?? null,
             'reroute_extra_costs_currency' => $f['reroute_extra_costs_currency'] ?? null,
+            'reroute_extra_costs_description' => $f['reroute_extra_costs_description'] ?? null,
+            'reroute_extra_costs_receipt' => $f['reroute_extra_costs_receipt'] ?? null,
             'reroute_later_ticket_upload' => $f['reroute_later_ticket_upload'] ?? null,
             'reroute_later_ticket_file' => $f['reroute_later_ticket_file'] ?? null,
 
@@ -819,7 +1027,13 @@ class SessionToFixtureMapper
             'return_to_origin_expense' => $f['return_to_origin_expense'] ?? null,
             'return_to_origin_amount' => $f['return_to_origin_amount'] ?? null,
             'return_to_origin_currency' => $f['return_to_origin_currency'] ?? null,
+            'rail_return_to_origin_expense' => $railValue($f, 'return_to_origin_expense'),
+            'rail_return_to_origin_amount' => $railValue($f, 'return_to_origin_amount'),
+            'rail_return_to_origin_currency' => $railValue($f, 'return_to_origin_currency'),
             'return_to_origin_receipt' => $f['return_to_origin_receipt'] ?? null,
+            'bus_return_to_departure_stop_expense' => $busValue($f, 'bus_return_to_departure_stop_expense', 'return_to_origin_expense'),
+            'bus_return_to_departure_stop_amount' => $busValue($f, 'bus_return_to_departure_stop_amount', 'return_to_origin_amount'),
+            'bus_return_to_departure_stop_currency' => $busValue($f, 'bus_return_to_departure_stop_currency', 'return_to_origin_currency'),
             'ferry_return_to_departure_port_expense' => $f['ferry_return_to_departure_port_expense'] ?? null,
             'ferry_return_to_departure_port_amount' => $f['ferry_return_to_departure_port_amount'] ?? null,
             'ferry_return_to_departure_port_currency' => $f['ferry_return_to_departure_port_currency'] ?? null,
@@ -838,8 +1052,172 @@ class SessionToFixtureMapper
     private function extractStep7Assistance(array $flow): array
     {
         $f = (array)($flow['form'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
+        $railValue = static function (array $form, string $canonical) use ($transportMode) {
+            return $transportMode === 'rail' ? ($form[$canonical] ?? null) : null;
+        };
+        $busValue = static function (array $form, string $alias, string $canonical) use ($transportMode) {
+            $aliasValue = $form[$alias] ?? null;
+            if ($transportMode !== 'bus') {
+                return $aliasValue;
+            }
+            if ($aliasValue === null || $aliasValue === '' || $aliasValue === 'irrelevant') {
+                return $form[$canonical] ?? null;
+            }
+            return $aliasValue;
+        };
+        $priceHints = $flow['meta']['price_hints'] ?? null;
+        if ($transportMode === 'rail') {
+            $rawPriceHints = is_array($priceHints) ? $priceHints : [];
+            $priceHints = [
+                'model' => 'rail_engine_ranges',
+                'meals' => $rawPriceHints['meals'] ?? null,
+                'hotelPerNight' => $rawPriceHints['hotelPerNight'] ?? null,
+                'taxi' => $rawPriceHints['taxi'] ?? null,
+                'altTransport' => $rawPriceHints['altTransport'] ?? null,
+                'upgradeFirstClass' => $rawPriceHints['upgradeFirstClass'] ?? null,
+            ];
+        } elseif ($transportMode === 'bus') {
+            $delayMinutes = 0;
+            $delayRaw = $f['delayAtFinalMinutes'] ?? ($flow['compute']['delayAtFinalMinutes'] ?? 0);
+            if (is_numeric($delayRaw)) {
+                $delayMinutes = max(0, (int)$delayRaw);
+            }
+            $delayHours = max(1, (int)ceil($delayMinutes / 60));
+            $distanceKm = is_numeric($f['scheduled_distance_km'] ?? null)
+                ? (float)$f['scheduled_distance_km']
+                : (is_numeric($flow['form']['scheduled_distance_km'] ?? null) ? (float)$flow['form']['scheduled_distance_km'] : 0.0);
+            $altTransportCap = match (true) {
+                $distanceKm >= 250 => 300,
+                $distanceKm >= 80 => 150,
+                default => 50,
+            };
+            $priceHints = [
+                'meals' => [
+                    'min' => 0,
+                    'max' => 20 * $delayHours,
+                    'currency' => 'EUR',
+                ],
+                'hotelPerNight' => [
+                    'min' => 80,
+                    'max' => 80,
+                    'currency' => 'EUR',
+                ],
+                'taxi' => [
+                    'min' => 0,
+                    'max' => $altTransportCap,
+                    'currency' => 'EUR',
+                ],
+                'altTransport' => [
+                    'min' => 0,
+                    'max' => $altTransportCap,
+                    'currency' => 'EUR',
+                ],
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $priceHints = [
+                'meals' => [
+                    'rule' => 'reasonable',
+                    'softCap' => 40,
+                    'currency' => 'EUR',
+                ],
+                'hotelPerNight' => [
+                    'min' => 80,
+                    'max' => 80,
+                    'currency' => 'EUR',
+                    'maxNights' => 3,
+                ],
+                'localTransport' => [
+                    'min' => 0,
+                    'max' => 50,
+                    'currency' => 'EUR',
+                ],
+                'taxi' => [
+                    'min' => 0,
+                    'max' => 150,
+                    'currency' => 'EUR',
+                ],
+                'altTransport' => [
+                    'min' => 0,
+                    'max' => 400,
+                    'currency' => 'EUR',
+                ],
+            ];
+        }
+        $modeFields = [];
+        if ($transportMode === 'bus') {
+            $modeFields['bus'] = [
+                'refreshments_offered' => $f['bus_refreshments_offered'] ?? ($f['meal_offered'] ?? null),
+                'refreshments_self_paid_amount' => $busValue($f, 'bus_refreshments_self_paid_amount', 'meal_self_paid_amount'),
+                'refreshments_self_paid_currency' => $busValue($f, 'bus_refreshments_self_paid_currency', 'meal_self_paid_currency'),
+                'hotel_offered' => $busValue($f, 'bus_hotel_offered', 'hotel_offered'),
+                'hotel_transport_included' => $busValue($f, 'bus_hotel_transport_included', 'assistance_hotel_transport_included'),
+                'hotel_transport_self_paid_amount' => $busValue($f, 'bus_hotel_transport_self_paid_amount', 'hotel_transport_self_paid_amount'),
+                'hotel_transport_self_paid_currency' => $busValue($f, 'bus_hotel_transport_self_paid_currency', 'hotel_transport_self_paid_currency'),
+                'hotel_transport_self_paid_receipt' => $busValue($f, 'bus_hotel_transport_self_paid_receipt', 'hotel_transport_self_paid_receipt'),
+                'overnight_required' => $busValue($f, 'bus_overnight_required', 'overnight_needed'),
+                'hotel_self_paid_amount' => $busValue($f, 'bus_hotel_self_paid_amount', 'hotel_self_paid_amount'),
+                'hotel_self_paid_currency' => $busValue($f, 'bus_hotel_self_paid_currency', 'hotel_self_paid_currency'),
+                'hotel_self_paid_nights' => $busValue($f, 'bus_hotel_self_paid_nights', 'hotel_self_paid_nights'),
+                'pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
+                'pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+                'pmr_dog_supported' => $f['assistance_pmr_dog_supported'] ?? null,
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $modeFields['ferry'] = [
+                'refreshments_offered' => $f['ferry_refreshments_offered'] ?? null,
+                'refreshments_self_paid_amount' => $f['ferry_refreshments_self_paid_amount'] ?? null,
+                'refreshments_self_paid_currency' => $f['ferry_refreshments_self_paid_currency'] ?? null,
+                'hotel_offered' => $f['ferry_hotel_offered'] ?? null,
+                'hotel_transport_included' => $f['ferry_hotel_transport_included'] ?? null,
+                'overnight_required' => $f['ferry_overnight_required'] ?? null,
+                'hotel_self_paid_amount' => $f['ferry_hotel_self_paid_amount'] ?? null,
+                'hotel_self_paid_currency' => $f['ferry_hotel_self_paid_currency'] ?? null,
+                'hotel_self_paid_nights' => $f['ferry_hotel_self_paid_nights'] ?? null,
+                'pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
+                'pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+                'pmr_dog_supported' => $f['assistance_pmr_dog_supported'] ?? null,
+            ];
+        } elseif ($transportMode === 'air') {
+            $modeFields['air'] = [
+                'refreshments_offered' => $f['meal_offered'] ?? null,
+                'refreshments_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
+                'refreshments_self_paid_currency' => $f['meal_self_paid_currency'] ?? null,
+                'hotel_offered' => $f['hotel_offered'] ?? null,
+                'hotel_transport_included' => $f['assistance_hotel_transport_included'] ?? null,
+                'hotel_transport_self_paid_amount' => $f['hotel_transport_self_paid_amount'] ?? null,
+                'hotel_transport_self_paid_currency' => $f['hotel_transport_self_paid_currency'] ?? null,
+                'overnight_required' => $f['overnight_needed'] ?? null,
+                'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
+                'hotel_self_paid_currency' => $f['hotel_self_paid_currency'] ?? null,
+                'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
+                'pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
+                'pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+                'pmr_dog_supported' => $f['assistance_pmr_dog_supported'] ?? null,
+            ];
+        } elseif ($transportMode === 'rail') {
+            $modeFields['rail'] = [
+                'refreshments_offered' => $f['meal_offered'] ?? null,
+                'refreshments_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
+                'refreshments_self_paid_currency' => $f['meal_self_paid_currency'] ?? null,
+                'hotel_offered' => $f['hotel_offered'] ?? null,
+                'hotel_transport_included' => $f['assistance_hotel_transport_included'] ?? null,
+                'overnight_required' => $f['overnight_needed'] ?? null,
+                'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
+                'hotel_self_paid_currency' => $f['hotel_self_paid_currency'] ?? null,
+                'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
+                'pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
+                'pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+                'pmr_dog_supported' => $f['assistance_pmr_dog_supported'] ?? null,
+            ];
+        }
+
         return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
             'meal_offered' => $f['meal_offered'] ?? null,
+            'rail_refreshments_offered' => $railValue($f, 'meal_offered'),
+            'bus_refreshments_offered' => $f['bus_refreshments_offered'] ?? null,
             'ferry_refreshments_offered' => $f['ferry_refreshments_offered'] ?? null,
             'assistance_meals_unavailable_reason' => $f['assistance_meals_unavailable_reason'] ?? null,
             'meal_self_paid_amount' => $f['meal_self_paid_amount'] ?? null,
@@ -847,17 +1225,30 @@ class SessionToFixtureMapper
             'meal_self_paid_receipt' => $f['meal_self_paid_receipt'] ?? null,
             'meal_self_paid_amount_items' => $f['meal_self_paid_amount_items'] ?? null,
             'meal_self_paid_receipt_items' => $f['meal_self_paid_receipt_items'] ?? null,
+            'rail_refreshments_self_paid_amount' => $railValue($f, 'meal_self_paid_amount'),
+            'rail_refreshments_self_paid_currency' => $railValue($f, 'meal_self_paid_currency'),
+            'bus_refreshments_self_paid_amount' => $busValue($f, 'bus_refreshments_self_paid_amount', 'meal_self_paid_amount'),
+            'bus_refreshments_self_paid_currency' => $busValue($f, 'bus_refreshments_self_paid_currency', 'meal_self_paid_currency'),
             'ferry_refreshments_self_paid_amount' => $f['ferry_refreshments_self_paid_amount'] ?? null,
             'ferry_refreshments_self_paid_currency' => $f['ferry_refreshments_self_paid_currency'] ?? null,
 
             'hotel_offered' => $f['hotel_offered'] ?? null,
+            'rail_hotel_offered' => $railValue($f, 'hotel_offered'),
+            'bus_hotel_offered' => $busValue($f, 'bus_hotel_offered', 'hotel_offered'),
             'ferry_hotel_offered' => $f['ferry_hotel_offered'] ?? null,
             'assistance_hotel_transport_included' => $f['assistance_hotel_transport_included'] ?? null,
+            'rail_hotel_transport_included' => $railValue($f, 'assistance_hotel_transport_included'),
+            'bus_hotel_transport_included' => $busValue($f, 'bus_hotel_transport_included', 'assistance_hotel_transport_included'),
             'ferry_hotel_transport_included' => $f['ferry_hotel_transport_included'] ?? null,
             'hotel_transport_self_paid_amount' => $f['hotel_transport_self_paid_amount'] ?? null,
             'hotel_transport_self_paid_currency' => $f['hotel_transport_self_paid_currency'] ?? null,
             'hotel_transport_self_paid_receipt' => $f['hotel_transport_self_paid_receipt'] ?? null,
+            'bus_hotel_transport_self_paid_amount' => $busValue($f, 'bus_hotel_transport_self_paid_amount', 'hotel_transport_self_paid_amount'),
+            'bus_hotel_transport_self_paid_currency' => $busValue($f, 'bus_hotel_transport_self_paid_currency', 'hotel_transport_self_paid_currency'),
+            'bus_hotel_transport_self_paid_receipt' => $busValue($f, 'bus_hotel_transport_self_paid_receipt', 'hotel_transport_self_paid_receipt'),
             'overnight_needed' => $f['overnight_needed'] ?? null,
+            'rail_overnight_required' => $railValue($f, 'overnight_needed'),
+            'bus_overnight_required' => $busValue($f, 'bus_overnight_required', 'overnight_needed'),
             'ferry_overnight_required' => $f['ferry_overnight_required'] ?? null,
             'hotel_self_paid_nights' => $f['hotel_self_paid_nights'] ?? null,
             'hotel_self_paid_amount' => $f['hotel_self_paid_amount'] ?? null,
@@ -866,6 +1257,12 @@ class SessionToFixtureMapper
             'hotel_self_paid_amount_items' => $f['hotel_self_paid_amount_items'] ?? null,
             'hotel_self_paid_nights_items' => $f['hotel_self_paid_nights_items'] ?? null,
             'hotel_self_paid_receipt_items' => $f['hotel_self_paid_receipt_items'] ?? null,
+            'rail_hotel_self_paid_amount' => $railValue($f, 'hotel_self_paid_amount'),
+            'rail_hotel_self_paid_currency' => $railValue($f, 'hotel_self_paid_currency'),
+            'rail_hotel_self_paid_nights' => $railValue($f, 'hotel_self_paid_nights'),
+            'bus_hotel_self_paid_amount' => $busValue($f, 'bus_hotel_self_paid_amount', 'hotel_self_paid_amount'),
+            'bus_hotel_self_paid_currency' => $busValue($f, 'bus_hotel_self_paid_currency', 'hotel_self_paid_currency'),
+            'bus_hotel_self_paid_nights' => $busValue($f, 'bus_hotel_self_paid_nights', 'hotel_self_paid_nights'),
             'ferry_hotel_self_paid_amount' => $f['ferry_hotel_self_paid_amount'] ?? null,
             'ferry_hotel_self_paid_currency' => $f['ferry_hotel_self_paid_currency'] ?? null,
             'ferry_hotel_self_paid_nights' => $f['ferry_hotel_self_paid_nights'] ?? null,
@@ -873,9 +1270,10 @@ class SessionToFixtureMapper
             // PMR only
             'assistance_pmr_priority_applied' => $f['assistance_pmr_priority_applied'] ?? null,
             'assistance_pmr_companion_supported' => $f['assistance_pmr_companion_supported'] ?? null,
+            'assistance_pmr_dog_supported' => $f['assistance_pmr_dog_supported'] ?? null,
 
             // Useful for scenario output and UI hinting (not user-entered in step 7)
-            'price_hints' => $flow['meta']['price_hints'] ?? null,
+            'price_hints' => $priceHints,
         ];
     }
 
@@ -890,6 +1288,9 @@ class SessionToFixtureMapper
             'downgrade_occurred' => $f['downgrade_occurred'] ?? null,
             'downgrade_comp_basis' => $f['downgrade_comp_basis'] ?? null,
             'downgrade_segment_share' => $f['downgrade_segment_share'] ?? null,
+            'air_downgrade_booked_class' => $f['air_downgrade_booked_class'] ?? null,
+            'air_downgrade_flown_class' => $f['air_downgrade_flown_class'] ?? null,
+            'air_downgrade_refund_percent' => $f['air_downgrade_refund_percent'] ?? null,
             'leg_class_purchased' => $f['leg_class_purchased'] ?? [],
             'leg_class_delivered' => $f['leg_class_delivered'] ?? [],
             'leg_reservation_purchased' => $f['leg_reservation_purchased'] ?? [],
@@ -906,10 +1307,77 @@ class SessionToFixtureMapper
     {
         $form = (array)($flow['form'] ?? []);
         $compute = (array)($flow['compute'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
+        $resultPreview = $this->buildCompensationPreview($flow, $transportMode);
+        $modeFields = [];
+        if ($transportMode === 'bus') {
+            $modeFields['bus'] = [
+                'delay_at_final_minutes' => $form['delayAtFinalMinutes'] ?? null,
+                'compensation_band' => $form['compensationBand'] ?? null,
+                'scheduled_distance_km' => $form['scheduled_distance_km'] ?? null,
+                'vehicle_breakdown' => $form['vehicle_breakdown'] ?? null,
+                'hotel_transport_self_paid_amount' => $form['bus_hotel_transport_self_paid_amount'] ?? ($form['hotel_transport_self_paid_amount'] ?? null),
+                'hotel_transport_self_paid_currency' => $form['bus_hotel_transport_self_paid_currency'] ?? ($form['hotel_transport_self_paid_currency'] ?? null),
+                'hotel_legal_cap_eur_per_night' => 80,
+                'hotel_legal_nights_max' => 2,
+                'meals_soft_cap_eur_per_delay_hour' => 20,
+                'hotel_transport_soft_cap_eur' => 50,
+                'result_preview' => $resultPreview,
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $modeFields['ferry'] = [
+                'delay_at_final_minutes' => $form['delayAtFinalMinutes'] ?? null,
+                'compensation_band' => $form['compensationBand'] ?? null,
+                'hotel_transport_self_paid_amount' => $form['hotel_transport_self_paid_amount'] ?? null,
+                'hotel_transport_self_paid_currency' => $form['hotel_transport_self_paid_currency'] ?? null,
+                'hotel_legal_cap_eur_per_night' => 80,
+                'hotel_legal_nights_max' => 3,
+                'meals_legal_rule' => 'reasonable',
+                'hotel_transport_included' => true,
+                'refund_ticket_price_percent' => 100,
+                'refund_deadline_days' => 7,
+                'meals_soft_cap_eur_per_day' => 40,
+                'local_transport_soft_cap_eur_per_trip' => 50,
+                'local_transport_soft_cap_total_eur' => 150,
+                'taxi_soft_cap_eur' => 150,
+                'self_arranged_alt_transport_soft_cap_total_eur' => 400,
+                'result_preview' => $resultPreview,
+            ];
+        } elseif ($transportMode === 'air') {
+            $modeFields['air'] = [
+                'delay_at_final_minutes' => $form['delayAtFinalMinutes'] ?? null,
+                'compensation_band' => $form['compensationBand'] ?? null,
+                'flight_distance_km' => $form['flight_distance_km'] ?? null,
+                'air_distance_band' => $form['air_distance_band'] ?? null,
+                'air_delay_threshold_hours' => $form['air_delay_threshold_hours'] ?? null,
+                'hotel_transport_self_paid_amount' => $form['hotel_transport_self_paid_amount'] ?? null,
+                'hotel_transport_self_paid_currency' => $form['hotel_transport_self_paid_currency'] ?? null,
+                'alternative_airport_transfer_amount' => $form['air_alternative_airport_transfer_amount'] ?? null,
+                'alternative_airport_transfer_currency' => $form['air_alternative_airport_transfer_currency'] ?? null,
+                'result_preview' => $resultPreview,
+            ];
+        } elseif ($transportMode === 'rail') {
+            $modeFields['rail'] = [
+                'delay_at_final_minutes' => $form['delayAtFinalMinutes'] ?? null,
+                'compensation_band' => $form['compensationBand'] ?? null,
+                'delay_min_eu' => $compute['delayMinEU'] ?? null,
+                'known_delay_before_purchase' => $compute['knownDelayBeforePurchase'] ?? null,
+                'voucher_accepted' => $form['voucherAccepted'] ?? null,
+                'operator_exceptional_circumstances' => $form['operatorExceptionalCircumstances'] ?? null,
+                'operator_exceptional_type' => $form['operatorExceptionalType'] ?? null,
+                'minimum_threshold_applies' => $form['minThresholdApplies'] ?? null,
+                'result_preview' => $resultPreview,
+            ];
+        }
 
         return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
+            'result_preview' => $resultPreview,
             'delayAtFinalMinutes' => $form['delayAtFinalMinutes'] ?? null,
             'compensationBand' => $form['compensationBand'] ?? null,
+            'rail_delay_at_final_minutes' => $transportMode === 'rail' ? ($form['delayAtFinalMinutes'] ?? null) : null,
+            'rail_compensation_band' => $transportMode === 'rail' ? ($form['compensationBand'] ?? null) : null,
             'voucherAccepted' => $form['voucherAccepted'] ?? null,
             'operatorExceptionalCircumstances' => $form['operatorExceptionalCircumstances'] ?? null,
             'operatorExceptionalType' => $form['operatorExceptionalType'] ?? null,
@@ -918,7 +1386,32 @@ class SessionToFixtureMapper
             // Useful for scenario overrides
             'delayMinEU' => $compute['delayMinEU'] ?? null,
             'knownDelayBeforePurchase' => $compute['knownDelayBeforePurchase'] ?? null,
-        ];
+        ] + ($transportMode === 'bus' ? [
+            'scheduled_distance_km' => $form['scheduled_distance_km'] ?? null,
+            'vehicle_breakdown' => $form['vehicle_breakdown'] ?? null,
+            'hotel_transport_self_paid_amount' => $form['hotel_transport_self_paid_amount'] ?? null,
+            'hotel_transport_self_paid_currency' => $form['hotel_transport_self_paid_currency'] ?? null,
+            'bus_hotel_transport_self_paid_amount' => $form['bus_hotel_transport_self_paid_amount'] ?? ($form['hotel_transport_self_paid_amount'] ?? null),
+            'bus_hotel_transport_self_paid_currency' => $form['bus_hotel_transport_self_paid_currency'] ?? ($form['hotel_transport_self_paid_currency'] ?? null),
+            'bus_hotel_legal_cap_eur_per_night' => 80,
+            'bus_hotel_legal_nights_max' => 2,
+            'bus_meals_soft_cap_eur_per_delay_hour' => 20,
+            'bus_hotel_transport_soft_cap_eur' => 50,
+        ] : []) + ($transportMode === 'ferry' ? [
+            'hotel_transport_self_paid_amount' => $form['hotel_transport_self_paid_amount'] ?? null,
+            'hotel_transport_self_paid_currency' => $form['hotel_transport_self_paid_currency'] ?? null,
+            'ferry_hotel_legal_cap_eur_per_night' => 80,
+            'ferry_hotel_legal_nights_max' => 3,
+            'ferry_meals_legal_rule' => 'reasonable',
+            'ferry_hotel_transport_included' => true,
+            'ferry_refund_ticket_price_percent' => 100,
+            'ferry_refund_deadline_days' => 7,
+            'ferry_meals_soft_cap_eur_per_day' => 40,
+            'ferry_local_transport_soft_cap_eur_per_trip' => 50,
+            'ferry_local_transport_soft_cap_total_eur' => 150,
+            'ferry_taxi_soft_cap_eur' => 150,
+            'ferry_self_arranged_alt_transport_soft_cap_total_eur' => 400,
+        ] : []);
     }
 
     /**
@@ -930,6 +1423,7 @@ class SessionToFixtureMapper
         $form = (array)($flow['form'] ?? []);
         $auto = (array)($flow['meta']['_auto'] ?? []);
         $segAuto = (array)($flow['meta']['_segments_auto'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
 
         $journeyBasic = [
             'dep_date' => $form['dep_date'] ?? ($auto['dep_date']['value'] ?? null),
@@ -945,12 +1439,52 @@ class SessionToFixtureMapper
             'price' => $form['price'] ?? ($auto['price']['value'] ?? null),
         ];
 
+        $normalizePlace = static function ($value): string {
+            return preg_replace('/\s+/u', ' ', trim((string)$value)) ?? trim((string)$value);
+        };
+        $looksLikeNoise = static function (string $value): bool {
+            if ($value === '') {
+                return true;
+            }
+            $letterCount = preg_match_all('/[\p{L}]/u', $value, $mLetters);
+            $digitCount = preg_match_all('/[\p{N}]/u', $value, $mDigits);
+            $symbolCount = preg_match_all('/[^\p{L}\p{N}\s]/u', $value, $mSymbols);
+            if ($letterCount === 0 && $digitCount < 2) {
+                return true;
+            }
+            if (mb_strlen($value, 'UTF-8') <= 4 && $letterCount < 3) {
+                return true;
+            }
+            if ($symbolCount >= max(2, $letterCount)) {
+                return true;
+            }
+            if ($letterCount > 0 && preg_match('/(?:^|\s)(?:fq|bust|eee|to)(?:\s|$)/iu', $value)) {
+                return true;
+            }
+            return false;
+        };
+
         $segments = [];
         for ($i = 0; $i < min(3, count($segAuto)); $i++) {
             $s = (array)$segAuto[$i];
+            $from = $normalizePlace($s['from'] ?? null);
+            $to = $normalizePlace($s['to'] ?? null);
+            $fallbackFrom = $normalizePlace($journeyBasic['dep_station'] ?? '');
+            $fallbackTo = $normalizePlace($journeyBasic['arr_station'] ?? '');
+            if ($transportMode === 'bus') {
+                if ($looksLikeNoise($from) && $fallbackFrom !== '') {
+                    $from = $fallbackFrom;
+                }
+                if ($looksLikeNoise($to) && $fallbackTo !== '') {
+                    $to = $fallbackTo;
+                }
+            }
+            if ($from === '' && $to === '' && empty($s['schedDep']) && empty($s['schedArr']) && empty($s['depDate']) && empty($s['arrDate'])) {
+                continue;
+            }
             $segments[] = [
-                'from' => $s['from'] ?? null,
-                'to' => $s['to'] ?? null,
+                'from' => $from !== '' ? $from : null,
+                'to' => $to !== '' ? $to : null,
                 'schedDep' => $s['schedDep'] ?? null,
                 'schedArr' => $s['schedArr'] ?? null,
                 'trainNo' => $s['trainNo'] ?? ($s['train_no'] ?? null),
@@ -1056,8 +1590,50 @@ class SessionToFixtureMapper
     {
         $incident = (array)($flow['incident'] ?? []);
         $form = (array)($flow['form'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
+        $busIncidentMain = $transportMode === 'bus' ? ($incident['main'] ?? null) : null;
+        $busOverbooking = $transportMode === 'bus'
+            ? (($form['overbooking'] ?? null) ?? (($incident['main'] ?? null) === 'overbooking' ? 'yes' : null))
+            : null;
+        $modeFields = [];
+        if ($transportMode === 'bus') {
+            $modeFields['bus'] = [
+                'incident_main' => $busIncidentMain,
+                'delay_departure_band' => $form['delay_departure_band'] ?? null,
+                'delay_minutes_departure' => $form['delay_minutes_departure'] ?? null,
+                'planned_duration_band' => $form['planned_duration_band'] ?? null,
+                'vehicle_breakdown' => $form['vehicle_breakdown'] ?? null,
+                'missed_connection_due_to_delay' => $form['missed_connection_due_to_delay'] ?? null,
+                'overbooking' => $busOverbooking,
+                'severe_weather' => $form['severe_weather'] ?? null,
+                'major_natural_disaster' => $form['major_natural_disaster'] ?? null,
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $modeFields['ferry'] = [
+                'incident_main' => $incident['main'] ?? null,
+                'art16_notice_within_30min' => $form['ferry_art16_notice_within_30min'] ?? null,
+                'informed_before_purchase' => $form['informed_before_purchase'] ?? null,
+                'open_ticket_without_departure_time' => $form['open_ticket_without_departure_time'] ?? null,
+                'weather_safety' => $form['weather_safety'] ?? null,
+                'extraordinary_circumstances' => $form['extraordinary_circumstances'] ?? null,
+                'overnight_required' => $form['ferry_overnight_required'] ?? ($form['overnight_needed'] ?? null),
+            ];
+        } elseif ($transportMode === 'air') {
+            $modeFields['air'] = [
+                'incident_main' => $incident['main'] ?? null,
+                'boarding_denied' => $form['boarding_denied'] ?? null,
+                'voluntary_denied_boarding' => $form['voluntary_denied_boarding'] ?? null,
+                'cancellation_notice_band' => $form['cancellation_notice_band'] ?? null,
+                'protected_connection_missed' => $form['protected_connection_missed'] ?? null,
+                'reroute_offered' => $form['reroute_offered'] ?? null,
+                'refund_offered' => $form['refund_offered'] ?? null,
+                'hotel_required' => $form['hotel_required'] ?? null,
+            ];
+        }
 
         return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
             'incident_main' => $incident['main'] ?? null,
             'incident_missed' => $incident['missed'] ?? null,
             'expected_delay_60' => $form['expected_delay_60'] ?? null,
@@ -1080,6 +1656,26 @@ class SessionToFixtureMapper
             'operatorExceptionalCircumstances' => $form['operatorExceptionalCircumstances'] ?? null,
             'operatorExceptionalType' => $form['operatorExceptionalType'] ?? null,
             'minThresholdApplies' => $form['minThresholdApplies'] ?? null,
+            'ferry_art16_notice_within_30min' => $form['ferry_art16_notice_within_30min'] ?? null,
+            'vehicle_breakdown' => $form['vehicle_breakdown'] ?? null,
+            'delay_departure_band' => $form['delay_departure_band'] ?? null,
+            'delay_minutes_departure' => $form['delay_minutes_departure'] ?? null,
+            'planned_duration_band' => $form['planned_duration_band'] ?? null,
+            'missed_connection_due_to_delay' => $form['missed_connection_due_to_delay'] ?? null,
+            'overbooking' => $form['overbooking'] ?? null,
+            'severe_weather' => $form['severe_weather'] ?? null,
+            'major_natural_disaster' => $form['major_natural_disaster'] ?? null,
+
+            // Bus-specific aliases to support gradual split from the shared rail-shaped model.
+            'bus_incident_main' => $busIncidentMain,
+            'bus_delay_departure_band' => $transportMode === 'bus' ? ($form['delay_departure_band'] ?? null) : null,
+            'bus_delay_minutes_departure' => $transportMode === 'bus' ? ($form['delay_minutes_departure'] ?? null) : null,
+            'bus_planned_duration_band' => $transportMode === 'bus' ? ($form['planned_duration_band'] ?? null) : null,
+            'bus_vehicle_breakdown' => $transportMode === 'bus' ? ($form['vehicle_breakdown'] ?? null) : null,
+            'bus_missed_connection_due_to_delay' => $transportMode === 'bus' ? ($form['missed_connection_due_to_delay'] ?? null) : null,
+            'bus_overbooking' => $busOverbooking,
+            'bus_severe_weather' => $transportMode === 'bus' ? ($form['severe_weather'] ?? null) : null,
+            'bus_major_natural_disaster' => $transportMode === 'bus' ? ($form['major_natural_disaster'] ?? null) : null,
         ];
     }
 
@@ -1089,10 +1685,33 @@ class SessionToFixtureMapper
     private function extractStep6Choices(array $flow): array
     {
         $f = (array)($flow['form'] ?? []);
+        $transportMode = $this->detectTransportMode($flow);
         $isTrack = strtolower((string)($f['is_stranded_trin5'] ?? '')) === 'yes'
             || strtolower((string)($f['stranded_location'] ?? '')) === 'track';
+        $modeFields = [];
+        if ($transportMode === 'rail') {
+            $modeFields['rail'] = [
+                'is_stranded_trin5' => $f['is_stranded_trin5'] ?? null,
+                'maps_opt_in_trin5' => $f['maps_opt_in_trin5'] ?? null,
+                'stranded_location' => $f['stranded_location'] ?? null,
+                'blocked_train_alt_transport' => $f['blocked_train_alt_transport'] ?? null,
+                'blocked_no_transport_action' => $f['blocked_no_transport_action'] ?? null,
+                'assistance_alt_transport_type' => $f['assistance_alt_transport_type'] ?? null,
+                'a20_where_ended' => $isTrack ? ($f['a20_where_ended'] ?? ($f['assistance_alt_to_destination'] ?? null)) : null,
+                'a20_arrival_station' => $isTrack ? ($f['a20_arrival_station'] ?? ($f['assistance_alt_arrival_station'] ?? null)) : null,
+                'a20_arrival_station_other' => $isTrack ? ($f['a20_arrival_station_other'] ?? ($f['assistance_alt_arrival_station_other'] ?? null)) : null,
+                'a20_where_ended_assumed' => $isTrack ? ($f['a20_where_ended_assumed'] ?? ($f['assistance_alt_to_destination_assumed'] ?? null)) : null,
+                'handoff_station' => $isTrack ? ($f['handoff_station'] ?? null) : null,
+                'blocked_self_paid_transport_type' => $f['blocked_self_paid_transport_type'] ?? null,
+                'blocked_self_paid_amount' => $f['blocked_self_paid_amount'] ?? null,
+                'blocked_self_paid_currency' => $f['blocked_self_paid_currency'] ?? null,
+                'blocked_self_paid_receipt' => $f['blocked_self_paid_receipt'] ?? null,
+            ];
+        }
 
         return [
+            '_mode' => $transportMode,
+            '_mode_fields' => $modeFields,
             'is_stranded_trin5' => $f['is_stranded_trin5'] ?? null,
             'maps_opt_in_trin5' => $f['maps_opt_in_trin5'] ?? null,
             'stranded_location' => $f['stranded_location'] ?? null,
@@ -1120,6 +1739,195 @@ class SessionToFixtureMapper
     private function extractStep9Downgrade(array $flow): array { return $this->extractStep8Downgrade($flow); }
     private function extractStep10Compensation(array $flow): array { return $this->extractStep9Compensation($flow); }
 
+    /**
+     * @param array<string,mixed> $canonical
+     * @param array<string,mixed> $step4Journey
+     * @param array<string,mixed> $step5Incident
+     * @param array<string,mixed> $step6Choices
+     * @param array<string,mixed> $step7Remedies
+     * @param array<string,mixed> $step8Assistance
+     * @param array<string,mixed> $step10Comp
+     * @param array<string,mixed> $scopeMeta
+     * @param array<string,mixed> $contractMeta
+     * @param array<string,mixed> $incidentMeta
+     * @return array<string,mixed>
+     */
+    private function enrichCanonicalModeFields(
+        array $canonical,
+        string $transportMode,
+        array $step4Journey,
+        array $step5Incident,
+        array $step6Choices,
+        array $step7Remedies,
+        array $step8Assistance,
+        array $step10Comp,
+        array $scopeMeta,
+        array $contractMeta,
+        array $incidentMeta
+    ): array {
+        if ($canonical === []) {
+            return $canonical;
+        }
+
+        $modeBundle = [
+            'journey' => (array)(($step4Journey['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'incident' => (array)(($step5Incident['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'choices' => (array)(($step6Choices['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'remedies' => (array)(($step7Remedies['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'assistance' => (array)(($step8Assistance['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'compensation' => (array)(($step10Comp['_mode_fields'] ?? [])[$transportMode] ?? []),
+            'scope' => $this->extractCanonicalScopeModeFields($transportMode, $scopeMeta),
+            'contract' => $this->extractCanonicalContractModeFields($transportMode, $contractMeta),
+            'incident_meta' => $this->extractCanonicalIncidentModeFields($transportMode, $incidentMeta),
+        ];
+        $modeBundle = array_filter($modeBundle, static fn($value): bool => is_array($value) && $value !== []);
+
+        $canonical['_mode'] = $transportMode;
+        $canonical['_mode_fields'] = [$transportMode => $modeBundle];
+
+        foreach (['journey', 'incident', 'contract', 'legal_assessment', 'evidence'] as $section) {
+            if (!isset($canonical[$section]) || !is_array($canonical[$section])) {
+                continue;
+            }
+            $sectionFields = [];
+            if ($section === 'journey') {
+                $sectionFields = (array)($modeBundle['journey'] ?? []);
+            } elseif ($section === 'incident') {
+                $sectionFields = array_replace(
+                    (array)($modeBundle['incident_meta'] ?? []),
+                    (array)($modeBundle['incident'] ?? [])
+                );
+            } elseif ($section === 'contract') {
+                $sectionFields = (array)($modeBundle['contract'] ?? []);
+            } elseif ($section === 'legal_assessment') {
+                $sectionFields = array_replace(
+                    (array)($modeBundle['scope'] ?? []),
+                    (array)($modeBundle['compensation'] ?? [])
+                );
+            } elseif ($section === 'evidence') {
+                $sectionFields = array_replace(
+                    (array)($modeBundle['remedies'] ?? []),
+                    (array)($modeBundle['assistance'] ?? [])
+                );
+            }
+            if ($sectionFields === []) {
+                continue;
+            }
+            $canonical[$section]['_mode'] = $transportMode;
+            $canonical[$section]['_mode_fields'] = [$transportMode => $sectionFields];
+        }
+
+        return $canonical;
+    }
+
+    /**
+     * @param array<string,mixed> $scopeMeta
+     * @return array<string,mixed>
+     */
+    private function extractCanonicalScopeModeFields(string $transportMode, array $scopeMeta): array
+    {
+        return match ($transportMode) {
+            'bus' => array_filter([
+                'scheduled_distance_km' => $scopeMeta['scheduled_distance_km'] ?? null,
+                'departure_from_terminal' => $scopeMeta['departure_from_terminal'] ?? null,
+                'bus_regular_service' => $scopeMeta['bus_regular_service'] ?? null,
+                'boarding_in_eu' => $scopeMeta['boarding_in_eu'] ?? null,
+                'alighting_in_eu' => $scopeMeta['alighting_in_eu'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'ferry' => array_filter([
+                'departure_port_in_eu' => $scopeMeta['departure_port_in_eu'] ?? null,
+                'arrival_port_in_eu' => $scopeMeta['arrival_port_in_eu'] ?? null,
+                'carrier_is_eu' => $scopeMeta['carrier_is_eu'] ?? null,
+                'vessel_passenger_capacity' => $scopeMeta['vessel_passenger_capacity'] ?? null,
+                'route_distance_meters' => $scopeMeta['route_distance_meters'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'air' => array_filter([
+                'departure_airport_in_eu' => $scopeMeta['departure_airport_in_eu'] ?? null,
+                'arrival_airport_in_eu' => $scopeMeta['arrival_airport_in_eu'] ?? null,
+                'operating_carrier_is_eu' => $scopeMeta['operating_carrier_is_eu'] ?? null,
+                'flight_distance_km' => $scopeMeta['flight_distance_km'] ?? null,
+                'air_distance_band' => $scopeMeta['air_distance_band'] ?? null,
+                'air_delay_threshold_hours' => $scopeMeta['air_delay_threshold_hours'] ?? null,
+                'intra_eu_over_1500' => $scopeMeta['intra_eu_over_1500'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'rail' => array_filter([
+                'transport_mode' => $scopeMeta['transport_mode'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            default => [],
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $contractMeta
+     * @return array<string,mixed>
+     */
+    private function extractCanonicalContractModeFields(string $transportMode, array $contractMeta): array
+    {
+        return match ($transportMode) {
+            'air' => array_filter([
+                'marketing_carrier' => $contractMeta['marketing_carrier'] ?? null,
+                'operating_carrier' => $contractMeta['operating_carrier'] ?? null,
+                'air_connection_type' => $contractMeta['air_connection_type'] ?? null,
+                'self_transfer_notice' => $contractMeta['self_transfer_notice'] ?? null,
+                'protected_connection_disclosed' => $contractMeta['protected_connection_disclosed'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'bus', 'ferry', 'rail' => array_filter([
+                'claim_transport_mode' => $contractMeta['claim_transport_mode'] ?? null,
+                'original_contract_mode' => $contractMeta['original_contract_mode'] ?? null,
+                'incident_segment_mode' => $contractMeta['incident_segment_mode'] ?? null,
+                'journey_structure' => $contractMeta['journey_structure'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            default => [],
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $incidentMeta
+     * @return array<string,mixed>
+     */
+    private function extractCanonicalIncidentModeFields(string $transportMode, array $incidentMeta): array
+    {
+        return match ($transportMode) {
+            'bus' => array_filter([
+                'incident_type' => $incidentMeta['incident_type'] ?? null,
+                'delay_departure_band' => $incidentMeta['delay_departure_band'] ?? null,
+                'delay_minutes_departure' => $incidentMeta['delay_minutes_departure'] ?? null,
+                'planned_duration_band' => $incidentMeta['planned_duration_band'] ?? null,
+                'vehicle_breakdown' => $incidentMeta['vehicle_breakdown'] ?? null,
+                'missed_connection_due_to_delay' => $incidentMeta['missed_connection_due_to_delay'] ?? null,
+                'overbooking' => $incidentMeta['overbooking'] ?? null,
+                'severe_weather' => $incidentMeta['severe_weather'] ?? null,
+                'major_natural_disaster' => $incidentMeta['major_natural_disaster'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'ferry' => array_filter([
+                'incident_type' => $incidentMeta['incident_type'] ?? null,
+                'ferry_art16_notice_within_30min' => $incidentMeta['ferry_art16_notice_within_30min'] ?? null,
+                'informed_before_purchase' => $incidentMeta['informed_before_purchase'] ?? null,
+                'open_ticket_without_departure_time' => $incidentMeta['open_ticket_without_departure_time'] ?? null,
+                'weather_safety' => $incidentMeta['weather_safety'] ?? null,
+                'extraordinary_circumstances' => $incidentMeta['extraordinary_circumstances'] ?? null,
+                'overnight_required' => $incidentMeta['overnight_required'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'air' => array_filter([
+                'incident_type' => $incidentMeta['incident_type'] ?? null,
+                'boarding_denied' => $incidentMeta['boarding_denied'] ?? null,
+                'voluntary_denied_boarding' => $incidentMeta['voluntary_denied_boarding'] ?? null,
+                'cancellation_notice_band' => $incidentMeta['cancellation_notice_band'] ?? null,
+                'protected_connection_missed' => $incidentMeta['protected_connection_missed'] ?? null,
+                'reroute_offered' => $incidentMeta['reroute_offered'] ?? null,
+                'refund_offered' => $incidentMeta['refund_offered'] ?? null,
+                'hotel_required' => $incidentMeta['hotel_required'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            'rail' => array_filter([
+                'incident_type' => $incidentMeta['incident_type'] ?? null,
+                'incident_missed' => $incidentMeta['incident_missed'] ?? null,
+                'arrival_delay_minutes' => $incidentMeta['arrival_delay_minutes'] ?? null,
+                'operator_exceptional_circumstances' => $incidentMeta['operator_exceptional_circumstances'] ?? null,
+            ], static fn($value): bool => $value !== null && $value !== ''),
+            default => [],
+        };
+    }
+
     private function extractStep7Compensation(array $flow): array
     {
         $form = (array)($flow['form'] ?? []);
@@ -1135,6 +1943,313 @@ class SessionToFixtureMapper
             'extraordinary_type' => $form['extraordinary_type'] ?? null,
             'minThresholdApplies' => $form['minThresholdApplies'] ?? null,
             'delayMinEU' => $compute['delayMinEU'] ?? null,
+        ];
+    }
+
+    private function deriveDefaultCurrency(array $form, array $meta, array $journey): string
+    {
+        $cc = strtoupper(trim((string)(
+            $form['operator_country']
+            ?? ($meta['_auto']['operator_country']['value'] ?? null)
+            ?? ($journey['country']['value'] ?? null)
+            ?? ''
+        )));
+        $cur = self::COUNTRY_TO_CURRENCY[$cc] ?? 'EUR';
+
+        return in_array($cur, self::SUPPORTED_CURRENCIES, true) ? $cur : 'EUR';
+    }
+
+    private function detectExplicitMoneyCurrency(string $raw): ?string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+        if (preg_match('/€/u', $raw) || preg_match('/\bEUR(?:O)?\b/i', $raw)) {
+            return 'EUR';
+        }
+        $symbolMap = [
+            'KČ' => 'CZK',
+            'Kč' => 'CZK',
+            'ZŁ' => 'PLN',
+            'zł' => 'PLN',
+            'FT' => 'HUF',
+            'Ft' => 'HUF',
+            'LEI' => 'RON',
+            'лв' => 'BGN',
+        ];
+        foreach ($symbolMap as $symbol => $iso) {
+            if (stripos($raw, $symbol) !== false) {
+                return $iso;
+            }
+        }
+        if (preg_match('/\b(BGN|CZK|DKK|HUF|PLN|RON|SEK|NOK|GBP|CHF|EUR)\b/i', $raw, $m)) {
+            return strtoupper($m[1]);
+        }
+
+        return null;
+    }
+
+    private function normalizeMoneyAmount(mixed $raw): ?float
+    {
+        $s = trim((string)$raw);
+        if ($s === '') {
+            return null;
+        }
+        $s = preg_replace('/[^0-9,\.\s]/', '', $s) ?? '';
+        $s = preg_replace('/\s+/', '', $s) ?? '';
+        if ($s === '') {
+            return null;
+        }
+
+        $lastComma = strrpos($s, ',');
+        $lastDot = strrpos($s, '.');
+        if ($lastComma !== false && $lastDot !== false) {
+            if ($lastComma > $lastDot) {
+                $s = str_replace('.', '', $s);
+                $s = str_replace(',', '.', $s);
+            } else {
+                $s = str_replace(',', '', $s);
+            }
+        } elseif ($lastComma !== false) {
+            if (substr_count($s, ',') > 1) {
+                $parts = explode(',', $s);
+                $dec = array_pop($parts);
+                $s = implode('', $parts) . '.' . $dec;
+            } else {
+                $s = str_replace(',', '.', $s);
+            }
+        } elseif ($lastDot !== false && substr_count($s, '.') > 1) {
+            $parts = explode('.', $s);
+            $dec = array_pop($parts);
+            $s = implode('', $parts) . '.' . $dec;
+        }
+
+        return is_numeric($s) ? (float)$s : null;
+    }
+
+    private function convertAmount(float $amount, string $fromCurrency, string $toCurrency): float
+    {
+        $fx = [
+            'EUR' => 1.0,
+            'DKK' => 7.45,
+            'SEK' => 11.0,
+            'BGN' => 1.96,
+            'CZK' => 25.0,
+            'HUF' => 385.0,
+            'PLN' => 4.35,
+            'RON' => 4.95,
+            'NOK' => 11.6,
+            'GBP' => 0.86,
+            'CHF' => 0.96,
+        ];
+        $fromCurrency = strtoupper(trim($fromCurrency));
+        $toCurrency = strtoupper(trim($toCurrency));
+        if ($fromCurrency === '' || $toCurrency === '' || $fromCurrency === $toCurrency) {
+            return $amount;
+        }
+        if (!isset($fx[$fromCurrency], $fx[$toCurrency]) || $fx[$fromCurrency] <= 0 || $fx[$toCurrency] <= 0) {
+            return $amount;
+        }
+
+        return ($amount / $fx[$fromCurrency]) * $fx[$toCurrency];
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @return array<string,mixed>
+     */
+    private function buildCompensationPreview(array $flow, string $transportMode): array
+    {
+        $form = (array)($flow['form'] ?? []);
+        $meta = (array)($flow['meta'] ?? []);
+        $journey = (array)($flow['journey'] ?? ($meta['journey'] ?? []));
+        $compute = (array)($flow['compute'] ?? []);
+        $incident = (array)($flow['incident'] ?? []);
+
+        $manualPriceRaw = trim((string)($form['price'] ?? ''));
+        $journeyPriceRaw = trim((string)($journey['ticketPrice']['value'] ?? ''));
+        $autoPriceRaw = trim((string)($meta['_auto']['price']['value'] ?? ''));
+        $priceRaw = $manualPriceRaw !== ''
+            ? $manualPriceRaw
+            : ($journeyPriceRaw !== '' ? $journeyPriceRaw : ($autoPriceRaw !== '' ? $autoPriceRaw : '0'));
+        $ticketCurrency = $this->detectExplicitMoneyCurrency($priceRaw)
+            ?? strtoupper(trim((string)(
+                $form['price_currency']
+                ?? ($journey['ticketPrice']['currency'] ?? '')
+                ?? ($meta['_auto']['price_currency']['value'] ?? '')
+            )));
+        if (!in_array($ticketCurrency, self::SUPPORTED_CURRENCIES, true)) {
+            $ticketCurrency = $this->deriveDefaultCurrency($form, $meta, $journey);
+        }
+        $ticketPriceAmount = $this->normalizeMoneyAmount($priceRaw) ?? 0.0;
+
+        $expenseAmount = function (string $amountKey, ?string $currencyKey = null) use ($form, $ticketCurrency): float {
+            $amount = $this->normalizeMoneyAmount($form[$amountKey] ?? null) ?? 0.0;
+            $fromCurrency = strtoupper(trim((string)($currencyKey !== null ? ($form[$currencyKey] ?? '') : '')));
+            if ($fromCurrency === '') {
+                $fromCurrency = $ticketCurrency;
+            }
+
+            return $this->convertAmount($amount, $fromCurrency, $ticketCurrency);
+        };
+
+        $expenses = [
+            'meals' => $expenseAmount('meal_self_paid_amount', 'meal_self_paid_currency'),
+            'hotel' => $expenseAmount('hotel_self_paid_amount', 'hotel_self_paid_currency'),
+            'hotel_transport' => $expenseAmount('hotel_transport_self_paid_amount', 'hotel_transport_self_paid_currency'),
+            'alt_transport' => $expenseAmount('alt_self_paid_amount', 'alt_self_paid_currency')
+                + $expenseAmount('blocked_self_paid_amount', 'blocked_self_paid_currency'),
+            'other' => $expenseAmount('expense_breakdown_other_amounts', 'expense_breakdown_currency'),
+        ];
+
+        $claimInput = [
+            'transport_mode' => $transportMode,
+            'country_code' => (string)($journey['country']['value'] ?? ($form['operator_country'] ?? 'EU')),
+            'currency' => $ticketCurrency,
+            'ticket_price_total' => $ticketPriceAmount,
+            'disruption' => [
+                'delay_minutes_final' => (int)($form['delayAtFinalMinutes'] ?? ($compute['delayAtFinalMinutes'] ?? 0)),
+                'eu_only' => (bool)($compute['euOnly'] ?? false),
+                'delay_minutes_final_eu' => (bool)($compute['euOnly'] ?? false)
+                    ? (int)($form['delayAtFinalMinutes'] ?? ($compute['delayAtFinalMinutes'] ?? 0))
+                    : null,
+                'notified_before_purchase' => (bool)($compute['knownDelayBeforePurchase'] ?? false),
+                'extraordinary' => false,
+                'self_inflicted' => false,
+                'missed_connection' => !empty($incident['missed']),
+                'art18_active' => true,
+            ],
+            'choices' => [
+                'wants_refund' => ((string)($form['remedyChoice'] ?? '') === 'refund_return')
+                    || ((string)($form['air_refund_scope'] ?? '') !== ''),
+                'wants_reroute_same_soonest' => ((string)($form['remedyChoice'] ?? '') === 'reroute_soonest'),
+                'wants_reroute_later_choice' => ((string)($form['remedyChoice'] ?? '') === 'reroute_later'),
+            ],
+            'expenses' => $expenses,
+            'carrier_offered_choice' => $form['carrier_offered_choice'] ?? null,
+            'scheduled_distance_km' => $form['scheduled_distance_km'] ?? null,
+            'vehicle_breakdown' => $form['vehicle_breakdown'] ?? null,
+            'hotel_self_paid_nights' => $form['hotel_self_paid_nights'] ?? ($form['bus_hotel_self_paid_nights'] ?? ($form['ferry_hotel_self_paid_nights'] ?? null)),
+            'hotel_transport_self_paid_amount' => $expenses['hotel_transport'],
+            'return_to_origin_expense' => $form['return_to_origin_expense'] ?? null,
+            'return_to_origin_amount' => $expenseAmount('return_to_origin_amount', 'return_to_origin_currency'),
+            'reroute_extra_costs' => $form['reroute_extra_costs'] ?? null,
+            'reroute_extra_costs_amount' => $expenseAmount('reroute_extra_costs_amount', 'reroute_extra_costs_currency'),
+            'open_ticket_without_departure_time' => $form['open_ticket_without_departure_time'] ?? null,
+            'weather_safety' => $form['weather_safety'] ?? null,
+            'air_distance_band' => $form['air_distance_band'] ?? null,
+            'air_delay_threshold_hours' => $form['air_delay_threshold_hours'] ?? null,
+            'air_refund_scope' => $form['air_refund_scope'] ?? null,
+            'air_alternative_airport_transfer_amount' => $expenseAmount('air_alternative_airport_transfer_amount', 'air_alternative_airport_transfer_currency'),
+        ];
+
+        $claim = (new ClaimCalculator())->calculate($claimInput);
+        $breakdown = (array)($claim['breakdown'] ?? []);
+        $totals = (array)($claim['totals'] ?? []);
+        $art18 = (array)($breakdown['art18'] ?? []);
+        $comp = (array)($breakdown['compensation'] ?? []);
+        $refund = (array)($breakdown['refund'] ?? []);
+
+        if ($transportMode === 'air') {
+            $airRights = (array)($flow['meta']['_multimodal']['air_rights'] ?? []);
+            $airDistanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($airRights['air_distance_band'] ?? ''))));
+            $airRerouteArrivalDelayMinutes = is_numeric($form['reroute_arrival_delay_minutes'] ?? null)
+                ? (int)$form['reroute_arrival_delay_minutes']
+                : 0;
+            $airCompFlatAmount = match ($airDistanceBand) {
+                'up_to_1500' => 250.0,
+                'intra_eu_over_1500', 'other_1500_to_3500' => 400.0,
+                'other_over_3500' => 600.0,
+                default => 250.0,
+            };
+            $airCompReductionThresholdMinutes = match ($airDistanceBand) {
+                'up_to_1500' => 120,
+                'intra_eu_over_1500', 'other_1500_to_3500' => 180,
+                'other_over_3500' => 240,
+                default => 120,
+            };
+            $airCompReductionPct = (!empty($airRights['gate_air_compensation'])
+                && $airRerouteArrivalDelayMinutes > 0
+                && $airRerouteArrivalDelayMinutes <= $airCompReductionThresholdMinutes)
+                ? 50
+                : 0;
+            if (!empty($airRights['gate_air_compensation'])) {
+                $comp['eligible'] = true;
+                $comp['pct'] = $airCompReductionPct > 0 ? 50.0 : 100.0;
+                $comp['amount'] = round($airCompFlatAmount * (($airCompReductionPct > 0 ? 50 : 100) / 100), 2);
+                $comp['basis'] = 'Art. 7 EC261 flat amount' . ($airCompReductionPct > 0 ? ' - reduced 50% under Art. 7(2)' : '');
+            }
+
+            $airBookedClass = strtolower(trim((string)($form['air_downgrade_booked_class'] ?? '')));
+            $airFlownClass = strtolower(trim((string)($form['air_downgrade_flown_class'] ?? '')));
+            $airDowngradePctRaw = $form['air_downgrade_refund_percent'] ?? null;
+            $airDowngradeGate = (string)($form['downgrade_occurred'] ?? '') === 'yes'
+                || (string)$airDowngradePctRaw !== ''
+                || ($airBookedClass !== '' && $airFlownClass !== '' && $airBookedClass !== $airFlownClass);
+            $airDowngradePctNum = in_array((int)$airDowngradePctRaw, [30, 50, 75], true)
+                ? (int)$airDowngradePctRaw
+                : match ($airDistanceBand) {
+                    'up_to_1500' => 30,
+                    'intra_eu_over_1500', 'other_1500_to_3500' => 50,
+                    'other_over_3500' => 75,
+                    default => 30,
+                };
+            if ($airDowngradeGate && $ticketPriceAmount > 0) {
+                $art18['downgrade_annexii'] = round($ticketPriceAmount * ($airDowngradePctNum / 100), 2);
+            }
+
+            $gross = round(
+                max(0.0, (float)($refund['amount'] ?? 0.0))
+                + max(0.0, (float)($comp['amount'] ?? 0.0))
+                + max(0.0, (float)($breakdown['expenses']['total'] ?? 0.0))
+                + max(0.0, (float)($art18['return_to_origin'] ?? 0.0))
+                + max(0.0, (float)($art18['reroute_extra_costs'] ?? 0.0))
+                + max(0.0, (float)($art18['downgrade_annexii'] ?? 0.0)),
+                2
+            );
+            $serviceFeePct = (float)($totals['service_fee_pct'] ?? 0.0);
+            $totals['gross_claim'] = $gross;
+            $totals['service_fee_amount'] = round($gross * ($serviceFeePct / 100), 2);
+            $totals['net_to_client'] = round(max(0.0, $gross - (float)$totals['service_fee_amount']), 2);
+        }
+
+        return [
+            'ticket_price_total' => round($ticketPriceAmount, 2),
+            'currency' => (string)($totals['currency'] ?? $ticketCurrency),
+            'refund' => [
+                'amount' => round((float)($refund['amount'] ?? 0.0), 2),
+                'basis' => (string)($refund['basis'] ?? ''),
+            ],
+            'compensation' => [
+                'eligible' => (bool)($comp['eligible'] ?? false),
+                'amount' => round((float)($comp['amount'] ?? 0.0), 2),
+                'pct' => (float)($comp['pct'] ?? 0.0),
+                'basis' => (string)($comp['basis'] ?? ''),
+            ],
+            'expenses' => [
+                'total' => round((float)(($breakdown['expenses']['total'] ?? 0.0)), 2),
+                'meals' => round((float)(($breakdown['expenses']['meals'] ?? 0.0)), 2),
+                'hotel' => round((float)(($breakdown['expenses']['hotel'] ?? 0.0)), 2),
+                'hotel_transport' => round((float)(($breakdown['expenses']['hotel_transport'] ?? 0.0)), 2),
+                'alt_transport' => round((float)(($breakdown['expenses']['alt_transport'] ?? 0.0)), 2),
+                'other' => round((float)(($breakdown['expenses']['other'] ?? 0.0)), 2),
+            ],
+            'art18' => [
+                'reroute_extra_costs' => round((float)($art18['reroute_extra_costs'] ?? 0.0), 2),
+                'return_to_origin' => round((float)($art18['return_to_origin'] ?? 0.0), 2),
+                'downgrade_annexii' => round((float)($art18['downgrade_annexii'] ?? 0.0), 2),
+            ],
+            'totals' => [
+                'gross_claim' => round((float)($totals['gross_claim'] ?? 0.0), 2),
+                'service_fee_pct' => (float)($totals['service_fee_pct'] ?? 0.0),
+                'service_fee_amount' => round((float)($totals['service_fee_amount'] ?? 0.0), 2),
+                'net_to_client' => round((float)($totals['net_to_client'] ?? 0.0), 2),
+            ],
+            'caps' => array_intersect_key(
+                $breakdown,
+                array_flip(['bus_caps', 'ferry_caps'])
+            ),
         ];
     }
 

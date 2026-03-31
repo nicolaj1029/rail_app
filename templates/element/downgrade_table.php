@@ -8,6 +8,8 @@ $classOptions = $classOptions ?? [];
 $reservationOptions = $reservationOptions ?? [];
 $form = $form ?? [];
 $meta = $meta ?? [];
+$isAir = !empty($isAir);
+$isFerry = !empty($isFerry);
 $missedStation = $missedStation ?? '';
 $affectedLegsAuto = $affectedLegsAuto ?? [];
 $affectedSet = [];
@@ -18,12 +20,28 @@ if (is_array($affectedLegsAuto)) {
 }
 
 if (empty($classOptions)) {
-    $classOptions = [
-        'sleeper' => 'Sovevogn',
-        'couchette' => 'Liggevogn',
-        '1st' => '1. klasse',
-        '2nd' => '2. klasse',
-    ];
+    if ($isAir) {
+        $classOptions = [
+            'economy' => 'Economy',
+            'premium_economy' => 'Premium Economy',
+            'business' => 'Business',
+            'first' => 'First',
+        ];
+    } elseif ($isFerry) {
+        $classOptions = [
+            'sleeper' => 'Kahyt / privat overnatning',
+            'couchette' => 'Liggeplads / hvileplads',
+            '1st' => 'Prioriteret / bedre plads',
+            '2nd' => 'Standardplads / basisservice',
+        ];
+    } else {
+        $classOptions = [
+            'sleeper' => 'Sovevogn',
+            'couchette' => 'Liggevogn',
+            '1st' => '1. klasse',
+            '2nd' => '2. klasse',
+        ];
+    }
 }
 if (empty($reservationOptions)) {
     $reservationOptions = [
@@ -32,9 +50,19 @@ if (empty($reservationOptions)) {
         'missing' => 'Reservation mangler',
     ];
 }
+if ($isAir) {
+    $reservationOptions = [];
+}
+if ($isFerry) {
+    $reservationOptions = [];
+}
 
 $mapClass = function($v): string {
     $v = strtolower(trim((string)$v));
+    if (in_array($v, ['economy','standard','coach','main','economy_class'], true)) { return 'economy'; }
+    if (in_array($v, ['premium_economy','premium economy','premium','economy_plus'], true)) { return 'premium_economy'; }
+    if (in_array($v, ['business','business class','biz'], true)) { return 'business'; }
+    if (in_array($v, ['first','first class','1st','1st_class','1'], true)) { return 'first'; }
     if ($v === '1st_class' || $v === '1st' || $v === 'first' || $v === '1') { return '1st'; }
     if ($v === '2nd_class' || $v === '2nd' || $v === 'second' || $v === '2') { return '2nd'; }
     if ($v === 'business' || $v === 'premium') { return '1st'; }
@@ -127,7 +155,7 @@ if (empty($journeyRowsDowng)) {
 ?>
 <?php if (!empty($journeyRowsDowng)): ?>
   <div id="perLegDowngrade" style="margin-top:12px; display:block;">
-    <div class="small"><strong>Per-leg niveau (nedgradering)</strong></div>
+    <div class="small"><strong><?= $isAir ? 'Flight-segmenter (koebt vs floejet)' : ($isFerry ? 'Overfart / service (koebt vs leveret)' : 'Per-leg niveau (nedgradering)') ?></strong></div>
     <?php if ($missedNorm !== '' && $missedIdx !== null): ?>
       <div class="small muted" style="margin-top:4px;">Skift ved: <strong><?= h($missedStation) ?></strong>. R&aelig;kker f&oslash;r/efter markeres.</div>
     <?php endif; ?>
@@ -137,20 +165,22 @@ if (empty($journeyRowsDowng)) {
         <button type="button" id="toggleAllDowngLegs" style="margin-left:8px; padding:2px 6px; font-size:12px;">Vis alle ben</button>
       </div>
     <?php endif; ?>
-    <div class="small muted" style="margin-top:4px;">LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.</div>
+    <div class="small muted" style="margin-top:4px;"><?= $isAir ? 'LLM/OCR har udfyldt koebt/floejet kabineklasse. Marker nedgraderet hvis faktisk floejet var lavere.' : ($isFerry ? 'Brug felterne til at vise, hvad du havde koebt, og hvad der faktisk blev leveret. Reservationstabeller bruges ikke i ferry-sporet.' : 'LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.') ?></div>
     <div class="small" style="overflow:auto; margin-top:6px;">
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Straekning</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Skift</th>
+            <?php if (!$isAir && !$isFerry): ?><th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Skift</th><?php endif; ?>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Afgang</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Tog</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Koebt klasse</th>
-            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Leveret klasse</th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Fly' : ($isFerry ? 'Overfart' : 'Tog') ?></th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Koebt kabineklasse' : ($isFerry ? 'Koebt service/niveau' : 'Koebt klasse') ?></th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Faktisk floejet kabineklasse' : ($isFerry ? 'Faktisk leveret service/niveau' : 'Leveret klasse') ?></th>
+            <?php if (!$isAir && !$isFerry): ?>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Koebt reservation</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Leveret reservation</th>
+            <?php endif; ?>
           </tr>
         </thead>
         <tbody>
@@ -173,16 +203,18 @@ if (empty($journeyRowsDowng)) {
               }
               $purchasedVal = $mapClass($purchasedVal);
               $deliveredVal = $mapClass($form["leg_class_delivered"][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ""));
-              $resPurchasedVal = (string)($form["leg_reservation_purchased"][$idx] ?? '');
-              if ($resPurchasedVal === '') {
-                if ($autoLegRes !== '') {
-                  $resPurchasedVal = $autoLegRes;
-                } elseif (in_array(strtolower($autoBerth), ['seat_reserved','seat','free','free_seat'], true)) {
-                  $resPurchasedVal = $autoBerth;
+              $resPurchasedVal = $isAir ? '' : (string)($form["leg_reservation_purchased"][$idx] ?? '');
+              if (!$isAir) {
+                if ($resPurchasedVal === '') {
+                  if ($autoLegRes !== '') {
+                    $resPurchasedVal = $autoLegRes;
+                  } elseif (in_array(strtolower($autoBerth), ['seat_reserved','seat','free','free_seat'], true)) {
+                    $resPurchasedVal = $autoBerth;
+                  }
                 }
+                $resPurchasedVal = $mapRes($resPurchasedVal);
               }
-              $resPurchasedVal = $mapRes($resPurchasedVal);
-              $resDeliveredVal = $mapRes($form["leg_reservation_delivered"][$idx] ?? "");
+              $resDeliveredVal = $isAir ? '' : $mapRes($form["leg_reservation_delivered"][$idx] ?? "");
               $phase = '';
               if ($missedIdx !== null) {
                 $phase = ($idx < $missedIdx) ? 'F&oslash;r skift' : 'Efter skift';
@@ -191,13 +223,13 @@ if (empty($journeyRowsDowng)) {
             <?php $autoAffected = isset($affectedSet[(int)$idx]); ?>
             <tr<?= $autoAffected ? ' data-auto-affected="1" style="background:#fff7ed;"' : (!empty($affectedSet) ? ' data-auto-affected="0" style="display:none;"' : '') ?>>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["leg"]) ?></td>
-              <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= $phase ?></td>
+              <?php if (!$isAir && !$isFerry): ?><td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= $phase ?></td><?php endif; ?>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["dep"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["arr"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["train"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
                 <select name="leg_class_purchased[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
-                  <option value=""><?= __("Vaelg koebt niveau") ?></option>
+                  <option value=""><?= $isAir ? __("Vaelg koebt kabineklasse") : __("Vaelg koebt niveau") ?></option>
                   <?php foreach ($classOptions as $key => $label): ?>
                     <option value="<?= h($key) ?>" <?= $purchasedVal===$key?"selected":"" ?>><?= h($label) ?></option>
                   <?php endforeach; ?>
@@ -205,12 +237,16 @@ if (empty($journeyRowsDowng)) {
               </td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
                 <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
-                  <option value=""><?= __("Vaelg leveret niveau") ?></option>
+                  <option value=""><?= $isAir ? __("Vaelg floejet kabineklasse") : __("Vaelg leveret niveau") ?></option>
                   <?php foreach ($classOptions as $key => $label): ?>
                     <option value="<?= h($key) ?>" <?= $deliveredVal===$key?"selected":"" ?>><?= h($label) ?></option>
                   <?php endforeach; ?>
                 </select>
               </td>
+              <?php if ($isAir || $isFerry): ?>
+                <input type="hidden" name="leg_reservation_purchased[<?= (int)$idx ?>]" value="" />
+                <input type="hidden" name="leg_reservation_delivered[<?= (int)$idx ?>]" value="" />
+              <?php else: ?>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
                 <select name="leg_reservation_purchased[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
                   <option value=""><?= __("Vaelg koebt reservation") ?></option>
@@ -227,6 +263,7 @@ if (empty($journeyRowsDowng)) {
                   <?php endforeach; ?>
                 </select>
               </td>
+              <?php endif; ?>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -237,12 +274,20 @@ if (empty($journeyRowsDowng)) {
         const classRank = {
           'sleeper': 4,
           'couchette': 3,
+          'first': 4,
+          'business': 3,
+          'premium_economy': 2,
+          'economy': 1,
           '1st': 2,
           '2nd': 1
         };
         function normClass(v){
           v = (v || '').toLowerCase().trim();
-          if (v === '1st_class' || v === '1st' || v === 'first' || v === '1') return '1st';
+          if (v === 'premium economy') return 'premium_economy';
+          if (v === 'economy class' || v === 'main cabin' || v === 'coach') return 'economy';
+          if (v === 'business class' || v === 'biz') return 'business';
+          if (v === 'first class') return 'first';
+          if (v === '1st_class' || v === '1st' || v === '1') return '1st';
           if (v === '2nd_class' || v === '2nd' || v === 'second' || v === '2') return '2nd';
           if (v === 'business' || v === 'premium') return '1st';
           if (v === 'economy' || v === 'standard') return '2nd';
@@ -261,9 +306,9 @@ if (empty($journeyRowsDowng)) {
         function bindRow(row, idx){
           const selBuy = row.querySelector('select[name="leg_class_purchased['+idx+']"]');
           const selDel = row.querySelector('select[name="leg_class_delivered['+idx+']"]');
-          const selResBuy = row.querySelector('select[name="leg_reservation_purchased['+idx+']"]');
-          const selResDel = row.querySelector('select[name="leg_reservation_delivered['+idx+']"]');
-          if (!selBuy || !selDel || !selResBuy || !selResDel) return;
+        const selResBuy = row.querySelector('select[name="leg_reservation_purchased['+idx+']"]');
+        const selResDel = row.querySelector('select[name="leg_reservation_delivered['+idx+']"]');
+        if (!selBuy || !selDel) return;
           let hid = row.querySelector('input[name="leg_downgraded['+idx+']"]');
           if (!hid) {
             hid = document.createElement('input');
@@ -277,18 +322,18 @@ if (empty($journeyRowsDowng)) {
             const rBuy = classRank[cBuy] || 0;
             const rDel = classRank[cDel] || 0;
             const classDown = rDel > 0 && rBuy > rDel;
-            const resBuy = normRes(selResBuy.value);
-            const resDel = normRes(selResDel.value);
-            const resDown = (resBuy === 'reserved') && (resDel !== '' && resDel !== 'reserved');
-            const downg = classDown || resDown;
-            hid.value = downg ? '1' : '';
-          };
-          selBuy.addEventListener('change', auto);
-          selDel.addEventListener('change', auto);
-          selResBuy.addEventListener('change', auto);
-          selResDel.addEventListener('change', auto);
-          auto();
-        }
+          const resDown = selResBuy && selResDel
+            ? ((normRes(selResBuy.value) === 'reserved') && (normRes(selResDel.value) !== '' && normRes(selResDel.value) !== 'reserved'))
+            : false;
+          const downg = classDown || resDown;
+          hid.value = downg ? '1' : '';
+        };
+        selBuy.addEventListener('change', auto);
+        selDel.addEventListener('change', auto);
+        if (selResBuy) { selResBuy.addEventListener('change', auto); }
+        if (selResDel) { selResDel.addEventListener('change', auto); }
+        auto();
+      }
         document.querySelectorAll('#perLegDowngrade table tbody tr').forEach((tr,i)=>bindRow(tr,i));
 
         var btn = document.getElementById('toggleAllDowngLegs');

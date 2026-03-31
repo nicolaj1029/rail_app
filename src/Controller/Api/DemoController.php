@@ -737,6 +737,7 @@ class DemoController extends AppController
         $notified = (bool)($scenario['compute']['knownDelayBeforePurchase'] ?? false);
 
         return [
+            'transport_mode' => strtolower(trim((string)($scenario['transport_mode'] ?? 'rail'))),
             'country_code' => $country ?: 'EU',
             'currency' => $currency,
             'ticket_price_total' => $price,
@@ -764,6 +765,11 @@ class DemoController extends AppController
                 'alt_transport' => 0,
                 'other' => 0,
             ],
+            'carrier_offered_choice' => $scenario['wizard']['step7_remedies']['carrier_offered_choice'] ?? null,
+            'scheduled_distance_km' => $scenario['wizard']['step10_compensation']['scheduled_distance_km'] ?? null,
+            'vehicle_breakdown' => $scenario['wizard']['step5_incident']['vehicle_breakdown'] ?? null,
+            'hotel_self_paid_nights' => $scenario['wizard']['step8_assistance']['hotel_self_paid_nights'] ?? null,
+            'hotel_transport_self_paid_amount' => $scenario['wizard']['step8_assistance']['hotel_transport_self_paid_amount'] ?? null,
             'already_refunded' => 0,
         ];
     }

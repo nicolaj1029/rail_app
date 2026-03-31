@@ -14,8 +14,8 @@ final class LlmExtractor implements ExtractorInterface
         $logs = [];
 
         // Env/config guard: if not configured, return stub result with low confidence.
-    $provider = $this->env('LLM_PROVIDER') ?: 'disabled';
     $apiKey   = $this->env('OPENAI_API_KEY');
+    $provider = $this->env('LLM_PROVIDER') ?: ($apiKey ? 'openai' : 'disabled');
     $baseUrlRaw  = (string)($this->env('OPENAI_BASE_URL') ?: 'https://api.openai.com/v1');
         $model    = $this->env('OPENAI_MODEL') ?: 'gpt-4o-mini';
         $timeout  = (int)($this->env('LLM_TIMEOUT_SECONDS') ?: 15);
@@ -82,10 +82,10 @@ final class LlmExtractor implements ExtractorInterface
 
             // Compose messages with an extra system instruction that emphasizes label hint preference
             $messages = [
-                ['role' => 'system', 'content' => 'You extract structured fields from EU train tickets. Output strict JSON only.'],
+                ['role' => 'system', 'content' => 'You extract structured fields from EU transport tickets (train, air, bus, ferry). Output strict JSON only.'],
             ];
             // If hints were appended to the prompt, reinforce usage as a system directive
-            $messages[] = ['role' => 'system', 'content' => 'When multilingual label hints are provided in the conversation, prefer extracting fields from text segments that are immediately preceded by or on the same line as those labels in the relevant language (e.g., From/To, Departure/Arrival date/time, Train number). Avoid substring matches and ignore code-like tokens for station names (e.g., all-caps codes or tokens containing digits). If uncertain, return null.'];
+            $messages[] = ['role' => 'system', 'content' => 'When multilingual label hints are provided in the conversation, prefer extracting fields from text segments that are immediately preceded by or on the same line as those labels in the relevant language (e.g., From/To, Departure/Arrival date/time, Train number). Avoid substring matches and ignore code-like tokens for station names (e.g., all-caps codes or tokens containing digits). If the document looks like an air boarding pass, prefer extracting marketing_carrier, operating_carrier, operator, operator_country and operator_product as separate values when they are visible. If only one carrier name is visible, use it for operator and operating_carrier; if a marketed and an operating carrier differ, keep them separate. If uncertain, return null.'];
             $messages[] = ['role' => 'user', 'content' => $prompt];
 
             $body = [
@@ -183,18 +183,23 @@ final class LlmExtractor implements ExtractorInterface
             'operator' => 'string|null',
             'operator_country' => 'string|null',
             'operator_product' => 'string|null',
+            'marketing_carrier' => 'string|null',
+            'operating_carrier' => 'string|null',
             'notes' => 'array of strings with uncertainties or OCR ambiguities (optional)',
         ];
 
         $schemaText = json_encode($schema, JSON_UNESCAPED_SLASHES);
         return <<<EOT
-Extract the following fields from the OCR text of a European train ticket.
+Extract the following fields from the OCR text of a European transport ticket.
 Return STRICT JSON with exactly these keys and values matching the types:
 {$schemaText}
 
 Rules:
 - Use ISO date YYYY-MM-DD when a date is present.
 - Use 24-hour HH:MM for times.
+- For air documents, do not collapse carrier fields: keep marketing_carrier, operating_carrier, and operator separate when the ticket explicitly distinguishes them.
+- Use the exact carrier/brand names printed on the ticket when present. Prefer the marketed carrier for operator; prefer the actual operating carrier for operating_carrier.
+- If the air ticket only names one carrier, populate both operator and operating_carrier with that name when no better split is visible.
 - If unknown, put null.
 - Do not add comments or extra keys. Output JSON only.
 
@@ -257,7 +262,7 @@ EOT;
      */
     private function normalizeFields(array $parsed): array
     {
-        $keys = ['dep_station','arr_station','dep_date','dep_time','arr_time','train_no','ticket_no','price','operator','operator_country','operator_product'];
+        $keys = ['dep_station','arr_station','dep_date','dep_time','arr_time','train_no','ticket_no','price','operator','operator_country','operator_product','marketing_carrier','operating_carrier'];
         $out = [];
         foreach ($keys as $k) {
             $v = $parsed[$k] ?? null;

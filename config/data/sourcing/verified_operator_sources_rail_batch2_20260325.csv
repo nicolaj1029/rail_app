@@ -1,0 +1,17 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+bdz,rail,BDZ,https://holding.bdz.bg/en/info/about.html,high
+cfl,rail,CFL,https://groupe.cfl.lu/en-gb/whoarewe,high
+cfr_calatori,rail,CFR Calatori,https://www.cfrcalatori.ro/;https://www.cfrcalatori.ro/en/contact/;https://www.cfrcalatori.ro/en/services-or-goods-produced-by-the-enterprise-in-the-public-interest/,high
+cp,rail,CP,https://www.cp.pt/info/en/cp-group;https://www.cp.pt/info/en/vision-mission-values;https://www.cp.pt/info/en/our-activity,high
+elron,rail,Elron,https://elron.ee/en;https://elron.ee/en/elronist/organisatsioonist;https://elron.ee/en/uldinfo/general-contact,high
+iarnrod_eireann,rail,Iarnrod Eireann,https://www.irishrail.ie/about-us/company-information;https://www.irishrail.ie/about-us/company-information/en-ie/;https://www.irishrail.ie/en-ie/about_us/,high
+ltg_link,rail,LTG Link,https://ltglink.lt/en/strategy-of-ltg-link,high
+mav_start,rail,MAV-START,https://www.mavcsoport.hu/mav-szemelyszallitas/rolunk;https://www.mavcsoport.hu/en/about-us,high
+ns,rail,NS,https://www.ns.nl/en/about-ns;https://www.ns.nl/en/about-ns/activities/our-mission.html;https://www.ns.nl/en/about-ns/strategy,high
+polregio,rail,POLREGIO,https://polregio.pl/en/;https://polregio.pl/,high
+sncb_nmbs,rail,SNCB/NMBS,https://press.sncb.be/;https://press.sncb.be/la-sncb-lance-mobi-20--une-ia-plus-intelligente-pour-les-voyageurs;https://press.sncb.be/la-sncb-lance-lanniversaire-de-ses-100-ans-par-un-grand--merci--a-ses-voyageurs,high
+sbb_cff_ffs,rail,SBB CFF FFS,https://company.sbb.ch/en;https://company.sbb.ch/en/company/about-us.html;https://bahninfrastruktur.sbb.ch/en/about-us.html,high
+sj,rail,SJ,https://www.sj.se/en/about-sj.html;https://www.sj.se/en/company-information.html,high
+slovenske_zeleznice,rail,Slovenske zeleznice,https://www.slo-zeleznice.si/en/about-us;https://www.slo-zeleznice.si/en/company/annual-reports,high
+sncf,rail,SNCF,https://archives.sncf.com/mentions-legales/;https://archives.sncf.com/who-are-we/;https://emploi.sncf.com/travailler-pour-le-groupe-sncf,high
+zssk,rail,ZSSK,https://www.zssk.sk/en/about-us/;https://www.zssk.sk/en/about-us/company-body/;https://www.zssk.sk/en/about-us/terms-conditions/,high

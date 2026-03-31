@@ -29,7 +29,10 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
   .desk-item { border:1px solid #e5e7eb; border-radius:12px; padding:14px; background:#fff; display:grid; gap:8px; }
   .desk-item-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
   .desk-item-title { font-weight:700; color:#0f172a; }
-  .desk-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; background:#eef2ff; color:#3730a3; }
+  .desk-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; background:#eef2ff; color:#3730a3; border:1px solid transparent; }
+  .desk-risk-low { background:#ecfccb; color:#3f6212; border-color:#bef264; }
+  .desk-risk-medium { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .desk-risk-high { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
   .desk-meta { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:#475569; }
   .desk-actions { display:flex; gap:8px; flex-wrap:wrap; }
   .desk-note { border-left:4px solid #0a6fd8; background:#f5faff; padding:10px 12px; border-radius:8px; margin-top:12px; }
@@ -69,6 +72,7 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
         <div class="desk-stat"><div class="desk-muted">Juridisk review</div><strong><?= (int)($stats['legal_review'] ?? 0) ?></strong></div>
         <div class="desk-stat"><div class="desk-muted">Klar til indsendelse</div><strong><?= (int)($stats['ready_to_submit'] ?? 0) ?></strong></div>
         <div class="desk-stat"><div class="desk-muted">Indsendt</div><strong><?= (int)($stats['submitted'] ?? 0) ?></strong></div>
+        <div class="desk-stat"><div class="desk-muted">Fraud review</div><strong><?= (int)($stats['fraud_review'] ?? 0) ?></strong></div>
       </div>
 
       <div class="desk-note">
@@ -108,13 +112,22 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
           <div class="desk-note">Ingen sager matcher det valgte filter.</div>
         <?php endif; ?>
         <?php foreach ($items as $item): ?>
+          <?php $risk = (array)($item['risk'] ?? []); ?>
           <article class="desk-item">
             <div class="desk-item-head">
               <div>
                 <div class="desk-item-title"><?= h((string)($item['title'] ?? '')) ?></div>
                 <div class="desk-muted"><?= h((string)($item['subtitle'] ?? '')) ?></div>
               </div>
-              <span class="desk-badge"><?= h((string)($item['ops_status_label'] ?? '')) ?></span>
+              <div class="desk-actions">
+                <span class="desk-badge"><?= h((string)($item['ops_status_label'] ?? '')) ?></span>
+                <?php if (!empty($risk['evaluated'])): ?>
+                  <span class="desk-badge <?= h((string)($risk['badge_class'] ?? 'desk-risk-low')) ?>"><?= h((string)($risk['level_label'] ?? 'Low risk')) ?></span>
+                <?php endif; ?>
+                <?php if (!empty($risk['fraud_review_required'])): ?>
+                  <span class="desk-badge desk-risk-high">Fraud review</span>
+                <?php endif; ?>
+              </div>
             </div>
             <div class="desk-meta">
               <span>Kilde: <?= h((string)($item['source'] ?? '')) ?></span>
@@ -125,6 +138,9 @@ $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
               <span>Opdateret: <?= h((string)($item['updated_at'] ?? '')) ?></span>
             </div>
             <div class="desk-muted"><?= h((string)($item['next_action'] ?? '')) ?></div>
+            <?php if (!empty($risk['evaluated'])): ?>
+              <div class="desk-muted"><?= h((string)($risk['summary'] ?? '')) ?></div>
+            <?php endif; ?>
             <?php if (trim((string)(($item['follow_up']['reason'] ?? ''))) !== ''): ?>
               <div class="desk-muted">Opfølgningsårsag: <?= h((string)$item['follow_up']['reason']) ?></div>
             <?php endif; ?>

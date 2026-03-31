@@ -11,17 +11,28 @@ $downgradeScopeAuto = $downgradeScopeAuto ?? ['from' => null, 'to' => null, 'bas
 $journeyRowsDowng = $journeyRowsDowng ?? [];
 $downgradeTicketOptions = $downgradeTicketOptions ?? [];
 $downgradeTicketFile = (string)($downgradeTicketFile ?? ($form['downgrade_ticket_file'] ?? ''));
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail')));
+$isAir = ($transportMode === 'air');
+$isFerry = ($transportMode === 'ferry');
 
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isCompleted = ($travelState === 'completed');
 $isOngoing = ($travelState === 'ongoing');
 
-$title = $isOngoing
-    ? 'TRIN 9 - Nedgradering (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 9 - Nedgradering (afsluttet rejse)' : 'TRIN 9 - Nedgradering (klasse/reservation)');
-$hint = $isOngoing
-    ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.'
-    : ($isCompleted ? 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.' : '');
+$title = $isAir
+    ? ($isOngoing ? 'TRIN 9 - Nedgradering (fly, igangvaerende rejse)' : ($isCompleted ? 'TRIN 9 - Nedgradering (fly, afsluttet rejse)' : 'TRIN 9 - Nedgradering (fly)'))
+    : ($isFerry
+        ? ($isOngoing ? 'TRIN 9 - Serviceafvigelse (faerge, igangvaerende rejse)' : ($isCompleted ? 'TRIN 9 - Serviceafvigelse (faerge, afsluttet rejse)' : 'TRIN 9 - Serviceafvigelse (faerge)'))
+        : ($isOngoing
+            ? 'TRIN 9 - Nedgradering (igangvaerende rejse)'
+            : ($isCompleted ? 'TRIN 9 - Nedgradering (afsluttet rejse)' : 'TRIN 9 - Nedgradering (klasse/reservation)')));
+$hint = $isAir
+    ? ($isOngoing ? 'Udfyld kun hvis du allerede er blevet placeret i lavere kabineklasse end koebt.' : ($isCompleted ? 'Udfyld kun hvis du blev placeret i lavere kabineklasse end koebt.' : ''))
+    : ($isFerry
+        ? 'Valgfrit trin. Brug det kun hvis den konkrete faergeservice afveg fra det koebte. Hotel, hoteltransport, refund, ombooking og ankomstkompensation hoerer fortsat hjemme i TRIN 7, 8 og 10.'
+        : ($isOngoing
+            ? 'Udfyld kun hvis du allerede er blevet placeret i lavere klasse eller mistede reservation.'
+            : ($isCompleted ? 'Udfyld kun hvis du blev placeret i lavere klasse eller mistede reservation.' : '')));
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 $missedStation = (string)($form['missed_connection_station'] ?? ($incident['missed_station'] ?? ''));
@@ -30,6 +41,16 @@ $isPreview = !empty($flowPreview);
 $articles = (array)($profile['articles'] ?? []);
 $showArt18 = !isset($articles['art18']) || $articles['art18'] !== false;
 $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
+$airDistanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($meta['_multimodal']['air_scope']['air_distance_band'] ?? ($meta['air_distance_band'] ?? '')))));
+$airAutoRefundPercent = match ($airDistanceBand) {
+  'up_to_1500' => '30',
+  'intra_eu_over_1500', 'other_1500_to_3500' => '50',
+  'other_over_3500' => '75',
+  default => '',
+};
+$airBookedClass = strtolower((string)($form['air_downgrade_booked_class'] ?? ''));
+$airFlownClass = strtolower((string)($form['air_downgrade_flown_class'] ?? ''));
+$airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoRefundPercent !== '' ? $airAutoRefundPercent : ''));
 ?>
 
 <style>
@@ -98,41 +119,81 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
           <path fill="#1e3a8a" d="M12 3a1 1 0 0 1 1 1v10.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L11 14.6V4a1 1 0 0 1 1-1z"/>
         </svg>
       </span>
-      <span>Nedgradering (klasse/reservation)</span>
+      <span><?= $isAir ? 'Nedgradering (kabineklasse)' : ($isFerry ? 'Leveret service afveg fra det koebte' : 'Nedgradering (klasse/reservation)') ?></span>
     </div>
-    <div class="small muted mt4">Udfyld kun hvis du reelt blev placeret lavere end koebt, eller mistede reservation.</div>
+    <div class="small muted mt4"><?= $isAir ? 'Udfyld kun hvis du reelt blev placeret i lavere kabineklasse end koebt. Flight-sporet bruger artikel 10-procenter som vejledning.' : ($isFerry ? 'Brug kun dette trin ved kontraktmaessig serviceafvigelse, fx kahyt/plads/service ikke leveret som koebt. Det er ikke ferry Art. 17-assistance eller Art. 18-ombooking.' : 'Udfyld kun hvis du reelt blev placeret lavere end koebt, eller mistede reservation.') ?></div>
 
     <div class="mt8">
-      <div>1. Blev du nedgraderet under rejsen?</div>
+      <div>1. <?= $isAir ? 'Blev du placeret i lavere kabineklasse end koebt?' : ($isFerry ? 'Fik du ikke den konkrete service eller plads, du havde betalt for?' : 'Blev du nedgraderet under rejsen?') ?></div>
       <label><input type="radio" name="downgrade_occurred" value="yes" <?= $v('downgrade_occurred')==='yes'?'checked':'' ?> /> Ja</label>
       <label class="ml8"><input type="radio" name="downgrade_occurred" value="no" <?= $v('downgrade_occurred')!=='yes'?'checked':'' ?> /> Nej</label>
     </div>
 
     <div id="downgradeDetails" class="mt12 <?= $v('downgrade_occurred')==='yes' ? '' : 'hidden' ?>">
+      <?php if (!$isFerry): ?>
       <details class="quick">
         <summary><span class="chev">&gt;</span>Avanceret (valgfrit)</summary>
-        <div class="small muted mt4">Hurtig beregning. Du kan springe dette over og i stedet udfylde per-leg tabellen nedenfor.</div>
+        <div class="small muted mt4"><?= $isAir ? 'Hurtig artikel 10-vurdering. Du kan springe dette over og i stedet bruge flight-segmenterne nedenfor som dokumentation.' : 'Hurtig beregning. Du kan springe dette over og i stedet udfylde per-leg tabellen nedenfor.' ?></div>
         <div class="grid-2 mt8">
-          <label>Basis (CIV/Bilag II)
-            <?php $basis = $v('downgrade_comp_basis'); ?>
-            <select name="downgrade_comp_basis">
-              <option value="" <?= $basis===''?'selected':'' ?>>-</option>
-              <option value="seat" <?= $basis==='seat'?'selected':'' ?>>S&aelig;de (1-&gt;2 klasse)</option>
-              <option value="couchette" <?= $basis==='couchette'?'selected':'' ?>>Ligge (komfort trin ned)</option>
-              <option value="sleeper" <?= $basis==='sleeper'?'selected':'' ?>>Sove (komfort trin ned)</option>
-            </select>
-            <div class="small muted mt4">Hvis du er i tvivl, kan du lade den st&aring; tom og udfylde per-leg felterne nedenfor.</div>
-          </label>
+          <?php if ($isAir): ?>
+            <label>Koebt kabineklasse
+              <select name="air_downgrade_booked_class">
+                <option value="">Vaelg</option>
+                <option value="economy" <?= $airBookedClass==='economy'?'selected':'' ?>>Economy</option>
+                <option value="premium_economy" <?= $airBookedClass==='premium_economy'?'selected':'' ?>>Premium Economy</option>
+                <option value="business" <?= $airBookedClass==='business'?'selected':'' ?>>Business</option>
+                <option value="first" <?= $airBookedClass==='first'?'selected':'' ?>>First</option>
+              </select>
+            </label>
+            <label>Faktisk floejet kabineklasse
+              <select name="air_downgrade_flown_class">
+                <option value="">Vaelg</option>
+                <option value="economy" <?= $airFlownClass==='economy'?'selected':'' ?>>Economy</option>
+                <option value="premium_economy" <?= $airFlownClass==='premium_economy'?'selected':'' ?>>Premium Economy</option>
+                <option value="business" <?= $airFlownClass==='business'?'selected':'' ?>>Business</option>
+                <option value="first" <?= $airFlownClass==='first'?'selected':'' ?>>First</option>
+              </select>
+            </label>
+            <label>Artikel 10-refusionsprocent
+              <select name="air_downgrade_refund_percent">
+                <option value="">Auto</option>
+                <option value="30" <?= $airRefundPercent==='30'?'selected':'' ?>>30%</option>
+                <option value="50" <?= $airRefundPercent==='50'?'selected':'' ?>>50%</option>
+                <option value="75" <?= $airRefundPercent==='75'?'selected':'' ?>>75%</option>
+              </select>
+              <?php if ($airAutoRefundPercent !== ''): ?>
+                <div class="small muted mt4">Auto fra distancekategori: <?= h($airDistanceBand) ?> -> <?= h($airAutoRefundPercent) ?>%</div>
+              <?php endif; ?>
+            </label>
+            <label>Andel af den relevante flyvning (0-1)
+              <?php $share = $v('downgrade_segment_share'); ?>
+              <input type="number" name="downgrade_segment_share" min="0" max="1" step="0.01" value="<?= h($share !== '' ? $share : '1') ?>" />
+            </label>
+          <?php else: ?>
+            <label>Basis (CIV/Bilag II)
+              <?php $basis = $v('downgrade_comp_basis'); ?>
+              <select name="downgrade_comp_basis">
+                <option value="" <?= $basis===''?'selected':'' ?>>-</option>
+                <option value="seat" <?= $basis==='seat'?'selected':'' ?>>S&aelig;de (1-&gt;2 klasse)</option>
+                <option value="couchette" <?= $basis==='couchette'?'selected':'' ?>>Ligge (komfort trin ned)</option>
+                <option value="sleeper" <?= $basis==='sleeper'?'selected':'' ?>>Sove (komfort trin ned)</option>
+              </select>
+              <div class="small muted mt4">Hvis du er i tvivl, kan du lade den st&aring; tom og udfylde per-leg felterne nedenfor.</div>
+            </label>
 
-          <label>Andel af rejsen (0-1)
-            <?php $share = $v('downgrade_segment_share'); ?>
-            <input type="number" name="downgrade_segment_share" min="0" max="1" step="0.01" value="<?= h($share !== '' ? $share : '1') ?>" />
-            <?php if ($v('downgrade_segment_share_basis') !== ''): ?>
-              <div class="small muted mt4">Auto: <?= h($v('downgrade_segment_share_basis')) ?> (conf: <?= h($v('downgrade_segment_share_conf')) ?>)</div>
-            <?php endif; ?>
-          </label>
+            <label>Andel af rejsen (0-1)
+              <?php $share = $v('downgrade_segment_share'); ?>
+              <input type="number" name="downgrade_segment_share" min="0" max="1" step="0.01" value="<?= h($share !== '' ? $share : '1') ?>" />
+              <?php if ($v('downgrade_segment_share_basis') !== ''): ?>
+                <div class="small muted mt4">Auto: <?= h($v('downgrade_segment_share_basis')) ?> (conf: <?= h($v('downgrade_segment_share_conf')) ?>)</div>
+              <?php endif; ?>
+            </label>
+          <?php endif; ?>
         </div>
       </details>
+      <?php else: ?>
+      <div class="small muted mt4">Eksempler: kahyt ikke leveret, reserveret siddeplads bortfaldt, eller en saerlig service/plads blev erstattet af en ringere loesning. Hvis det kun handler om hotel, maaltider eller ombooking, skal du bruge TRIN 7-8 i stedet.</div>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -144,9 +205,9 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
           <path fill="#374151" d="M8 8h8v2H8V8zm0 4h8v2H8v-2zm0 4h5v2H8v-2z"/>
         </svg>
       </span>
-      <span>Per-leg (koebt vs leveret)</span>
+      <span><?= $isAir ? 'Flight-segmenter (koebt vs floejet)' : ($isFerry ? 'Overfart / service (koebt vs leveret)' : 'Per-leg (koebt vs leveret)') ?></span>
     </div>
-    <div class="small muted mt4">LLM/OCR forsoeger at udfylde koebt klasse/reservation. Du kan rette og angive leveret niveau.</div>
+    <div class="small muted mt4"><?= $isAir ? 'OCR/metadata forsoeger at udfylde koebt klasse. Du kan bruge flight-segmenterne som dokumentation for, hvad der faktisk blev leveret.' : ($isFerry ? 'Brug denne blok som dokumentation for serviceafvigelsen. Den bruges ikke til hotel, hoteltransport eller ombookingsudgifter.' : 'LLM/OCR forsoeger at udfylde koebt klasse/reservation. Du kan rette og angive leveret niveau.') ?></div>
     <?php if (!empty($affectedLegsAuto)): ?>
       <div class="small muted mt4">
         Auto-scope: ben <?= h(implode(', ', array_map(static fn($i)=> (string)(((int)$i)+1), $affectedLegsAuto))) ?>
@@ -164,6 +225,8 @@ $showArt182 = !isset($articles['art18_2']) || $articles['art18_2'] !== false;
         'meta' => $meta,
         'missedStation' => $missedStation,
         'affectedLegsAuto' => $affectedLegsAuto ?? [],
+        'isAir' => $isAir,
+        'isFerry' => $isFerry,
     ]) ?>
   </div>
 

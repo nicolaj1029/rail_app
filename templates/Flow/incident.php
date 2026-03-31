@@ -5,6 +5,7 @@ $flags    = $flags ?? [];
 $incident = $incident ?? [];
 $meta     = $meta ?? [];
 $journey  = $journey ?? [];
+$groupedTickets = $groupedTickets ?? [];
 $profile  = $profile ?? ['articles' => []];
 $articles = (array)($profile['articles'] ?? []);
 $euArt18Supported = ($articles['art18'] ?? true) !== false;
@@ -22,7 +23,7 @@ $v = fn(string $k): string => (string)($form[$k] ?? '');
 $isPreview = !empty($flowPreview);
 $segCount = is_array($journey['segments'] ?? null) ? count($journey['segments']) : 0;
 if ($segCount < 2) {
-    $altSegs = $meta['_segments_llm_suggest'] ?? ($meta['_segments_auto'] ?? []);
+    $altSegs = $meta['_miss_conn_segments'] ?? ($meta['_segments_all'] ?? ($meta['_segments_llm_suggest'] ?? ($meta['_segments_auto'] ?? [])));
     if (is_array($altSegs)) { $segCount = max($segCount, count($altSegs)); }
 }
 $multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
@@ -57,6 +58,16 @@ $airDelayBandValue = strtolower(trim((string)($form['delay_departure_band'] ?? '
 $airCancellationNoticeBand = strtolower(trim((string)($form['cancellation_notice_band'] ?? '')));
 $airRerouteDepartureBand = strtolower(trim((string)($form['reroute_departure_band'] ?? '')));
 $airRerouteArrivalBand = strtolower(trim((string)($form['reroute_arrival_band'] ?? '')));
+$airConnectionType = strtolower(trim((string)($airContract['air_connection_type'] ?? $form['air_connection_type'] ?? '')));
+$airConnectionKnown = in_array($airConnectionType, ['single_flight', 'protected_connection', 'self_transfer'], true);
+$airConnectionNeedsFallback = !$airConnectionKnown || !empty($airContract['manual_review_required']);
+$showAirMissedConnection = $isAir && (
+    $segCount > 1
+    || in_array($airConnectionType, ['protected_connection', 'self_transfer'], true)
+);
+$missedConnectionStation = trim((string)($form['missed_connection_station'] ?? ''));
+$missedConnectionPick = trim((string)($form['missed_connection_pick'] ?? ''));
+$missedConnectionChosen = $missedConnectionStation !== '' || $missedConnectionPick !== '';
 $airDelayBandOptions = match ($airDelayThresholdHours) {
     2 => [
         'under_threshold' => 'Under 2 timer',
@@ -143,7 +154,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <?php endif; ?>
 
   <?= $this->element('flow_locked_notice') ?>
-  <?= $this->Form->create(null, ['novalidate' => true]) ?>
+  <?= $this->Form->create(null, ['novalidate' => true, 'id' => 'incidentStepForm']) ?>
   <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
   <!-- Preinformed disruption (moved from TRIN 3d) -->
@@ -161,14 +172,19 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     ];
   ?>
   <div class="card mt12 <?= (($art91On && !$isBus && !$isAir) || $isFerry) ? '' : 'hidden' ?>" data-art="9(1)">
-    <strong><span aria-hidden="true">&#x23F1;</span> Afbrydelser/forsinkelser</strong>
-    <p class="small muted">Default er "Nej". Udfyld kun hvis relevant.</p>
-
     <?php if ($isFerry): ?>
-    <div class="mt8">
-      <div class="small">Var passageren informeret om aflysning/forsinkelse foer koeb?</div>
-      <label><input type="radio" name="informed_before_purchase" value="yes" <?= $v('informed_before_purchase')==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="informed_before_purchase" value="no" <?= $v('informed_before_purchase')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+    <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
+      <div class="widget-title">
+        <span class="step-badge" aria-hidden="true">&#x23F1;</span>
+        <span>Afbrydelser/forsinkelser</span>
+      </div>
+      <p class="small muted mt8">Default er "Nej". Udfyld kun hvis relevant.</p>
+
+      <div class="mt8">
+        <div>Var passageren informeret om aflysning/forsinkelse foer koeb?</div>
+        <label><input type="radio" name="informed_before_purchase" value="yes" <?= $v('informed_before_purchase')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="informed_before_purchase" value="no" <?= $v('informed_before_purchase')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
     </div>
 
     <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
@@ -183,6 +199,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         <label class="ml8"><input type="radio" name="open_ticket_without_departure_time" value="no" <?= $v('open_ticket_without_departure_time')==='no'?'checked':'' ?> /> Nej</label>
       </div>
     </div>
+
     <?php elseif (!$isBus && !$isAir): ?>
     <div class="mt8">
       <div class="small">Var der meddelt afbrydelse/forsinkelse foer dit koeb?</div>
@@ -215,19 +232,27 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <!-- Standard gating -->
   <div class="card mt12">
     <?php if ($isFerry): ?>
-      <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art. 16-19 ferry)</strong>
-      <p class="small muted">TRIN 5 bruges til at afgore information, assistance, rerouting/refund og kompensation for faergebenet.</p>
-
       <input type="hidden" name="overnight_required" value="" />
       <input type="hidden" name="passenger_fault" value="" />
 
-      <div class="mt12" style="padding:10px; border:1px solid #e5e7eb; border-radius:8px; background:#f8fafc;">
-        <p class="small muted">Bruges til ferry-gating for Art. 17, 18 og 19.</p>
+      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">&#x26A1;</span>
+          <span>Haendelse (Art. 16-19 ferry)</span>
+        </div>
+        <p class="small muted mt8">Bruges til ferry-gating for Art. 17, 18 og 19.</p>
 
         <div class="mt8">
           <div>Haendelse</div>
           <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
           <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+        </div>
+
+        <div class="mt8" data-show-if="incident_main:delay,cancellation">
+          <div>Fik du information om aflysningen eller forsinkelsen senest 30 min efter planlagt afgangstid?</div>
+          <label><input type="radio" name="ferry_art16_notice_within_30min" value="yes" <?= $v('ferry_art16_notice_within_30min')==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="no" <?= $v('ferry_art16_notice_within_30min')==='no'?'checked':'' ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="unknown" <?= $v('ferry_art16_notice_within_30min')==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
 
         <div class="mt8" data-show-if="incident_main:delay">
@@ -241,7 +266,6 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label><input type="radio" name="actual_departure_delay_90" value="yes" <?= $v('actual_departure_delay_90')==='yes'?'checked':'' ?> /> Ja</label>
           <label class="ml8"><input type="radio" name="actual_departure_delay_90" value="no" <?= $v('actual_departure_delay_90')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
         </div>
-
       </div>
 
       <div class="card mt12">
@@ -302,20 +326,6 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
 
       <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
         <div class="widget-title">
-          <span class="step-badge" aria-hidden="true">O</span>
-          <span>Aaben billet / afgangstid</span>
-        </div>
-        <p class="small muted mt8">Bruges til at afgoere om bus-passageren falder uden for de almindelige forsinkelses- og kompensationsrettigheder.</p>
-
-        <div class="mt8">
-          <div>Er det en aaben billet uden afgangstid?</div>
-          <label><input type="radio" name="open_ticket_without_departure_time" value="yes" <?= $v('open_ticket_without_departure_time')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="open_ticket_without_departure_time" value="no" <?= $v('open_ticket_without_departure_time')==='no'?'checked':'' ?> /> Nej</label>
-        </div>
-      </div>
-
-      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
-        <div class="widget-title">
           <span class="step-badge" aria-hidden="true">H</span>
           <span>Haendelsestype</span>
         </div>
@@ -326,57 +336,65 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
           <label class="ml8"><input type="radio" name="incident_main" value="overbooking" <?= $v('incident_main')==='overbooking'?'checked':'' ?> /> Overbooking / manglende plads</label>
         </div>
+        <div class="mt12" data-show-if="incident_main:delay">
+          <div class="small"><strong>Forsinkelsesniveau</strong></div>
+          <p class="small muted mt4">Vaelg den juridiske forsinkelses-kategori i stedet for at indtaste minutter.</p>
+
+          <div class="mt8">
+            <label><input type="radio" name="delay_departure_band" value="under_90" <?= $v('delay_departure_band')==='under_90'?'checked':'' ?> /> Under 90 min</label>
+            <label class="ml8"><input type="radio" name="delay_departure_band" value="90_119" <?= $v('delay_departure_band')==='90_119'?'checked':'' ?> /> 90-119 min</label>
+            <label class="ml8"><input type="radio" name="delay_departure_band" value="120_plus" <?= $v('delay_departure_band')==='120_plus'?'checked':'' ?> /> 120+ min</label>
+          </div>
+
+          <div id="busDelayTimerCard" class="bus-live-shell">
+            <div class="small"><strong>Live forsinkelses-hjaelper</strong></div>
+            <div class="small muted mt4">Timeren kan koere ved igangvaerende busforsinkelse og synkroniserer automatisk til 90- og 120-minutters-taersklerne.</div>
+
+            <div class="bus-live-display mt8">
+              <span id="busDelayLiveMinutes" class="bus-live-minutes"><?= h((string)($form['delay_minutes_departure'] ?? '0')) ?> min</span>
+              <span id="busDelayThresholdBadge" class="bus-live-badge">Under 90 min</span>
+            </div>
+
+            <div id="busDelayThresholdMessage" class="small mt8">Naeste threshold er 90 min, hvor assistance kan blive relevant ved rejser over 3 timer.</div>
+            <div id="busDelayNextHint" class="small muted mt4">Refund eller omlaegning bliver forst relevant ved 120+ min.</div>
+
+            <label class="small mt8" style="display:block;">Saet aktuel forsinkelse nu (minutter)
+              <input id="busDelayLiveMinutesInput" type="number" min="0" step="1" value="<?= h((string)($form['delay_minutes_departure'] ?? '0')) ?>" placeholder="75" />
+            </label>
+
+            <div class="bus-live-actions">
+              <button type="button" id="busDelayTimerStart">Start timer</button>
+              <button type="button" id="busDelayTimerPause" class="bus-live-secondary">Pause</button>
+              <button type="button" id="busDelayTimerReset" class="bus-live-secondary">Nulstil</button>
+            </div>
+
+            <div id="busDelayTimerStatus" class="small muted mt8"></div>
+          </div>
+        </div>
+
+        <div class="mt12" id="busPlannedDurationCard">
+          <div class="small"><strong>Planlagt rejsevarighed</strong></div>
+          <p class="small muted mt4">Vises kun naar Art. 21 kan komme i spil, saa brugeren ikke moedes af irrelevante spoergsmaal.</p>
+
+          <div class="mt8">
+            <label><input type="radio" name="planned_duration_band" value="up_to_3h" <?= $v('planned_duration_band')==='up_to_3h'?'checked':'' ?> /> 3 timer eller mindre</label>
+            <label class="ml8"><input type="radio" name="planned_duration_band" value="over_3h" <?= $v('planned_duration_band')==='over_3h'?'checked':'' ?> /> Over 3 timer</label>
+          </div>
+        </div>
       </div>
 
-      <div class="card mt12" data-show-if="incident_main:delay" style="border-color:#d0d7de;background:#f8f9fb">
+      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">D</span>
-          <span>Forsinkelsesniveau</span>
+          <span>Driftsproblem</span>
         </div>
-        <p class="small muted mt8">Vaelg den juridiske forsinkelses-kategori i stedet for at indtaste minutter.</p>
+        <p class="small muted mt8">Registrer separat, om bussen blev uanvendelig undervejs. Det supplerer haendelsestypen og erstatter den ikke.</p>
 
         <div class="mt8">
-          <label><input type="radio" name="delay_departure_band" value="under_90" <?= $v('delay_departure_band')==='under_90'?'checked':'' ?> /> Under 90 min</label>
-          <label class="ml8"><input type="radio" name="delay_departure_band" value="90_119" <?= $v('delay_departure_band')==='90_119'?'checked':'' ?> /> 90-119 min</label>
-          <label class="ml8"><input type="radio" name="delay_departure_band" value="120_plus" <?= $v('delay_departure_band')==='120_plus'?'checked':'' ?> /> 120+ min</label>
-        </div>
-
-        <div id="busDelayTimerCard" class="bus-live-shell">
-          <div class="small"><strong>Live forsinkelses-hjaelper</strong></div>
-          <div class="small muted mt4">Timeren kan koere ved igangvaerende busforsinkelse og synkroniserer automatisk til 90- og 120-minutters-taersklerne.</div>
-
-          <div class="bus-live-display mt8">
-            <span id="busDelayLiveMinutes" class="bus-live-minutes"><?= h((string)($form['delay_minutes_departure'] ?? '0')) ?> min</span>
-            <span id="busDelayThresholdBadge" class="bus-live-badge">Under 90 min</span>
-          </div>
-
-          <div id="busDelayThresholdMessage" class="small mt8">Naeste threshold er 90 min, hvor assistance kan blive relevant ved rejser over 3 timer.</div>
-          <div id="busDelayNextHint" class="small muted mt4">Refund eller omlaegning bliver forst relevant ved 120+ min.</div>
-
-          <label class="small mt8" style="display:block;">Saet aktuel forsinkelse nu (minutter)
-            <input id="busDelayLiveMinutesInput" type="number" min="0" step="1" value="<?= h((string)($form['delay_minutes_departure'] ?? '0')) ?>" placeholder="75" />
-          </label>
-
-          <div class="bus-live-actions">
-            <button type="button" id="busDelayTimerStart">Start timer</button>
-            <button type="button" id="busDelayTimerPause" class="bus-live-secondary">Pause</button>
-            <button type="button" id="busDelayTimerReset" class="bus-live-secondary">Nulstil</button>
-          </div>
-
-          <div id="busDelayTimerStatus" class="small muted mt8"></div>
-        </div>
-      </div>
-
-      <div class="card mt12" id="busPlannedDurationCard" style="border-color:#d0d7de;background:#f8f9fb">
-        <div class="widget-title">
-          <span class="step-badge" aria-hidden="true">T</span>
-          <span>Planlagt rejsevarighed</span>
-        </div>
-        <p class="small muted mt8">Vises kun naar Art. 21 kan komme i spil, saa brugeren ikke moedes af irrelevante spoergsmaal.</p>
-
-        <div class="mt8">
-          <label><input type="radio" name="planned_duration_band" value="up_to_3h" <?= $v('planned_duration_band')==='up_to_3h'?'checked':'' ?> /> 3 timer eller mindre</label>
-          <label class="ml8"><input type="radio" name="planned_duration_band" value="over_3h" <?= $v('planned_duration_band')==='over_3h'?'checked':'' ?> /> Over 3 timer</label>
+          <div>Gik bussen i stykker eller blev den uanvendelig under rejsen?</div>
+          <label><input type="radio" name="vehicle_breakdown" value="yes" <?= $v('vehicle_breakdown')==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="vehicle_breakdown" value="no" <?= $v('vehicle_breakdown')==='no'?'checked':'' ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="vehicle_breakdown" value="unknown" <?= $v('vehicle_breakdown')==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
       </div>
 
@@ -501,18 +519,41 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       </div>
       <input type="hidden" name="boarding_denied" value="<?= h(in_array($v('incident_main'), ['denied_boarding'], true) ? 'yes' : $v('boarding_denied')) ?>" />
 
+      <?php if ($showAirMissedConnection): ?>
       <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">P</span>
-          <span>Protected connection</span>
+          <span>Missed connection</span>
         </div>
-        <p class="small muted mt8">Bruges kun hvis den oprindelige hændelse gjorde, at du mistede en videre forbindelse på samme booking eller PNR.</p>
-        <div class="mt8">Mistede du en protected connection pga. hændelsen?</div>
+        <p class="small muted mt8">TRIN 2 afgør allerede, om forbindelsen er samlet eller separat. Her registrerer vi kun, om du faktisk mistede en videre forbindelse.</p>
+        <div class="mt8">Mistede du en videre forbindelse pga. hændelsen?</div>
         <label><input type="radio" name="protected_connection_missed" value="yes" <?= $v('protected_connection_missed')==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="protected_connection_missed" value="no" <?= $v('protected_connection_missed')==='no'?'checked':'' ?> /> Nej / uklart</label>
+        <div class="mt8" data-show-if="protected_connection_missed:yes">
+          <?php if ($airConnectionNeedsFallback): ?>
+          <div>Hvad bygger forbindelsen på?</div>
+          <select name="connection_protection_basis">
+            <option value="">- Vaelg grundlag -</option>
+            <option value="same_booking_reference" <?= $v('connection_protection_basis')==='same_booking_reference'?'selected':'' ?>>Samme bookingreference / PNR</option>
+            <option value="same_ticket" <?= $v('connection_protection_basis')==='same_ticket'?'selected':'' ?>>Samme billet / ticket chain</option>
+            <option value="same_airline_interline" <?= $v('connection_protection_basis')==='same_airline_interline'?'selected':'' ?>>Samme airline / interline-forloeb</option>
+            <option value="separate_tickets" <?= $v('connection_protection_basis')==='separate_tickets'?'selected':'' ?>>Saerskilte billetter</option>
+            <option value="unclear" <?= $v('connection_protection_basis')==='unclear'?'selected':'' ?>>Uklart</option>
+          </select>
+          <div class="small muted mt4">Vises kun naar TRIN 2 ikke allerede har afgjort forbindelsestypen sikkert.</div>
+          <?php else: ?>
+          <input type="hidden" name="connection_protection_basis" value="" />
+          <div class="small muted mt4">TRIN 2 har allerede afgjort forbindelsestypen som <?= h($airConnectionType ?: 'afgjort') ?>, så der er ikke brug for et ekstra grundlag her.</div>
+          <?php endif; ?>
+        </div>
       </div>
 
       <div id="airCancellationNotice14Card" class="small muted mt8 hidden">Hvis aflysningen blev meddelt mindst 14 dage foer, bortfalder kompensation normalt efter Art. 5(1)(c)(i), men remedy og care kan stadig vaere relevante.</div>
+      <?php else: ?>
+      <input type="hidden" name="protected_connection_missed" value="no" />
+      <input type="hidden" name="connection_protection_basis" value="" />
+      <input type="hidden" name="reroute_arrival_delay_minutes" value="" />
+      <?php endif; ?>
 
       <div id="airCancellationRerouteCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
@@ -620,27 +661,26 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <!-- Mistet forbindelse -->
   <div class="card mt12">
     <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
-    <p class="small muted">Marker kun hvis du faktisk missede et skift.</p>
+    <p class="small muted">Vælg den konkrete leg i TRIN 3.5. Her bruger vi kun den valgte forbindelse som reference.</p>
 
-    <div class="mt4">
-      <div>Mistede du en forbindelse pga. haendelsen?</div>
-      <label><input type="radio" name="incident_missed" value="yes" <?= $v('incident_missed')==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="ml8"><input type="radio" name="incident_missed" value="no" <?= $v('incident_missed')==='no'?'checked':'' ?> /> Nej</label>
-      <?php if ($segCount < 2): ?>
-        <div class="small muted mt4">Vi fandt ingen skift paa billetterne &ndash; marker kun hvis du faktisk missede et skift.</div>
-      <?php endif; ?>
-    </div>
+    <input type="hidden" name="incident_missed" value="<?= $missedConnectionChosen ? 'yes' : 'no' ?>" />
 
-    <div class="mt4" data-show-if="incident_missed:yes">
-      <div class="card" style="margin-top:8px;">
-        <?= $this->element('missed_connection_block', compact('meta','form')) ?>
+    <?php if ($missedConnectionChosen): ?>
+      <div class="mt8 small">
+        Registreret forbindelse:
+        <strong>
+          <?= h($missedConnectionPick !== '' ? $missedConnectionPick : $missedConnectionStation) ?>
+        </strong>
       </div>
       <div id="missed60Wrap" class="mt8">
-        <div>Betyder det missede skift, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?</div>
+        <div>Betyder den valgte forbindelse, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?</div>
         <label><input type="radio" name="missed_expected_delay_60" value="yes" <?= $v('missed_expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= $v('missed_expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
-        <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig vaere relevante afhaengigt af land.</div>
+        <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig være relevante afhængigt af land.</div>
       </div>
+    <?php else: ?>
+      <div class="small muted mt8">Ingen forbindelse valgt endnu. Gå tilbage til TRIN 3.5 for at vælge den ramte leg.</div>
+    <?php endif; ?>
     </div>
   </div>
   <?php endif; ?>
@@ -747,7 +787,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <?php endif; ?>
   <div class="mt12" style="display:flex; gap:8px; align-items:center;">
     <?= $this->Html->link('<- Tilbage', ['action' => 'journey'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
-    <?= $this->Form->button('Naeste trin ->', ['class' => 'button']) ?>
+    <?= $this->Form->button('Naeste trin ->', ['class' => 'button', 'id' => 'incidentSubmitBtn', 'form' => 'incidentStepForm']) ?>
   </div>
 
   </fieldset>
@@ -932,10 +972,14 @@ function updateAirCancellationState() {
     if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 1 time foer det planlagte afgangstidspunkt?';
     if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 2 timer efter det planlagte ankomsttidspunkt?';
     if (help) help.textContent = 'Ved under 7 dages varsel bortfalder kompensation kun, hvis ombookningen holdt sig inden for 1 time foer afgang og 2 timer efter planlagt ankomst.';
-  } else {
+  } else if (notice === '7_to_13_days') {
     if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 2 timer foer det planlagte afgangstidspunkt?';
     if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 4 timer efter det planlagte ankomsttidspunkt?';
     if (help) help.textContent = 'Ved 7-13 dages varsel bortfalder kompensation kun, hvis ombookningen holdt sig inden for 2 timer foer afgang og 4 timer efter planlagt ankomst.';
+  } else {
+    if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 2 timer foer det planlagte afgangstidspunkt?';
+    if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 4 timer efter det planlagte ankomsttidspunkt?';
+    if (help) help.textContent = 'Kun relevant hvis du fik besked om aflysningen mindre end 14 dage foer og faktisk blev tilbudt ombooking.';
   }
 }
 
@@ -1190,7 +1234,7 @@ function updateStep4State(){
   var main = getRadioValue('incident_main');
   var exp60 = getRadioValue('expected_delay_60');
   var already60 = getRadioValue('delay_already_60');
-  var missed = getRadioValue('incident_missed');
+  var missed = getVal('incident_missed');
   var missed60 = getRadioValue('missed_expected_delay_60');
   var missedAnswered = (missed === 'yes' || missed === 'no');
 

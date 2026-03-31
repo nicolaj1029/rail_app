@@ -1,0 +1,6 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+hžpp,rail,HŽPP,https://www.hzpp.hr/en/company/about-us;https://www.hzpp.hr/en/information,high
+iryo,rail,iryo,https://iryo.eu/en/meet-us/about-us;https://agencias.iryo.eu/en/meet-us/about-us,high
+thalys,rail,Thalys,https://www.eurostar.com/us-en/about-eurostar/thalys-becomes-eurostar;https://www.eurostar.com/us-en/about-eurostar/our-company;https://www.eurostar.com/us-en/train/thalys-trains,high
+vivi,rail,Vivi,https://www.vivi.lv/;https://www.vivi.lv/en/news/271/vivi-trains-carried-21-3-million-passengers-last-year-98-4-of-trips-completed-on-time/;https://www.vivi.lv/en/news/247/vivi-transported-18-million-passengers-by-train-in-ten-months-98-6-of-trips-were-completed-on-time/,high
+čd,rail,ČD,https://www.cd.cz/;https://www.cd.cz/en/;https://www.cd.cz/en/dalsi-sluzby/;https://www.cd.cz/en/typy-jizdenek/,high

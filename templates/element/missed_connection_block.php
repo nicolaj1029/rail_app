@@ -1,10 +1,11 @@
 <?php
 /**
  * Missed connection selector (station) + journey table.
- * Expects: $meta, $form. Optional: $journeyRowsInline, $mcChoicesInline, $changeBullets, $groupedTickets.
+ * Expects: $meta, $form. Optional: $journey, $journeyRowsInline, $mcChoicesInline, $changeBullets, $groupedTickets.
  */
 $meta = $meta ?? [];
 $form = $form ?? [];
+$journey = $journey ?? [];
 $journeyRowsInline = $journeyRowsInline ?? [];
 $mcChoicesInline = $mcChoicesInline ?? [];
 $changeBullets = $changeBullets ?? [];
@@ -19,8 +20,12 @@ foreach ($mctEvalRaw as $ev) {
     $mctByStation[$normStation($ev['station'] ?? '')] = $ev;
 }
 $toMin = function(string $t){ if(!preg_match('/^(\\d{1,2}):(\\d{2})$/', trim($t), $m)) return null; return (int)$m[1]*60 + (int)$m[2]; };
+$segPreferred = (array)($meta['_miss_conn_segments'] ?? []);
+$segAll = (array)($meta['_segments_all'] ?? []);
+$segJourney = (array)($journey['segments'] ?? []);
 $segLlm = (array)($meta['_segments_llm_suggest'] ?? []);
 $segAuto = (array)($meta['_segments_auto'] ?? []);
+$segGrouped = [];
 $normChain = function(string $s): string {
     $s = mb_strtolower(trim($s), 'UTF-8');
     $s = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s) ?? $s;
@@ -39,19 +44,47 @@ $isChainable = function($segs) use ($normChain): bool {
     }
     return true;
 };
-$segSrc = $segLlm;
-if (empty($segLlm) || !$isChainable($segLlm)) {
-    $segSrc = $segAuto;
-    if (empty($segAuto) && !empty($segLlm)) { $segSrc = $segLlm; }
-}
-if (empty($segSrc) && !empty($groupedTickets)) {
+$pickBetterSegments = function(array $current, array $candidate) use ($isChainable): array {
+    if (empty($candidate)) {
+        return $current;
+    }
+    if (empty($current)) {
+        return $candidate;
+    }
+
+    $currentChainable = $isChainable($current);
+    $candidateChainable = $isChainable($candidate);
+    if ($candidateChainable && !$currentChainable) {
+        return $candidate;
+    }
+    if ($candidateChainable === $currentChainable && count($candidate) > count($current)) {
+        return $candidate;
+    }
+
+    return $current;
+};
+
+if (!empty($groupedTickets)) {
     foreach ((array)$groupedTickets as $group) {
         $groupSegments = (array)($group['segments'] ?? []);
-        if (!empty($groupSegments)) {
-            $segSrc = $groupSegments;
-            break;
-        }
+        $segGrouped = $pickBetterSegments($segGrouped, $groupSegments);
     }
+}
+$segSrc = [];
+$segSrc = $pickBetterSegments($segSrc, $segPreferred);
+$segSrc = $pickBetterSegments($segSrc, $segAll);
+$segSrc = $pickBetterSegments($segSrc, $segJourney);
+$segSrc = $pickBetterSegments($segSrc, $segLlm);
+$segSrc = $pickBetterSegments($segSrc, $segAuto);
+$segSrc = $pickBetterSegments($segSrc, $segGrouped);
+if (empty($segSrc)) {
+    $segSrc = !empty($segPreferred)
+        ? $segPreferred
+        : (!empty($segAll)
+            ? $segAll
+            : (!empty($segJourney)
+                ? $segJourney
+                : (!empty($segAuto) ? $segAuto : (!empty($segLlm) ? $segLlm : $segGrouped))));
 }
 
 // Fallback build of journey rows from detected segments
@@ -93,10 +126,21 @@ if (empty($mcChoicesInline)) {
             }
             $mcChoicesInline[] = ['station' => $toName, 'label' => $label];
         }
-    } elseif (!empty($form['_miss_conn_choices'])) {
-        foreach ((array)$form['_miss_conn_choices'] as $st => $lbl) {
-            $mcChoicesInline[] = ['station' => (string)$st, 'label' => (string)$lbl];
+    }
+}
+
+if (!empty($form['_miss_conn_choices'])) {
+    $existingStations = [];
+    foreach ($mcChoicesInline as $choice) {
+        $existingStations[(string)($choice['station'] ?? '')] = true;
+    }
+    foreach ((array)$form['_miss_conn_choices'] as $st => $lbl) {
+        $stationName = (string)$st;
+        if ($stationName === '' || isset($existingStations[$stationName])) {
+            continue;
         }
+        $mcChoicesInline[] = ['station' => $stationName, 'label' => (string)$lbl];
+        $existingStations[$stationName] = true;
     }
 }
 

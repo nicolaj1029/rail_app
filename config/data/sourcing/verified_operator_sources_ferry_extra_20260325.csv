@@ -1,0 +1,7 @@
+﻿operator_key,mode,display_name,source_urls,source_confidence
+stena_line,ferry,Stena Line,https://stenaline.com/about-us/;https://stenaline.com/about-us/our-company/;https://stenaline.com/about-us/route-network/,high
+viking_line,ferry,Viking Line,https://www.vikingline.com/globalassets/documents/market_specific/corporate/investors/corporate-governance/bolagsstyrning-2024-en.pdf;https://www.vikingline.com/globalassets/documents/market_specific/corporate/investors/corporate-governance/code-of-conduct-for-suppliers_en.pdf,high
+finnlines,ferry,Finnlines,https://www.finnlines.com/passengers/good-to-know/conditions-and-regulations/,high
+irish_ferries,ferry,Irish Ferries,https://www.irishferries.com/de/about-us/Our-story/;https://www.irishferries.com/nl/about-us/Our-story/,high
+tt_line,ferry,TT-Line,https://www.ttline.com/en/conditions/;https://www.ttline.com/en/conditions/gtc-passengers/;https://www.ttline.com/en/conditions/gtc-groups/,high
+color_line,ferry,Color Line,https://www.colorline.com/about-us;https://www.colorline.com/practical-information/travel-regulations-ferry-crossings;https://www.colorline.com/practical-information/travel-regulations-overview,high

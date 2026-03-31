@@ -9,6 +9,32 @@
     $hooksTransportMode = 'rail';
   }
   $isFerryHooks = $hooksTransportMode === 'ferry';
+  $formatHooksRemedyChoice = static function (?string $value, bool $isFerry): string {
+    $normalized = trim((string)$value);
+    if ($normalized === '') {
+      return '-';
+    }
+
+    return match ($normalized) {
+      'refund_return' => 'Tilbagebetaling',
+      'reroute_soonest' => $isFerry ? 'Ombooking hurtigst muligt' : 'Omlaegning hurtigst muligt',
+      'reroute_later' => $isFerry ? 'Ombooking senere (efter eget valg)' : 'Omlaegning senere (efter eget valg)',
+      default => $normalized,
+    };
+  };
+  $formatHooksAnswer = static function (?string $value): string {
+    $normalized = strtolower(trim((string)$value));
+    if ($normalized === '') {
+      return '-';
+    }
+
+    return match ($normalized) {
+      'yes', 'ja', '1', 'true' => 'ja',
+      'no', 'nej', '0', 'false' => 'nej',
+      'unknown', 'ved ikke', 'unsure' => 'ved ikke',
+      default => (string)$value,
+    };
+  };
   $ferryScopeHooks = (array)($multimodalHooks['ferry_scope'] ?? []);
   $ferryContractHooks = (array)($multimodalHooks['ferry_contract'] ?? []);
   $ferryRightsHooks = (array)($multimodalHooks['ferry_rights'] ?? []);
@@ -715,9 +741,15 @@ if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'throug
 <?php endif; // showArt12Section ?>
 <hr/>
 <div class="small"><strong>TRIN 7</strong> · Art. 18 (remedies)</div>
-<?php $remedy = (string)($form['remedyChoice'] ?? ''); $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); ?>
-<div class="small">remedy: <code><?= h($remedy ?: '-') ?></code></div>
-<div class="small">100-min info: <code><?= h($ri100 ?: '-') ?></code></div>
+<?php $remedy = (string)($form['remedyChoice'] ?? ''); $ri100 = (string)($form['reroute_info_within_100min'] ?? ''); $airArticle8Choice = (string)($form['air_article8_choice_offered'] ?? ''); ?>
+<?php $tr7Title = $isFerryHooks ? 'TRIN 7 · Art. 18 (tilbagebetaling / ombooking)' : 'TRIN 7 · Art. 18 (refusion / omlaegning)'; ?>
+<div class="small muted"><?= h($tr7Title) ?></div>
+<div class="small">valg: <code><?= h($formatHooksRemedyChoice($remedy, $isFerryHooks)) ?></code></div>
+<?php if (($transportMode ?? '') === 'air'): ?>
+<div class="small">Article 8-valg tilbudt: <code><?= h($formatHooksAnswer($airArticle8Choice)) ?></code></div>
+<?php else: ?>
+<div class="small">100-min info: <code><?= h($formatHooksAnswer($ri100)) ?></code></div>
+<?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 8</strong> · Art. 20 (assistance)</div>
 <?php $mo=(string)($form['meal_offered']??''); $ho=(string)($form['hotel_offered']??''); $on=(string)($form['overnight_needed']??''); ?>
@@ -729,6 +761,14 @@ if ($scn === 'yes' && ($ttd === 'unknown' || $ttd === '')) { $ny_ask[] = 'throug
 <?php $ask = (array)($art9['ask_hooks'] ?? []); ?>
 <div class="kv small">count: <code><?= count($ask) ?></code></div>
 <div class="small">hooks: <code><?= h(implode(', ', $ask) ?: '-') ?></code></div>
+<?php if (($transportMode ?? '') === 'air'): ?>
+<?php $airPctHooks = (string)($form['air_downgrade_refund_percent'] ?? ''); ?>
+<?php $airBookedHooks = (string)($form['air_downgrade_booked_class'] ?? ''); ?>
+<?php $airFlownHooks = (string)($form['air_downgrade_flown_class'] ?? ''); ?>
+<div class="small">air booked class: <code><?= h($airBookedHooks !== '' ? $airBookedHooks : '-') ?></code></div>
+<div class="small">air flown class: <code><?= h($airFlownHooks !== '' ? $airFlownHooks : '-') ?></code></div>
+<div class="small">air article 10 pct: <code><?= h($airPctHooks !== '' ? $airPctHooks . '%' : '-') ?></code></div>
+<?php endif; ?>
 <hr/>
 <div class="small"><strong>TRIN 10</strong> · Art. 19 (comp)</div>
 <?php $band=(string)($form['compensationBand']??''); $df=(string)($form['delayAtFinalMinutes']??''); ?>

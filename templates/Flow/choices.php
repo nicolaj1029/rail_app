@@ -10,14 +10,42 @@ $isCompleted = ($travelState === 'completed');
 $isOngoing = ($travelState === 'ongoing');
 $isBeforeStart = ($travelState === 'before_start');
 $isFutureLike = ($isOngoing || $isBeforeStart);
+$multimodal = (array)($meta['_multimodal'] ?? []);
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$isFerry = ($transportMode === 'ferry');
 $maps = $maps ?? [];
 $mapsOptIn = !empty($form['maps_opt_in_trin5']);
 $mapsTrin5 = (is_array($maps) && isset($maps['trin5']) && is_array($maps['trin5'])) ? $maps['trin5'] : null;
-$transportHint = 'Alternativ transport skal tilbydes, hvis du er strandet pga. aflysning/forsinkelse.';
+$transportHint = $isFerry
+    ? 'Lokal/noedtransport til/fra et strandet sted eller egnet afgangssted kan vaere relevant, hvis du er strandet pga. aflysning/forsinkelse. Ny hovedtransport eller ny faergebillet hører i stedet hjemme i TRIN 7.'
+    : 'Alternativ transport skal tilbydes, hvis du er strandet pga. aflysning/forsinkelse.';
 if ($isFutureLike) { $transportHint .= ' (Udfyld det, der er sket indtil nu).'; }
-$transportTitle = $isOngoing
-    ? 'TRIN 6 - Er du strandet? (igangvaerende rejse)'
-    : ($isCompleted ? 'TRIN 6 - Er du strandet? (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 6 - Er du strandet? (rejsen starter senere)' : 'TRIN 6 - Er du strandet? (Art. 20)'));
+$transportTitle = $isFerry
+    ? ($isOngoing
+        ? 'TRIN 6 - Transport til/fra strandet sted (faerge, igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 6 - Transport til/fra strandet sted (faerge, afsluttet rejse)' : ($isBeforeStart ? 'TRIN 6 - Transport til/fra strandet sted (faerge)' : 'TRIN 6 - Transport til/fra strandet sted (faerge Art. 20)')))
+    : ($isOngoing
+        ? 'TRIN 6 - Er du strandet? (igangvaerende rejse)'
+        : ($isCompleted ? 'TRIN 6 - Er du strandet? (afsluttet rejse)' : ($isBeforeStart ? 'TRIN 6 - Er du strandet? (rejsen starter senere)' : 'TRIN 6 - Er du strandet? (Art. 20)')));
+$transportCardTitle = $isFerry ? 'Lokal/noedtransport fra strandet sted (Art.20)' : 'Transport til/fra (Art.20)';
+$mapsCardTitle = $isFerry ? 'Rute-/forbindelsesforslag (Google Maps, valgfrit)' : 'Ruter (Google Maps, valgfrit)';
+$mapsHelp = $isFerry
+    ? 'Klik for at hente rute- eller forbindelsesforslag. Google Maps bruges kun som routing-hint og ikke som juridisk facit.'
+    : 'Klik for at hente forslag til omlaegning. Vi sender start/destination til Google for at finde ruter.';
+$mapsOriginLabel = $isFerry ? 'Fra (havn/terminal)' : 'Fra (station)';
+$mapsOriginHint = $isFerry ? 'Tip: Brug din nuvaerende havn/terminal eller dit strandede sted som start.' : 'Tip: Brug missed connection / din nuvaerende station som start.';
+$mapsDestinationLabel = $isFerry ? 'Til (destination/ankomsthavn)' : 'Til (destination)';
+$mapsDestinationHint = $isFerry ? 'Hentes fra billetten (destination/ankomsthavn).' : 'Hentes fra billetten (destination).';
+$strandedQuestion = $isFerry ? 'Blev du strandet, saa transport til/fra havn, terminal eller et egnet sted blev relevant (Art.20(2)(c))?' : 'Sad du fast i et tog paa sporet (Art.20(2)(c))?';
+$altTransportTypeLabel = $isFerry ? 'Transportform' : 'Transporttype';
+$waitedLabel = $isFerry ? 'Ventede til du kunne komme videre' : 'Ventede til toget kunne koere videre';
+$selfActionWalkLabel = $isFerry ? 'Fandt selv vej til havn/terminal eller andet afgangssted' : 'Fandt selv vej til station/spor';
+$resolutionEndpointNearestLabel = $isFerry ? 'Naermeste havn/terminal' : 'Naermeste station';
+$resolutionEndpointHelp = $isFerry ? 'Angiv havn/terminal eller andet afgangssted, saa vi kan bruge stedet videre i ombooking og vurdering.' : 'Angiv station, saa vi kan beregne downgrade korrekt.';
+$resolutionArrivalLabel = $isFerry ? 'Hvilken havn/terminal endte du ved?' : 'Hvilken station endte du ved?';
+$otherPlaceLabel = $isFerry ? 'Anden havn/terminal' : 'Anden station';
+$otherPlacePlaceholder = $isFerry ? 'Anden havn/terminal' : 'Anden station';
+$unknownPlaceLabel = $isFerry ? '(ukendt havn/terminal)' : '(ukendt sted)';
 
 $segments = [];
 if (!empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) { $segments = (array)$meta['_segments_auto']; }
@@ -41,6 +69,7 @@ sort($stationOptions, SORT_NATURAL | SORT_FLAG_CASE);
 // Use a literal path to avoid the URL builder selecting the /api/demo/v2 scope fallback route.
 $stationsSearchUrl = $this->Url->build('/api/stations/search');
 $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
+$currencyOptions = ['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'];
 try {
     if ($stationCountryDefault !== '' && strlen($stationCountryDefault) !== 2) {
         $cc = (new \App\Service\CountryNormalizer())->toIso2($stationCountryDefault);
@@ -131,11 +160,11 @@ try {
 
 <div id="coreAfterArt20">
     <div id="art20Wrapper" class="card mt12 <?= ($art20Disabled && !$isPreview) ? 'hidden' : '' ?>" data-art="20" data-art20-disabled="<?= $art20Disabled ? '1' : '0' ?>">
-        <div class="card-title"><span class="icon">&#128652;</span><span>Transport til/fra (Art.20)</span></div>
+        <div class="card-title"><span class="icon">&#128652;</span><span><?= h($transportCardTitle) ?></span></div>
         <p class="small muted"><?= h($transportHint) ?></p>
 
         <div class="mt8">
-            <div>Sad du fast i et tog paa sporet (Art.20(2)(c))?</div>
+            <div><?= h($strandedQuestion) ?></div>
             <label><input type="radio" name="is_stranded_trin5" value="yes" <?= $isStrandedTrin5==='yes'?'checked':'' ?> /> Ja</label>
             <label class="ml8"><input type="radio" name="is_stranded_trin5" value="no" <?= $isStrandedTrin5==='no'?'checked':'' ?> /> Nej</label>
         </div>
@@ -155,20 +184,20 @@ try {
             $mapsConfigured = ((string)(getenv('GOOGLE_MAPS_SERVER_KEY') ?: (getenv('GOOGLE_MAPS_API_KEY') ?: ''))) !== '';
         ?>
         <div class="card mt12" id="mapsCardTrin5" style="background:#f8f9fb;" data-show-if="is_stranded_trin5:yes">
-            <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
-            <div class="small muted mt4">Klik for at hente forslag til oml&aelig;gning. Vi sender start/destination til Google for at finde ruter.</div>
+            <div class="card-title"><span class="icon">MAP</span><span><?= h($mapsCardTitle) ?></span></div>
+            <div class="small muted mt4"><?= h($mapsHelp) ?></div>
             <input type="hidden" name="maps_opt_in_trin5" value="0" />
             <label class="mt8"><input type="checkbox" name="maps_opt_in_trin5" value="1" <?= $mapsOptIn ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
 
             <div id="mapsPanelTrin5" class="mt8 <?= $mapsOptIn ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>">
                 <div class="grid-2">
-                    <label>Fra (station)
+                    <label><?= h($mapsOriginLabel) ?>
                         <input type="text" id="mapsOriginTrin5" value="<?= h($originDefault) ?>" />
-                        <div class="small muted mt4">Tip: Brug missed connection / din nuv&aelig;rende station som start.</div>
+                        <div class="small muted mt4"><?= h($mapsOriginHint) ?></div>
                     </label>
-                    <label>Til (destination)
+                    <label><?= h($mapsDestinationLabel) ?>
                         <input type="text" id="mapsDestTrin5" value="<?= h($destDefault) ?>" readonly />
-                        <div class="small muted mt4">Hentes fra billetten (destination).</div>
+                        <div class="small muted mt4"><?= h($mapsDestinationHint) ?></div>
                     </label>
                 </div>
 
@@ -201,6 +230,7 @@ try {
                                                 elseif (strpos($veh, 'BUS') !== false) { $vehLabel = 'Bus'; }
                                                 elseif (strpos($veh, 'SUBWAY') !== false) { $vehLabel = 'Metro'; }
                                                 elseif (strpos($veh, 'LIGHT_RAIL') !== false || strpos($veh, 'TRAM') !== false) { $vehLabel = 'Letbane'; }
+                                                elseif (strpos($veh, 'FERRY') !== false) { $vehLabel = 'Faerge'; }
                                                 $line = trim((string)($s['line'] ?? ''));
                                                 $from = trim((string)($s['from'] ?? ''));
                                                 $to = trim((string)($s['to'] ?? ''));
@@ -234,10 +264,13 @@ try {
 
             <div class="mt4" data-show-if="blocked_train_alt_transport:yes" data-art="20(2c)">
                 <div class="grid-2">
-                    <label>Transporttype
+                    <label><?= h($altTransportTypeLabel) ?>
                         <?php $tt = $v('assistance_alt_transport_type'); ?>
                         <select name="assistance_alt_transport_type">
                             <option value="">Vaelg</option>
+                            <?php if ($isFerry): ?>
+                                <option value="ferry" <?= $tt==='ferry'?'selected':'' ?>>Faerge</option>
+                            <?php endif; ?>
                             <option value="rail" <?= $tt==='rail'?'selected':'' ?>>Tog</option>
                             <option value="bus" <?= $tt==='bus'?'selected':'' ?>>Bus</option>
                             <option value="taxi" <?= $tt==='taxi'?'selected':'' ?>>Taxi</option>
@@ -250,8 +283,8 @@ try {
             <div class="mt4" data-show-if="blocked_train_alt_transport:no" data-art="20(2c)">
                 <div>Hvad gjorde du saa?</div>
                 <?php $bn = $v('blocked_no_transport_action'); ?>
-                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="waited" <?= $bn==='waited'?'checked':'' ?> /> Ventede til toget kunne koere videre</label>
-                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="walked_station" <?= $bn==='walked_station'?'checked':'' ?> /> Fandt selv vej til station/spor</label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="waited" <?= $bn==='waited'?'checked':'' ?> /> <?= h($waitedLabel) ?></label>
+                <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="walked_station" <?= $bn==='walked_station'?'checked':'' ?> /> <?= h($selfActionWalkLabel) ?></label>
                 <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="evacuated_later" <?= $bn==='evacuated_later'?'checked':'' ?> /> Blev evakueret senere</label>
                 <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="self_arranged" <?= $bn==='self_arranged'?'checked':'' ?> /> Fandt selv transport</label>
                 <label class="ml8"><input type="radio" name="blocked_no_transport_action" value="other" <?= $bn==='other'?'checked':'' ?> /> Andet</label>
@@ -259,11 +292,15 @@ try {
 
             <div class="mt4" data-show-if="blocked_no_transport_action:self_arranged" data-art="20(2c)">
             <div class="small muted">Angiv egne udgifter hvis du selv ordnede transport.</div>
+            <?php if ($isFerry): ?><div class="small muted mt4">Brug kun denne blok til lokal/noedtransport fra det strandede sted. Ny hovedbillet eller egentlig ombooking hører til i TRIN 7.</div><?php endif; ?>
             <div class="grid-2 mt4">
-                <label>Transporttype
+                <label><?= h($altTransportTypeLabel) ?>
                     <?php $bst = $v('blocked_self_paid_transport_type'); ?>
                     <select name="blocked_self_paid_transport_type">
                         <option value="">Vaelg</option>
+                        <?php if ($isFerry): ?>
+                            <option value="ferry" <?= $bst==='ferry'?'selected':'' ?>>Faerge</option>
+                        <?php endif; ?>
                         <option value="rail" <?= $bst==='rail'?'selected':'' ?>>Tog</option>
                         <option value="bus" <?= $bst==='bus'?'selected':'' ?>>Bus</option>
                         <option value="taxi" <?= $bst==='taxi'?'selected':'' ?>>Taxi</option>
@@ -274,8 +311,17 @@ try {
                 <label>Beloeb
                     <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
                 </label>
-                <label>Valuta (fx DKK/EUR)
-                    <input type="text" name="blocked_self_paid_currency" value="<?= h($v('blocked_self_paid_currency')) ?>" />
+                <label>Valuta
+                    <?php $blockedCur = strtoupper(trim($v('blocked_self_paid_currency'))); ?>
+                    <select name="blocked_self_paid_currency">
+                        <option value="">Auto</option>
+                        <?php foreach ($currencyOptions as $cc): ?>
+                            <option value="<?= $cc ?>" <?= $blockedCur === $cc ? 'selected' : '' ?>><?= $cc ?></option>
+                        <?php endforeach; ?>
+                        <?php if ($blockedCur !== '' && !in_array($blockedCur, $currencyOptions, true)): ?>
+                            <option value="<?= h($blockedCur) ?>" selected><?= h($blockedCur) ?></option>
+                        <?php endif; ?>
+                    </select>
                 </label>
                 <label class="small">Kvittering
                     <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
@@ -297,22 +343,22 @@ try {
                 <label>Slutpunkt
                     <select name="a20_where_ended">
                         <option value="">Vaelg</option>
-                        <option value="nearest_station" <?= $toEnd==='nearest_station'?'selected':'' ?>>Naermeste station</option>
+                        <option value="nearest_station" <?= $toEnd==='nearest_station'?'selected':'' ?>><?= h($resolutionEndpointNearestLabel) ?></option>
                         <option value="other_departure_point" <?= $toEnd==='other_departure_point'?'selected':'' ?>>Et andet afgangssted</option>
                         <option value="final_destination" <?= $toEnd==='final_destination'?'selected':'' ?>>Mit endelige bestemmelsessted</option>
                     </select>
-                    <div class="small muted mt4" data-show-if="a20_where_ended:nearest_station,other_departure_point">Angiv station, saa vi kan beregne downgrade korrekt.</div>
+                    <div class="small muted mt4" data-show-if="a20_where_ended:nearest_station,other_departure_point"><?= h($resolutionEndpointHelp) ?></div>
                 </label>
-                <label class="station-autocomplete" data-station-select="a20_arrival_station" data-station-other="a20_arrival_station_other" data-show-if="a20_where_ended:nearest_station,other_departure_point">Hvilken station endte du ved?
+                <label class="station-autocomplete" data-station-select="a20_arrival_station" data-station-other="a20_arrival_station_other" data-show-if="a20_where_ended:nearest_station,other_departure_point"><?= h($resolutionArrivalLabel) ?>
                     <select name="a20_arrival_station">
                         <option value="">Vaelg</option>
                         <?php foreach ($stationOptions as $st): ?>
                             <option value="<?= h($st) ?>" <?= $arrEnd===$st?'selected':'' ?>><?= h($st) ?></option>
                         <?php endforeach; ?>
                         <option value="unknown" <?= $arrEnd==='unknown'?'selected':'' ?>>Ved ikke</option>
-                        <option value="other" <?= $arrEnd==='other'?'selected':'' ?>>Anden station</option>
+                        <option value="other" <?= $arrEnd==='other'?'selected':'' ?>><?= h($otherPlaceLabel) ?></option>
                     </select>
-	                    <input type="text" name="a20_arrival_station_other" value="<?= h($arrEndOther) ?>" placeholder="Anden station" data-show-if="a20_arrival_station:other" />
+	                    <input type="text" name="a20_arrival_station_other" value="<?= h($arrEndOther) ?>" placeholder="<?= h($otherPlacePlaceholder) ?>" data-show-if="a20_arrival_station:other" />
 	                    <input type="hidden" name="a20_arrival_station_other_osm_id" value="<?= h($v('a20_arrival_station_other_osm_id')) ?>" />
 	                    <input type="hidden" name="a20_arrival_station_other_lat" value="<?= h($v('a20_arrival_station_other_lat')) ?>" />
 	                    <input type="hidden" name="a20_arrival_station_other_lon" value="<?= h($v('a20_arrival_station_other_lon')) ?>" />
@@ -633,6 +679,9 @@ try {
 	            function niceType(t){
 	                var s = (t || '').toString().toLowerCase();
 	                if (s === 'station') return 'Station';
+	                if (s === 'terminal') return 'Terminal';
+	                if (s === 'ferry_terminal') return 'Faergeterminal';
+	                if (s === 'port' || s === 'harbor' || s === 'harbour') return 'Havn';
 	                if (s === 'halt') return 'Stopested';
 	                return s;
 	            }
@@ -682,7 +731,7 @@ try {
 	                    var nm = (st && st.name) ? String(st.name) : '';
 	                    var cc = (st && st.country) ? String(st.country) : '';
 	                    var tp = (st && st.type) ? String(st.type) : '';
-	                    btn.appendChild(document.createTextNode(nm || '(ukendt station)'));
+	                    btn.appendChild(document.createTextNode(nm || <?= json_encode($unknownPlaceLabel, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>));
 	                    if (cc || tp) {
 	                        var meta = document.createElement('div');
 	                        meta.className = 'muted';

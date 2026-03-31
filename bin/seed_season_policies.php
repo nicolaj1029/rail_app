@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Seed/merge season-policy stubs from operators_catalog.json into season_policy_matrix.json.
+ * Seed/merge season-policy stubs from transport_operators_catalog.json into season_policy_matrix.json.
  *
  * Usage:
  *   php bin/seed_season_policies.php
  */
 
 $root = dirname(__DIR__);
-$operatorsPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'operators_catalog.json';
+$operatorsPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'transport_operators_catalog.json';
 $matrixPath = $root . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'season_policy_matrix.json';
 
 if (!is_file($operatorsPath)) {
@@ -80,7 +80,7 @@ foreach ((array)$opsJson['operators'] as $op) {
         continue;
     }
     $name = trim((string)($op['name'] ?? ''));
-    $cc = strtoupper(trim((string)($op['country'] ?? '')));
+    $cc = strtoupper(trim((string)($op['country_code'] ?? $op['country'] ?? '')));
     if ($name === '' || $cc === '') {
         continue;
     }
@@ -146,4 +146,3 @@ if (file_put_contents($matrixPath, $out . "\n") === false) {
 }
 
 fwrite(STDOUT, "Seed complete. Added $added operator stub(s).\nWrote: $matrixPath\n");
-

@@ -49,6 +49,7 @@ final class FlowStepsService
         $gateArt18 = ((string)($flags['gate_art18'] ?? '')) === '1';
         $gateArt20 = ((string)($flags['gate_art20'] ?? '')) === '1';
         $gateArt20_2c = ((string)($flags['gate_art20_2c'] ?? '')) === '1';
+        $gateBusContinuation = ((string)($flags['gate_bus_continuation'] ?? '')) === '1';
         $gateFerryPmrRemedy = ((string)($flags['gate_ferry_pmr_remedy'] ?? '')) === '1';
         $gateBusPmrRemedy = ((string)($flags['gate_bus_pmr_remedy'] ?? '')) === '1';
         $gateBusPmrAssistance = ((string)($flags['gate_bus_pmr_assistance'] ?? '')) === '1';
@@ -105,7 +106,12 @@ final class FlowStepsService
                         ? 'Strandet paa station/sporet'
                         : 'Transport til/fra strandet sted';
                     // TRIN 6 only matters when Art.20(2)(c) transport/stranding is active.
-                    $visible = $gateArt20_2c || $done || $isCurrent;
+                    if ($gatingMode === 'bus') {
+                        $prereqFlags = ['step5_done'];
+                        $visible = $gateArt20_2c || $gateBusContinuation || $done || $isCurrent;
+                    } else {
+                        $visible = $gateArt20_2c || $done || $isCurrent;
+                    }
                     break;
                 case 'remedies':
                     // TRIN 7 should not be forced via TRIN 6 unless TRIN 6 is actually applicable.
@@ -144,7 +150,11 @@ final class FlowStepsService
                     break;
                 case 'downgrade':
                     // TRIN 9 only when downgrade is relevant (or already completed/current).
-                    $visible = $gateDowngrade || $done || $isCurrent;
+                    if ($gatingMode === 'bus') {
+                        $visible = false;
+                    } else {
+                        $visible = $gateDowngrade || $done || $isCurrent;
+                    }
                     break;
                 case 'compensation':
                     // TRIN 10 is normally after TRIN 5, but season/pendler setup should unlock it right after TRIN 2.

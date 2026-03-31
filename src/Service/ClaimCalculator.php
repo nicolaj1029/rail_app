@@ -17,6 +17,7 @@ class ClaimCalculator
      */
     public function calculate(array $input): array
     {
+        $transportMode = strtolower(trim((string)($input['transport_mode'] ?? '')));
         $country = (string)($input['country_code'] ?? '');
         $currency = (string)($input['currency'] ?? 'EUR');
         $ticketTotal = (float)($input['ticket_price_total'] ?? 0.0);
@@ -29,6 +30,10 @@ class ClaimCalculator
         $expensesIn = (array)($input['expenses'] ?? []);
         $alreadyRefunded = (float)($input['already_refunded'] ?? 0.0);
         $applyMinThreshold = (bool)($input['apply_min_threshold'] ?? false);
+        $busCarrierChoice = strtolower(trim((string)($input['carrier_offered_choice'] ?? '')));
+        if ($busCarrierChoice === 'nej') { $busCarrierChoice = 'no'; }
+        if ($busCarrierChoice === 'ja') { $busCarrierChoice = 'yes'; }
+        $busNoChoicePenalty = $transportMode === 'bus' && $busCarrierChoice === 'no' && $ticketTotal > 0.0;
 
         // Exemption profile
         $journeyForProfile = [
@@ -121,11 +126,24 @@ class ClaimCalculator
                 $compRule = 'EU';
             }
         }
+        if ($busNoChoicePenalty) {
+            $compEligible = true;
+            $compPct = 50;
+            $compAmount = round($ticketTotal * 0.50, 2);
+            $compBaseLabel = 'Bus 50% compensation - operator failed to offer refund or reroute choice';
+            $compRule = 'Bus Regulation 181/2011';
+        }
 
         // 2) Refund (Art.18) — simplified decision using choices + downgrade comparator
         $refundBasis = 'none';
         $refundAmount = 0.0;
-        if (!empty($choices['wants_refund'])) {
+        $airRefundScope = strtolower(trim((string)($input['air_refund_scope'] ?? '')));
+        $airRefundSelected = in_array($airRefundScope, [
+            'full_ticket',
+            'unused_part',
+            'unused_plus_used_if_no_longer_serves_purpose',
+        ], true);
+        if (!empty($choices['wants_refund']) || $airRefundSelected) {
             // Art.18(1)(a): refund eligibility can be triggered by upstream gating (e.g., cancellation/missed/PMR/bike),
             // not necessarily by final arrival delay minutes available at computation time.
             $art18Active = !empty($disruption['art18_active']);
@@ -141,13 +159,14 @@ class ClaimCalculator
         }
 
         // Downgrade-based partial refund (heuristic) — applies when class/amenity downgraded.
+        // Ferry uses TRIN 9 as a narrow service-deviation track, not a legal downgrade refund module.
         // If user explicitly provided CIV/Annex II downgrade inputs (downgrade_occurred=yes),
         // we avoid double counting by not also applying heuristic downgrade here.
         $dgOcc = strtolower(trim((string)($input['downgrade_occurred'] ?? '')));
         if ($dgOcc === 'ja') { $dgOcc = 'yes'; }
         if ($dgOcc === 'nej') { $dgOcc = 'no'; }
         $downgradeAmount = 0.0; $downgradeLabel = null;
-        if ($dgOcc !== 'yes') {
+        if ($transportMode !== 'ferry' && $dgOcc !== 'yes') {
             $refusion = (array)($input['refusion'] ?? []);
             $downgrade = (array)($refusion['downgrade'] ?? []);
         if (empty($downgrade)) {
@@ -176,7 +195,7 @@ class ClaimCalculator
         }
 
         // Avoid double coverage: if refund covers whole fare, suppress compensation for same portion
-        if ($refundAmount >= $ticketTotal - 0.01 && !$art12Retailer75) {
+        if ($refundAmount >= $ticketTotal - 0.01 && !$art12Retailer75 && !$busNoChoicePenalty) {
             $compEligible = false; $compPct = 0; $compAmount = 0.0; $compBasis = '-';
         }
         // Art.12(4) override: refund whole fare + 75% compensation — ensure refund covers total
@@ -201,6 +220,205 @@ class ClaimCalculator
             'alt_transport' => (float)($expensesIn['alt_transport'] ?? 0),
             'other' => (float)($expensesIn['other'] ?? 0),
         ];
+        $busCaps = [];
+        $ferryCaps = [];
+        if ($transportMode === 'bus') {
+            $fx = [
+                'EUR' => 1.0,
+                'DKK' => 7.45,
+                'SEK' => 11.0,
+                'BGN' => 1.96,
+                'CZK' => 25.0,
+                'HUF' => 385.0,
+                'PLN' => 4.35,
+                'RON' => 4.95,
+                'NOK' => 11.6,
+                'GBP' => 0.86,
+            ];
+            $convertFromEur = static function (float $amount, string $to) use ($fx): float {
+                $to = strtoupper(trim($to));
+                if (!isset($fx[$to]) || $fx[$to] <= 0) {
+                    return $amount;
+                }
+
+                return $amount * $fx[$to];
+            };
+            $normalizeNumber = static function ($value): float {
+                if (is_numeric($value)) {
+                    return (float)$value;
+                }
+
+                return (float)preg_replace('/[^0-9.]/', '', (string)$value);
+            };
+
+            $delayHours = max(1, (int)ceil(max(0, $delay) / 60));
+            $distanceKm = isset($input['scheduled_distance_km']) && is_numeric($input['scheduled_distance_km'])
+                ? (int)$input['scheduled_distance_km']
+                : null;
+            $hotelNightsRaw = $normalizeNumber($input['hotel_self_paid_nights'] ?? ($input['bus_hotel_self_paid_nights'] ?? 0));
+            $hotelNights = $hotelNightsRaw > 0
+                ? (int)max(1, min(2, round($hotelNightsRaw)))
+                : ($expenseAmounts['hotel'] > 0 ? 1 : 0);
+            $hotelTransportAmount = $normalizeNumber($input['hotel_transport_self_paid_amount'] ?? 0);
+            $expenseAmounts['hotel_transport'] = $hotelTransportAmount;
+
+            $hotelHardCapEur = 80.0 * max(0, min(2, $hotelNights));
+            $hotelHardCap = $convertFromEur($hotelHardCapEur, $currency);
+            $requestedHotelAmount = (float)$expenseAmounts['hotel'];
+            if ($hotelHardCap > 0 && $requestedHotelAmount > $hotelHardCap) {
+                $expenseAmounts['hotel'] = round($hotelHardCap, 2);
+            }
+
+            $altTransportSoftCapEur = match (true) {
+                $distanceKm === null => 150.0,
+                $distanceKm <= 100 => 50.0,
+                $distanceKm <= 250 => 150.0,
+                default => 300.0,
+            };
+            $mealsSoftCap = $convertFromEur(20.0 * $delayHours, $currency);
+            $hotelTransportSoftCap = $convertFromEur(50.0, $currency);
+            $altTransportSoftCap = $convertFromEur($altTransportSoftCapEur, $currency);
+
+            $busCaps = [
+                'hotel_legal_per_night_eur' => 80.0,
+                'hotel_legal_nights_max' => 2,
+                'hotel_legal_cap_amount' => round($hotelHardCap, 2),
+                'hotel_requested_amount' => round($requestedHotelAmount, 2),
+                'hotel_cap_applied' => $hotelHardCap > 0 && $requestedHotelAmount > $hotelHardCap,
+                'hotel_capped_nights' => $hotelNights,
+                'meals_soft_cap_amount' => round($mealsSoftCap, 2),
+                'hotel_transport_soft_cap_amount' => round($hotelTransportSoftCap, 2),
+                'alt_transport_soft_cap_amount' => round($altTransportSoftCap, 2),
+                'soft_cap_basis_distance_km' => $distanceKm,
+                'soft_cap_delay_hours' => $delayHours,
+                'hotel_transport_soft_cap_exceeded' => $hotelTransportAmount > $hotelTransportSoftCap,
+                'alt_transport_soft_cap_exceeded' => (float)$expenseAmounts['alt_transport'] > $altTransportSoftCap,
+                'meals_soft_cap_exceeded' => (float)$expenseAmounts['meals'] > $mealsSoftCap,
+                'breakdown_full_coverage' => strtolower(trim((string)($input['vehicle_breakdown'] ?? ''))) === 'yes',
+            ];
+        } elseif ($transportMode === 'ferry') {
+            $fx = [
+                'EUR' => 1.0,
+                'DKK' => 7.45,
+                'SEK' => 11.0,
+                'BGN' => 1.96,
+                'CZK' => 25.0,
+                'HUF' => 385.0,
+                'PLN' => 4.35,
+                'RON' => 4.95,
+                'NOK' => 11.6,
+                'GBP' => 0.86,
+            ];
+            $convertFromEur = static function (float $amount, string $to) use ($fx): float {
+                $to = strtoupper(trim($to));
+                if (!isset($fx[$to]) || $fx[$to] <= 0) {
+                    return $amount;
+                }
+
+                return $amount * $fx[$to];
+            };
+            $normalizeNumber = static function ($value): float {
+                if (is_numeric($value)) {
+                    return (float)$value;
+                }
+
+                return (float)preg_replace('/[^0-9.]/', '', (string)$value);
+            };
+            $normYesNo = static function ($v): string {
+                $s = strtolower(trim((string)$v));
+                if ($s === 'ja') { return 'yes'; }
+                if ($s === 'nej') { return 'no'; }
+
+                return $s;
+            };
+
+            $weatherRisk = $normYesNo($input['weather_safety'] ?? '') === 'yes'
+                || $extraordinaryType === 'weather_safety';
+            $openTicket = $normYesNo($input['open_ticket_without_departure_time'] ?? '') === 'yes';
+            $notifiedBeforePurchase = $notifiedBefore;
+            $ferryRerouteExtraFlag = $normYesNo($input['reroute_extra_costs'] ?? '');
+            $ferryRerouteExtraType = strtolower(trim((string)($input['reroute_extra_costs_type'] ?? '')));
+            $ferryRerouteExtraAmount = is_numeric($input['reroute_extra_costs_amount'] ?? null)
+                ? (float)$input['reroute_extra_costs_amount']
+                : (float)preg_replace('/[^0-9.]/', '', (string)($input['reroute_extra_costs_amount'] ?? '0'));
+            $ferryAccommodationMigrated = ($ferryRerouteExtraFlag !== 'no'
+                && $ferryRerouteExtraType === 'accommodation'
+                && $ferryRerouteExtraAmount > 0
+                && (float)$expenseAmounts['hotel'] <= 0);
+            if ($ferryAccommodationMigrated) {
+                $expenseAmounts['hotel'] = round($ferryRerouteExtraAmount, 2);
+            }
+
+            $hotelNightsRaw = $normalizeNumber($input['hotel_self_paid_nights'] ?? ($input['ferry_hotel_self_paid_nights'] ?? 0));
+            $hotelNightsClaimed = $hotelNightsRaw > 0
+                ? (int)max(0, round($hotelNightsRaw))
+                : ($expenseAmounts['hotel'] > 0 ? 1 : 0);
+            $hotelRequestedAmount = (float)$expenseAmounts['hotel'];
+            $hotelRateClaimed = ($hotelNightsClaimed > 0)
+                ? ($hotelRequestedAmount / max($hotelNightsClaimed, 1))
+                : 0.0;
+            $allowedHotelNights = $weatherRisk ? 0 : min(3, max(0, $hotelNightsClaimed));
+            $allowedHotelRate = min(80.0, max(0.0, $hotelRateClaimed));
+            $hotelLegalApprovedEur = $allowedHotelNights * $allowedHotelRate;
+            $hotelLegalApproved = $convertFromEur($hotelLegalApprovedEur, $currency);
+            if ($hotelRequestedAmount > 0) {
+                $expenseAmounts['hotel'] = round(min($hotelRequestedAmount, $hotelLegalApproved > 0 ? $hotelLegalApproved : 0.0), 2);
+            }
+
+            $hotelTransportAmount = $normalizeNumber($input['hotel_transport_self_paid_amount'] ?? 0);
+            $expenseAmounts['hotel_transport'] = $hotelTransportAmount;
+            $mealsSoftCap = $convertFromEur(40.0, $currency);
+            $localTransportTripSoftCap = $convertFromEur(50.0, $currency);
+            $localTransportTotalSoftCap = $convertFromEur(150.0, $currency);
+            $rerouteSoftCap = $convertFromEur(400.0, $currency);
+            $taxiSoftCap = $convertFromEur(150.0, $currency);
+            $rerouteExtraType = strtolower(trim((string)($input['reroute_extra_costs_type'] ?? '')));
+            $rerouteTransportType = strtolower(trim((string)($input['reroute_transport_type'] ?? '')));
+            $rerouteExtraAmount = is_numeric($input['reroute_extra_costs_amount'] ?? null)
+                ? (float)$input['reroute_extra_costs_amount']
+                : (float)preg_replace('/[^0-9.]/', '', (string)($input['reroute_extra_costs_amount'] ?? '0'));
+            $rerouteIsTaxi = $rerouteTransportType === 'taxi'
+                || $rerouteExtraType === 'alt_transport';
+
+            $ferryCaps = [
+                'legal' => [
+                    'hotel_land_per_night_eur' => 80.0,
+                    'hotel_land_max_nights' => $weatherRisk ? 0 : 3,
+                    'meals_rule' => 'reasonable',
+                    'hotel_transport_included' => true,
+                    'reroute_extra_cost_to_passenger' => 0.0,
+                    'refund_ticket_price_percent' => 100,
+                    'refund_deadline_days' => 7,
+                ],
+                'engine' => [
+                    'meals_per_day_eur' => 40.0,
+                    'local_transport_per_trip_eur' => 50.0,
+                    'total_local_transport_eur' => 150.0,
+                    'taxi_soft_cap_eur' => 150.0,
+                    'self_arranged_alt_transport_total_eur' => 400.0,
+                ],
+                'hotel_requested_amount' => round($hotelRequestedAmount, 2),
+                'hotel_requested_nights' => $hotelNightsClaimed,
+                'hotel_requested_rate' => round($hotelRateClaimed, 2),
+                'hotel_legal_approved_amount' => round($hotelLegalApproved, 2),
+                'hotel_excess_amount' => round(max(0.0, $hotelRequestedAmount - $expenseAmounts['hotel']), 2),
+                'hotel_manual_review_required' => $hotelNightsClaimed > $allowedHotelNights || $hotelRateClaimed > 80.0,
+                'hotel_weather_blocked' => $weatherRisk,
+                'meals_soft_cap_amount' => round($mealsSoftCap, 2),
+                'meals_manual_review_required' => (float)$expenseAmounts['meals'] > $mealsSoftCap,
+                'hotel_transport_soft_cap_amount' => round($localTransportTripSoftCap, 2),
+                'hotel_transport_total_soft_cap_amount' => round($localTransportTotalSoftCap, 2),
+                'hotel_transport_manual_review_required' => $hotelTransportAmount > $localTransportTripSoftCap,
+                'reroute_alt_transport_soft_cap_amount' => round($rerouteSoftCap, 2),
+                'reroute_taxi_soft_cap_amount' => round($taxiSoftCap, 2),
+                'reroute_alt_transport_manual_review_required' => $rerouteExtraAmount > $rerouteSoftCap
+                    || ($rerouteIsTaxi && $rerouteExtraAmount > $taxiSoftCap),
+                'accommodation_migrated_from_art18' => $ferryAccommodationMigrated,
+                'open_ticket_without_departure_time' => $openTicket,
+                'notified_before_purchase' => $notifiedBeforePurchase,
+                'weather_safety_risk' => $weatherRisk,
+            ];
+        }
         $expensesTotal = $assistAllowed ? array_sum($expenseAmounts) : 0.0;
         $expenses = $expenseAmounts + [
             'alt_transport_label' => ($expenseAmounts['alt_transport'] ?? 0) > 0 ? $altTransportLabel : null,
@@ -222,7 +440,31 @@ class ClaimCalculator
         $rerouteExtraAmount = is_numeric($input['reroute_extra_costs_amount'] ?? null)
             ? (float)$input['reroute_extra_costs_amount']
             : (float)preg_replace('/[^0-9.]/', '', (string)($input['reroute_extra_costs_amount'] ?? '0'));
+        if ($transportMode === 'air') {
+            $airRerouteExtraFlag = $normYesNo($input['air_reroute_expenses_incurred'] ?? '');
+            $airRerouteExtraType = strtolower(trim((string)($input['air_reroute_expense_type'] ?? '')));
+            $airRerouteExtraAmount = is_numeric($input['air_reroute_expense_amount'] ?? null)
+                ? (float)$input['air_reroute_expense_amount']
+                : (float)preg_replace('/[^0-9.]/', '', (string)($input['air_reroute_expense_amount'] ?? '0'));
+            if ($airRerouteExtraFlag !== '') {
+                $rerouteExtraFlag = $airRerouteExtraFlag;
+                $rerouteExtraAmount = $airRerouteExtraAmount;
+                $input['reroute_extra_costs_type'] = match ($airRerouteExtraType) {
+                    'other_transport', 'airport_transfer' => 'alt_transport',
+                    'expensive_solution' => 'higher_class',
+                    default => $airRerouteExtraType,
+                };
+            }
+        }
         if ($rerouteExtraFlag === 'no') { $rerouteExtraAmount = 0.0; }
+        if ($transportMode === 'ferry' && strtolower(trim((string)($input['reroute_extra_costs_type'] ?? ''))) === 'accommodation') {
+            // Ferry hotel/overnight stay belongs to Art. 17 assistance, not Art. 18 reroute extras.
+            $rerouteExtraAmount = 0.0;
+        }
+        if ($transportMode === 'air' && strtolower(trim((string)($input['reroute_extra_costs_type'] ?? ''))) === 'accommodation') {
+            // Air hotel/overnight stay belongs to care (Art. 9), not reroute/refund extras.
+            $rerouteExtraAmount = 0.0;
+        }
 
         $returnFlag = $normYesNo($input['return_to_origin_expense'] ?? '');
         $returnAmount = is_numeric($input['return_to_origin_amount'] ?? null)
@@ -233,11 +475,33 @@ class ClaimCalculator
         // Downgrade Annex II (CIV) rate map (same as TRIN 9 UI).
         $rateMap = ['seat' => 0.25, 'couchette' => 0.50, 'sleeper' => 0.75];
         $dwOcc = $normYesNo($input['downgrade_occurred'] ?? '');
+        if ($transportMode === 'ferry') { $dwOcc = 'no'; }
         $dwBasis = strtolower(trim((string)($input['downgrade_comp_basis'] ?? '')));
         $dwShare = is_numeric($input['downgrade_segment_share'] ?? null) ? (float)$input['downgrade_segment_share'] : 1.0;
         if (!is_finite($dwShare)) { $dwShare = 1.0; }
         $dwShare = max(0.0, min(1.0, $dwShare));
         $dwRate = $rateMap[$dwBasis] ?? 0.0;
+        $airDistanceBand = strtolower(trim((string)($input['air_distance_band'] ?? '')));
+        $airDowngradePctRaw = $input['air_downgrade_refund_percent'] ?? null;
+        $airDowngradePct = is_numeric($airDowngradePctRaw) ? (int)$airDowngradePctRaw : null;
+        if ($dwOcc === 'yes' && in_array($airDowngradePct, [30, 50, 75], true)) {
+            $dwRate = $airDowngradePct / 100;
+            $dwBasis = 'air_article_10';
+        }
+        if ($dwOcc === 'yes' && $dwRate <= 0.0) {
+            $airBookedClass = strtolower(trim((string)($input['air_downgrade_booked_class'] ?? '')));
+            $airFlownClass = strtolower(trim((string)($input['air_downgrade_flown_class'] ?? '')));
+            if ($airBookedClass !== '' && $airFlownClass !== '' && $airBookedClass !== $airFlownClass) {
+                $airBandRate = match ($airDistanceBand) {
+                    'up_to_1500' => 0.30,
+                    'intra_eu_over_1500', 'other_1500_to_3500' => 0.50,
+                    'other_over_3500' => 0.75,
+                    default => 0.25,
+                };
+                $dwRate = $airBandRate;
+                $dwBasis = ($airDistanceBand !== '') ? 'air_article_10' : 'air_article_10_assumed';
+            }
+        }
 
         // If no explicit basis, attempt to infer the highest applicable downgrade rate from per-leg inputs.
         if ($dwRate <= 0.0) {
@@ -246,9 +510,22 @@ class ClaimCalculator
             $legResBuy = (array)($input['leg_reservation_purchased'] ?? []);
             $legResDel = (array)($input['leg_reservation_delivered'] ?? []);
             $legDg = (array)($input['leg_downgraded'] ?? []);
-            $rank = ['sleeper' => 4, 'couchette' => 3, '1st' => 2, '2nd' => 1];
+            $rank = [
+                'sleeper' => 4,
+                'couchette' => 3,
+                'first' => 4,
+                'business' => 3,
+                'premium_economy' => 2,
+                'economy' => 1,
+                '1st' => 2,
+                '2nd' => 1,
+            ];
             $normClass = static function (string $v): string {
                 $v = strtolower(trim($v));
+                if (in_array($v, ['premium economy','premium_economy','economy_plus'], true)) { return 'premium_economy'; }
+                if (in_array($v, ['economy','standard','coach','main','economy_class'], true)) { return 'economy'; }
+                if (in_array($v, ['business','business class','biz'], true)) { return 'business'; }
+                if (in_array($v, ['first','first class'], true)) { return 'first'; }
                 if (in_array($v, ['1st_class','1st','first','1'], true)) { return '1st'; }
                 if (in_array($v, ['2nd_class','2nd','second','2'], true)) { return '2nd'; }
                 if (in_array($v, ['seat_reserved','free_seat'], true)) { return '2nd'; }
@@ -349,7 +626,9 @@ class ClaimCalculator
                 ],
                 'expenses' => $expenses + ['total' => $expensesTotal],
                 'deductions' => ['already_refunded' => $alreadyRefunded],
-            ],
+            ]
+                + ($busCaps !== [] ? ['bus_caps' => $busCaps] : [])
+                + ($ferryCaps !== [] ? ['ferry_caps' => $ferryCaps] : []),
             'totals' => [
                 'gross_claim' => $gross,
                 'service_fee_pct' => $serviceFeePct,
@@ -362,7 +641,14 @@ class ClaimCalculator
                 'extraordinary_type' => $extraordinaryType ?: null,
                 'self_inflicted' => $selfInflicted,
                 'exemptions_applied' => !empty($exemptionsApplied) ? array_values(array_unique($exemptionsApplied)) : null,
-                'manual_review' => false,
+                'manual_review' => !empty($busCaps['hotel_cap_applied'])
+                    || !empty($busCaps['hotel_transport_soft_cap_exceeded'])
+                    || !empty($busCaps['alt_transport_soft_cap_exceeded'])
+                    || !empty($busCaps['meals_soft_cap_exceeded'])
+                    || !empty($ferryCaps['hotel_manual_review_required'])
+                    || !empty($ferryCaps['meals_manual_review_required'])
+                    || !empty($ferryCaps['hotel_transport_manual_review_required'])
+                    || !empty($ferryCaps['reroute_alt_transport_manual_review_required']),
                 'retailer_75' => $art12Retailer75,
             ],
         ];

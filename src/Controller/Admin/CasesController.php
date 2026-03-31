@@ -2,6 +2,7 @@
 namespace App\Controller\Admin;
 
 use App\Controller\AppController;
+use App\Service\CaseRiskService;
 use Cake\Datasource\Exception\RecordNotFoundException;
 use Cake\Utility\Text;
 
@@ -76,6 +77,22 @@ class CasesController extends AppController
         $travelDate = null;
         if (!empty($form['dep_date'])) { $travelDate = $form['dep_date']; }
         $snapshot = json_encode($sess, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $riskFields = [
+            'risk_score' => 0,
+            'risk_level' => 'low',
+            'risk_flags' => null,
+            'fraud_review_required' => false,
+            'risk_last_evaluated_at' => date('Y-m-d H:i:s'),
+            'risk_summary' => 'Ingen staerke risikosignaler fundet i fase 1.',
+            'duplicate_flag' => false,
+        ];
+        try {
+            $riskService = new CaseRiskService();
+            $risk = $riskService->evaluate($sess);
+            $riskFields = $riskService->toCaseFields($risk);
+        } catch (\Throwable) {
+            // Risk screening must not block case creation.
+        }
         $ref = Text::uuid();
         $case = $this->Cases->newEntity([
             'ref' => $ref,
@@ -92,10 +109,9 @@ class CasesController extends AppController
             'currency' => $currency,
             'eu_only' => $euOnly,
             'extraordinary' => (bool)($form['operatorExceptionalCircumstances'] ?? false),
-            'duplicate_flag' => false,
             'attachments_count' => 0,
             'flow_snapshot' => $snapshot,
-        ]);
+        ] + $riskFields);
         if ($this->Cases->save($case)) {
             $this->Flash->success('Sag oprettet fra session: ' . $ref);
             return $this->redirect(['action' => 'view', $case->id]);

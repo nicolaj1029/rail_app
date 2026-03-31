@@ -96,7 +96,7 @@ $isPreview = !empty($flowPreview);
 <?php elseif ($isBus): ?>
   <h1>TRIN 4 - PMR / handicap (bus)</h1>
 <?php elseif ($isAir): ?>
-  <h1>TRIN 4 - Air gating + saerlige behov</h1>
+  <h1>TRIN 4 - Saerlige behov og prioriteret assistance (fly)</h1>
 <?php elseif ($isOngoing): ?>
   <h1>TRIN 4 - Bekraeft rejse og forsinkelse (igangvaerende rejse)</h1>
 <?php elseif ($isCompleted): ?>

@@ -13,6 +13,47 @@ class ReimbursementController extends AppController
     {
         // Collect request input for the summary view
         $data = $this->request->is('post') ? (array)$this->request->getData() : (array)$this->request->getQueryParams();
+        $transportMode = $this->normalizeTransportMode((string)($data['transport_mode'] ?? ($data['gating_mode'] ?? 'rail')));
+        $isFerry = $transportMode === 'ferry';
+        $departureLabel = match ($transportMode) {
+            'ferry' => 'Afgangshavn/terminal',
+            'air' => 'Afgangslufthavn',
+            'bus' => 'Afgangsstoppested/terminal',
+            default => 'Afgangsstation',
+        };
+        $arrivalLabel = match ($transportMode) {
+            'ferry' => 'Ankomsthavn/terminal',
+            'air' => 'Ankomstlufthavn',
+            'bus' => 'Ankomststoppested/terminal',
+            default => 'Ankomststation',
+        };
+        $connectionLabel = match ($transportMode) {
+            'ferry' => 'Skiftehavn/-terminal',
+            'air' => 'Skiftelufthavn',
+            'bus' => 'Skiftested',
+            default => 'Skiftestation',
+        };
+        $returnToLabel = match ($transportMode) {
+            'ferry' => 'Retur til afgangshavn/terminal',
+            'air' => 'Retur til afgangslufthavn',
+            'bus' => 'Retur til afgangsstoppested/terminal',
+            default => 'Retur til afgangsstation',
+        };
+        $step7OriginLabel = $isFerry ? 'Udgangspunkt for ombooking' : 'Udgangspunkt for omlaegning';
+        $step7ModeLabel = $isFerry ? 'Transportform for ombooking' : 'Transportform for omlaegning';
+        $step7EndpointLabel = $isFerry ? 'Hvor endte ombookingen' : 'Hvor endte omlaegningen';
+        $step7ArrivalLabel = match ($transportMode) {
+            'ferry' => 'Omlagt til havn/terminal',
+            'air' => 'Omlagt til lufthavn',
+            'bus' => 'Omlagt til stoppested/terminal',
+            default => 'Omlagt til station',
+        };
+        $art20ArrivalLabel = match ($transportMode) {
+            'ferry' => 'Art.20 ankomsthavn/terminal',
+            'air' => 'Art.20 ankomstlufthavn',
+            'bus' => 'Art.20 ankomststed',
+            default => 'Art.20 ankomststation',
+        };
 
         // Init simple summary PDF
         $pdf = new FPDF('P', 'mm', 'A4');
@@ -69,7 +110,7 @@ class ReimbursementController extends AppController
         $renderSection('TRIN 2 -À H+ªndelse', [
             'Type' => $data['incident_main'] ?? null,
             'Missed connection' => !empty($data['missed_connection']) ? 'ja' : 'nej',
-            'Missed connection station' => $data['missed_connection_station'] ?? null,
+            $connectionLabel => $data['missed_connection_station'] ?? null,
             '+àrsager (afledt)' => implode(', ', array_keys(array_filter([
                 'delay' => !empty($data['reason_delay']),
                 'cancellation' => !empty($data['reason_cancellation']),
@@ -91,8 +132,8 @@ class ReimbursementController extends AppController
             'Operat+©r' => $data['operator'] ?? null,
             'Operat+©r land' => $data['operator_country'] ?? null,
             'Produkt' => $data['operator_product'] ?? null,
-            'Afgangsstation' => $data['dep_station'] ?? null,
-            'Ankomststation' => $data['arr_station'] ?? null,
+            $departureLabel => $data['dep_station'] ?? null,
+            $arrivalLabel => $data['arr_station'] ?? null,
             'Afgangsdato' => $data['dep_date'] ?? null,
             'Afgangstid' => $data['dep_time'] ?? null,
             'Ankomsttid' => $data['arr_time'] ?? null,
@@ -120,17 +161,31 @@ class ReimbursementController extends AppController
 
         // TRIN 7 ÔÇô Remedies (Art. 18)
         $renderSection('TRIN 7 -À Afhj+ªlpning', [
-            'Valg' => $data['remedyChoice'] ?? null,
+            'Valg' => $this->formatRemedyChoice($data['remedyChoice'] ?? null, $transportMode),
             'Refusion anmodet' => $data['refund_requested'] ?? null,
             'Refusionsformular valgt' => $data['refund_form_selected'] ?? null,
             'Reroute samme vilk+Ñr (snarest)' => $data['reroute_same_conditions_soonest'] ?? null,
             'Reroute senere (valg)' => $data['reroute_later_at_choice'] ?? null,
-            'Reroute info inden 100 min' => $data['reroute_info_within_100min'] ?? null,
+            ($transportMode === 'air' ? 'Article 8-valg tilbudt' : 'Reroute info inden 100 min') => $transportMode === 'air' ? ($data['air_article8_choice_offered'] ?? null) : ($data['reroute_info_within_100min'] ?? null),
+            $step7OriginLabel => $data['a18_from_station'] ?? null,
+            $returnToLabel => $data['a18_return_to_station'] ?? null,
+            $step7ModeLabel => $this->formatTransportChoice($data['a18_reroute_mode'] ?? null),
+            $step7EndpointLabel => $this->formatResolutionEndpoint($data['a18_reroute_endpoint'] ?? null, $transportMode),
+            $step7ArrivalLabel => $data['a18_reroute_arrival_station'] ?? null,
+            'Air refund scope' => $transportMode === 'air' ? ($data['air_refund_scope'] ?? null) : null,
+            'Retur til foerste afgangssted' => $transportMode === 'air' ? ($data['air_return_to_first_departure_point'] ?? null) : null,
+            'Selv arrangeret ombooking' => $transportMode === 'air' ? ($data['air_self_arranged_reroute'] ?? ($data['self_purchased_new_ticket'] ?? null)) : null,
+            'Hvorfor selv fundet loesning' => $transportMode === 'air' ? ($data['air_self_arranged_reroute_reason'] ?? ($data['self_purchase_reason'] ?? null)) : null,
+            'Flyselskabet bekraeftede loesningen' => $transportMode === 'air' ? ($data['air_airline_confirmed_self_arranged_solution'] ?? ($data['self_purchase_approved_by_operator'] ?? null)) : null,
+            'Alternativ lufthavn-transfer' => $transportMode === 'air' ? ($data['air_alternative_airport_transfer_needed'] ?? null) : null,
             'Ekstra omkostninger' => $data['reroute_extra_costs'] ?? null,
             'Ekstra omkostninger bel+©b' => $data['reroute_extra_costs_amount'] ?? null,
             'Ekstra omkostninger valuta' => $data['reroute_extra_costs_currency'] ?? null,
             'Nedgradering skete' => $data['downgrade_occurred'] ?? null,
             'Nedgradering komp.basis' => $data['downgrade_comp_basis'] ?? null,
+            'Koebt kabineklasse' => $transportMode === 'air' ? ($data['air_downgrade_booked_class'] ?? null) : null,
+            'Floejet kabineklasse' => $transportMode === 'air' ? ($data['air_downgrade_flown_class'] ?? null) : null,
+            'Artikel 10-refusionsprocent' => $transportMode === 'air' ? ($data['air_downgrade_refund_percent'] ?? null) : null,
         ]);
 
         // TRIN 8 ÔÇô Assistance og udgifter
@@ -140,6 +195,8 @@ class ReimbursementController extends AppController
             'Overnatning n+©dvendig' => $data['overnight_needed'] ?? null,
             'Alternativ transport (blokeret tog)' => $data['blocked_train_alt_transport'] ?? null,
             'Alt. transport leveret' => $data['alt_transport_provided'] ?? null,
+            'Art.20 slutpunkt' => $this->formatResolutionEndpoint($data['a20_where_ended'] ?? null, $transportMode),
+            $art20ArrivalLabel => $data['a20_arrival_station'] ?? null,
             'Kvittering upload (udgifter)' => $data['extra_expense_upload'] ?? null,
             'Udgifter: m+Ñltider' => $data['expense_breakdown_meals'] ?? $data['expense_meals'] ?? null,
             'Udgifter: hotel-n+ªtter' => $data['expense_breakdown_hotel_nights'] ?? null,
@@ -302,6 +359,29 @@ class ReimbursementController extends AppController
             $data['extraordinary'] = $computeSess['extraordinary'] ? '1' : '';
         }
 
+        $transportMode = $this->normalizeTransportMode((string)(
+            $data['transport_mode']
+            ?? $formSess['transport_mode']
+            ?? $metaSess['transport_mode']
+            ?? $computeSess['transport_mode']
+            ?? $flagsSess['transport_mode']
+            ?? 'rail'
+        ));
+        $countryQuery = strtoupper((string)($this->request->getQuery('country') ?? ($data['operator_country'] ?? '')));
+        $preferNat = (string)($this->request->getQuery('prefer') ?? '') === 'national'
+            || (string)($this->request->getQuery('national') ?? '') === '1';
+        $templateQuery = (string)($this->request->getQuery('template') ?? '');
+        $isFerryClaimLetter = $transportMode === 'ferry' && (
+            stripos($templateQuery, 'ferry_claim_letter') !== false
+            || stripos($templateQuery, 'Form_ferry_claim_letter') !== false
+            || stripos($templateQuery, 'claim_ferry_letter') !== false
+        );
+        $isBusClaimLetter = $transportMode === 'bus' && (
+            stripos($templateQuery, 'bus_claim_letter') !== false
+            || stripos($templateQuery, 'Form_bus_claim_letter') !== false
+            || stripos($templateQuery, 'claim_bus_letter') !== false
+        );
+
         // Developer aid: expose a JSON dump of relevant session values for debugging via DevTools
         // Usage: /reimbursement/official?eu=1&session=1
         $peekSess = (string)($this->request->getQuery('session') ?? $this->request->getQuery('peek') ?? '') === '1';
@@ -408,6 +488,11 @@ class ReimbursementController extends AppController
                     if ($choice === 'reroute_soonest' || $choice === 'reroute_later') { $snap['main_compensation'] = true; }
                     $hasExp = $isYes($snap['request_expenses'] ?? null) || ($snap['meal_self_paid_amount'] ?? '') !== '' || ($snap['hotel_self_paid_amount'] ?? '') !== '' || ($snap['blocked_self_paid_amount'] ?? '') !== '' || ($snap['alt_self_paid_amount'] ?? '') !== '';
                     if ($hasExp) { $snap['main_expenses'] = true; }
+                    $transportMode = $this->normalizeTransportMode((string)($snap['transport_mode'] ?? ($snap['gating_mode'] ?? 'rail')));
+                    $snap['display_remedyChoice'] = $this->formatRemedyChoice($snap['remedyChoice'] ?? null, $transportMode);
+                    $snap['display_a18_reroute_mode'] = $this->formatTransportChoice($snap['a18_reroute_mode'] ?? null);
+                    $snap['display_a18_reroute_endpoint'] = $this->formatResolutionEndpoint($snap['a18_reroute_endpoint'] ?? null, $transportMode);
+                    $snap['display_a20_where_ended'] = $this->formatResolutionEndpoint($snap['a20_where_ended'] ?? null, $transportMode);
                     return $snap;
                 })(),
             ];
@@ -426,7 +511,6 @@ class ReimbursementController extends AppController
             // Respect force=eu to always choose EU official template
             $forceEu = (string)($this->request->getQuery('eu') ?? $this->request->getQuery('force')) === '1' || (string)$this->request->getQuery('force') === 'eu';
         // Defaults to avoid undefined notices when forcing EU template
-        $countryQuery = (string)($this->request->getQuery('country') ?? ($data['operator_country'] ?? ''));
         $opName = (string)($data['operator'] ?? '');
         $opProd = (string)($data['operator_product'] ?? '');
         $preferNat = (string)($this->request->getQuery('prefer') ?? '') === 'national' || (string)$this->request->getQuery('national') === '1';
@@ -652,6 +736,63 @@ class ReimbursementController extends AppController
     $applyDateSplits($data, $mapArray, 'dep_date');
     $applyTicketSplits($data, $mapArray);
 
+    $isAirTemplate = stripos((string)basename((string)$source), 'air_travel_form') !== false
+        || stripos((string)$source, 'form_air_travel') !== false
+        || stripos((string)$source, 'air_travel') !== false;
+    if ($isAirTemplate) {
+        $postcode = trim((string)($data['address_postalCode'] ?? ($data['postcode'] ?? '')));
+        $city = trim((string)($data['address_city'] ?? ($data['city'] ?? '')));
+        if ((string)($data['postcode_city'] ?? '') === '' && ($postcode !== '' || $city !== '')) {
+            $data['postcode_city'] = trim($postcode . ($postcode !== '' && $city !== '' ? ' ' : '') . $city);
+        }
+        if ((string)($data['signature_name'] ?? '') === '') {
+            $fn = trim((string)($data['firstName'] ?? ($data['firstname'] ?? '')));
+            $ln = trim((string)($data['lastName'] ?? ($data['surname'] ?? '')));
+            $full = trim($fn . ' ' . $ln);
+            if ($full !== '') {
+                $data['signature_name'] = $full;
+            }
+        }
+        if ((string)($data['signature_date'] ?? '') === '') {
+            $data['signature_date'] = date('Y-m-d');
+        }
+        foreach ([
+            'meal_offered' => 'air_meals_offered',
+            'hotel_offered' => 'air_hotel_offered',
+        ] as $legacyKey => $airKey) {
+            if ((string)($data[$airKey] ?? '') === '' && (string)($data[$legacyKey] ?? '') !== '') {
+                $data[$airKey] = (string)$data[$legacyKey];
+            }
+            if ((string)($data[$legacyKey] ?? '') === '' && (string)($data[$airKey] ?? '') !== '') {
+                $data[$legacyKey] = (string)$data[$airKey];
+            }
+        }
+        if ((string)($data['flight_number'] ?? '') === '') {
+            $flight = trim((string)($data['train_no'] ?? ($data['flight_no'] ?? '')));
+            if ($flight !== '') {
+                $data['flight_number'] = $flight;
+            }
+        }
+        if ((string)($data['airline'] ?? '') === '' && (string)($data['operator'] ?? '') !== '') {
+            $data['airline'] = (string)$data['operator'];
+        }
+        if ((string)($data['ticket_number'] ?? '') === '' && (string)($data['ticket_no'] ?? '') !== '') {
+            $data['ticket_number'] = (string)$data['ticket_no'];
+        }
+        if ((string)($data['booking_reference'] ?? '') === '' && (string)($data['ticket_no'] ?? '') !== '') {
+            $data['booking_reference'] = (string)$data['ticket_no'];
+        }
+        if ((string)($data['incident_airports'] ?? '') === '') {
+            $incidentAirports = trim((string)($data['missed_connection_station'] ?? ''));
+            if ($incidentAirports === '') {
+                $incidentAirports = trim((string)($data['dep_station'] ?? '') . ' ' . (string)($data['arr_station'] ?? ''));
+            }
+            if ($incidentAirports !== '') {
+                $data['incident_airports'] = $incidentAirports;
+            }
+        }
+    }
+
     // If developer asked for session debug, include template and map details now that they are resolved
     if ($peekSess && is_array($debugPayload)) {
         $debugPayload['template'] = [
@@ -859,8 +1000,20 @@ class ReimbursementController extends AppController
             $name = trim($fn . ' ' . $ln);
             if ($name !== '') { $data['full_name'] = $name; }
         }
-    }
-    $debug = (bool)$this->request->getQuery('debug');
+        }
+        if ($isFerryClaimLetter) {
+            $this->disableAutoRender();
+            $pdfBody = $this->buildFerryClaimLetterPdf($data, $formSess, $metaSess, $incidentSess, $computeSess, $flagsSess);
+            $this->response = $this->response->withType('pdf')->withStringBody($pdfBody);
+            return;
+        }
+        if ($isBusClaimLetter) {
+            $this->disableAutoRender();
+            $pdfBody = $this->buildBusClaimLetterPdf($data, $formSess, $metaSess, $incidentSess, $computeSess, $flagsSess);
+            $this->response = $this->response->withType('pdf')->withStringBody($pdfBody);
+            return;
+        }
+        $debug = (bool)$this->request->getQuery('debug');
     $dx = (float)($this->request->getQuery('dx') ?? 0);
     $dy = (float)($this->request->getQuery('dy') ?? 0);
     // Optional per-box vertical nudge for quick testing: ?boxdy=-50
@@ -1264,8 +1417,8 @@ class ReimbursementController extends AppController
                 'refund_form_selected' => 'Hvis ja, hvilken form for refusion?',
                 'reroute_same_conditions_soonest' => '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
                 'reroute_later_at_choice' => '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
-                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                'self_purchased_new_ticket' => 'K+©ber du selv en ny billet for at komme videre?',
+                'reroute_info_within_100min' => $transportMode === 'air' ? 'Tilboed flyselskabet refusion eller ombooking efter article 8?' : 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                'self_purchased_new_ticket' => $transportMode === 'air' ? 'Maatte du selv arrangere ombooking eller videre rejse?' : 'K+©ber du selv en ny billet for at komme videre?',
                 'reroute_extra_costs' => 'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
                 'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?',
                 'pmr_user' => 'Har du et handicap eller nedsat mobilitet, som kr+ªvede assistance?',
@@ -1363,8 +1516,8 @@ class ReimbursementController extends AppController
                 // Oml+ªgning
                 'reroute_same_conditions_soonest' => 'Oml+ªgning',
                 'reroute_later_at_choice' => 'Oml+ªgning',
-                'reroute_info_within_100min' => 'Oml+ªgning',
-                'self_purchased_new_ticket' => 'Oml+ªgning',
+                'reroute_info_within_100min' => $transportMode === 'air' ? 'Article 8' : 'Oml+ªgning',
+                'self_purchased_new_ticket' => $transportMode === 'air' ? 'Article 8' : 'Oml+ªgning',
                 'reroute_extra_costs' => 'Oml+ªgning',
                 'downgrade_occurred' => 'Oml+ªgning',
                 // TRIN 5 -À Assistance og udgifter (Art. 20)
@@ -1792,7 +1945,7 @@ class ReimbursementController extends AppController
                                     $pref = [
                                         '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
                                         '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
-                                        'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                                        $transportMode === 'air' ? 'Tilboed flyselskabet refusion eller ombooking efter article 8?' : 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
                                         'K+©ber du selv en ny billet for at komme videre?',
                                         'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
                                         'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?'
@@ -1974,8 +2127,8 @@ class ReimbursementController extends AppController
                 'refund_form_selected' => 'Hvis ja, hvilken form for refusion?',
                 'reroute_same_conditions_soonest' => '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
                 'reroute_later_at_choice' => '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
-                'reroute_info_within_100min' => 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
-                'self_purchased_new_ticket' => 'K+©ber du selv en ny billet for at komme videre?',
+                'reroute_info_within_100min' => $transportMode === 'air' ? 'Tilboed flyselskabet refusion eller ombooking efter article 8?' : 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                'self_purchased_new_ticket' => $transportMode === 'air' ? 'Maatte du selv arrangere ombooking eller videre rejse?' : 'K+©ber du selv en ny billet for at komme videre?',
                 'reroute_extra_costs' => 'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
                 'downgrade_occurred' => 'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?',
                 'through_ticket_disclosure' => 'Blev det oplyst at billetten var gennemg+Ñende?',
@@ -2113,8 +2266,8 @@ class ReimbursementController extends AppController
                 'refund_form_selected' => 'Refusion',
                 'reroute_same_conditions_soonest' => 'Oml+ªgning',
                 'reroute_later_at_choice' => 'Oml+ªgning',
-                'reroute_info_within_100min' => 'Oml+ªgning',
-                'self_purchased_new_ticket' => 'Oml+ªgning',
+                'reroute_info_within_100min' => $transportMode === 'air' ? 'Article 8' : 'Oml+ªgning',
+                'self_purchased_new_ticket' => $transportMode === 'air' ? 'Article 8' : 'Oml+ªgning',
                 'reroute_extra_costs' => 'Oml+ªgning',
                 'downgrade_occurred' => 'Oml+ªgning',
                 // TRIN 5 -À Art. 20
@@ -2286,7 +2439,7 @@ class ReimbursementController extends AppController
                         $pref = [
                             '+ÿnsker du oml+ªgning p+Ñ tilsvarende vilk+Ñr ved f+©rst givne lejlighed?',
                             '+ÿnsker du oml+ªgning til et senere tidspunkt efter eget valg?',
-                            'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
+                            $transportMode === 'air' ? 'Tilboed flyselskabet refusion eller ombooking efter article 8?' : 'Er du blevet informeret om mulighederne for oml+ªgning inden for 100 minutter efter planlagt afgang? (Art. 18(3))',
                             'K+©ber du selv en ny billet for at komme videre?',
                             'Kommer oml+ªgningen til at medf+©re ekstra udgifter for dig? (h+©jere klasse/andet transportmiddel)?',
                             'Er du blevet nedklassificeret eller regner med at blive det pga. oml+ªgningen?'
@@ -2381,6 +2534,71 @@ class ReimbursementController extends AppController
      * Adjust iteratively by viewing the output.
      * @return array<int,array<string,array{x:float,y:float,w?:float,multiline?:bool}>>
      */
+    private function normalizeTransportMode(?string $mode): string
+    {
+        $normalized = strtolower(trim((string)$mode));
+
+        return in_array($normalized, ['rail', 'bus', 'ferry', 'air'], true) ? $normalized : 'rail';
+    }
+
+    private function formatRemedyChoice(?string $value, ?string $transportMode = null): ?string
+    {
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $mode = $this->normalizeTransportMode($transportMode);
+
+        return match ($normalized) {
+            'refund_return' => 'Tilbagebetaling',
+            'reroute_soonest' => $mode === 'ferry' ? 'Ombooking hurtigst muligt' : 'Omlaegning hurtigst muligt',
+            'reroute_later' => $mode === 'ferry' ? 'Ombooking senere (efter eget valg)' : 'Omlaegning senere (efter eget valg)',
+            default => $normalized,
+        };
+    }
+
+    private function formatTransportChoice(?string $value): ?string
+    {
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return match ($normalized) {
+            'rail' => 'Tog',
+            'bus' => 'Bus',
+            'ferry' => 'Faerge',
+            'air' => 'Fly',
+            'taxi' => 'Taxi/minibus',
+            'rideshare' => 'Samkoersel/rideshare',
+            'other' => 'Andet',
+            default => trim((string)$value),
+        };
+    }
+
+    private function formatResolutionEndpoint(?string $value, ?string $transportMode = null): ?string
+    {
+        $normalized = trim((string)$value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $mode = $this->normalizeTransportMode($transportMode);
+
+        return match ($normalized) {
+            'nearest_station' => match ($mode) {
+                'ferry' => 'Naermeste havn/terminal',
+                'air' => 'Naermeste lufthavn',
+                'bus' => 'Naermeste stoppested/terminal',
+                default => 'Naermeste station',
+            },
+            'other_departure_point' => 'Et andet egnet afgangssted',
+            'final_destination' => 'Mit endelige bestemmelsessted',
+            default => $normalized,
+        };
+    }
+
     private function officialFieldMap(): array
     {
         return [
@@ -2478,6 +2696,834 @@ class ReimbursementController extends AppController
     }
 
     /**
+     * Build a ferry claim letter PDF from the stored flow state.
+     *
+     * @param array<string,mixed> $data
+     * @param array<string,mixed> $formSess
+     * @param array<string,mixed> $metaSess
+     * @param array<string,mixed> $incidentSess
+     * @param array<string,mixed> $computeSess
+     * @param array<string,mixed> $flagsSess
+     */
+    private function buildFerryClaimLetterPdf(array $data, array $formSess, array $metaSess, array $incidentSess, array $computeSess, array $flagsSess): string
+    {
+        $multimodal = (array)($metaSess['_multimodal'] ?? []);
+        $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+        $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
+        $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
+        $claimDirection = (array)($multimodal['claim_direction'] ?? []);
+
+        $pick = function (array $sources, array $keys, string $default = ''): string {
+            foreach ($keys as $key) {
+                foreach ($sources as $src) {
+                    if (is_array($src) && array_key_exists($key, $src) && trim((string)$src[$key]) !== '') {
+                        return trim((string)$src[$key]);
+                    }
+                }
+            }
+            return $default;
+        };
+        $pickNested = function (array $src, array $path, string $default = '') use (&$pickNested): string {
+            $cur = $src;
+            foreach ($path as $key) {
+                if (!is_array($cur) || !array_key_exists($key, $cur)) {
+                    return $default;
+                }
+                $cur = $cur[$key];
+            }
+            $val = trim((string)$cur);
+            return $val !== '' ? $val : $default;
+        };
+        $normalizeMoney = function (mixed $raw, string $defaultCurrency = 'EUR'): array {
+            $rawStr = trim((string)$raw);
+            $currency = strtoupper(trim($defaultCurrency));
+            if ($currency === '') {
+                $currency = 'EUR';
+            }
+            if (preg_match('/\b(EUR|DKK|SEK|NOK|PLN|CZK|HUF|RON|BGN|GBP|USD)\b/i', $rawStr, $m)) {
+                $currency = strtoupper($m[1]);
+            } elseif (str_contains($rawStr, '€')) {
+                $currency = 'EUR';
+            } elseif (str_contains($rawStr, 'kr')) {
+                $currency = 'DKK';
+            }
+            $num = preg_replace('/[^0-9,.\-]/', '', $rawStr);
+            $amount = 0.0;
+            if ($num !== '') {
+                if (preg_match('/-?\d[\d.,]*/', $num, $m)) {
+                    $guess = str_replace([' ', ','], ['', '.'], $m[0]);
+                    $amount = (float)$guess;
+                }
+            }
+            return [$amount, $currency];
+        };
+        $sumMoney = function (array $values, string $defaultCurrency = 'EUR') use ($normalizeMoney): array {
+            $amount = 0.0;
+            $currency = strtoupper(trim($defaultCurrency)) ?: 'EUR';
+            foreach ($values as $v) {
+                if ($v === null || $v === '') {
+                    continue;
+                }
+                [$a, $c] = $normalizeMoney($v, $currency);
+                if ($a > 0) {
+                    $amount += $a;
+                }
+                if ($currency === 'EUR' && $c !== '') {
+                    $currency = $c;
+                }
+            }
+            return [$amount, $currency];
+        };
+        $yes = function (mixed $v): bool {
+            $s = strtolower(trim((string)$v));
+            return in_array($s, ['1', 'true', 'yes', 'ja', 'y'], true);
+        };
+        $firstNonEmpty = function (array $values, string $default = ''): string {
+            foreach ($values as $v) {
+                $s = trim((string)$v);
+                if ($s !== '') {
+                    return $s;
+                }
+            }
+            return $default;
+        };
+        $formatDate = function (string $date, string $time = ''): string {
+            $date = trim($date);
+            $time = trim($time);
+            if ($date === '' && $time === '') {
+                return '';
+            }
+            if ($time === '') {
+                return $date;
+            }
+            return trim($date . ' ' . $time);
+        };
+        $bulletList = function (array $items): string {
+            $lines = [];
+            foreach ($items as $item) {
+                $item = trim((string)$item);
+                if ($item !== '') {
+                    $lines[] = '- ' . $item;
+                }
+            }
+            return implode("\n", $lines);
+        };
+        $toPdf = function (string $s): string {
+            if (!preg_match('//u', $s)) {
+                return $s;
+            }
+            $conv = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $s);
+            return $conv !== false ? $conv : $s;
+        };
+
+        $fullName = $firstNonEmpty([
+            trim((string)($data['full_name'] ?? '')),
+            trim((string)($formSess['firstName'] ?? '') . ' ' . (string)($formSess['lastName'] ?? '')),
+            trim((string)($data['firstName'] ?? '') . ' ' . (string)($data['lastName'] ?? '')),
+        ]);
+        $email = $firstNonEmpty([
+            (string)($data['contact_email'] ?? ''),
+            (string)($data['email'] ?? ''),
+            (string)($formSess['contact_email'] ?? ''),
+        ]);
+        $phone = $firstNonEmpty([
+            (string)($data['contact_phone'] ?? ''),
+            (string)($data['phone'] ?? ''),
+            (string)($formSess['contact_phone'] ?? ''),
+        ]);
+        $address = trim((string)($data['address_line1'] ?? ($formSess['address_line1'] ?? '')));
+        $city = trim((string)($data['address_city'] ?? ($formSess['address_city'] ?? '')));
+        $postcode = trim((string)($data['address_postalCode'] ?? ($formSess['address_postalCode'] ?? '')));
+        $country = trim((string)($data['address_country'] ?? ($formSess['address_country'] ?? '')));
+        $fullAddress = trim(implode(', ', array_values(array_filter([
+            $address,
+            trim($postcode . ' ' . $city),
+            $country,
+        ], static fn($v) => trim((string)$v) !== ''))));
+
+        $carrier = $firstNonEmpty([
+            (string)($ferryContract['primary_claim_party_name'] ?? ''),
+            (string)($data['operator'] ?? ''),
+            (string)($formSess['operator'] ?? ''),
+            (string)($computeSess['primary_claim_party_name'] ?? ''),
+        ]);
+        $carrierKnown = $carrier !== '';
+        if (!$carrierKnown) {
+            $carrier = 'Carrier / operator';
+        }
+        $carrierType = $firstNonEmpty([
+            (string)($ferryContract['primary_claim_party'] ?? ''),
+            (string)($computeSess['primary_claim_party'] ?? ''),
+        ]);
+        $bookingRef = $firstNonEmpty([
+            (string)($data['booking_reference'] ?? ''),
+            (string)($data['ticket_no'] ?? ''),
+            (string)($formSess['ticket_no'] ?? ''),
+            (string)($metaSess['_auto']['ticket_no']['value'] ?? ''),
+        ]);
+        $fromPort = $firstNonEmpty([
+            (string)($data['dep_station'] ?? ''),
+            (string)($formSess['dep_station'] ?? ''),
+            (string)($metaSess['_auto']['dep_station']['value'] ?? ''),
+        ]);
+        $toPort = $firstNonEmpty([
+            (string)($data['arr_station'] ?? ''),
+            (string)($formSess['arr_station'] ?? ''),
+            (string)($metaSess['_auto']['arr_station']['value'] ?? ''),
+        ]);
+        $depDate = $firstNonEmpty([
+            (string)($data['dep_date'] ?? ''),
+            (string)($formSess['dep_date'] ?? ''),
+            (string)($metaSess['_auto']['dep_date']['value'] ?? ''),
+        ]);
+        $depTime = $firstNonEmpty([
+            (string)($data['dep_time'] ?? ''),
+            (string)($formSess['dep_time'] ?? ''),
+        ]);
+        $arrTime = $firstNonEmpty([
+            (string)($data['arr_time'] ?? ''),
+            (string)($formSess['arr_time'] ?? ''),
+        ]);
+        $arrivalDelayMinutes = (int)preg_replace('/[^0-9\-]/', '', (string)($data['arrival_delay_minutes'] ?? ($formSess['arrival_delay_minutes'] ?? '0')));
+        if ($arrivalDelayMinutes < 0) {
+            $arrivalDelayMinutes = 0;
+        }
+        $plannedDurationMinutes = (int)preg_replace('/[^0-9\-]/', '', (string)($data['scheduled_journey_duration_minutes'] ?? ($formSess['scheduled_journey_duration_minutes'] ?? '0')));
+        if ($plannedDurationMinutes < 0) {
+            $plannedDurationMinutes = 0;
+        }
+        [$ticketAmount, $ticketCurrency] = $normalizeMoney((string)($data['price'] ?? ($formSess['price'] ?? '0')), (string)($data['price_currency'] ?? ($formSess['price_currency'] ?? 'EUR')));
+        $ticketCurrency = strtoupper($ticketCurrency ?: 'EUR');
+        if ($ticketCurrency === 'AUTO') {
+            $ticketCurrency = 'EUR';
+        }
+
+        $incidentMain = $firstNonEmpty([
+            (string)($data['incident_main'] ?? ''),
+            (string)($incidentSess['main'] ?? ''),
+            (string)($metaSess['incident']['main'] ?? ''),
+        ]);
+        if ($incidentMain === '') {
+            $incidentMain = !empty($data['missed_connection']) ? 'missed_connection' : 'delay';
+        }
+        $incidentReasons = [];
+        if ($incidentMain !== '') {
+            $incidentReasons[] = ucfirst(str_replace('_', ' ', $incidentMain));
+        }
+        if (!empty($data['reason_delay'])) {
+            $incidentReasons[] = 'Forsinkelse';
+        }
+        if (!empty($data['reason_cancellation'])) {
+            $incidentReasons[] = 'Aflysning';
+        }
+        if (!empty($data['reason_missed_conn']) || !empty($data['missed_connection'])) {
+            $incidentReasons[] = 'Missed connection';
+        }
+        $incidentConsequence = $firstNonEmpty([
+            (string)($data['ferry_incident_consequence'] ?? ''),
+            (string)($incidentSess['consequence'] ?? ''),
+        ]);
+        if ($incidentConsequence === '') {
+            if ($incidentMain === 'cancellation') {
+                $incidentConsequence = 'The service could not be performed as planned.';
+            } elseif ($arrivalDelayMinutes > 0) {
+                $incidentConsequence = 'The journey arrived with a significant delay.';
+            } else {
+                $incidentConsequence = 'My rights under Regulation (EU) No 1177/2010 were triggered.';
+            }
+        }
+
+        $remedyChoice = (string)($data['remedyChoice'] ?? ($formSess['remedyChoice'] ?? ''));
+        if ($remedyChoice === '') {
+            if (!empty($data['ferry_refund_requested'])) {
+                $remedyChoice = 'refund_return';
+            } elseif (!empty($data['ferry_reroute_choice'])) {
+                $remedyChoice = (string)$data['ferry_reroute_choice'];
+            }
+        }
+        $remedyLabel = (string)($this->formatRemedyChoice($remedyChoice, 'ferry') ?? $remedyChoice);
+
+        $ferryBand = (string)($ferryRights['art19_comp_band'] ?? ($flagsSess['ferry_art19_comp_band'] ?? ''));
+        $bandPct = is_numeric($ferryBand) ? (float)$ferryBand : 0.0;
+        $art19Active = !empty($ferryRights['gate_art19']) || $bandPct > 0;
+        $compAmount = ($art19Active && $ticketAmount > 0 && $bandPct > 0) ? round($ticketAmount * ($bandPct / 100), 2) : 0.0;
+
+        $refundRequested = $yes($data['ferry_refund_requested'] ?? ($data['refund_requested'] ?? false)) || $remedyChoice === 'refund_return';
+        $returnToOriginAmount = 0.0;
+        $rerouteExtraAmount = 0.0;
+        $selfPaidReturn = (string)($data['ferry_return_to_departure_port_expense'] ?? ($data['return_to_origin_expense'] ?? ''));
+        if ($selfPaidReturn !== '') {
+            [$returnToOriginAmount] = $normalizeMoney($data['ferry_return_to_departure_port_amount'] ?? ($data['return_to_origin_amount'] ?? 0), $ticketCurrency);
+        }
+        if (!empty($data['reroute_extra_costs']) || !empty($data['reroute_extra_costs_amount'])) {
+            [$rerouteExtraAmount] = $normalizeMoney($data['reroute_extra_costs_amount'] ?? 0, $ticketCurrency);
+        }
+
+        [$mealsAmount] = $sumMoney([
+            $data['meal_self_paid_amount'] ?? '',
+            $data['ferry_refreshments_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$hotelAmount] = $sumMoney([
+            $data['hotel_self_paid_amount'] ?? '',
+            $data['ferry_hotel_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$hotelTransportAmount] = $sumMoney([
+            $data['hotel_transport_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$altAmount] = $sumMoney([
+            $data['alt_self_paid_amount'] ?? '',
+            $data['blocked_self_paid_amount'] ?? '',
+            $data['blocked_self_paid_transport_amount'] ?? '',
+        ], $ticketCurrency);
+        [$otherAmount] = $sumMoney([
+            $data['expense_other'] ?? '',
+            $data['expense_breakdown_other_amounts'] ?? '',
+        ], $ticketCurrency);
+        $assistanceAmount = round($mealsAmount + $hotelAmount + $hotelTransportAmount + $altAmount + $otherAmount, 2);
+        $refundAmount = $refundRequested ? $ticketAmount : 0.0;
+        $art18ExtraAmount = round($returnToOriginAmount + $rerouteExtraAmount, 2);
+        $totalClaim = round($refundAmount + $art18ExtraAmount + $assistanceAmount + $compAmount, 2);
+
+        $recommendations = [];
+        foreach ((array)($claimDirection['recommended_documents'] ?? []) as $doc) {
+            $doc = trim((string)$doc);
+            if ($doc !== '') {
+                $recommendations[] = $doc;
+            }
+        }
+
+        $pdf = new FPDF('P', 'mm', 'A4');
+        $pdf->SetAutoPageBreak(true, 14);
+        $pdf->AddPage();
+        $pdf->SetMargins(15, 15, 15);
+
+        $write = function (string $text, string $font = 'Arial', string $style = '', int $size = 11) use ($pdf, $toPdf): void {
+            $pdf->SetFont($font, $style, $size);
+            $pdf->MultiCell(0, 6, $toPdf($text));
+        };
+        $section = function (string $title) use ($pdf, $toPdf): void {
+            $pdf->Ln(1);
+            $pdf->SetFont('Arial', 'B', 13);
+            $pdf->Cell(0, 8, $toPdf($title), 0, 1);
+        };
+        $kv = function (string $label, string $value) use ($pdf, $toPdf): void {
+            if (trim($value) === '') {
+                return;
+            }
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(58, 6, $toPdf($label) . ':', 0, 0);
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->MultiCell(0, 6, $toPdf($value));
+        };
+
+        $write('Subject: Claim under Regulation (EU) No 1177/2010 - Ferry Passenger Rights', 'Arial', 'B', 14);
+        $pdf->Ln(1);
+        $write('To: ' . ($carrierKnown ? $carrier : 'Carrier / operator'), 'Arial', '', 11);
+        $write('Please treat this as a formal ferry passenger rights claim based on the journey and disruption information supplied in my case.', 'Arial', '', 10);
+
+        $section('Passenger details');
+        $kv('Name', $fullName);
+        $kv('Email', $email);
+        $kv('Phone', $phone);
+        $kv('Address', $fullAddress);
+        $kv('Booking reference', $bookingRef);
+
+        $section('Journey details');
+        if ($carrierKnown) {
+            $kv('Carrier / operator', $carrier);
+        }
+        if ($carrierType !== '' && !in_array(strtolower($carrierType), ['carrier', 'manual_review'], true)) {
+            $kv('Claim channel', $carrierType);
+        }
+        $kv('Route', trim($fromPort . ' -> ' . $toPort));
+        $kv('Scheduled departure', $formatDate($depDate, $depTime));
+        $kv('Scheduled arrival', $formatDate($depDate, $arrTime));
+        if ($arrivalDelayMinutes > 0 && $incidentMain !== 'cancellation') {
+            $kv('Arrival delay (minutes)', (string)$arrivalDelayMinutes);
+        }
+        $kv('Planned journey duration (minutes)', (string)$plannedDurationMinutes);
+        $kv('Ticket price', number_format($ticketAmount, 2) . ' ' . $ticketCurrency);
+
+        $section('Incident');
+        $kv('Incident type', trim(implode(', ', $incidentReasons)) !== '' ? implode(', ', $incidentReasons) : 'Delay');
+        if ($incidentMain !== 'cancellation') {
+            $kv('Delay basis', $arrivalDelayMinutes > 0 ? (string)$arrivalDelayMinutes . ' minutes' : 'Not stated');
+        }
+        $kv('Consequence', $incidentConsequence);
+        $kv('Scope', !empty($ferryScope['regulation_applies']) ? 'Regulation applies on the stated facts' : 'Regulation unclear / not applicable');
+        if (!empty($ferryScope['scope_exclusion_reason'])) {
+            $kv('Scope reason', (string)$ferryScope['scope_exclusion_reason']);
+        }
+
+        $section('Rights invoked');
+        $kv('Article 18', $remedyLabel !== '' ? $remedyLabel : 'Not selected');
+        if (!empty($ferryRights['gate_art16_notice'])) {
+            $kv('Article 16', 'Relevant');
+        }
+        if (!empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel'])) {
+            $kv('Article 17', 'Relevant');
+        }
+        if (!empty($ferryRights['gate_art18'])) {
+            $kv('Article 18 gate', 'Relevant');
+        }
+        $kv('Article 19', $art19Active ? ($bandPct > 0 ? 'Relevant - ' . rtrim(rtrim(number_format($bandPct, 2), '0'), '.') . '%' : 'Relevant') : 'Not activated');
+
+        $section('Claim amounts');
+        $kv('Refund / reimbursement', number_format($refundAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Rerouting / return costs', number_format($art18ExtraAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Assistance expenses', number_format($assistanceAmount, 2) . ' ' . $ticketCurrency);
+        if ($mealsAmount > 0) {
+            $kv('Meals / refreshments', number_format($mealsAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($hotelAmount > 0) {
+            $kv('Hotel / accommodation', number_format($hotelAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($hotelTransportAmount > 0) {
+            $kv('Transport to / from hotel', number_format($hotelTransportAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($altAmount > 0) {
+            $kv('Alternative transport', number_format($altAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($otherAmount > 0) {
+            $kv('Other expenses', number_format($otherAmount, 2) . ' ' . $ticketCurrency);
+        }
+        $kv('Article 19 compensation', number_format($compAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Total claim amount', number_format($totalClaim, 2) . ' ' . $ticketCurrency);
+        $write('Legal conclusion: I therefore claim the amounts above under Regulation (EU) No 1177/2010 and request reimbursement in money, not vouchers, unless I explicitly agree otherwise.', 'Arial', 'B', 10);
+        $write('Please respond within the deadlines set out in Article 24 of Regulation (EU) No 1177/2010.', 'Arial', '', 10);
+
+        $section('Documentation');
+        if (!empty($recommendations)) {
+            $write('Supporting documentation: ' . implode(', ', $recommendations), 'Arial', '', 10);
+        }
+        $write('I request payment in money, not vouchers, unless I explicitly agree otherwise.', 'Arial', '', 10);
+        $write('Kind regards,', 'Arial', '', 10);
+        $write($fullName !== '' ? $fullName : 'Passenger', 'Arial', 'B', 11);
+
+        return $pdf->Output('S');
+    }
+
+    /**
+     * Build a bus claim letter PDF from the stored flow state.
+     *
+     * @param array<string,mixed> $data
+     * @param array<string,mixed> $formSess
+     * @param array<string,mixed> $metaSess
+     * @param array<string,mixed> $incidentSess
+     * @param array<string,mixed> $computeSess
+     * @param array<string,mixed> $flagsSess
+     */
+    private function buildBusClaimLetterPdf(array $data, array $formSess, array $metaSess, array $incidentSess, array $computeSess, array $flagsSess): string
+    {
+        $multimodal = (array)($metaSess['_multimodal'] ?? []);
+        $busScope = (array)($multimodal['bus_scope'] ?? []);
+        $busContract = (array)($multimodal['bus_contract'] ?? []);
+        $busRights = (array)($multimodal['bus_rights'] ?? []);
+        $busPmrRights = (array)($multimodal['bus_pmr_rights'] ?? []);
+        $claimDirection = (array)($multimodal['claim_direction'] ?? []);
+
+        $firstNonEmpty = function (array $values, string $default = ''): string {
+            foreach ($values as $v) {
+                $s = trim((string)$v);
+                if ($s !== '') {
+                    return $s;
+                }
+            }
+            return $default;
+        };
+        $yes = function (mixed $v): bool {
+            $s = strtolower(trim((string)$v));
+            return in_array($s, ['1', 'true', 'yes', 'ja', 'y'], true);
+        };
+        $normalizeMoney = function (mixed $raw, string $defaultCurrency = 'EUR'): array {
+            $rawStr = trim((string)$raw);
+            $currency = strtoupper(trim($defaultCurrency)) ?: 'EUR';
+            if (preg_match('/\b(EUR|DKK|SEK|NOK|PLN|CZK|HUF|RON|BGN|GBP|USD)\b/i', $rawStr, $m)) {
+                $currency = strtoupper($m[1]);
+            } elseif (str_contains($rawStr, '€')) {
+                $currency = 'EUR';
+            } elseif (str_contains($rawStr, 'kr')) {
+                $currency = 'DKK';
+            }
+            $amount = 0.0;
+            $num = preg_replace('/[^0-9,.\-]/', '', $rawStr);
+            if ($num !== '' && preg_match('/-?\d[\d.,]*/', $num, $m)) {
+                $guess = str_replace([' ', ','], ['', '.'], $m[0]);
+                $amount = (float)$guess;
+            }
+            return [$amount, $currency];
+        };
+        $sumMoney = function (array $values, string $defaultCurrency = 'EUR') use ($normalizeMoney): array {
+            $amount = 0.0;
+            $currency = strtoupper(trim($defaultCurrency)) ?: 'EUR';
+            foreach ($values as $v) {
+                if ($v === null || $v === '') {
+                    continue;
+                }
+                [$a, $c] = $normalizeMoney($v, $currency);
+                $amount += max(0.0, $a);
+                if ($currency === 'EUR' && $c !== '') {
+                    $currency = $c;
+                }
+            }
+            return [$amount, $currency];
+        };
+        $toPdf = function (string $s): string {
+            if (!preg_match('//u', $s)) {
+                return $s;
+            }
+            $conv = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $s);
+            return $conv !== false ? $conv : $s;
+        };
+        $firstNonEmptyArray = function (array $values, string $default = ''): string {
+            foreach ($values as $v) {
+                $s = trim((string)$v);
+                if ($s !== '') {
+                    return $s;
+                }
+            }
+            return $default;
+        };
+        $formatDate = function (string $date, string $time = ''): string {
+            $date = trim($date);
+            $time = trim($time);
+            if ($date === '' && $time === '') {
+                return '';
+            }
+            return trim($date . ($time !== '' ? ' ' . $time : ''));
+        };
+
+        $fullName = $firstNonEmpty([
+            trim((string)($data['full_name'] ?? '')),
+            trim((string)($formSess['firstName'] ?? '') . ' ' . (string)($formSess['lastName'] ?? '')),
+            trim((string)($data['firstName'] ?? '') . ' ' . (string)($data['lastName'] ?? '')),
+        ]);
+        $email = $firstNonEmpty([
+            (string)($data['contact_email'] ?? ''),
+            (string)($data['email'] ?? ''),
+            (string)($formSess['contact_email'] ?? ''),
+        ]);
+        $phone = $firstNonEmpty([
+            (string)($data['contact_phone'] ?? ''),
+            (string)($data['phone'] ?? ''),
+            (string)($formSess['contact_phone'] ?? ''),
+        ]);
+        $address = trim((string)($data['address_line1'] ?? ($formSess['address_line1'] ?? '')));
+        $city = trim((string)($data['address_city'] ?? ($formSess['address_city'] ?? '')));
+        $postcode = trim((string)($data['address_postalCode'] ?? ($formSess['address_postalCode'] ?? '')));
+        $country = trim((string)($data['address_country'] ?? ($formSess['address_country'] ?? '')));
+        $fullAddress = trim(implode(', ', array_values(array_filter([
+            $address,
+            trim($postcode . ' ' . $city),
+            $country,
+        ], static fn($v) => trim((string)$v) !== ''))));
+
+        $carrier = $firstNonEmpty([
+            (string)($busContract['primary_claim_party_name'] ?? ''),
+            (string)($data['operator'] ?? ''),
+            (string)($formSess['operator'] ?? ''),
+            (string)($computeSess['primary_claim_party_name'] ?? ''),
+        ], 'Unknown carrier (to be confirmed)');
+        if (preg_match('/^flix$/i', $carrier)) {
+            $carrier = $firstNonEmpty([
+                (string)($data['operator_product'] ?? ''),
+                (string)($formSess['operator_product'] ?? ''),
+                $carrier,
+            ], $carrier);
+        }
+        $carrierType = $firstNonEmpty([
+            (string)($busContract['primary_claim_party'] ?? ''),
+            (string)($computeSess['primary_claim_party'] ?? ''),
+        ]);
+        $bookingRef = $firstNonEmpty([
+            (string)($data['booking_reference'] ?? ''),
+            (string)($data['ticket_no'] ?? ''),
+            (string)($formSess['ticket_no'] ?? ''),
+            (string)($metaSess['_auto']['ticket_no']['value'] ?? ''),
+        ]);
+        $fromStop = $firstNonEmpty([
+            (string)($data['dep_station'] ?? ''),
+            (string)($formSess['dep_station'] ?? ''),
+            (string)($metaSess['_auto']['dep_station']['value'] ?? ''),
+        ]);
+        $toStop = $firstNonEmpty([
+            (string)($data['arr_station'] ?? ''),
+            (string)($formSess['arr_station'] ?? ''),
+            (string)($metaSess['_auto']['arr_station']['value'] ?? ''),
+        ]);
+        $depDate = $firstNonEmpty([
+            (string)($data['dep_date'] ?? ''),
+            (string)($formSess['dep_date'] ?? ''),
+            (string)($metaSess['_auto']['dep_date']['value'] ?? ''),
+        ]);
+        $depTime = $firstNonEmpty([
+            (string)($data['dep_time'] ?? ''),
+            (string)($formSess['dep_time'] ?? ''),
+        ]);
+        $arrTime = $firstNonEmpty([
+            (string)($data['arr_time'] ?? ''),
+            (string)($formSess['arr_time'] ?? ''),
+        ]);
+        $distanceKm = (int)preg_replace('/[^0-9\-]/', '', (string)($data['scheduled_distance_km'] ?? ($formSess['scheduled_distance_km'] ?? '0')));
+        if ($distanceKm < 0) {
+            $distanceKm = 0;
+        }
+        $arrivalDelayMinutes = (int)preg_replace('/[^0-9\-]/', '', (string)($data['arrival_delay_minutes'] ?? ($formSess['arrival_delay_minutes'] ?? '0')));
+        if ($arrivalDelayMinutes < 0) {
+            $arrivalDelayMinutes = 0;
+        }
+        [$ticketAmount, $ticketCurrency] = $normalizeMoney((string)($data['price'] ?? ($formSess['price'] ?? '0')), (string)($data['price_currency'] ?? ($formSess['price_currency'] ?? 'EUR')));
+        if ($ticketCurrency === 'AUTO' || $ticketCurrency === '') {
+            $ticketCurrency = 'EUR';
+        }
+
+        $incidentMain = $firstNonEmpty([
+            (string)($data['incident_main'] ?? ''),
+            (string)($incidentSess['main'] ?? ''),
+            (string)($metaSess['incident']['main'] ?? ''),
+        ]);
+        if ($incidentMain === '') {
+            $incidentMain = !empty($data['bus_pmr_boarding_refused']) ? 'denied_boarding' : (!empty($data['reason_cancellation']) ? 'cancellation' : 'departure_delay');
+        }
+        $incidentNotes = [];
+        if ($incidentMain !== '') {
+            $incidentNotes[] = ucfirst(str_replace('_', ' ', $incidentMain));
+        }
+        if (!empty($data['reason_delay'])) {
+            $incidentNotes[] = 'Departure delay';
+        }
+        if (!empty($data['reason_cancellation'])) {
+            $incidentNotes[] = 'Cancellation';
+        }
+        if (!empty($data['reason_missed_conn']) || !empty($data['missed_connection'])) {
+            $incidentNotes[] = 'Missed connection';
+        }
+        $incidentConsequence = $firstNonEmpty([
+            (string)($data['bus_incident_consequence'] ?? ''),
+            (string)($incidentSess['consequence'] ?? ''),
+        ]);
+        if ($incidentConsequence === '') {
+            if ($incidentMain === 'cancellation') {
+                $incidentConsequence = 'The service could not be performed as planned.';
+            } elseif ($arrivalDelayMinutes > 0) {
+                $incidentConsequence = 'The journey arrived with a significant delay.';
+            } else {
+                $incidentConsequence = 'My rights under Regulation (EU) No 181/2011 were triggered.';
+            }
+        }
+
+        $remedyChoice = (string)($data['remedyChoice'] ?? ($formSess['remedyChoice'] ?? ''));
+        if ($remedyChoice === '') {
+            if (!empty($data['bus_refund_requested']) || !empty($formSess['bus_refund_requested'])) {
+                $remedyChoice = 'refund_return';
+            } elseif (!empty($data['bus_reroute_choice']) || !empty($formSess['bus_reroute_choice'])) {
+                $remedyChoice = (string)($data['bus_reroute_choice'] ?? $formSess['bus_reroute_choice'] ?? '');
+            } elseif (!empty($data['refund_requested']) || !empty($formSess['refund_requested'])) {
+                $remedyChoice = 'refund_return';
+            }
+        }
+        $remedyLabel = (string)($this->formatRemedyChoice($remedyChoice, 'bus') ?? $remedyChoice);
+
+        $refundRequested = $yes(
+            $data['bus_refund_requested']
+                ?? $formSess['bus_refund_requested']
+                ?? $data['refund_requested']
+                ?? $formSess['refund_requested']
+                ?? false
+        ) || $remedyChoice === 'refund_return';
+        $art19Active = !empty($busRights['gate_bus_reroute_refund']);
+        $compPct = !empty($busRights['gate_bus_compensation_50']) ? 50.0 : 0.0;
+        $compAmount = ($compPct > 0 && $ticketAmount > 0) ? round($ticketAmount * 0.50, 2) : 0.0;
+        $refundAmount = $refundRequested ? $ticketAmount : 0.0;
+        $showArrivalDelay = $arrivalDelayMinutes > 0 && $incidentMain !== 'cancellation';
+        $routeLabel = trim(implode(' -> ', array_values(array_filter([$fromStop, $toStop], static fn($v) => trim((string)$v) !== ''))));
+        $scheduledArrival = $arrTime !== '' ? $formatDate($depDate, $arrTime) : '';
+        $showPmrLine = !empty($busPmrRights['gate_bus_pmr_assistance'])
+            || !empty($busPmrRights['gate_bus_pmr_assistance_partial'])
+            || !empty($busPmrRights['gate_bus_pmr_boarding_remedy']);
+
+        [$mealsAmount] = $sumMoney([
+            $data['meal_self_paid_amount'] ?? '',
+            $data['bus_refreshments_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$hotelAmount] = $sumMoney([
+            $data['hotel_self_paid_amount'] ?? '',
+            $data['bus_hotel_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$hotelTransportAmount] = $sumMoney([
+            $data['hotel_transport_self_paid_amount'] ?? '',
+        ], $ticketCurrency);
+        [$altAmount] = $sumMoney([
+            $data['alt_self_paid_amount'] ?? '',
+            $data['blocked_self_paid_amount'] ?? '',
+            $data['blocked_self_paid_transport_amount'] ?? '',
+        ], $ticketCurrency);
+        [$otherAmount] = $sumMoney([
+            $data['expense_other'] ?? '',
+            $data['expense_breakdown_other_amounts'] ?? '',
+        ], $ticketCurrency);
+        [$rerouteAmount] = $sumMoney([
+            $data['reroute_extra_costs_amount'] ?? '',
+        ], $ticketCurrency);
+        [$returnToOriginAmount] = $sumMoney([
+            $data['bus_return_to_departure_stop_amount'] ?? '',
+            $formSess['bus_return_to_departure_stop_amount'] ?? '',
+            $data['return_to_origin_amount'] ?? '',
+            $formSess['return_to_origin_amount'] ?? '',
+        ], $ticketCurrency);
+        $assistanceAmount = round($mealsAmount + $hotelAmount + $hotelTransportAmount + $altAmount + $otherAmount, 2);
+        $art18ExtraAmount = round($rerouteAmount + $returnToOriginAmount, 2);
+        $totalClaim = round($refundAmount + $art18ExtraAmount + $assistanceAmount + $compAmount, 2);
+
+        $recommendations = [];
+        foreach ((array)($claimDirection['recommended_documents'] ?? []) as $doc) {
+            $doc = trim((string)$doc);
+            if ($doc !== '') {
+                $recommendations[] = $doc;
+            }
+        }
+
+        $pdf = new FPDF('P', 'mm', 'A4');
+        $pdf->SetAutoPageBreak(true, 14);
+        $pdf->AddPage();
+        $pdf->SetMargins(15, 15, 15);
+
+        $write = function (string $text, string $font = 'Arial', string $style = '', int $size = 11) use ($pdf, $toPdf): void {
+            $pdf->SetFont($font, $style, $size);
+            $pdf->MultiCell(0, 6, $toPdf($text));
+        };
+        $section = function (string $title) use ($pdf, $toPdf): void {
+            $pdf->Ln(1);
+            $pdf->SetFont('Arial', 'B', 13);
+            $pdf->Cell(0, 8, $toPdf($title), 0, 1);
+        };
+        $kv = function (string $label, string $value) use ($pdf, $toPdf): void {
+            if (trim($value) === '') {
+                return;
+            }
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(46, 6, $toPdf($label) . ':', 0, 0);
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->MultiCell(0, 6, $toPdf($value));
+        };
+
+        $write('Subject: Claim under Regulation (EU) No 181/2011 - Bus and coach passenger rights', 'Arial', 'B', 14);
+        $pdf->Ln(1);
+        $write('To: ' . $carrier, 'Arial', '', 11);
+        $write('This is a formal bus passenger rights claim based on the journey and disruption information supplied in my case.', 'Arial', '', 10);
+
+        $section('Passenger details');
+        $kv('Name', $fullName);
+        $kv('Email', $email);
+        $kv('Phone', $phone);
+        $kv('Address', $fullAddress);
+        $kv('Booking reference', $bookingRef);
+
+        $section('Journey details');
+        $kv('Carrier / operator', $carrier);
+        if ($carrierType !== '' && !in_array(strtolower($carrierType), ['carrier', 'manual_review'], true)) {
+            $kv('Claim channel', $carrierType);
+        }
+        $kv('Route', $routeLabel);
+        $kv('Scheduled departure', $formatDate($depDate, $depTime));
+        $kv('Scheduled arrival', $scheduledArrival);
+        $kv('Planned distance', $distanceKm > 0 ? $distanceKm . ' km' : '');
+        if ($showArrivalDelay) {
+            $kv('Arrival delay (minutes)', (string)$arrivalDelayMinutes);
+        }
+        $kv('Ticket price', number_format($ticketAmount, 2) . ' ' . $ticketCurrency);
+
+        $section('Incident');
+        $kv('Incident type', trim(implode(', ', $incidentNotes)) !== '' ? implode(', ', $incidentNotes) : 'Departure delay');
+        $kv('Consequence', $incidentConsequence);
+        $kv('Scope', !empty($busScope['regulation_applies']) ? 'Regulation applies on the stated facts' : 'Regulation unclear / not applicable');
+        if (!empty($busScope['scope_exclusion_reason'])) {
+            $kv('Scope reason', (string)$busScope['scope_exclusion_reason']);
+        }
+
+        $section('Rights invoked');
+        $kv('Article 19', $art19Active ? 'Relevant' : 'Not activated');
+        $kv('Article 20', !empty($busRights['gate_bus_info']) ? 'Relevant' : 'Not activated');
+        $kv('Article 21', (!empty($busRights['gate_bus_assistance_refreshments']) || !empty($busRights['gate_bus_assistance_hotel'])) ? 'Relevant' : 'Not activated');
+        if ($showPmrLine) {
+            $kv('PMR / disability rights', 'Relevant');
+        }
+        if (!empty($busRights['gate_bus_compensation_50'])) {
+            $kv('50% compensation gate', 'Relevant');
+        }
+        if (!empty($busRights['gate_bus_pmr_boarding_remedy'])) {
+            $kv('PMR remedy gate', 'Relevant');
+        }
+        if ($remedyLabel !== '') {
+            $kv('Chosen remedy', $remedyLabel);
+        }
+
+        $section('Claim amounts');
+        $kv('Refund / reimbursement', number_format($refundAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Art. 19 / 50% compensation', number_format($compAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Rerouting / return costs', number_format($art18ExtraAmount, 2) . ' ' . $ticketCurrency);
+        $kv('Assistance expenses', number_format($assistanceAmount, 2) . ' ' . $ticketCurrency);
+        if ($mealsAmount > 0) {
+            $kv('Meals / refreshments', number_format($mealsAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($hotelAmount > 0) {
+            $kv('Hotel / accommodation', number_format($hotelAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($hotelTransportAmount > 0) {
+            $kv('Transport to / from hotel', number_format($hotelTransportAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($altAmount > 0) {
+            $kv('Alternative transport', number_format($altAmount, 2) . ' ' . $ticketCurrency);
+        }
+        if ($otherAmount > 0) {
+            $kv('Other expenses', number_format($otherAmount, 2) . ' ' . $ticketCurrency);
+        }
+        $kv('Total claim amount', number_format($totalClaim, 2) . ' ' . $ticketCurrency);
+        $write('Legal conclusion: I therefore claim the amounts above under Regulation (EU) No 181/2011 and request reimbursement in money, not vouchers, unless I explicitly agree otherwise.', 'Arial', 'B', 10);
+        $write('Please respond within the deadlines set out in Article 27 of Regulation (EU) No 181/2011.', 'Arial', '', 10);
+
+        $section('Documentation');
+        if (!empty($recommendations)) {
+            $write('Supporting documentation: ' . implode(', ', $recommendations), 'Arial', '', 10);
+        }
+        $write('I request payment in money, not vouchers, unless I explicitly agree otherwise.', 'Arial', '', 10);
+        $write('Kind regards,', 'Arial', '', 10);
+        $write($fullName !== '' ? $fullName : 'Passenger', 'Arial', 'B', 11);
+
+        return $pdf->Output('S');
+    }
+
+    /**
+     * @return array{0:float,1:string}
+     */
+    private function normalizeMoneyParts(mixed $raw, string $defaultCurrency = 'EUR'): array
+    {
+        $rawStr = trim((string)$raw);
+        $currency = strtoupper(trim($defaultCurrency));
+        if ($currency === '') {
+            $currency = 'EUR';
+        }
+        if (preg_match('/\b(EUR|DKK|SEK|NOK|PLN|CZK|HUF|RON|BGN|GBP|USD)\b/i', $rawStr, $m)) {
+            $currency = strtoupper($m[1]);
+        } elseif (str_contains($rawStr, '€')) {
+            $currency = 'EUR';
+        } elseif (str_contains($rawStr, '£')) {
+            $currency = 'GBP';
+        } elseif (preg_match('/\bkr\b/i', $rawStr)) {
+            $currency = 'DKK';
+        }
+        $amount = 0.0;
+        if ($rawStr !== '') {
+            $num = preg_replace('/[^0-9,.\-]/', '', $rawStr);
+            if ($num !== '' && preg_match('/-?\d[\d.,]*/', $num, $m)) {
+                $guess = str_replace([' ', ','], ['', '.'], $m[0]);
+                $amount = (float)$guess;
+            }
+        }
+        return [$amount, $currency];
+    }
+
+    /**
      * Load a national field map matched to the selected template source.
      * Looks under config/pdf/forms/<CC>/*.json and normalizes keys.
      * Returns array with numeric page keys and optional _meta.
@@ -2493,6 +3539,7 @@ class ReimbursementController extends AppController
         elseif (preg_match('/(dk|denmark|danmark|dsb)/i', $source)) { $cc = 'DK'; }
         elseif (preg_match('/(nl|netherlands|nederland|ns)/i', $source)) { $cc = 'NL'; }
         elseif (preg_match('/(es|spain|espa|renfe)/i', $source)) { $cc = 'ES'; }
+        elseif (preg_match('/(air|air_travel_form|boarding\\s*pass|ec261|eu261)/i', $source)) { $cc = 'AIR'; }
         if ($cc === null) { return null; }
         // Support both uppercase and lowercase country folders (we have "fr" on disk)
         $dirUpper = CONFIG . 'pdf' . DIRECTORY_SEPARATOR . 'forms' . DIRECTORY_SEPARATOR . $cc . DIRECTORY_SEPARATOR;
@@ -2507,6 +3554,7 @@ class ReimbursementController extends AppController
             $dir . 'map_de_db_fahrgastrechte.json',
             $dir . 'map_it_trenitalia_compensation.json',
             $dir . 'map_dk_dsb_basic_rejsetidsgaranti.json',
+            $dir . 'map_air_travel_form.json',
             // Generic fallbacks
             $dir . 'mapping_g30.json',
             $dir . 'mapping_' . strtolower($cc) . '.json',

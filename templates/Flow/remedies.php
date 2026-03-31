@@ -83,6 +83,38 @@ if ($isFerry) {
     $returnQuestion = $isOngoing ? 'Har du haft - eller forventer du at faa - udgifter til at komme tilbage til udgangspunktet?' : 'Havde du udgifter til at komme tilbage til udgangspunktet?';
 }
 
+$placeLabelCurrent = $isFerry ? 'Hvilken havn/terminal befinder du dig ved?' : ($isBus ? 'Hvilket stoppested eller hvilken station er du p&aring;?' : ($isAir ? 'Hvilken lufthavn befinder du dig ved?' : 'Hvilken station er du p&aring;?'));
+$placeLabelReturn = $isFerry ? 'Hvilken afgangshavn/terminal skal du tilbage til?' : ($isBus ? 'Hvilket stoppested eller hvilken station skal du tilbage til?' : ($isAir ? 'Hvilken lufthavn skal du tilbage til?' : 'Hvilken station skal du tilbage til?'));
+$placeLabelRerouteArrival = $isFerry ? 'Hvilken havn/terminal eller hvilket afgangssted blev du omlagt til?' : ($isBus ? 'Hvilket stoppested eller hvilken station omlagde du til?' : ($isAir ? 'Hvilken lufthavn eller hvilket transportpunkt omlagde du til?' : 'Hvilken station omlagde du til?'));
+$placeOtherLabel = $isFerry ? 'Anden havn/terminal' : ($isBus ? 'Andet stoppested/station' : ($isAir ? 'Anden lufthavn' : 'Anden station'));
+$placeOtherPlaceholder = $isFerry ? 'Anden havn/terminal' : ($isBus ? 'Andet stoppested/station' : ($isAir ? 'Anden lufthavn' : 'Anden station'));
+$placeSearchPlaceholder = $isFerry ? 'Soeg havn/terminal (ticketless)' : ($isBus ? 'Soeg stoppested/station (ticketless)' : ($isAir ? 'Soeg lufthavn (ticketless)' : 'Soeg station (ticketless)'));
+$mapsCardTitle = $isFerry ? 'Rute-/forbindelsesforslag (Google Maps, valgfrit)' : ($isAir ? 'Ruter mellem lufthavne/transportpunkter (Google Maps, valgfrit)' : 'Ruter (Google Maps, valgfrit)');
+$mapsRefundHelp = $isFerry
+    ? 'Bruges som hjaelp til at finde ruter eller forbindelser for returtransport til afgangshavnen eller det aftalte udgangspunkt. Google Maps er kun et routing-hint og ikke juridisk facit.'
+    : 'Bruges som hjaelp til at finde ruter for returtransport (fra din nuvaerende station til stationen du skal tilbage til).';
+$mapsRerouteHelp = $isFerry
+    ? 'Klik for at hente rute- eller forbindelsesforslag til ombooking. Google Maps er kun et routing-hint og ikke juridisk facit.'
+    : 'Klik for at hente forslag til omlaegning (TRANSIT). Vi sender start/destination til Google.';
+$mapsOriginLabel = $isFerry ? 'Fra (havn/terminal)' : ($isBus ? 'Fra (stoppested/station)' : ($isAir ? 'Fra (lufthavn)' : 'Fra (station)'));
+$mapsOriginHint = $isFerry ? 'Tip: Brug din nuvaerende havn/terminal som start.' : ($isBus ? 'Tip: Brug missed connection / dit nuvaerende stoppested som start.' : ($isAir ? 'Tip: Brug din nuvaerende eller ombookede lufthavn som start.' : 'Tip: Brug missed connection / din nuvaerende station som start.'));
+$mapsDestinationHintUnknown = $isFerry ? 'Angiv destination eller ankomsthavn (ticketless/ukendt destination).' : ($isAir ? 'Angiv destination eller relevant lufthavn/transportpunkt.' : 'Angiv destination (ticketless/ukendt destination).');
+$mapsDestinationHintKnown = $isFerry ? 'Hentes fra billetten (destination/ankomsthavn).' : ($isAir ? 'Hentes fra billetten eller din ombookede flyrute.' : 'Hentes fra billetten (destination).');
+$refundCardTitle = $isFerry ? 'Tilbagebetaling / retur til afgangshavn eller aftalt udgangspunkt (Art. 18)' : ($isAir ? 'Returtransport / refund (Art. 8)' : 'Returtransport (Art. 18 stk. 1)');
+$rerouteCardTitle = $isFerry ? 'Ombooking' : 'Omlaegning';
+$rerouteModeLabel = $isFerry ? 'Transportform (ombooking)' : 'Transportform (omlaegning)';
+$rerouteEndpointLabel = $isFerry ? 'Hvor endte ombookingen?' : 'Hvor endte omlaegningen?';
+$rerouteEndpointNearestLabel = $isFerry ? 'Naermeste havn/terminal' : ($isBus ? 'Naermeste stoppested/station' : ($isAir ? 'Naermeste lufthavn/transportpunkt' : 'Naermeste station'));
+$rerouteContextTitle = $isFerry ? 'Stedvalg (ombooking)' : ($isAir ? 'Struktureret stedvalg (valgfrit)' : 'Stationsvalg (omlaegning)');
+$rerouteContextHelp = $isFerry
+    ? 'TRIN 7 er uafhaengigt af TRIN 6. Brug evt. havnen/terminalen fra Art.20 som udgangspunkt.'
+    : ($isBus
+        ? 'TRIN 7 er uafhaengigt af TRIN 6. Brug evt. stoppestedet/stationen fra Art.20 som udgangspunkt.'
+        : ($isAir
+            ? 'Dette er et struktureret fallback ved siden af Google Maps og alternativ lufthavn. Brug det, hvis du vil laase fra-/til-lufthavn og transporttype til scenario, PDF og senere vurdering.'
+            : 'TRIN 7 er uafhaengigt af TRIN 6. Brug evt. stationen fra Art.20 som udgangspunkt.'));
+$currencyOptions = ['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'];
+
 $segments = [];
 if (!empty($meta['_segments_auto']) && is_array($meta['_segments_auto'])) { $segments = (array)$meta['_segments_auto']; }
 elseif (!empty($meta['_segments_all']) && is_array($meta['_segments_all'])) { $segments = (array)$meta['_segments_all']; }
@@ -92,10 +124,12 @@ $addStation = function ($val) use (&$stations) {
     if ($s === '' || $s === 'other' || $s === 'unknown') { return; }
     $stations[$s] = true;
 };
-foreach ($segments as $seg) {
-    if (!is_array($seg)) { continue; }
-    foreach (['from','to','origin','destination','dep_station','arr_station','departureStation','arrivalStation'] as $k) {
-        if (isset($seg[$k])) { $addStation($seg[$k]); }
+if (!$isBus) {
+    foreach ($segments as $seg) {
+        if (!is_array($seg)) { continue; }
+        foreach (['from','to','origin','destination','dep_station','arr_station','departureStation','arrivalStation'] as $k) {
+            if (isset($seg[$k])) { $addStation($seg[$k]); }
+        }
     }
 }
 $addStation($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? ''));
@@ -116,6 +150,36 @@ $stationSet = array_fill_keys($stationOptions, true);
 $stationsSearchUrl = $this->Url->build('/api/stations/search');
 $stationCountryDefault = strtoupper(trim((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? ''))));
 $airDelayRefundOnly = $isAir && !empty($airRights['gate_air_delay_refund_5h']) && (string)($form['incident_main'] ?? '') === 'delay';
+$capFx = [
+    'EUR' => 1.0,
+    'DKK' => 7.45,
+    'SEK' => 11.0,
+    'BGN' => 1.96,
+    'CZK' => 25.0,
+    'HUF' => 385.0,
+    'PLN' => 4.35,
+    'RON' => 4.95,
+    'NOK' => 11.6,
+    'GBP' => 0.86,
+];
+$toEur = static function ($amount, string $currency) use ($capFx): float {
+    $amount = is_numeric($amount) ? (float)$amount : (float)preg_replace('/[^0-9.]/', '', (string)$amount);
+    $currency = strtoupper(trim($currency));
+    if ($amount <= 0 || !isset($capFx[$currency]) || $capFx[$currency] <= 0) {
+        return $amount;
+    }
+
+    return $amount / $capFx[$currency];
+};
+$ferryOpenTicket = $isFerry && strtolower(trim((string)($form['open_ticket_without_departure_time'] ?? ''))) === 'yes';
+$ferryNotifiedBefore = $isFerry && strtolower(trim((string)($form['informed_before_purchase'] ?? ''))) === 'yes';
+$ferryWeatherRisk = $isFerry && strtolower(trim((string)($form['weather_safety'] ?? ''))) === 'yes';
+$ferryRerouteExtraAmountCurrent = is_numeric($form['reroute_extra_costs_amount'] ?? null)
+    ? (float)$form['reroute_extra_costs_amount']
+    : (float)preg_replace('/[^0-9.]/', '', (string)($form['reroute_extra_costs_amount'] ?? '0'));
+$ferryRerouteExtraCurrencyCurrent = (string)($form['reroute_extra_costs_currency'] ?? ($form['price_currency'] ?? 'EUR'));
+$ferryRerouteModeCurrent = strtolower(trim((string)($form['a18_reroute_mode'] ?? '')));
+$ferryRerouteExtraAmountEur = $toEur($ferryRerouteExtraAmountCurrent, $ferryRerouteExtraCurrencyCurrent);
 ?>
 
 <style>
@@ -128,6 +192,7 @@ $airDelayRefundOnly = $isAir && !empty($airRights['gate_air_delay_refund_5h']) &
     .mt12 { margin-top:12px; }
     .ml8 { margin-left:8px; }
     .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .grid-span-2 { grid-column: 1 / -1; }
     .grid-1 { display:grid; grid-template-columns:1fr; gap:8px; }
     .disabled-block { opacity: 0.6; }
     .flow-wrapper { max-width: 1100px; margin: 0 auto; }
@@ -224,6 +289,28 @@ $airDelayRefundOnly = $isAir && !empty($airRights['gate_air_delay_refund_5h']) &
             <div class="small muted mt8">Transportoerens skriftlige begrundelse ser ikke ud til at vaere givet klart, saa reason-notice-sporet er ogsaa aktivt.</div>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
+<?php endif; ?>
+<?php if ($isFerry): ?>
+    <?php if ($ferryOpenTicket): ?>
+        <div class="card mt12" style="border-color:#f3d9a4;background:#fff8e8;">
+            <div class="card-title"><span class="icon">&#9888;</span><span>Ferry Art. 18 er ikke aktiv ved aaben billet uden afgangstid</span></div>
+            <div class="small muted mt4">Aabne billetter uden afgangstid er som udgangspunkt undtaget fra Art. 17, 18 og 19, medmindre der er tale om abonnement eller periodekort.</div>
+        </div>
+    <?php else: ?>
+        <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+            <div class="card-title"><span class="icon">&#9873;</span><span>Dine lovbestemte rettigheder</span></div>
+            <div class="small muted mt4">Omlaegning: <strong>uden ekstraomkostninger</strong>. Refusion: <strong>100% af billetprisen</strong>. Refusion skal ske <strong>inden for 7 dage</strong>. Der findes ingen fast lovbestemt EUR-cap paa omlaegning.</div>
+        </div>
+        <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+            <div class="card-title"><span class="icon">&#8505;</span><span>Hvis du selv betalte alternativ transport</span></div>
+            <div class="small muted mt4">Ferry-forordningen har ikke en fast self-help cap. Vi registrerer noedvendige og rimelige udgifter, men vores interne vurderingsniveau er foreloebigt <strong>150 EUR for taxi</strong> og <strong>400 EUR samlet</strong> for alternativ transport. Belob over dette flagges til manuel vurdering.</div>
+            <?php if ($ferryRerouteExtraAmountCurrent > 0 && $ferryRerouteExtraAmountEur > 400): ?>
+                <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">Kan kraeve manuel vurdering: samlet alternativ transport overstiger vores interne standardniveau paa 400 EUR.</div>
+            <?php elseif ($ferryRerouteExtraAmountCurrent > 0 && $ferryRerouteModeCurrent === 'taxi' && $ferryRerouteExtraAmountEur > 150): ?>
+                <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">Kan kraeve manuel vurdering: taxi overstiger vores interne standardniveau paa 150 EUR.</div>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 <?php endif; ?>
 <?php
@@ -330,7 +417,116 @@ $preview = round($tp * $rate * $share, 2);
         $art18HelpResolved = 'Ved naegtet reservation eller boarding for PMR kan tilbagebetaling eller rimelig alternativ transport vaere relevant efter busforordningen.';
     }
     $art18Help = $art18HelpResolved;
-    $ri100 = (string)($form['reroute_info_within_100min'] ?? '');
+$ri100 = (string)($form['reroute_info_within_100min'] ?? '');
+$busCarrierChoice = (string)($form['carrier_offered_choice'] ?? '');
+$busSelfArranged = (string)($form['bus_self_arranged_solution'] ?? ($form['self_purchased_new_ticket'] ?? ''));
+$busSelfArrangedType = (string)($form['bus_self_arranged_solution_type'] ?? '');
+$busSelfArrangedReason = (string)($form['bus_self_arranged_reason'] ?? ($form['self_purchase_reason'] ?? ''));
+$airChoiceOffered = (string)($form['air_article8_choice_offered'] ?? ($form['offer_provided'] ?? ''));
+$airSelfArranged = (string)($form['air_self_arranged_reroute'] ?? ($form['self_purchased_new_ticket'] ?? ''));
+$airSelfArrangedReasonRaw = (string)($form['air_self_arranged_reroute_reason'] ?? ($form['self_purchase_reason'] ?? ''));
+$airSelfArrangedReason = match ($airSelfArrangedReasonRaw) {
+    'offer_not_usable' => 'unusable_solution',
+    'needed_fast' => 'urgent_need',
+    'separate_ticket_onward' => 'separate_ticket',
+    'alternative_airport_issue' => 'airport_issue',
+    default => $airSelfArrangedReasonRaw,
+};
+$airChoiceOfferedEffective = $airChoiceOffered;
+$showAirArticle8Question = true;
+$airConfirmedSelfArranged = (string)($form['air_airline_confirmed_self_arranged_solution'] ?? ($form['self_purchase_approved_by_operator'] ?? ''));
+$airRefundScope = (string)($form['air_refund_scope'] ?? '');
+$airReturnToFirstDeparturePoint = (string)($form['air_return_to_first_departure_point'] ?? '');
+$airRerouteExpensesIncurred = (string)($form['air_reroute_expenses_incurred'] ?? ($form['reroute_extra_costs'] ?? ''));
+$airRerouteExpenseTypeRaw = (string)($form['air_reroute_expense_type'] ?? ($form['reroute_extra_costs_type'] ?? ''));
+$airRerouteExpenseType = match ($airRerouteExpenseTypeRaw) {
+    'alt_transport' => 'other_transport',
+    'higher_class' => 'expensive_solution',
+    default => $airRerouteExpenseTypeRaw,
+};
+$airRerouteExpenseAmount = (string)($form['air_reroute_expense_amount'] ?? ($form['reroute_extra_costs_amount'] ?? ''));
+$airRerouteExpenseCurrency = strtoupper(trim((string)($form['air_reroute_expense_currency'] ?? ($form['reroute_extra_costs_currency'] ?? ''))));
+$airRerouteExpenseDescription = (string)($form['air_reroute_expense_description'] ?? ($form['reroute_extra_costs_description'] ?? ''));
+$airRerouteExpenseReceipt = (string)($form['air_reroute_expense_receipt'] ?? ($form['reroute_extra_costs_receipt'] ?? ''));
+$airAlternativeAirportUsed = (string)($form['air_alternative_airport_used'] ?? '');
+$airAlternativeAirportFrom = (string)($form['air_alternative_airport_from'] ?? '');
+$airAlternativeAirportTo = (string)($form['air_alternative_airport_to'] ?? '');
+$airAlternativeAirportTransferNeeded = (string)($form['air_alternative_airport_transfer_needed'] ?? '');
+$airExpenseItems = [];
+foreach ((array)($form['air_reroute_expense_items'] ?? []) as $idx => $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $type = (string)($row['type'] ?? '');
+    if ($type === 'alt_transport') { $type = 'other_transport'; }
+    if ($type === 'higher_class') { $type = 'expensive_solution'; }
+    $amount = trim((string)($row['amount'] ?? ''));
+    $currencyItem = strtoupper(trim((string)($row['currency'] ?? '')));
+    $description = trim((string)($row['description'] ?? ''));
+    if ($type === '' && $amount === '' && $currencyItem === '' && $description === '') {
+        continue;
+    }
+    $airExpenseItems[] = [
+        'type' => $type,
+        'amount' => $amount,
+        'currency' => $currencyItem,
+        'description' => $description,
+    ];
+}
+if ($airRerouteExpenseType === '' && $airAlternativeAirportTransferNeeded === 'yes') {
+    $airRerouteExpenseType = 'airport_transfer';
+}
+if ($airRerouteExpensesIncurred === '' && ($airRerouteExpenseType !== '' || $airAlternativeAirportTransferNeeded === 'yes')) {
+    $airRerouteExpensesIncurred = 'yes';
+}
+if ($airRerouteExpenseType === 'airport_transfer') {
+    if ($airAlternativeAirportUsed === '' && $airAlternativeAirportTransferNeeded !== '') {
+        $airAlternativeAirportUsed = $airAlternativeAirportTransferNeeded;
+    }
+    if ($airRerouteExpenseAmount === '' && (string)($form['air_alternative_airport_transfer_amount'] ?? '') !== '') {
+        $airRerouteExpenseAmount = (string)$form['air_alternative_airport_transfer_amount'];
+    }
+    if ($airRerouteExpenseCurrency === '' && (string)($form['air_alternative_airport_transfer_currency'] ?? '') !== '') {
+        $airRerouteExpenseCurrency = strtoupper(trim((string)$form['air_alternative_airport_transfer_currency']));
+    }
+    if ($airRerouteExpenseReceipt === '' && (string)($form['air_alternative_airport_transfer_receipt'] ?? '') !== '') {
+        $airRerouteExpenseReceipt = (string)$form['air_alternative_airport_transfer_receipt'];
+    }
+}
+if ($airExpenseItems === []) {
+    if ($airRerouteExpenseType !== '' || $airRerouteExpenseAmount !== '' || $airRerouteExpenseCurrency !== '' || $airRerouteExpenseDescription !== '') {
+        $airExpenseItems[] = [
+            'type' => $airRerouteExpenseType,
+            'amount' => $airRerouteExpenseAmount,
+            'currency' => $airRerouteExpenseCurrency,
+            'description' => $airRerouteExpenseDescription,
+        ];
+    }
+}
+if ($airExpenseItems === []) {
+    $airExpenseItems[] = [
+        'type' => '',
+        'amount' => '',
+        'currency' => '',
+        'description' => '',
+    ];
+}
+$airHasAirportTransferItem = false;
+foreach ($airExpenseItems as $item) {
+    if ((string)($item['type'] ?? '') === 'airport_transfer') {
+        $airHasAirportTransferItem = true;
+        break;
+    }
+}
+$ferryOfferProvided = (string)($form['ferry_offer_provided'] ?? ($form['offer_provided'] ?? ''));
+$ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing'] ?? '')) {
+    'within_90' => '30_90',
+    'later_than_90' => 'after_90',
+    default => (string)($form['ferry_first_usable_solution_timing'] ?? ''),
+};
+    $ferrySelfArranged = (string)($form['ferry_self_arranged_solution'] ?? ($form['self_purchased_new_ticket'] ?? ''));
+    $ferrySelfArrangedType = (string)($form['ferry_self_arranged_solution_type'] ?? '');
+    $ferrySelfArrangedReason = (string)($form['ferry_self_arranged_reason'] ?? ($form['self_purchase_reason'] ?? ''));
 ?>
     <div id="art18Wrapper" class="<?= (($art18Active || $ferryPmrRemedyActive || $busPmrRemedyActive) || $isPreview) ? '' : 'hidden' ?>">
         <div id="art18Flow">
@@ -354,13 +550,69 @@ $preview = round($tp * $rate * $share, 2);
     </div>
 
     <div id="remedyFollowupPast" class="mt12">
-        <?php $rtFlag = (string)($form['return_to_origin_expense'] ?? ''); ?>
-        <div id="returnExpensePast" class="card <?= ($showArt18 && $showArt181 && $remedy==='refund_return') ? '' : 'hidden' ?>" data-art="18(1a)">
-            <div class="card-title"><span class="icon">&#8634;</span><span><?= $isFerry ? 'Tilbagebetaling / retur til afgangshavn (Art. 18)' : 'Returtransport (Art. 18 stk. 1)' ?></span></div>
+            <?php
+                $rtFlag = (string)($form['return_to_origin_expense'] ?? '');
+                $airReturnExpenseItems = [];
+                if ($isAir) {
+                    foreach ((array)($form['air_return_expense_items'] ?? []) as $idx => $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $type = (string)($row['type'] ?? '');
+                        $amount = trim((string)($row['amount'] ?? ''));
+                        $currencyItem = strtoupper(trim((string)($row['currency'] ?? '')));
+                        if ($type === '' && $amount === '' && $currencyItem === '') {
+                            continue;
+                        }
+                        $airReturnExpenseItems[] = [
+                            'type' => $type,
+                            'amount' => $amount,
+                            'currency' => $currencyItem,
+                        ];
+                    }
+                    if ($airReturnExpenseItems === []) {
+                        $legacyReturnType = (string)($form['return_to_origin_transport_type'] ?? '');
+                        $legacyReturnAmount = (string)($form['return_to_origin_amount'] ?? '');
+                        $legacyReturnCurrency = strtoupper(trim((string)($form['return_to_origin_currency'] ?? '')));
+                        if ($legacyReturnType !== '' || $legacyReturnAmount !== '' || $legacyReturnCurrency !== '') {
+                            $airReturnExpenseItems[] = [
+                                'type' => $legacyReturnType,
+                                'amount' => $legacyReturnAmount,
+                                'currency' => $legacyReturnCurrency,
+                            ];
+                        }
+                    }
+                    if ($airReturnExpenseItems === []) {
+                        $airReturnExpenseItems[] = ['type' => '', 'amount' => '', 'currency' => ''];
+                    }
+                }
+            ?>
+            <div id="returnExpensePast" class="card <?= ($showArt18 && $showArt181 && $remedy==='refund_return') ? '' : 'hidden' ?>" data-art="18(1a)">
+            <div class="card-title"><span class="icon">&#8634;</span><span><?= h($refundCardTitle) ?></span></div>
             <?php if ($decisionHint !== ''): ?>
                 <div class="small muted"><?= h($decisionHint) ?></div>
             <?php endif; ?>
-
+            <?php if ($isAir): ?>
+                <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">
+                    <strong>Air refund scope (Article 8)</strong>
+                    <div class="muted mt4">Angiv om du kraever hele billetten, kun den ubrugte del, eller ogsaa den brugte del hvis rejsen ikke laengere tjente sit formaal.</div>
+                </div>
+                <div class="grid-2 mt8">
+                    <label>Hvad vil du have refunderet?
+                        <select name="air_refund_scope">
+                            <option value="">Vaelg</option>
+                            <option value="full_ticket" <?= $airRefundScope==='full_ticket'?'selected':'' ?>>Hele billetten</option>
+                            <option value="unused_part" <?= $airRefundScope==='unused_part'?'selected':'' ?>>Kun den ubrugte del</option>
+                            <option value="unused_plus_used_if_no_longer_serves_purpose" <?= $airRefundScope==='unused_plus_used_if_no_longer_serves_purpose'?'selected':'' ?>>Ubrugt del plus brugt del, hvis rejsen ikke laengere tjente sit formaal</option>
+                        </select>
+                    </label>
+                    <div data-show-if="air_refund_scope:unused_plus_used_if_no_longer_serves_purpose">
+                        <div>Skal du tilbage til dit foerste afgangssted?</div>
+                        <label><input type="radio" name="air_return_to_first_departure_point" value="yes" <?= $airReturnToFirstDeparturePoint==='yes'?'checked':'' ?> /> Ja</label>
+                        <label class="ml8"><input type="radio" name="air_return_to_first_departure_point" value="no" <?= $airReturnToFirstDeparturePoint==='no'?'checked':'' ?> /> Nej</label>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php
                 // TRIN 6 refund context: where are you now, and where are you returning to?
                 // Prefer explicit TRIN 5 handoff_station; if missing, fall back to stranded_current_station (so refund can be chosen before handoff is known).
@@ -406,12 +658,12 @@ $preview = round($tp * $rate * $share, 2);
             ?>
             <div class="grid-2 mt8" id="refundStationsPast">
                 <?php if ($isTicketless): ?>
-                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $placeLabelCurrent ?>
                         <select name="a18_from_station" style="display:none;">
-                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
                         </select>
-                        <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                        <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="<?= h($placeSearchPlaceholder) ?>" />
                         <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
                         <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
                         <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
@@ -423,12 +675,12 @@ $preview = round($tp * $rate * $share, 2);
                             <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
                         <?php endif; ?>
                     </label>
-                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other">Hvilken station skal du tilbage til?
+                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other"><?= $placeLabelReturn ?>
                         <select name="a18_return_to_station" style="display:none;">
-                            <option value="other" <?= $retSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="other" <?= $retSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             <option value="unknown" <?= $retSel==='unknown'?'selected':'' ?>>Ved ikke</option>
                         </select>
-                        <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                        <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="<?= h($placeSearchPlaceholder) ?>" />
                         <input type="hidden" name="a18_return_to_station_other_osm_id" value="<?= h((string)($form['a18_return_to_station_other_osm_id'] ?? '')) ?>" />
                         <input type="hidden" name="a18_return_to_station_other_lat" value="<?= h((string)($form['a18_return_to_station_other_lat'] ?? '')) ?>" />
                         <input type="hidden" name="a18_return_to_station_other_lon" value="<?= h((string)($form['a18_return_to_station_other_lon'] ?? '')) ?>" />
@@ -441,16 +693,18 @@ $preview = round($tp * $rate * $share, 2);
                         <?php endif; ?>
                     </label>
                 <?php else: ?>
-                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $placeLabelCurrent ?>
                         <select name="a18_from_station">
                             <option value="">V&aelig;lg</option>
                             <?php foreach ($stationOptions as $st): ?>
                                 <option value="<?= h($st) ?>" <?= $fromSel===$st?'selected':'' ?>><?= h($st) ?></option>
                             <?php endforeach; ?>
                             <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
-                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="other" <?= $fromSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                         </select>
-                        <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="Anden station" data-show-if="a18_from_station:other" />
+                        <div id="a18FromStationOtherWrapPast" class="other-station-wrap" data-other-select="a18_from_station" style="<?= $fromSel==='other' ? '' : 'display:none;' ?>">
+                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="<?= h($placeOtherPlaceholder) ?>" />
+                        </div>
                         <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
                         <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
                         <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
@@ -462,16 +716,18 @@ $preview = round($tp * $rate * $share, 2);
                             <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
                         <?php endif; ?>
                     </label>
-                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other">Hvilken station skal du tilbage til?
+                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other"><?= $placeLabelReturn ?>
                         <select name="a18_return_to_station">
                             <option value="">V&aelig;lg</option>
                             <?php foreach ($stationOptions as $st): ?>
                                 <option value="<?= h($st) ?>" <?= $retSel===$st?'selected':'' ?>><?= h($st) ?></option>
                             <?php endforeach; ?>
                             <option value="unknown" <?= $retSel==='unknown'?'selected':'' ?>>Ved ikke</option>
-                            <option value="other" <?= $retSel==='other'?'selected':'' ?>>Anden station</option>
+                            <option value="other" <?= $retSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                         </select>
-                        <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="Anden station" data-show-if="a18_return_to_station:other" />
+                        <div id="a18ReturnToStationOtherWrapPast" class="other-station-wrap" data-other-select="a18_return_to_station" style="<?= $retSel==='other' ? '' : 'display:none;' ?>">
+                            <input type="text" name="a18_return_to_station_other" value="<?= h($retOther) ?>" placeholder="<?= h($placeOtherPlaceholder) ?>" />
+                        </div>
                         <input type="hidden" name="a18_return_to_station_other_osm_id" value="<?= h((string)($form['a18_return_to_station_other_osm_id'] ?? '')) ?>" />
                         <input type="hidden" name="a18_return_to_station_other_lat" value="<?= h((string)($form['a18_return_to_station_other_lat'] ?? '')) ?>" />
                         <input type="hidden" name="a18_return_to_station_other_lon" value="<?= h((string)($form['a18_return_to_station_other_lon'] ?? '')) ?>" />
@@ -503,14 +759,14 @@ $preview = round($tp * $rate * $share, 2);
                 if ($mapDestRefund === '') { $mapDestRefund = $depDefault0; }
             ?>
             <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:refund_return">
-                <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
-                <div class="small muted mt4">Bruges som hj&aelig;lp til at finde ruter for returtransport (fra din nuv&aelig;rende station til stationen du skal tilbage til).</div>
+                <div class="card-title"><span class="icon">MAP</span><span><?= h($mapsCardTitle) ?></span></div>
+                <div class="small muted mt4"><?= h($mapsRefundHelp) ?></div>
                 <input type="hidden" name="maps_opt_in_trin7" value="0" />
                 <label class="mt8"><input type="checkbox" name="maps_opt_in_trin7" value="1" <?= $mapsOptInRefund ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
 
                 <div id="mapsPanelTrin7" class="mt8 <?= $mapsOptInRefund ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>" data-origin="<?= h($mapOriginRefund) ?>" data-destination="<?= h($mapDestRefund) ?>">
                     <div class="grid-2">
-                        <label class="station-autocomplete">Fra (station)
+                        <label class="station-autocomplete"><?= h($mapsOriginLabel) ?>
                             <input type="text" id="mapsOriginTrin7" value="<?= h($mapOriginRefund) ?>" />
                             <div class="station-suggest" id="mapsOriginSuggestTrin7" style="display:none;"></div>
                         </label>
@@ -541,23 +797,116 @@ $preview = round($tp * $rate * $share, 2);
                 </div>
             </div>
 
+            <?php if ($isBus): ?>
+            <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:refund_return,reroute_soonest">
+                <div class="card-title"><span class="icon">&#128652;</span><span>Busvalg fra operatoeren</span></div>
+                <div class="small muted mt4">Dette svar bruges baade i refusions- og omlaegningssporet, saa buskravet vurderes konsekvent.</div>
+                <div class="mt8">
+                    <div>Fik du valget mellem tilbagebetaling og omlaegning fra operatoeren?</div>
+                    <label><input type="radio" name="carrier_offered_choice" value="yes" <?= $busCarrierChoice==='yes'?'checked':'' ?> /> Ja</label>
+                    <label class="ml8"><input type="radio" name="carrier_offered_choice" value="no" <?= $busCarrierChoice==='no'?'checked':'' ?> /> Nej</label>
+                    <label class="ml8"><input type="radio" name="carrier_offered_choice" value="unknown" <?= $busCarrierChoice==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                </div>
+                <div class="small muted mt4">Bus-reglerne bruger dette svar til at vurdere, om der baade kan vaere krav paa refusion, omlaegningsudgifter og 50% kompensation.</div>
+            </div>
+
+            <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:refund_return">
+                <div class="card-title"><span class="icon">&#128652;</span><span>Bus refusion</span></div>
+                <div class="small muted mt4">Registrer om operatoeren gav valget mellem tilbagebetaling og omlaegning, saa buskravet kan vurderes korrekt.</div>
+                <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">
+                    <strong>Dine lovbestemte rettigheder</strong>
+                    <div class="muted mt4">Refusion: <strong>100% af billetprisen</strong>.</div>
+                    <div class="muted mt4">Hvis operatoeren ikke gav valget mellem tilbagebetaling og omlaegning, kan der derudover vaere et separat krav paa <strong>50% af billetprisen</strong>.</div>
+                    <div class="muted mt4">Retur til afgangsstedet kan ogsaa vaere relevant, hvis rejsen ikke kunne gennemfoeres som planlagt.</div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div class="mt4"><?= h($returnQuestion) ?></div>
             <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
             <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
             <div class="grid-2 mt8" id="returnExpenseFieldsPast" style="<?= $rtFlag==='yes' ? '' : 'display:none;' ?>">
+                <?php if ($isAir): ?>
+                    <div class="grid-span-2">
+                        <div class="small"><strong>Refusionsnaere udgiftsposter</strong></div>
+                        <div class="small muted mt4">Tilfoej en eller flere poster, hvis retur til udgangspunkt eller forste afgangssted medfoerte flere udgifter.</div>
+                    </div>
+                    <div id="airReturnExpenseItemsPast" class="grid-span-2" style="display:grid;gap:8px;">
+                        <?php foreach ($airReturnExpenseItems as $idx => $item): ?>
+                            <?php
+                                $itemType = (string)($item['type'] ?? '');
+                                $itemAmount = (string)($item['amount'] ?? '');
+                                $itemCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
+                            ?>
+                            <div class="card air-return-expense-item" data-air-return-row="<?= (int)$idx ?>" style="border-color:#d0d7de;background:#fbfcfd;">
+                                <div class="grid-2">
+                                    <label>Transporttype
+                                        <select name="air_return_expense_items[<?= (int)$idx ?>][type]">
+                                            <option value="">Vaelg</option>
+                                            <option value="flight" <?= $itemType==='flight'?'selected':'' ?>>Fly</option>
+                                            <option value="rail" <?= $itemType==='rail'?'selected':'' ?>>Tog</option>
+                                            <option value="bus" <?= $itemType==='bus'?'selected':'' ?>>Bus</option>
+                                            <option value="taxi" <?= $itemType==='taxi'?'selected':'' ?>>Taxi</option>
+                                            <option value="rideshare" <?= $itemType==='rideshare'?'selected':'' ?>>Samkoersel/rideshare</option>
+                                            <option value="other" <?= $itemType==='other'?'selected':'' ?>>Andet</option>
+                                        </select>
+                                    </label>
+                                    <label>Bel&oslash;b
+                                        <input type="number" step="0.01" name="air_return_expense_items[<?= (int)$idx ?>][amount]" value="<?= h($itemAmount) ?>" />
+                                    </label>
+                                    <label>Valuta
+                                        <select name="air_return_expense_items[<?= (int)$idx ?>][currency]">
+                                            <option value="">Auto</option>
+                                            <?php foreach ($currencyOptions as $cc): ?>
+                                                <option value="<?= $cc ?>" <?= $itemCurrency === $cc ? 'selected' : '' ?>><?= $cc ?></option>
+                                            <?php endforeach; ?>
+                                            <?php if ($itemCurrency !== '' && !in_array($itemCurrency, $currencyOptions, true)): ?>
+                                                <option value="<?= h($itemCurrency) ?>" selected><?= h($itemCurrency) ?></option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="mt8" style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button type="button" class="btn small js-air-return-remove" <?= count($airReturnExpenseItems) <= 1 ? 'disabled' : '' ?>>Fjern</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="grid-span-2" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="btn small js-air-return-add">+ Tilfoej udgift</button>
+                    </div>
+                    <label class="small grid-span-2">Kvittering(er)
+                        <input type="file" name="return_to_origin_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+                    </label>
+                <?php else: ?>
                 <label>Bel&oslash;b
                     <input type="number" step="0.01" name="return_to_origin_amount" value="<?= h($form['return_to_origin_amount'] ?? '') ?>" />
                 </label>
                 <label>Valuta
-                    <input type="text" name="return_to_origin_currency" value="<?= h($form['return_to_origin_currency'] ?? '') ?>" placeholder="<?= h($currency ?? 'EUR') ?>" />
+                    <?php $returnCur = strtoupper(trim((string)($form['return_to_origin_currency'] ?? ''))); ?>
+                    <select name="return_to_origin_currency">
+                        <option value="">Auto</option>
+                        <?php foreach ($currencyOptions as $cc): ?>
+                            <option value="<?= $cc ?>" <?= $returnCur === $cc ? 'selected' : '' ?>><?= $cc ?></option>
+                        <?php endforeach; ?>
+                        <?php if ($returnCur !== '' && !in_array($returnCur, $currencyOptions, true)): ?>
+                            <option value="<?= h($returnCur) ?>" selected><?= h($returnCur) ?></option>
+                        <?php endif; ?>
+                    </select>
                 </label>
-                <label>Transporttype
-                    <?php $rtt = (string)($form['return_to_origin_transport_type'] ?? ''); ?>
-                    <select name="return_to_origin_transport_type">
-                        <option value="">Vaelg</option>
-                        <option value="rail" <?= $rtt==='rail'?'selected':'' ?>>Tog</option>
-                        <option value="bus" <?= $rtt==='bus'?'selected':'' ?>>Bus</option>
-                        <option value="taxi" <?= $rtt==='taxi'?'selected':'' ?>>Taxi</option>
+                    <label>Transporttype
+                        <?php $rtt = (string)($form['return_to_origin_transport_type'] ?? ''); ?>
+                        <select name="return_to_origin_transport_type">
+                            <option value="">Vaelg</option>
+                            <?php if ($isAir): ?>
+                                <option value="flight" <?= $rtt==='flight'?'selected':'' ?>>Fly</option>
+                            <?php endif; ?>
+                            <?php if ($isFerry): ?>
+                                <option value="ferry" <?= $rtt==='ferry'?'selected':'' ?>>Faerge</option>
+                            <?php endif; ?>
+                            <option value="rail" <?= $rtt==='rail'?'selected':'' ?>>Tog</option>
+                            <option value="bus" <?= $rtt==='bus'?'selected':'' ?>>Bus</option>
+                            <option value="taxi" <?= $rtt==='taxi'?'selected':'' ?>>Taxi</option>
                         <option value="rideshare" <?= $rtt==='rideshare'?'selected':'' ?>>Samkoersel/rideshare</option>
                         <option value="other" <?= $rtt==='other'?'selected':'' ?>>Andet</option>
                     </select>
@@ -565,13 +914,14 @@ $preview = round($tp * $rate * $share, 2);
                 <label class="small">Kvittering
                     <input type="file" name="return_to_origin_receipt" accept=".pdf,.jpg,.jpeg,.png" />
                 </label>
+                <?php endif; ?>
             </div>
             <?php if ($f = $v('return_to_origin_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
         </div>
 
         <?php $showReroutePast = $showArt18 && ($showArt182 || $showArt183) && in_array($remedy, ['reroute_soonest','reroute_later'], true); ?>
         <div id="rerouteSectionPast" class="card mt12 <?= $showReroutePast ? '' : 'hidden' ?>" data-art="18">
-            <div class="card-title"><span class="icon">&#128260;</span><span>Oml&aelig;gning</span></div>
+            <div class="card-title"><span class="icon">&#128260;</span><span><?= h($rerouteCardTitle) ?></span></div>
             <?php if ($decisionHint !== ''): ?>
                 <div class="small muted"><?= h($decisionHint) ?></div>
             <?php endif; ?>
@@ -609,17 +959,17 @@ $preview = round($tp * $rate * $share, 2);
                 if ($originDefault === '') { $originDefault = $depDefault; }
             ?>
             <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
-                <div class="card-title"><span class="icon">MAP</span><span>Ruter (Google Maps, valgfrit)</span></div>
-                <div class="small muted mt4">Klik for at hente forslag til oml&aelig;gning (TRANSIT). Vi sender start/destination til Google.</div>
+                <div class="card-title"><span class="icon">MAP</span><span><?= h($mapsCardTitle) ?></span></div>
+                <div class="small muted mt4"><?= h($mapsRerouteHelp) ?></div>
                 <input type="hidden" name="maps_opt_in_trin6" value="0" />
                 <label class="mt8"><input type="checkbox" name="maps_opt_in_trin6" value="1" <?= $mapsOptIn ? 'checked' : '' ?> /> Brug Google Maps i denne sag</label>
 
                 <div id="mapsPanelTrin6" class="mt8 <?= $mapsOptIn ? '' : 'hidden' ?>" data-endpoint="<?= h($this->Url->build(['controller' => 'Flow', 'action' => 'mapsRoutes'])) ?>" data-origin="<?= h($originDefault) ?>" data-destination="<?= h($destDefault) ?>">
                     <div class="grid-2">
-                        <label class="station-autocomplete">Fra (station)
+                        <label class="station-autocomplete"><?= h($mapsOriginLabel) ?>
                             <input type="text" id="mapsOriginTrin6" value="<?= h($originDefault) ?>" />
                             <div class="station-suggest" id="mapsOriginSuggest" style="display:none;"></div>
-                            <div class="small muted mt4">Tip: Brug missed connection / din nuv&aelig;rende station som start.</div>
+                            <div class="small muted mt4"><?= h($mapsOriginHint) ?></div>
                         </label>
                         <label class="station-autocomplete">Til (destination)
                             <input
@@ -631,9 +981,9 @@ $preview = round($tp * $rate * $share, 2);
                             />
                             <div class="station-suggest" id="mapsDestSuggest" style="display:none;"></div>
                             <?php if ($isTicketless || $destDefault === ''): ?>
-                                <div class="small muted mt4">Angiv destination (ticketless/ukendt destination).</div>
+                                <div class="small muted mt4"><?= h($mapsDestinationHintUnknown) ?></div>
                             <?php else: ?>
-                                <div class="small muted mt4">Hentes fra billetten (destination).</div>
+                                <div class="small muted mt4"><?= h($mapsDestinationHintKnown) ?></div>
                             <?php endif; ?>
                         </label>
                     </div>
@@ -649,9 +999,15 @@ $preview = round($tp * $rate * $share, 2);
                 </div>
             </div>
 
-            <div id="trin6StationContext" class="mt8 card" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
-                <div class="small"><strong>Stationsvalg (oml&aelig;gning)</strong></div>
-                <div class="small muted mt4">TRIN 7 er uafhaengigt af TRIN 6. Brug evt. stationen fra Art.20 som udgangspunkt.</div>
+            <?php if (!$isAir): ?>
+            <<?= $isAir ? 'details' : 'div' ?> id="trin6StationContext" class="mt8 card" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="remedyChoice:reroute_soonest,reroute_later">
+                <?php if ($isAir): ?>
+                    <summary class="small" style="cursor:pointer;"><strong><?= h($rerouteContextTitle) ?></strong></summary>
+                    <div class="small muted mt4"><?= h($rerouteContextHelp) ?></div>
+                <?php else: ?>
+                    <div class="small"><strong><?= h($rerouteContextTitle) ?></strong></div>
+                    <div class="small muted mt4"><?= h($rerouteContextHelp) ?></div>
+                <?php endif; ?>
                 <?php
                     $handoff = trim((string)($form['handoff_station'] ?? ''));
                     if ($handoff === '') {
@@ -701,12 +1057,12 @@ $preview = round($tp * $rate * $share, 2);
                 ?>
                 <div class="grid-1 mt8">
                     <?php if ($isTicketless): ?>
-                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $placeLabelCurrent ?>
                             <select name="a18_from_station" style="display:none;">
-                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                                 <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
                             </select>
-                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="<?= h($placeSearchPlaceholder) ?>" />
                             <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
                             <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
                             <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
@@ -719,16 +1075,18 @@ $preview = round($tp * $rate * $share, 2);
                             <?php endif; ?>
                         </label>
                     <?php else: ?>
-                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other">Hvilken station er du p&aring;?
+                        <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $placeLabelCurrent ?>
                             <select name="a18_from_station">
                                 <option value="">V&aelig;lg</option>
                                 <?php foreach ($stationOptions as $st): ?>
                                     <option value="<?= h($st) ?>" <?= $fromSel===$st?'selected':'' ?>><?= h($st) ?></option>
                                 <?php endforeach; ?>
                                 <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
-                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="other" <?= $fromSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             </select>
-                            <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="Anden station" data-show-if="a18_from_station:other" />
+                            <div id="a18FromStationOtherWrapReroutePast" class="other-station-wrap" data-other-select="a18_from_station" style="<?= $fromSel==='other' ? '' : 'display:none;' ?>">
+                                <input type="text" name="a18_from_station_other" value="<?= h($fromOther) ?>" placeholder="<?= h($placeOtherPlaceholder) ?>" />
+                            </div>
                             <input type="hidden" name="a18_from_station_other_osm_id" value="<?= h((string)($form['a18_from_station_other_osm_id'] ?? '')) ?>" />
                             <input type="hidden" name="a18_from_station_other_lat" value="<?= h((string)($form['a18_from_station_other_lat'] ?? '')) ?>" />
                             <input type="hidden" name="a18_from_station_other_lon" value="<?= h((string)($form['a18_from_station_other_lon'] ?? '')) ?>" />
@@ -744,19 +1102,24 @@ $preview = round($tp * $rate * $share, 2);
                 </div>
 
                 <div class="grid-2 mt8">
-                    <label>Transportform (oml&aelig;gning)
+                    <label><?= h($rerouteModeLabel) ?>
                         <select name="a18_reroute_mode">
                             <option value="">V&aelig;lg</option>
+                            <?php if ($isFerry): ?>
+                                <option value="ferry" <?= $modeVal==='ferry'?'selected':'' ?>>Faerge</option>
+                            <?php elseif ($isAir): ?>
+                                <option value="air" <?= $modeVal==='air'?'selected':'' ?>>Fly</option>
+                            <?php endif; ?>
                             <option value="rail" <?= $modeVal==='rail'?'selected':'' ?>>Tog</option>
                             <option value="bus" <?= $modeVal==='bus'?'selected':'' ?>>Bus</option>
                             <option value="taxi" <?= $modeVal==='taxi'?'selected':'' ?>>Taxi/minibus</option>
                             <option value="other" <?= $modeVal==='other'?'selected':'' ?>>Andet</option>
                         </select>
                     </label>
-                    <label>Hvor endte oml&aelig;gningen?
+                    <label><?= h($rerouteEndpointLabel) ?>
                         <select name="a18_reroute_endpoint">
                             <option value="">V&aelig;lg</option>
-                            <option value="nearest_station" <?= $endVal==='nearest_station'?'selected':'' ?>>N&aelig;rmeste station</option>
+                            <option value="nearest_station" <?= $endVal==='nearest_station'?'selected':'' ?>><?= h($rerouteEndpointNearestLabel) ?></option>
                             <option value="other_departure_point" <?= $endVal==='other_departure_point'?'selected':'' ?>>Et andet egnet afgangssted</option>
                             <option value="final_destination" <?= $endVal==='final_destination'?'selected':'' ?>>Mit endelige bestemmelsessted</option>
                         </select>
@@ -765,12 +1128,12 @@ $preview = round($tp * $rate * $share, 2);
 
                 <div class="grid-1 mt8">
                     <?php if ($isTicketless): ?>
-                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point">Hvilken station omlagde du til?
+                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point"><?= $placeLabelRerouteArrival ?>
                             <select name="a18_reroute_arrival_station" style="display:none;">
-                                <option value="other" <?= $endSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="other" <?= $endSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                                 <option value="unknown" <?= $endSel==='unknown'?'selected':'' ?>>Ved ikke</option>
                             </select>
-                            <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="S&oslash;g station (ticketless)" />
+                            <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="<?= h($placeSearchPlaceholder) ?>" />
                             <input type="hidden" name="a18_reroute_arrival_station_other_osm_id" value="<?= h((string)($form['a18_reroute_arrival_station_other_osm_id'] ?? '')) ?>" />
                             <input type="hidden" name="a18_reroute_arrival_station_other_lat" value="<?= h((string)($form['a18_reroute_arrival_station_other_lat'] ?? '')) ?>" />
                             <input type="hidden" name="a18_reroute_arrival_station_other_lon" value="<?= h((string)($form['a18_reroute_arrival_station_other_lon'] ?? '')) ?>" />
@@ -783,16 +1146,18 @@ $preview = round($tp * $rate * $share, 2);
                             <?php endif; ?>
                         </label>
                     <?php else: ?>
-                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point">Hvilken station omlagde du til?
+                        <label class="station-autocomplete" data-station-select="a18_reroute_arrival_station" data-station-other="a18_reroute_arrival_station_other" data-show-if="a18_reroute_endpoint:nearest_station,other_departure_point"><?= $placeLabelRerouteArrival ?>
                             <select name="a18_reroute_arrival_station">
                                 <option value="">V&aelig;lg</option>
                                 <?php foreach ($stationOptions as $st): ?>
                                     <option value="<?= h($st) ?>" <?= $endSel===$st?'selected':'' ?>><?= h($st) ?></option>
                                 <?php endforeach; ?>
                                 <option value="unknown" <?= $endSel==='unknown'?'selected':'' ?>>Ved ikke</option>
-                                <option value="other" <?= $endSel==='other'?'selected':'' ?>>Anden station</option>
+                                <option value="other" <?= $endSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             </select>
-                            <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="Anden station" data-show-if="a18_reroute_arrival_station:other" />
+                            <div id="a18RerouteArrivalOtherWrapPast" class="other-station-wrap" data-other-select="a18_reroute_arrival_station" style="<?= $endSel==='other' ? '' : 'display:none;' ?>">
+                                <input type="text" name="a18_reroute_arrival_station_other" value="<?= h($endStOther) ?>" placeholder="<?= h($placeOtherPlaceholder) ?>" />
+                            </div>
                             <input type="hidden" name="a18_reroute_arrival_station_other_osm_id" value="<?= h((string)($form['a18_reroute_arrival_station_other_osm_id'] ?? '')) ?>" />
                             <input type="hidden" name="a18_reroute_arrival_station_other_lat" value="<?= h((string)($form['a18_reroute_arrival_station_other_lat'] ?? '')) ?>" />
                             <input type="hidden" name="a18_reroute_arrival_station_other_lon" value="<?= h((string)($form['a18_reroute_arrival_station_other_lon'] ?? '')) ?>" />
@@ -806,35 +1171,196 @@ $preview = round($tp * $rate * $share, 2);
                         </label>
                     <?php endif; ?>
                 </div>
-            </div>
+            <?php endif; ?>
 
             <!-- OFF-variant additions: always simple branch without 100-min dependency -->
+            <?php if (!$isFerry && !$isBus): ?>
             <fieldset id="offerProvidedWrapPast" class="mt8" data-art="18(3)" <?= $showArt183 ? 'hidden' : '' ?> >
-                <legend>Fik du et konkret oml&aelig;gningstilbud fra operat&oslash;ren?</legend>
-                <?php $offProv = (string)($form['offer_provided'] ?? ''); ?>
-                <label><input type="radio" name="offer_provided" value="yes" <?= $offProv==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="offer_provided" value="no" <?= $offProv==='no'?'checked':'' ?> /> Nej</label>
+                <legend><?= $isFerry ? 'Fik du et konkret oml&aelig;gningstilbud fra operat&oslash;ren?' : ($isBus ? 'Fik du valget mellem tilbagebetaling eller ombooking fra operatoeren?' : ($isAir ? 'Tilboed flyselskabet dig refusion eller ombooking efter artikel 8?' : 'Fik du et konkret oml&aelig;gningstilbud fra operat&oslash;ren?')) ?></legend>
+                <?php if ($isAir): ?>
+                    <div class="small muted mt4">Dette er hovedspoergsmaalet i air-sporet. Det maa ikke auto-saettes af lavere felter.</div>
+                <?php endif; ?>
+                <?php $offProv = $isFerry ? $ferryOfferProvided : ($isBus ? $busCarrierChoice : ($isAir ? $airChoiceOffered : (string)($form['offer_provided'] ?? ''))); ?>
+                <label><input type="radio" name="<?= $isFerry ? 'ferry_offer_provided' : ($isBus ? 'carrier_offered_choice' : ($isAir ? 'air_article8_choice_offered' : 'offer_provided')) ?>" value="yes" <?= $offProv==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="<?= $isFerry ? 'ferry_offer_provided' : ($isBus ? 'carrier_offered_choice' : ($isAir ? 'air_article8_choice_offered' : 'offer_provided')) ?>" value="no" <?= $offProv==='no'?'checked':'' ?> /> Nej</label>
+                <?php if ($isAir): ?>
+                    <label class="ml8"><input type="radio" name="air_article8_choice_offered" value="unknown" <?= $offProv==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                <?php endif; ?>
             </fieldset>
+            <?php endif; ?>
 
-            <?php $spt = (string)($form['self_purchased_new_ticket'] ?? ''); ?>
-            <div id="step2Past" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)">
-                <div class="mt4">K&oslash;bte du selv en ny billet for at komme videre?</div>
-                <label><input type="radio" name="self_purchased_new_ticket" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="self_purchased_new_ticket" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
-                <div class="mt4" data-show-if="self_purchased_new_ticket:yes">
-                    <label>Hvorfor k&oslash;bte du selv?
-                        <?php $spr = (string)($form['self_purchase_reason'] ?? ''); ?>
-                        <select name="self_purchase_reason">
+            <?php $spt = $isFerry ? $ferrySelfArranged : ($isBus ? $busSelfArranged : ($isAir ? $airSelfArranged : (string)($form['self_purchased_new_ticket'] ?? ''))); ?>
+            <?php if ($isFerry): ?>
+            <div id="ferryRerouteFlowPast" class="card mt12" data-show-if="remedyChoice:reroute_soonest,reroute_later">
+                <div class="card-title"><span class="icon">&#128260;</span><span>Ferry ombooking</span></div>
+                <div class="small muted mt4">Fastsl&aring;r om operat&oslash;ren tilb&oslash;d en brugbar l&oslash;sning, hvorn&aring;r den kom, og om du selv m&aring;tte handle.</div>
+
+                <div class="mt8">
+                    <div>Fik du et konkret tilbud om ombooking eller anden videre rejse fra operatoeren?</div>
+                    <label><input type="radio" name="ferry_offer_provided" value="yes" <?= $ferryOfferProvided==='yes'?'checked':'' ?> /> Ja</label>
+                    <label class="ml8"><input type="radio" name="ferry_offer_provided" value="no" <?= $ferryOfferProvided==='no'?'checked':'' ?> /> Nej</label>
+                    <label class="ml8"><input type="radio" name="ferry_offer_provided" value="unknown" <?= $ferryOfferProvided==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                </div>
+
+                <div class="mt8">
+                    <div>Hvorn&aring;r fik du f&oslash;rste brugbare information eller l&oslash;sning?</div>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="before_departure" <?= $ferrySolutionTiming==='before_departure'?'checked':'' ?> /> F&oslash;r planlagt afgang</label><br/>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="within_30" <?= $ferrySolutionTiming==='within_30'?'checked':'' ?> /> Inden 30 minutter efter planlagt afgang</label><br/>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="30_90" <?= $ferrySolutionTiming==='30_90'?'checked':'' ?> /> 30-90 minutter efter planlagt afgang</label><br/>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="after_90" <?= $ferrySolutionTiming==='after_90'?'checked':'' ?> /> Senere end 90 minutter</label><br/>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="none" <?= $ferrySolutionTiming==='none'?'checked':'' ?> /> Jeg fik ingen brugbar l&oslash;sning</label><br/>
+                    <label><input type="radio" name="ferry_first_usable_solution_timing" value="unknown" <?= $ferrySolutionTiming==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                </div>
+
+                <div class="mt8">
+                    <div>Maatte du selv arrangere en loesning for at komme videre?</div>
+                    <label><input type="radio" name="ferry_self_arranged_solution" value="yes" <?= $ferrySelfArranged==='yes'?'checked':'' ?> /> Ja</label>
+                    <label class="ml8"><input type="radio" name="ferry_self_arranged_solution" value="no" <?= $ferrySelfArranged==='no'?'checked':'' ?> /> Nej</label>
+                </div>
+
+                <div class="mt8" data-show-if="ferry_self_arranged_solution:yes">
+                    <label>Hvad gjorde du selv?
+                        <select name="ferry_self_arranged_solution_type">
                             <option value="">Vaelg</option>
-                            <option value="no_offer" <?= $spr==='no_offer'?'selected':'' ?>>Ingen tilbudt oml&aelig;gning</option>
-                            <option value="offer_not_usable" <?= $spr==='offer_not_usable'?'selected':'' ?>>Tilbudt men kunne ikke bruges</option>
+                            <option value="bought_new_ferry_ticket" <?= $ferrySelfArrangedType==='bought_new_ferry_ticket'?'selected':'' ?>>Koebte ny faergebillet</option>
+                            <option value="bought_rail_or_bus_ticket" <?= $ferrySelfArrangedType==='bought_rail_or_bus_ticket'?'selected':'' ?>>Koebte tog-/busbillet</option>
+                            <option value="booked_taxi_minibus" <?= $ferrySelfArrangedType==='booked_taxi_minibus'?'selected':'' ?>>Bestilte taxi/minibus</option>
+                            <option value="found_other_transport" <?= $ferrySelfArrangedType==='found_other_transport'?'selected':'' ?>>Fandt anden transport</option>
+                            <option value="other" <?= $ferrySelfArrangedType==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+
+                    <label>Hvorfor maatte du selv finde en loesning?
+                        <?php $spr = $ferrySelfArrangedReason; ?>
+                        <select name="ferry_self_arranged_reason">
+                            <option value="">Vaelg</option>
+                            <option value="no_offer" <?= $spr==='no_offer'?'selected':'' ?>>Ingen tilbudt ombooking eller videre rejse</option>
+                            <option value="offer_not_usable" <?= $spr==='offer_not_usable'?'selected':'' ?>>Tilbudt loesning kunne ikke bruges</option>
                             <option value="needed_fast" <?= $spr==='needed_fast'?'selected':'' ?>>Skulle hurtigt videre</option>
+                            <option value="missed_connection" <?= $spr==='missed_connection'?'selected':'' ?>>Jeg mistede videre forbindelse</option>
                             <option value="other" <?= $spr==='other'?'selected':'' ?>>Andet</option>
                         </select>
                     </label>
                 </div>
-                <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du k&oslash;bte selv ny billet, selvom oml&aelig;gning blev tilbudt inden for 100 min - udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig v&aelig;re mulig.</div>
+
+                <div id="note100FallbackPast" class="small mt8" style="display:none; background:#e7f5ff; padding:8px; border-radius:6px;">
+                    <strong>Bem&aelig;rk:</strong>
+                    <div class="muted">Dine svar tyder paa, at operatoeren ikke leverede en brugbar loesning hurtigt nok. Det styrker normalt begrundelsen for selvafholdte udgifter og manuel vurdering af ferry-kravet.</div>
+                </div>
+                <div id="note100ManualPast" class="small mt8" style="display:none; background:#fff3cd; padding:8px; border-radius:6px;">
+                    <strong>Bem&aelig;rk:</strong>
+                    <div class="muted">Dine svar tyder paa, at der blev givet en brugbar loesning relativt hurtigt. Selvk&oslash;b er derfor ikke automatisk refunderbart, men vi kan stadig vurdere det konkret.</div>
+                </div>
             </div>
+            <?php elseif ($isBus): ?>
+            <div id="busRerouteFlowPast" class="card mt12" data-show-if="remedyChoice:reroute_soonest">
+                <div class="card-title"><span class="icon">&#128652;</span><span>Bus omlaegning</span></div>
+                <div class="small muted mt4">Registrer om operatoeren gav valget mellem tilbagebetaling og omlaegning, om du selv maatte handle, og hvilke merudgifter omlaegningen medfoerte.</div>
+                <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">
+                    <strong>Dine lovbestemte rettigheder</strong>
+                    <div class="muted mt4">Omlaegning skal ske <strong>uden ekstraomkostninger</strong> for dig.</div>
+                    <div class="muted mt4">Rimelige og noedvendige merudgifter til alternativ transport kan vaere refunderbare, hvis du maatte handle selv.</div>
+                    <div class="muted mt4">Hvis operatoeren ikke gav dig valget mellem tilbagebetaling og omlaegning, kan der samtidig vaere et separat krav paa <strong>50% af billetprisen</strong>.</div>
+                </div>
+                <div class="small mt8" style="background:#fff; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                    <strong>Vores standardniveau for merudgifter</strong>
+                    <div class="muted mt4">Alternativ transport vurderes efter et internt standardniveau, som skalerer med distance i resultatet.</div>
+                    <div class="muted mt4">Taxi og anden alternativ transport over standardniveau sendes til manuel vurdering. Det er <strong>ikke</strong> et lovbestemt maksimum.</div>
+                </div>
+
+                <div id="note100FallbackPast" class="small mt8" style="display:none; background:#e7f5ff; padding:8px; border-radius:6px;">
+                    <strong>Bus-note:</strong>
+                    <div class="muted">Hvis operatoeren ikke gav dig valget mellem tilbagebetaling og omlaegning, kan det styrke et krav om 50% kompensation efter busreglerne, ud over vurderingen af dine udgifter.</div>
+                </div>
+                <div id="note100ManualPast" class="small mt8" style="display:none; background:#fff3cd; padding:8px; border-radius:6px;">
+                    <strong>Bem&aelig;rk:</strong>
+                    <div class="muted">Hvis operatoeren gav det relevante valg, er selvarrangeret videre rejse ikke automatisk refunderbar. Vi kan stadig vurdere sagen konkret.</div>
+                </div>
+
+                <div class="mt12">
+                    <div>Maatte du selv arrangere en loesning for at komme videre?</div>
+                    <label><input type="radio" name="bus_self_arranged_solution" value="yes" <?= $busSelfArranged==='yes'?'checked':'' ?> /> Ja</label>
+                    <label class="ml8"><input type="radio" name="bus_self_arranged_solution" value="no" <?= $busSelfArranged==='no'?'checked':'' ?> /> Nej</label>
+                </div>
+
+                <div class="mt8" data-show-if="bus_self_arranged_solution:yes">
+                    <label>Hvad gjorde du selv?
+                        <select name="bus_self_arranged_solution_type">
+                            <option value="">Vaelg</option>
+                            <option value="bought_new_ticket" <?= $busSelfArrangedType==='bought_new_ticket'?'selected':'' ?>>Koebte ny billet</option>
+                            <option value="used_other_bus" <?= $busSelfArrangedType==='used_other_bus'?'selected':'' ?>>Tog en anden bus</option>
+                            <option value="used_rail" <?= $busSelfArrangedType==='used_rail'?'selected':'' ?>>Tog tog videre</option>
+                            <option value="booked_taxi" <?= $busSelfArrangedType==='booked_taxi'?'selected':'' ?>>Bookede taxi</option>
+                            <option value="other" <?= $busSelfArrangedType==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+
+                    <label>Hvorfor maatte du selv finde en loesning?
+                        <select name="bus_self_arranged_reason">
+                            <option value="">Vaelg</option>
+                            <option value="no_choice_given" <?= $busSelfArrangedReason==='no_choice_given'?'selected':'' ?>>Jeg fik ikke valget</option>
+                            <option value="operator_solution_not_usable" <?= $busSelfArrangedReason==='operator_solution_not_usable'?'selected':'' ?>>Operatoerens loesning var ikke brugbar</option>
+                            <option value="needed_fast" <?= $busSelfArrangedReason==='needed_fast'?'selected':'' ?>>Jeg havde brug for at komme hurtigt videre</option>
+                            <option value="missed_connection" <?= $busSelfArrangedReason==='missed_connection'?'selected':'' ?>>Jeg ville ellers misse en forbindelse</option>
+                            <option value="other" <?= $busSelfArrangedReason==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;">Du arrangerede selv en loesning, selvom operatoeren ser ud til at have givet det relevante valg eller en brugbar mulighed. Udgiften er derfor ikke automatisk refunderbar, men vi kan stadig vurdere den konkret.</div>
+            </div>
+            <?php else: ?>
+            <div id="step2Past" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)">
+                <div class="mt4"><?= $isFerry ? 'Maette du selv arrangere en loesning for at komme videre?' : ($isBus ? 'Maatte du selv arrangere en loesning for at komme videre?' : ($isAir ? 'Maatte du selv arrangere ombooking eller videre rejse?' : 'K&oslash;bte du selv en ny billet for at komme videre?')) ?></div>
+                <label><input type="radio" name="<?= $isFerry ? 'ferry_self_arranged_solution' : ($isAir ? 'air_self_arranged_reroute' : 'self_purchased_new_ticket') ?>" value="yes" <?= $spt==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="<?= $isFerry ? 'ferry_self_arranged_solution' : ($isAir ? 'air_self_arranged_reroute' : 'self_purchased_new_ticket') ?>" value="no" <?= $spt==='no'?'checked':'' ?> /> Nej</label>
+                <div class="mt4" data-show-if="<?= $isFerry ? 'ferry_self_arranged_solution:yes' : ($isAir ? 'air_self_arranged_reroute:yes' : 'self_purchased_new_ticket:yes') ?>">
+                    <?php if ($isFerry): ?>
+                    <label>Hvad gjorde du selv?
+                        <select name="ferry_self_arranged_solution_type">
+                            <option value="">Vaelg</option>
+                            <option value="bought_new_ferry_ticket" <?= $ferrySelfArrangedType==='bought_new_ferry_ticket'?'selected':'' ?>>Koebte ny faergebillet</option>
+                            <option value="bought_rail_or_bus_ticket" <?= $ferrySelfArrangedType==='bought_rail_or_bus_ticket'?'selected':'' ?>>Koebte tog-/busbillet</option>
+                            <option value="booked_taxi_minibus" <?= $ferrySelfArrangedType==='booked_taxi_minibus'?'selected':'' ?>>Bestilte taxi/minibus</option>
+                            <option value="found_other_transport" <?= $ferrySelfArrangedType==='found_other_transport'?'selected':'' ?>>Fandt anden transport</option>
+                            <option value="other" <?= $ferrySelfArrangedType==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+                    <?php endif; ?>
+                    <label><?= $isFerry ? 'Hvorfor maatte du selv finde en loesning?' : ($isBus ? 'Hvorfor maatte du selv finde en loesning?' : ($isAir ? 'Hvorfor maatte du selv finde en loesning?' : 'Hvorfor k&oslash;bte du selv?')) ?>
+                        <?php $spr = $isFerry ? $ferrySelfArrangedReason : ($isAir ? $airSelfArrangedReason : (string)($form['self_purchase_reason'] ?? '')); ?>
+                        <select name="<?= $isFerry ? 'ferry_self_arranged_reason' : ($isAir ? 'air_self_arranged_reroute_reason' : 'self_purchase_reason') ?>">
+                            <option value="">Vaelg</option>
+                            <?php if (!$isAir): ?>
+                            <option value="no_offer" <?= $spr==='no_offer'?'selected':'' ?>><?= $isFerry ? 'Ingen tilbudt ombooking eller videre rejse' : ($isBus ? 'Jeg fik ikke valget mellem tilbagebetaling og ombooking' : 'Ingen tilbudt oml&aelig;gning') ?></option>
+                            <?php elseif ($spr === 'no_offer'): ?>
+                            <option value="no_offer" selected>Flyselskabet tilb&oslash;d ikke refusion eller ombooking (legacy)</option>
+                            <?php endif; ?>
+                            <option value="unusable_solution" <?= $spr==='unusable_solution'?'selected':'' ?>>Flyselskabets loesning kunne ikke bruges</option>
+                            <option value="urgent_need" <?= $spr==='urgent_need'?'selected':'' ?>><?= $isAir ? 'Jeg havde brug for hurtig ombooking' : 'Skulle hurtigt videre' ?></option>
+                            <?php if ($isFerry): ?>
+                                <option value="missed_connection" <?= $spr==='missed_connection'?'selected':'' ?>>Jeg mistede videre forbindelse</option>
+                            <?php elseif ($isAir): ?>
+                                <option value="separate_ticket" <?= $spr==='separate_ticket'?'selected':'' ?>>Jeg havde en videre rejse paa separat billet</option>
+                                <option value="airport_issue" <?= $spr==='airport_issue'?'selected':'' ?>>Ombookingen gav problemer med alternativ lufthavn</option>
+                            <?php endif; ?>
+                            <option value="other" <?= $spr==='other'?'selected':'' ?>>Andet</option>
+                        </select>
+                    </label>
+                    <?php if ($isAir): ?>
+                    <fieldset id="airApprovalEvidencePast" class="mt8">
+                        <legend>Bekraeftede flyselskabet din egen loesning?</legend>
+                        <div class="small muted mt4">Dette er kun et bevisfelt.</div>
+                        <?php $opOK = $airConfirmedSelfArranged; ?>
+                        <label><input type="radio" name="air_airline_confirmed_self_arranged_solution" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
+                        <label class="ml8"><input type="radio" name="air_airline_confirmed_self_arranged_solution" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
+                        <label class="ml8"><input type="radio" name="air_airline_confirmed_self_arranged_solution" value="unknown" <?= $opOK==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                    </fieldset>
+                    <?php endif; ?>
+                </div>
+                <div id="selfBuyNotePast" class="small" style="margin-top:6px; padding:6px; background:#fff3cd; border-radius:6px; display:none;"><?= $isFerry ? 'Du fandt selv en loesning, selvom operatoeren ser ud til at have tilbudt videre rejse. Udgiften er derfor ikke automatisk refunderbar, men vi kan stadig vurdere den konkret.' : ($isBus ? 'Du arrangerede selv en loesning, selvom operatoeren ser ud til at have givet det relevante valg eller en brugbar mulighed. Udgiften er derfor ikke automatisk refunderbar, men vi kan stadig vurdere den konkret.' : ($isAir ? 'Du arrangerede selv ombooking eller videre rejse. Det kan stadig vaere relevant at registrere dette, men vurderingen bygger paa article 8-valget og den konkrete loesning.' : 'Du k&oslash;bte selv ny billet, selvom oml&aelig;gning blev tilbudt inden for 100 min - udgiften refunderes normalt ikke (Art. 18(3)). Kompensation kan stadig v&aelig;re mulig.')) ?></div>
+            </div>
+            <?php endif; ?>
 
             <div id="rerouteLaterOutcomePast" class="mt8" data-show-if="remedyChoice:reroute_later">
                 <div>Hvad skete der s&aring;?</div>
@@ -850,7 +1376,16 @@ $preview = round($tp * $rate * $share, 2);
                         <input type="number" step="0.01" name="reroute_later_self_paid_amount" value="<?= h($form['reroute_later_self_paid_amount'] ?? '') ?>" />
                     </label>
                     <label>Valuta
-                        <input type="text" name="reroute_later_self_paid_currency" value="<?= h($form['reroute_later_self_paid_currency'] ?? '') ?>" placeholder="<?= h($currency ?? 'EUR') ?>" />
+                        <?php $rerouteLaterCur = strtoupper(trim((string)($form['reroute_later_self_paid_currency'] ?? ''))); ?>
+                        <select name="reroute_later_self_paid_currency">
+                            <option value="">Auto</option>
+                            <?php foreach ($currencyOptions as $cc): ?>
+                                <option value="<?= $cc ?>" <?= $rerouteLaterCur === $cc ? 'selected' : '' ?>><?= $cc ?></option>
+                            <?php endforeach; ?>
+                            <?php if ($rerouteLaterCur !== '' && !in_array($rerouteLaterCur, $currencyOptions, true)): ?>
+                                <option value="<?= h($rerouteLaterCur) ?>" selected><?= h($rerouteLaterCur) ?></option>
+                            <?php endif; ?>
+                        </select>
                     </label>
                     <label class="small">Billet/kvittering
                         <input type="file" name="reroute_later_ticket_upload" accept=".pdf,.jpg,.jpeg,.png" />
@@ -859,37 +1394,50 @@ $preview = round($tp * $rate * $share, 2);
                 <?php if ($f = $v('reroute_later_ticket_upload')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
             </div>
 
+            <?php if (!$isFerry && !$isBus && !$isAir): ?>
             <fieldset id="opApprovalWrapPast" class="mt8 <?= $showArt183 && $spt==='yes' ? '' : 'hidden' ?>" data-art="18(3)" <?= $spt==='yes' ? '' : 'hidden' ?> >
-                <legend>Var selvk&oslash;bet godkendt af operat&oslash;ren?</legend>
-                <?php $opOK = (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
-                <label><input type="radio" name="self_purchase_approved_by_operator" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
-                <label class="ml8"><input type="radio" name="self_purchase_approved_by_operator" value="unknown" <?= $opOK==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                <legend><?= $isFerry ? 'Bekraeftede eller godkendte operatoeren din loesning?' : ($isBus ? 'Bekraeftede eller godkendte operatoeren din loesning?' : ($isAir ? 'Bekraeftede flyselskabet din egen ombooking eller videre rejse?' : 'Var selvk&oslash;bet godkendt af operat&oslash;ren?')) ?></legend>
+                <?php if ($isAir): ?>
+                    <div class="small muted mt4">Dette er et bevisfelt. Svaret kan styrke din sag, men laaser ikke i sig selv ekstraomkostningerne.</div>
+                <?php endif; ?>
+                <?php $opOK = $isAir ? $airConfirmedSelfArranged : (string)($form['self_purchase_approved_by_operator'] ?? ''); ?>
+                <label><input type="radio" name="<?= $isAir ? 'air_airline_confirmed_self_arranged_solution' : 'self_purchase_approved_by_operator' ?>" value="yes" <?= $opOK==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="<?= $isAir ? 'air_airline_confirmed_self_arranged_solution' : 'self_purchase_approved_by_operator' ?>" value="no" <?= $opOK==='no'?'checked':'' ?> /> Nej</label>
+                <label class="ml8"><input type="radio" name="<?= $isAir ? 'air_airline_confirmed_self_arranged_solution' : 'self_purchase_approved_by_operator' ?>" value="unknown" <?= $opOK==='unknown'?'checked':'' ?> /> Ved ikke</label>
             </fieldset>
+            <?php endif; ?>
 
-            <div id="ri100PastWrap" class="mt8 <?= $showArt183 ? '' : 'hidden' ?>" data-art="18(3)" style="display:none;">
-                <div>Fik du besked om en alternativ rejse inden 100 minutter efter planlagt afgang? (Art. 18(3))
-                    <?php if (!empty($art183BaseLabel) && !empty($art183DeadlineLabel)): ?>
-                        <div class="small muted">
-                            100-min frist: <strong><?= h($art183DeadlineLabel) ?></strong> (m&aring;lt fra planlagt afgang: <?= h($art183BaseLabel) ?>).
-                            <?php if (!empty($art183BaseExplain)): ?><span class="ml8"><?= h($art183BaseExplain) ?></span><?php endif; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="small muted">100-min fristen m&aring;les fra planlagt afgangstidspunkt. (Vi kunne ikke udlede tidspunktet automatisk i denne sag.)</div>
-                    <?php endif; ?>
-                </div>
-                <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
-                <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= $ri100==='unknown'?'checked':'' ?> /> Ved ikke</label>
-                <div id="note100FallbackPast" class="small mt8" style="display:none; background:#e7f5ff; padding:8px; border-radius:6px;">
-                    <strong>100-minuttersfallback:</strong>
-                    <div class="muted">Hvis du ikke fik konkrete oml&aelig;gningsmuligheder inden for 100 minutter, kan du have ret til at k&oslash;be alternativ offentlig transport (tog/bus/turistbus) og f&aring; rimelige omkostninger refunderet.</div>
-                </div>
-                <div id="note100ManualPast" class="small mt8" style="display:none; background:#fff3cd; padding:8px; border-radius:6px;">
-                    <strong>Bem&aelig;rk:</strong>
-                    <div class="muted">Hvis oml&aelig;gningsmuligheder blev meddelt inden for 100 minutter, er selvk&oslash;b normalt ikke automatisk refunderbart efter Art. 18(3). Vi kan stadig vurdere sagen manuelt.</div>
-                </div>
+            <?php if (!$isFerry && !$isAir): ?>
+            <div id="ri100PastWrap" class="mt8 <?= ($showArt183 && $showAirArticle8Question) ? '' : 'hidden' ?>" data-art="18(3)" style="display:none;">
+                <?php if ($isBus): ?>
+                    <input type="hidden" name="reroute_info_within_100min" value="<?= h($ri100) ?>" />
+                <?php else: ?>
+                    <div>Fik du besked om en alternativ rejse inden 100 minutter efter planlagt afgang? (Art. 18(3))
+                        <?php if (!empty($art183BaseLabel) && !empty($art183DeadlineLabel)): ?>
+                            <div class="small muted">
+                                100-min frist: <strong><?= h($art183DeadlineLabel) ?></strong> (m&aring;lt fra planlagt afgang: <?= h($art183BaseLabel) ?>).
+                                <?php if (!empty($art183BaseExplain)): ?><span class="ml8"><?= h($art183BaseExplain) ?></span><?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="small muted">100-min fristen m&aring;les fra planlagt afgangstidspunkt. (Vi kunne ikke udlede tidspunktet automatisk i denne sag.)</div>
+                        <?php endif; ?>
+                    </div>
+                    <label><input type="radio" name="reroute_info_within_100min" value="yes" <?= $ri100==='yes'?'checked':'' ?> /> Ja</label>
+                    <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="no" <?= $ri100==='no'?'checked':'' ?> /> Nej</label>
+                    <label class="ml8"><input type="radio" name="reroute_info_within_100min" value="unknown" <?= $ri100==='unknown'?'checked':'' ?> /> Ved ikke</label>
+                    <div id="note100FallbackPast" class="small mt8" style="display:none; background:#e7f5ff; padding:8px; border-radius:6px;">
+                        <strong>100-minuttersfallback:</strong>
+                        <div class="muted">Hvis du ikke fik konkrete oml&aelig;gningsmuligheder inden for 100 minutter, kan du have ret til at k&oslash;be alternativ offentlig transport (tog/bus/turistbus) og f&aring; rimelige omkostninger refunderet.</div>
+                    </div>
+                    <div id="note100ManualPast" class="small mt8" style="display:none; background:#fff3cd; padding:8px; border-radius:6px;">
+                        <strong>Bem&aelig;rk:</strong>
+                        <div class="muted">Hvis oml&aelig;gningsmuligheder blev meddelt inden for 100 minutter, er selvk&oslash;b normalt ikke automatisk refunderbart efter Art. 18(3). Vi kan stadig vurdere sagen manuelt.</div>
+                    </div>
+                <?php endif; ?>
             </div>
+            <?php else: ?>
+            <input type="hidden" name="reroute_info_within_100min" value="<?= h($ri100) ?>" />
+            <?php endif; ?>
 
             <div id="notesAreaPast" class="notes small">
                 <p id="noteApprovedPast" class="note success" style="display:none;">&#10003; Selvk&oslash;b er oplyst som godkendt af operat&oslash;ren.</p>
@@ -897,20 +1445,119 @@ $preview = round($tp * $rate * $share, 2);
             </div>
 
             <div id="recBlockPast" class="mt8 <?= $showArt182 ? '' : 'hidden' ?>" data-art="18(2)">
-                <?php $rec = (string)($form['reroute_extra_costs'] ?? ''); ?>
-                <div class="mt4">Medf&oslash;rte oml&aelig;gningen ekstra udgifter for dig? (h&oslash;jere klasse/andet transportmiddel)</div>
-                <label><input type="radio" name="reroute_extra_costs" value="yes" <?= $rec==='yes'?'checked':'' ?> /> Ja</label>
-                <label class="ml8"><input type="radio" name="reroute_extra_costs" value="no" <?= $rec==='no'?'checked':'' ?> /> Nej</label>
-                <div class="grid-2 mt8 <?= $rec==='yes' ? '' : 'hidden' ?>" id="recWrapPast" data-art="18(2)">
+                <?php $rec = $isAir ? $airRerouteExpensesIncurred : (string)($form['reroute_extra_costs'] ?? ''); ?>
+                <div class="mt4"><?= $isAir ? 'Fik du ekstra udgifter paa grund af ombookingen eller din egen loesning?' : 'Medf&oslash;rte oml&aelig;gningen ekstra udgifter for dig? (h&oslash;jere klasse/andet transportmiddel)' ?></div>
+                <label><input type="radio" name="<?= $isAir ? 'air_reroute_expenses_incurred' : 'reroute_extra_costs' ?>" value="yes" <?= $rec==='yes'?'checked':'' ?> /> Ja</label>
+                <label class="ml8"><input type="radio" name="<?= $isAir ? 'air_reroute_expenses_incurred' : 'reroute_extra_costs' ?>" value="no" <?= $rec==='no'?'checked':'' ?> /> Nej</label>
+                <?php if ($isBus): ?>
+                    <div class="small muted mt4">Typiske poster er ny billet, taxi, lokal transport eller overnatning. Disse poster opgoeres senere sammen med den vejledende bus soft cap.</div>
+                    <div class="small muted mt4">Internt standardniveau: alternativ transport vurderes senere mod afstandsbaseret soft cap. Udgifter over standardniveau kan kraeve manuel vurdering, men er ikke automatisk afvist.</div>
+                <?php elseif ($isAir): ?>
+                    <div class="small muted mt4">Registrer kun udgifter, der ligger taet paa refusion eller ombooking. Maaltider og hotel hoerer til under assistance.</div>
+                <?php elseif ($isFerry): ?>
+                    <div class="small muted mt4">Ferry-forordningen har ingen fast EUR-cap paa selvbetalt alternativ hovedtransport. Vi registrerer noedvendige og rimelige udgifter og bruger et internt standardniveau paa 150 EUR for taxi og 400 EUR samlet til automatisk vurdering.</div>
+                    <div class="small muted mt4">Hotel/overnatning og transport mellem havn/terminal og hotel hoerer til i TRIN 8 Assistance og skal ikke registreres som ferry Art. 18-merudgift.</div>
+                <?php endif; ?>
+                <div class="grid-2 mt8 <?= $rec==='yes' ? '' : 'hidden' ?>" id="<?= $isAir ? 'airRecWrapPast' : 'recWrapPast' ?>" data-art="18(2)">
+                    <?php if ($isAir): ?>
+                    <div class="grid-span-2">
+                        <div class="small"><strong>Udgiftsposter</strong></div>
+                        <div class="small muted mt4">Tilfoej en eller flere ombookingsnaere udgifter. Brug <strong>+</strong>, hvis du har flere poster.</div>
+                    </div>
+                    <div id="airExpenseItemsPast" class="grid-span-2" style="display:grid;gap:8px;">
+                        <?php foreach ($airExpenseItems as $idx => $item): ?>
+                            <?php
+                                $itemType = (string)($item['type'] ?? '');
+                                $itemAmount = (string)($item['amount'] ?? '');
+                                $itemCurrency = strtoupper(trim((string)($item['currency'] ?? '')));
+                                $itemDescription = (string)($item['description'] ?? '');
+                            ?>
+                            <div class="card air-expense-item" data-air-expense-row="<?= (int)$idx ?>" style="border-color:#d0d7de;background:#fbfcfd;">
+                                <div class="grid-2">
+                                    <label>Hvilken type udgift havde du?
+                                        <select name="air_reroute_expense_items[<?= (int)$idx ?>][type]" data-air-expense-type>
+                                            <option value="">Vaelg</option>
+                                            <option value="new_ticket" <?= $itemType==='new_ticket'?'selected':'' ?>>Ny billet</option>
+                                            <option value="airport_transfer" <?= $itemType==='airport_transfer'?'selected':'' ?>>Transfer til/fra alternativ lufthavn</option>
+                                            <option value="other_transport" <?= $itemType==='other_transport'?'selected':'' ?>>Anden noedvendig transport</option>
+                                            <option value="expensive_solution" <?= $itemType==='expensive_solution'?'selected':'' ?>>Dyrere alternativ loesning</option>
+                                            <option value="other" <?= $itemType==='other'?'selected':'' ?>>Andet</option>
+                                            <?php if ($itemType === 'accommodation'): ?>
+                                                <option value="accommodation" selected>Indkvartering (legacy)</option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </label>
+                                    <label>Bel&oslash;b
+                                        <input type="number" step="0.01" name="air_reroute_expense_items[<?= (int)$idx ?>][amount]" value="<?= h($itemAmount) ?>" />
+                                    </label>
+                                    <label>Valuta
+                                        <select name="air_reroute_expense_items[<?= (int)$idx ?>][currency]">
+                                            <option value="">Auto</option>
+                                            <?php foreach ($currencyOptions as $cc): ?>
+                                                <option value="<?= $cc ?>" <?= $itemCurrency === $cc ? 'selected' : '' ?>><?= $cc ?></option>
+                                            <?php endforeach; ?>
+                                            <?php if ($itemCurrency !== '' && !in_array($itemCurrency, $currencyOptions, true)): ?>
+                                                <option value="<?= h($itemCurrency) ?>" selected><?= h($itemCurrency) ?></option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </label>
+                                    <label class="grid-span-2">Kort beskrivelse (valgfrit)
+                                        <textarea name="air_reroute_expense_items[<?= (int)$idx ?>][description]" rows="2" placeholder="Fx ny billet, transfer, tog eller anden noedvendig ombooking"><?= h($itemDescription) ?></textarea>
+                                    </label>
+                                </div>
+                                <div class="mt8" style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button type="button" class="btn small js-air-expense-remove" <?= count($airExpenseItems) <= 1 ? 'disabled' : '' ?>>Fjern</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="grid-span-2" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button type="button" class="btn small js-air-expense-add">+ Tilfoej udgift</button>
+                        <span class="small muted">Du kan registrere flere billetter, transfers eller andre noedvendige ombookingsudgifter.</span>
+                    </div>
+                    <label class="small grid-span-2">Kvittering(er)
+                        <input type="file" name="air_reroute_expense_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+                        <div class="small muted mt4">Upload evt. en samlet kvittering eller den vigtigste dokumentation her.</div>
+                    </label>
+                    <div id="airAirportTransferWrapPast" class="grid-span-2 card mt8" style="border-color:#d0d7de;background:#f8f9fb;<?= $airHasAirportTransferItem ? '' : 'display:none;' ?>">
+                        <div class="small"><strong>Alternativ lufthavn</strong></div>
+                        <div class="small muted mt4">Vises kun naer transferudgiften handler om en alternativ lufthavn.</div>
+                        <div class="mt8">
+                            <div>Gik ombookingen via en alternativ lufthavn?</div>
+                            <label><input type="radio" name="air_alternative_airport_used" value="yes" <?= $airAlternativeAirportUsed==='yes'?'checked':'' ?> /> Ja</label>
+                            <label class="ml8"><input type="radio" name="air_alternative_airport_used" value="no" <?= $airAlternativeAirportUsed==='no'?'checked':'' ?> /> Nej</label>
+                        </div>
+                        <div class="grid-2 mt8">
+                            <label>Fra hvilken lufthavn?
+                                <input type="text" name="air_alternative_airport_from" value="<?= h($airAlternativeAirportFrom) ?>" />
+                            </label>
+                            <label>Til hvilken lufthavn eller hvilket naerliggende bestemmelsessted?
+                                <input type="text" name="air_alternative_airport_to" value="<?= h($airAlternativeAirportTo) ?>" />
+                            </label>
+                        </div>
+                    </div>
+                    <?php if ($airRerouteExpenseReceipt !== ''): ?><div class="small muted mt4">Uploadet: <?= h(basename($airRerouteExpenseReceipt)) ?></div><?php endif; ?>
+                    <?php else: ?>
                     <label>Hvad var merudgiften knyttet til?
                         <?php $rxt = (string)($form['reroute_extra_costs_type'] ?? ''); ?>
                         <select name="reroute_extra_costs_type">
                             <option value="">Vaelg</option>
                             <option value="new_ticket" <?= $rxt==='new_ticket'?'selected':'' ?>>Ny billet</option>
-                            <option value="higher_class" <?= $rxt==='higher_class'?'selected':'' ?>>H&oslash;jere klasse</option>
-                            <option value="alt_transport" <?= $rxt==='alt_transport'?'selected':'' ?>>Alternativ transport (bus/taxi)</option>
-                            <option value="accommodation" <?= $rxt==='accommodation'?'selected':'' ?>>Indkvartering</option>
+                            <?php if ($isAir): ?>
+                                <option value="alt_transport" <?= $rxt==='alt_transport'?'selected':'' ?>>Alternativ hovedtransport / transfer</option>
+                                <option value="higher_class" <?= $rxt==='higher_class'?'selected':'' ?>>Dyrere alternativ loesning</option>
+                            <?php elseif ($isFerry): ?>
+                                <option value="higher_class" <?= $rxt==='higher_class'?'selected':'' ?>>Dyrere alternativ loesning</option>
+                                <option value="alt_transport" <?= $rxt==='alt_transport'?'selected':'' ?>>Alternativ hovedtransport (tog/bus/taxi)</option>
+                            <?php else: ?>
+                                <option value="higher_class" <?= $rxt==='higher_class'?'selected':'' ?>>H&oslash;jere klasse</option>
+                                <option value="alt_transport" <?= $rxt==='alt_transport'?'selected':'' ?>>Alternativ transport (bus/taxi)</option>
+                                <option value="accommodation" <?= $rxt==='accommodation'?'selected':'' ?>>Indkvartering</option>
+                            <?php endif; ?>
                             <option value="other" <?= $rxt==='other'?'selected':'' ?>>Andet</option>
+                            <?php if ($isAir && $rxt === 'accommodation'): ?>
+                                <option value="accommodation" selected>Indkvartering (legacy)</option>
+                            <?php endif; ?>
                         </select>
                     </label>
                     <label>Bel&oslash;b
@@ -928,13 +1575,41 @@ $preview = round($tp * $rate * $share, 2);
                             <?php endif; ?>
                         </select>
                     </label>
+                    <?php if ($isBus): ?>
+                    <label class="grid-span-2">Beskriv udgiften kort
+                        <textarea name="reroute_extra_costs_description" rows="3" placeholder="Fx ny billet, taxi, lokal transport eller overnatning"><?= h((string)($form['reroute_extra_costs_description'] ?? '')) ?></textarea>
+                    </label>
+                    <label class="small">Kvittering
+                        <input type="file" name="reroute_extra_costs_receipt" accept=".pdf,.jpg,.jpeg,.png" />
+                    </label>
+                    <?php endif; ?>
+                    <?php endif; ?>
                 </div>
+                <?php if ($isBus && ($f = $v('reroute_extra_costs_receipt'))): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+                <?php if ($isFerry && $rec === 'yes'): ?>
+                    <?php
+                        $ferryRecType = strtolower(trim((string)($form['reroute_extra_costs_type'] ?? '')));
+                        $ferryRecAmount = $toEur($form['reroute_extra_costs_amount'] ?? null, (string)($form['reroute_extra_costs_currency'] ?? 'EUR'));
+                        $ferryRecMode = strtolower(trim((string)($form['a18_reroute_mode'] ?? '')));
+                    ?>
+                    <?php if ($ferryRecAmount > 400): ?>
+                        <div class="small mt8" style="background:#fff3cd;padding:8px;border-radius:6px;">
+                            <strong>Kan kraeve manuel vurdering:</strong>
+                            <div class="muted">Selvbetalt alternativ transport over 400 EUR overstiger vores interne standardniveau. Ferry-forordningen har ikke et fast cap, men kravet boer vurderes manuelt.</div>
+                        </div>
+                    <?php elseif (($ferryRecType === 'alt_transport' || $ferryRecMode === 'taxi') && $ferryRecAmount > 150): ?>
+                        <div class="small mt8" style="background:#e7f5ff;padding:8px;border-radius:6px;">
+                            <strong>Internt standardniveau:</strong>
+                            <div class="muted">Taxi over 150 EUR flagges til manuel vurdering. Dette er vores standardniveau, ikke et lovbestemt maksimum.</div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
 
         </div>
     </div>
 
-<?php if (!$showArt183): ?>
+<?php if (!$showArt183 && !$isAir): ?>
         <div class="small mt8" style="background:#fff3cd; padding:6px; border-radius:6px;">&#9888;&#65039; 100-minutters-reglen (Art. 18(3)) er undtaget for denne rejse. Vi skjuler sp&oslash;rgsm&aring;let og anvender alternative vurderinger.</div>
     <?php endif; ?>
 </div>
@@ -944,7 +1619,10 @@ $preview = round($tp * $rate * $share, 2);
 </div>
  <script>
  // TRIN 5 (Art. 18): klientlogik for valg og sektioner
-  (function(){
+ (function(){
+     const isFerryMode = <?= $isFerry ? 'true' : 'false' ?>;
+     const isBusMode = <?= $isBus ? 'true' : 'false' ?>;
+     const isAirMode = <?= $isAir ? 'true' : 'false' ?>;
      const stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
      const stationCountryDefault = <?= json_encode((string)$stationCountryDefault, JSON_UNESCAPED_SLASHES) ?>;
      // Embed as safe JS literal (avoid U+2028/U+2029 breaking scripts; also protect against script-tag injection)
@@ -999,22 +1677,27 @@ $preview = round($tp * $rate * $share, 2);
         if (name === 'remedyChoice') {
             // 100-min question is relevant for both reroute types (b and c); clear only when leaving reroute.
             var vRem = (target.value || '');
-            if (!(vRem === 'reroute_soonest' || vRem === 'reroute_later')) { clearFields(['reroute_info_within_100min']); }
+            if (!(vRem === 'reroute_soonest' || vRem === 'reroute_later')) {
+                clearFields(['reroute_info_within_100min','offer_provided','ferry_offer_provided','ferry_first_usable_solution_timing','ferry_self_arranged_solution','ferry_self_arranged_solution_type','ferry_self_arranged_reason','air_article8_choice_offered','air_self_arranged_reroute','air_self_arranged_reroute_reason','air_airline_confirmed_self_arranged_solution','air_reroute_expenses_incurred','air_reroute_expense_type','air_reroute_expense_amount','air_reroute_expense_currency','air_reroute_expense_description','air_reroute_expense_receipt','air_alternative_airport_used','air_alternative_airport_from','air_alternative_airport_to','air_alternative_airport_transfer_needed','air_alternative_airport_transfer_amount','air_alternative_airport_transfer_currency','air_alternative_airport_transfer_receipt']);
+                if (!(isBusMode && vRem === 'refund_return')) {
+                    clearFields(['carrier_offered_choice']);
+                }
+            }
             if ((target.value || '') !== 'reroute_later') {
                 clearFields(['reroute_later_outcome','reroute_later_self_paid_amount','reroute_later_self_paid_currency','reroute_later_ticket_upload']);
             }
             if (vRem !== 'refund_return') {
-                clearFields(['a18_return_to_station','a18_return_to_station_other']);
+                clearFields(['a18_return_to_station','a18_return_to_station_other','air_refund_scope','air_return_to_first_departure_point']);
             }
         }
-        if (name === 'self_purchased_new_ticket') {
+        if (name === 'self_purchased_new_ticket' || name === 'ferry_self_arranged_solution' || name === 'bus_self_arranged_solution' || name === 'air_self_arranged_reroute') {
             if ((target.value || '') !== 'yes') {
-                clearFields(['self_purchase_reason','self_purchase_approved_by_operator','reroute_info_within_100min']);
+                clearFields(['self_purchase_reason','self_purchase_approved_by_operator','ferry_self_arranged_solution_type','ferry_self_arranged_reason','bus_self_arranged_solution_type','bus_self_arranged_reason','air_self_arranged_reroute_reason','air_airline_confirmed_self_arranged_solution']);
             }
         }
         if (name === 'self_purchase_approved_by_operator') {
             if ((target.value || '') === 'yes') {
-                clearFields(['reroute_info_within_100min']);
+                clearFields(['reroute_info_within_100min','offer_provided','carrier_offered_choice','ferry_offer_provided','ferry_first_usable_solution_timing','air_article8_choice_offered']);
             }
         }
         if (name === 'reroute_later_outcome') {
@@ -1024,12 +1707,36 @@ $preview = round($tp * $rate * $share, 2);
         }
         if (name === 'reroute_extra_costs') {
             if ((target.value || '') !== 'yes') {
-                clearFields(['reroute_extra_costs_type','reroute_extra_costs_amount','reroute_extra_costs_currency']);
+                clearFields(['reroute_extra_costs_type','reroute_extra_costs_amount','reroute_extra_costs_currency','reroute_extra_costs_description','reroute_extra_costs_receipt']);
+            }
+        }
+        if (name === 'air_reroute_expenses_incurred') {
+            if ((target.value || '') !== 'yes') {
+                clearFields([
+                    'air_reroute_expense_type','air_reroute_expense_amount','air_reroute_expense_currency',
+                    'air_reroute_expense_description','air_reroute_expense_receipt',
+                    'air_alternative_airport_used','air_alternative_airport_from','air_alternative_airport_to'
+                ]);
+            }
+        }
+        if (name === 'air_reroute_expense_type') {
+            if ((target.value || '') !== 'airport_transfer') {
+                clearFields(['air_alternative_airport_used','air_alternative_airport_from','air_alternative_airport_to']);
             }
         }
         if (name === 'return_to_origin_expense') {
             if ((target.value || '') !== 'yes') {
                 clearFields(['return_to_origin_amount','return_to_origin_currency','return_to_origin_transport_type','return_to_origin_receipt']);
+            }
+        }
+        if (name === 'air_alternative_airport_transfer_needed') {
+            if ((target.value || '') !== 'yes') {
+                clearFields(['air_alternative_airport_transfer_amount','air_alternative_airport_transfer_currency','air_alternative_airport_transfer_receipt']);
+            }
+        }
+        if (name === 'air_refund_scope') {
+            if ((target.value || '') !== 'unused_plus_used_if_no_longer_serves_purpose') {
+                clearFields(['air_return_to_first_departure_point']);
             }
         }
         // TRIN 6 station context (separate from TRIN 5 "Hvor endte du?")
@@ -1056,6 +1763,19 @@ $preview = round($tp * $rate * $share, 2);
         }
     }
     function s7Update() {
+        function syncOtherStationWraps() {
+            document.querySelectorAll('.other-station-wrap[data-other-select]').forEach(function(wrap){
+                var selectName = wrap.getAttribute('data-other-select') || '';
+                if (!selectName) return;
+                var host = wrap.closest('label') || wrap.parentElement;
+                var sel = host ? host.querySelector('select[name="' + selectName + '"]') : null;
+                if (!sel && wrap.parentElement) {
+                    sel = wrap.parentElement.querySelector('select[name="' + selectName + '"]');
+                }
+                var show = !!sel && (sel.value || '') === 'other';
+                wrap.style.display = show ? '' : 'none';
+            });
+        }
         function setRadio(name, value) {
             var els = document.querySelectorAll('input[name="'+name+'"]');
             els.forEach(function(r){ r.checked = (r.value === value); });
@@ -1106,6 +1826,7 @@ $preview = round($tp * $rate * $share, 2);
                 }
             }
         }
+        syncOtherStationWraps();
         // Feature flags for Art. 18 sections
         var artFlags = (window.__artFlags && window.__artFlags.art) || {};
         var a18On  = !(artFlags.hasOwnProperty('art18') && artFlags['art18'] === false);
@@ -1136,10 +1857,11 @@ $preview = round($tp * $rate * $share, 2);
     var recNow = document.getElementById('recWrapNow');
     var dgcPast = document.getElementById('dgcWrapPast');
     var dgcNow = document.getElementById('dgcWrapNow');
-    var recBlockPast = document.getElementById('recBlockPast');
-    var recBlockNow = document.getElementById('recBlockNow');
-    var dgcBlockPast = document.getElementById('dgcBlockPast');
-    var dgcBlockNow = document.getElementById('dgcBlockNow');
+        var recBlockPast = document.getElementById('recBlockPast');
+        var recBlockNow = document.getElementById('recBlockNow');
+        var offerWrapPast = document.getElementById('offerProvidedWrapPast');
+        var dgcBlockPast = document.getElementById('dgcBlockPast');
+        var dgcBlockNow = document.getElementById('dgcBlockNow');
     // (deferred toggles moved after scenario adjustments)
         if (!a182On) {
             if (recBlockPast) recBlockPast.style.display = 'none';
@@ -1148,10 +1870,15 @@ $preview = round($tp * $rate * $share, 2);
 
         // Art. 18(3) conditional: distinguish who rerouted vs self-purchase
         var ri100El = document.querySelector('input[name="reroute_info_within_100min"]:checked');
-        var ri100 = ri100El ? ri100El.value : '';
-        var selfBuyEl = document.querySelector('input[name="self_purchased_new_ticket"]:checked');
+        var ri100Input = document.querySelector('input[type="hidden"][name="reroute_info_within_100min"]');
+        var ri100 = ri100El ? ri100El.value : ((ri100Input && ri100Input.value) ? ri100Input.value : '');
+        var selfBuyEl = document.querySelector('input[name="' + (isFerryMode ? 'ferry_self_arranged_solution' : (isBusMode ? 'bus_self_arranged_solution' : (isAirMode ? 'air_self_arranged_reroute' : 'self_purchased_new_ticket'))) + '"]:checked');
         var selfBuy = selfBuyEl ? selfBuyEl.value : '';
-        var opApprEl = document.querySelector('input[name="self_purchase_approved_by_operator"]:checked');
+        var offerProvidedEl = document.querySelector('input[name="' + (isFerryMode ? 'ferry_offer_provided' : (isBusMode ? 'carrier_offered_choice' : (isAirMode ? 'air_article8_choice_offered' : 'offer_provided'))) + '"]:checked');
+        var offerProvided = offerProvidedEl ? offerProvidedEl.value : '';
+        var ferryTimingEl = document.querySelector('input[name="ferry_first_usable_solution_timing"]:checked');
+        var ferryTiming = ferryTimingEl ? ferryTimingEl.value : '';
+        var opApprEl = (isFerryMode || isBusMode) ? null : document.querySelector('input[name="' + (isAirMode ? 'air_airline_confirmed_self_arranged_solution' : 'self_purchase_approved_by_operator') + '"]:checked');
     var opAppr = opApprEl ? opApprEl.value : '';
     var riWrapPast = document.getElementById('ri100PastWrap');
     var note100FallbackPast = document.getElementById('note100FallbackPast');
@@ -1160,6 +1887,11 @@ $preview = round($tp * $rate * $share, 2);
     var noteNow = document.getElementById('selfBuyNoteNow');
     var apprPast = document.getElementById('opApprovalWrapPast');
     var apprNow = document.getElementById('opApprovalWrapNow');
+var airApprovalEvidencePast = document.getElementById('airApprovalEvidencePast');
+var airRecWrapPast = document.getElementById('airRecWrapPast');
+var airAirportTransferWrapPast = document.getElementById('airAirportTransferWrapPast');
+var airExpenseItemsPast = document.getElementById('airExpenseItemsPast');
+var airReturnExpenseItemsPast = document.getElementById('airReturnExpenseItemsPast');
 var noteApprovedPast = document.getElementById('noteApprovedPast');
 var noteApprovedNow = document.getElementById('noteApprovedNow');
 var returnPast = document.getElementById('returnExpensePast');
@@ -1197,6 +1929,75 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             if (disabled) { el.classList.add('disabled-block'); el.setAttribute('aria-disabled','true'); }
             else { el.classList.remove('disabled-block'); el.removeAttribute('aria-disabled'); }
         }
+        function updateAirExpenseRowButtons() {
+            if (!airExpenseItemsPast) return;
+            var rows = airExpenseItemsPast.querySelectorAll('[data-air-expense-row]');
+            rows.forEach(function(row){
+                var btn = row.querySelector('.js-air-expense-remove');
+                if (btn) btn.disabled = rows.length <= 1;
+            });
+        }
+        function reindexAirExpenseRows() {
+            if (!airExpenseItemsPast) return;
+            airExpenseItemsPast.querySelectorAll('[data-air-expense-row]').forEach(function(row, idx){
+                row.setAttribute('data-air-expense-row', String(idx));
+                row.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field){
+                    var name = field.getAttribute('name') || '';
+                    field.setAttribute('name', name.replace(/air_reroute_expense_items\[\d+\]/, 'air_reroute_expense_items[' + idx + ']'));
+                });
+            });
+            updateAirExpenseRowButtons();
+        }
+        function hasAirAirportTransferItem() {
+            if (!airExpenseItemsPast) return false;
+            return Array.prototype.some.call(
+                airExpenseItemsPast.querySelectorAll('[data-air-expense-type]'),
+                function(el){ return (el.value || '') === 'airport_transfer'; }
+            );
+        }
+        function addAirExpenseRow() {
+            if (!airExpenseItemsPast) return;
+            var rows = airExpenseItemsPast.querySelectorAll('[data-air-expense-row]');
+            var source = rows.length ? rows[rows.length - 1] : null;
+            if (!source) return;
+            var clone = source.cloneNode(true);
+            clone.querySelectorAll('select, input[type="number"], textarea').forEach(function(field){
+                field.value = '';
+            });
+            airExpenseItemsPast.appendChild(clone);
+            reindexAirExpenseRows();
+        }
+        function updateAirReturnRowButtons() {
+            if (!airReturnExpenseItemsPast) return;
+            var rows = airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]');
+            rows.forEach(function(row){
+                var btn = row.querySelector('.js-air-return-remove');
+                if (btn) btn.disabled = rows.length <= 1;
+            });
+        }
+        function reindexAirReturnRows() {
+            if (!airReturnExpenseItemsPast) return;
+            airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]').forEach(function(row, idx){
+                row.setAttribute('data-air-return-row', String(idx));
+                row.querySelectorAll('input[name], select[name]').forEach(function(field){
+                    var name = field.getAttribute('name') || '';
+                    field.setAttribute('name', name.replace(/air_return_expense_items\[\d+\]/, 'air_return_expense_items[' + idx + ']'));
+                });
+            });
+            updateAirReturnRowButtons();
+        }
+        function addAirReturnRow() {
+            if (!airReturnExpenseItemsPast) return;
+            var rows = airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]');
+            var source = rows.length ? rows[rows.length - 1] : null;
+            if (!source) return;
+            var clone = source.cloneNode(true);
+            clone.querySelectorAll('select, input[type="number"]').forEach(function(field){
+                field.value = '';
+            });
+            airReturnExpenseItemsPast.appendChild(clone);
+            reindexAirReturnRows();
+        }
 
         // Progressive ask-order: show one question at a time (do not clear previous answers).
         var step2Past = document.getElementById('step2Past');
@@ -1221,9 +2022,113 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
 
         // If not in reroute/refund, nothing to show.
         var isReroute = (val === 'reroute_soonest' || val === 'reroute_later');
+        var busSimpleReroute = isBusMode && isReroute;
+        var airReroute = isAirMode && isReroute;
+        if (isFerryMode && ri100Input) {
+            if (ferryTiming === 'before_departure' || ferryTiming === 'within_30' || ferryTiming === '30_90') {
+                ri100Input.value = 'yes';
+            } else if (ferryTiming === 'after_90' || ferryTiming === 'none') {
+                ri100Input.value = 'no';
+            } else if (ferryTiming === 'unknown') {
+                ri100Input.value = 'unknown';
+            } else {
+                ri100Input.value = '';
+            }
+            ri100 = ri100Input.value || '';
+        } else if (isBusMode && ri100Input) {
+            if (offerProvided === 'yes') {
+                ri100Input.value = 'yes';
+            } else if (offerProvided === 'no') {
+                ri100Input.value = 'no';
+            } else if (offerProvided === 'unknown') {
+                ri100Input.value = 'unknown';
+            } else {
+                ri100Input.value = '';
+            }
+            ri100 = ri100Input.value || '';
+        }
         if (!isReroute) {
             // Refund flow is handled by returnExpensePast toggles above.
             if (live) { live.textContent = 'TRIN 7: ikke-omlaegning'; }
+        } else if (busSimpleReroute) {
+            if (live) { live.textContent = 'TRIN 7: bus-omlaegning'; }
+            if (a182On) {
+                showBlock(recBlockPast);
+                showBlock(recBlockNow);
+            }
+        } else if (isAirMode) {
+            var rtValAir = (document.querySelector('input[name="return_to_origin_expense"]:checked') || {}).value || '';
+            var rtPastFieldsAir = document.getElementById('returnExpenseFieldsPast');
+            var rtNowFieldsAir = document.getElementById('returnExpenseFieldsNow');
+            var showRtAir = (rtValAir === 'yes');
+            if (rtPastFieldsAir) { rtPastFieldsAir.style.display = showRtAir ? '' : 'none'; }
+            if (rtNowFieldsAir) { rtNowFieldsAir.style.display = showRtAir ? '' : 'none'; }
+            if (offerWrapPast) {
+                if (isReroute) {
+                    offerWrapPast.hidden = false;
+                    offerWrapPast.style.display = '';
+                } else {
+                    offerWrapPast.hidden = true;
+                    offerWrapPast.style.display = 'none';
+                }
+            }
+            hideBlock(riWrapPast);
+            hideBlock(apprPast);
+            hideBlock(apprNow);
+            if (note100FallbackPast) note100FallbackPast.style.display = 'none';
+            if (note100ManualPast) note100ManualPast.style.display = 'none';
+            if (notePast) notePast.style.display = 'none';
+            if (noteNow) noteNow.style.display = 'none';
+            if (recBlockNow) recBlockNow.style.display = 'none';
+
+            if (!isReroute) {
+                hideBlock(step2Past);
+                hideBlock(laterOutcomePast);
+                hideBlock(laterTicket);
+                hideBlock(recBlockPast);
+                if (airApprovalEvidencePast) hideBlock(airApprovalEvidencePast);
+                if (airRecWrapPast) airRecWrapPast.style.display = 'none';
+                if (airAirportTransferWrapPast) airAirportTransferWrapPast.style.display = 'none';
+                if (live) { live.textContent = 'TRIN 7: air refund/ikke-omlaegning'; }
+                return;
+            }
+
+            showBlock(step2Past);
+            if (val === 'reroute_later') {
+                showBlock(laterOutcomePast);
+            } else {
+                hideBlock(laterOutcomePast);
+            }
+            var rloAirEl = document.querySelector('input[name="reroute_later_outcome"]:checked');
+            var rloAir = rloAirEl ? (rloAirEl.value || '') : '';
+            if (laterTicket) {
+                if (val === 'reroute_later' && rloAir === 'self_bought') { showBlock(laterTicket); }
+                else { hideBlock(laterTicket); }
+            }
+            if (airApprovalEvidencePast) {
+                if (selfBuy === 'yes') { showBlock(airApprovalEvidencePast); }
+                else { hideBlock(airApprovalEvidencePast); }
+            }
+
+            var airExpenseGate = !!(a182On && (selfBuy === 'yes' || offerProvided === 'no'));
+            if (airExpenseGate) { showBlock(recBlockPast); }
+            else { hideBlock(recBlockPast); }
+
+            var airExpEl = document.querySelector('input[name="air_reroute_expenses_incurred"]:checked');
+            var airExpVal = airExpEl ? airExpEl.value : '';
+            if (airRecWrapPast) {
+                airRecWrapPast.style.display = (airExpenseGate && airExpVal === 'yes') ? '' : 'none';
+            }
+            if (airAirportTransferWrapPast) {
+                airAirportTransferWrapPast.style.display = (airExpenseGate && airExpVal === 'yes' && hasAirAirportTransferItem()) ? '' : 'none';
+            }
+            if (live) {
+                if (!offerProvided) live.textContent = 'TRIN 7: afventer article 8-valg';
+                else if (!selfBuy) live.textContent = 'TRIN 7: afventer om du selv maatte finde en loesning';
+                else if (airExpenseGate && !airExpVal) live.textContent = 'TRIN 7: afventer om du havde reroute-udgifter';
+                else live.textContent = 'TRIN 7: air-omlaegning';
+            }
+            return;
         } else {
             // Progressive reveal for reroute paths.
             // 1) Ask whether user self-purchased a new ticket (Art.18(3) trigger).
@@ -1233,11 +2138,18 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 var offProvPast = document.getElementById('offerProvidedWrapPast');
                 if (offProvPast) offProvPast.hidden = false;
                 if (live) { live.textContent = 'TRIN 7: afventer omlaegningstilbud'; }
+            } else if (isAirMode && !offerProvided) {
+                showBlock(riWrapPast);
+                if (live) { live.textContent = 'TRIN 7: afventer article 8-valg'; }
+            } else if (isAirMode && !selfBuy) {
+                showBlock(riWrapPast);
+                showBlock(step2Past);
+                if (live) { live.textContent = 'TRIN 7: afventer om du selv maatte arrangere ombooking'; }
             } else if (!selfBuy) {
                 if (live) { live.textContent = 'TRIN 7: afventer selvkoeb'; }
             } else {
                 // For reroute_later, keep the extra outcome question, but only after self-purchase reason is selected (single-question feel).
-                var sprSel = document.querySelector('select[name=\"self_purchase_reason\"]');
+                var sprSel = document.querySelector('select[name=\"' + (isFerryMode ? 'ferry_self_arranged_reason' : (isBusMode ? 'bus_self_arranged_reason' : (isAirMode ? 'air_self_arranged_reroute_reason' : 'self_purchase_reason'))) + '\"]');
                 var spr = sprSel ? (sprSel.value || '') : '';
                 var stop = false;
                 if (val === 'reroute_later') {
@@ -1260,20 +2172,38 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 }
 
                 // 2) Ask operator approval when self purchase = yes (preapproval pathway).
-                if (!stop && selfBuy === 'yes') {
+                if (!stop && selfBuy === 'yes' && !isFerryMode) {
                     showBlock(apprPast);
-                    if (!opAppr) {
+                    if (!isAirMode && !opAppr) {
                         if (live) { live.textContent = 'TRIN 7: afventer godkendelse'; }
                         stop = true;
                     }
                 }
 
-                // 3) Ask 100-min only when self purchase=yes and operator not preapproved.
-                var needRi = a183On && isReroute && (selfBuy === 'yes') && (opAppr !== 'yes');
+                // 3) Ask the key follow-up field for reroute handling.
+                var needRi = isAirMode
+                    ? (a183On && isReroute && (selfBuy === 'yes'))
+                    : (isFerryMode
+                    ? (a183On && isReroute && (selfBuy === 'yes'))
+                    : (a183On && isReroute && (selfBuy === 'yes') && (opAppr !== 'yes')));
                 if (!stop && needRi) {
                     showBlock(riWrapPast);
-                    if (!ri100) {
-                        if (live) { live.textContent = 'TRIN 7: afventer 100-min'; }
+                    if (isFerryMode) {
+                        if (!offerProvided) {
+                            if (live) { live.textContent = 'TRIN 7: afventer tilbud om videre rejse'; }
+                            stop = true;
+                        } else if (!ferryTiming) {
+                            if (live) { live.textContent = 'TRIN 7: afventer tidspunkt for foerste brugbare loesning'; }
+                            stop = true;
+                        }
+                    } else if (isBusMode && !offerProvided) {
+                        if (live) { live.textContent = 'TRIN 7: afventer om operatoeren gav valget'; }
+                        stop = true;
+                    } else if (isAirMode && !offerProvided) {
+                        if (live) { live.textContent = 'TRIN 7: afventer article 8-valg'; }
+                        stop = true;
+                    } else if (!isBusMode && !ri100) {
+                        if (live) { live.textContent = isAirMode ? 'TRIN 7: afventer article 8-valg' : 'TRIN 7: afventer 100-min'; }
                         stop = true;
                     }
                 }
@@ -1285,26 +2215,54 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 }
             }
         }
-        if (note100FallbackPast) note100FallbackPast.style.display = 'none';
-        if (note100ManualPast) note100ManualPast.style.display = 'none';
-        if (a183On && (val === 'reroute_soonest' || val === 'reroute_later') && (selfBuy === 'yes') && (opAppr !== 'yes')) {
-            if (ri100 === 'no' && note100FallbackPast) note100FallbackPast.style.display = '';
-            if (ri100 === 'yes' && note100ManualPast) note100ManualPast.style.display = '';
+        if (airReroute && a182On) {
+            showBlock(recBlockPast);
+            showBlock(recBlockNow);
         }
+        if (busSimpleReroute) {
+            if (note100FallbackPast) note100FallbackPast.style.display = (offerProvided === 'no') ? '' : 'none';
+            if (note100ManualPast) note100ManualPast.style.display = (offerProvided === 'yes') ? '' : 'none';
+            if (notePast) notePast.style.display = (selfBuy === 'yes' && offerProvided === 'yes') ? '' : 'none';
+            if (noteNow) noteNow.style.display = 'none';
+            hideBlock(apprPast);
+            hideBlock(apprNow);
+            hideBlock(riWrapPast);
+            disableGroup('reroute_extra_costs', false);
+            disableGroup('downgrade_occurred', false);
+            setBlockDisabled('recBlockPast', false);
+            setBlockDisabled('recBlockNow', false);
+            setBlockDisabled('dgcBlockPast', false);
+            setBlockDisabled('dgcBlockNow', false);
+            if (noteApprovedPast) noteApprovedPast.style.display='none';
+            if (noteApprovedNow) noteApprovedNow.style.display='none';
+        } else {
+            if (note100FallbackPast) note100FallbackPast.style.display = 'none';
+            if (note100ManualPast) note100ManualPast.style.display = 'none';
+            if (isAirMode && (val === 'reroute_soonest' || val === 'reroute_later') && (selfBuy === 'yes')) {
+                if (offerProvided === 'no') {
+                    if (!recVal || recVal === 'unknown') { setRadio('reroute_extra_costs', 'yes'); }
+                    if (note100FallbackPast) note100FallbackPast.style.display = '';
+                } else if (offerProvided === 'yes') {
+                    if (note100ManualPast) note100ManualPast.style.display = '';
+                }
+            } else if (a183On && (val === 'reroute_soonest' || val === 'reroute_later') && (selfBuy === 'yes') && (opAppr !== 'yes')) {
+                if (ri100 === 'no' && note100FallbackPast) note100FallbackPast.style.display = '';
+                if (ri100 === 'yes' && note100ManualPast) note100ManualPast.style.display = '';
+            }
 
-        // Reset any prior locks (ensures toggling between scenarios clears stale states)
-        disableGroup('reroute_extra_costs', false);
-        disableGroup('downgrade_occurred', false);
-        setBlockDisabled('recBlockPast', false);
-        setBlockDisabled('recBlockNow', false);
-        setBlockDisabled('dgcBlockPast', false);
-        setBlockDisabled('dgcBlockNow', false);
+            // Reset any prior locks (ensures toggling between scenarios clears stale states)
+            disableGroup('reroute_extra_costs', false);
+            disableGroup('downgrade_occurred', false);
+            setBlockDisabled('recBlockPast', false);
+            setBlockDisabled('recBlockNow', false);
+            setBlockDisabled('dgcBlockPast', false);
+            setBlockDisabled('dgcBlockNow', false);
 
-        // Reset approval UI first (keep class/hidden attribute in sync with progressive reveal)
-        if (selfBuy === 'yes') { showBlock(apprPast); showBlock(apprNow); }
-        else { hideBlock(apprPast); hideBlock(apprNow); }
-        if (noteApprovedPast) noteApprovedPast.style.display='none';
-        if (noteApprovedNow) noteApprovedNow.style.display='none';
+            // Reset approval UI first (keep class/hidden attribute in sync with progressive reveal)
+            if (selfBuy === 'yes') { showBlock(apprPast); showBlock(apprNow); }
+            else { hideBlock(apprPast); hideBlock(apprNow); }
+            if (noteApprovedPast) noteApprovedPast.style.display='none';
+            if (noteApprovedNow) noteApprovedNow.style.display='none';
         // Return-to-origin expense fields toggle (shared radio group)
         var rtVal = (document.querySelector('input[name="return_to_origin_expense"]:checked') || {}).value || '';
         var rtPastFields = document.getElementById('returnExpenseFieldsPast');
@@ -1313,106 +2271,116 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         if (rtPastFields) { rtPastFields.style.display = showRt ? '' : 'none'; }
         if (rtNowFields) { rtNowFields.style.display = showRt ? '' : 'none'; }
 
-        // Scenario logic differs when Art. 18(3) OFF:
-        // OFF: extra costs only if selfBuy==yes AND operator approved (opAppr==yes). Downgrade always shown for reroute.
-        // ON: retain legacy 100-min branching (C/A/B cases).
-        var isReroute = (val === 'reroute_soonest' || val === 'reroute_later');
-        if (a183On) {
-            // Scenario C: offered within 100 AND self purchased
-            if (isReroute && ri100 === 'yes' && selfBuy === 'yes') {
-                if (opAppr === 'yes') {
-                    // Operator approved self-purchase: allow extra costs to be claimed; keep downgrade off
-                    if (!recVal || recVal === 'unknown') { setRadio('reroute_extra_costs', 'yes'); }
+            // Scenario logic differs when Art. 18(3) OFF:
+            // OFF: extra costs only if selfBuy==yes AND operator approved (opAppr==yes). Downgrade always shown for reroute.
+            // ON: retain legacy 100-min branching (C/A/B cases).
+            var isReroute = (val === 'reroute_soonest' || val === 'reroute_later');
+            if (a183On) {
+                if (isAirMode && isReroute && selfBuy === 'yes') {
                     disableGroup('reroute_extra_costs', false);
                     setBlockDisabled('recBlockPast', false);
                     setBlockDisabled('recBlockNow', false);
-                    setRadio('downgrade_occurred', 'no');
-                    disableGroup('downgrade_occurred', true);
-                    setBlockDisabled('dgcBlockPast', true);
-                    setBlockDisabled('dgcBlockNow', true);
-                    if (dgcPast) dgcPast.style.display = 'none';
-                    if (dgcNow) dgcNow.style.display = 'none';
                     if (notePast) notePast.style.display = 'none';
                     if (noteNow) noteNow.style.display = 'none';
-                } else {
-                    // Self-purchase without approval when reroute was offered -> lock out extra costs
-                    setRadio('reroute_extra_costs', 'no');
-                    disableGroup('reroute_extra_costs', true); // locked
-                    setBlockDisabled('recBlockPast', true);
-                    setBlockDisabled('recBlockNow', true);
-                    setRadio('downgrade_occurred', 'no');
-                    disableGroup('downgrade_occurred', true);
-                    setBlockDisabled('dgcBlockPast', true);
-                    setBlockDisabled('dgcBlockNow', true);
-                    if (dgcPast) dgcPast.style.display = 'none';
-                    if (dgcNow) dgcNow.style.display = 'none';
-                    if (notePast) notePast.style.display = '';
-                    if (noteNow) noteNow.style.display = '';
                 }
-            }
-            // Scenario A: NOT offered within 100 AND self purchased -> extra costs allowed; hide downgrade
-            else if (isReroute && (ri100 === 'no') && selfBuy === 'yes') {
-            setRadio('reroute_extra_costs', 'yes');
-            disableGroup('reroute_extra_costs', false); // user can edit amount
-            setBlockDisabled('recBlockPast', false);
-            setBlockDisabled('recBlockNow', false);
-            setRadio('downgrade_occurred', 'no');
-            disableGroup('downgrade_occurred', true);
-            setBlockDisabled('dgcBlockPast', true);
-            setBlockDisabled('dgcBlockNow', true);
-            if (dgcPast) dgcPast.style.display = 'none';
-            if (dgcNow) dgcNow.style.display = 'none';
-            if (notePast) notePast.style.display = 'none';
-            if (noteNow) noteNow.style.display = 'none';
-            }
-            // Scenario B: offered within 100 AND did not self purchase -> default no extra costs; show downgrade
-            else if (isReroute && ri100 === 'yes' && (selfBuy === 'no')) {
-            // Default only if user hasn't chosen yet (or chose 'unknown'); don't override an explicit Yes/No selection
-            if (!recVal || recVal === 'unknown') {
-                setRadio('reroute_extra_costs', 'no');
-            }
-            disableGroup('reroute_extra_costs', false);
-            setBlockDisabled('recBlockPast', false);
-            setBlockDisabled('recBlockNow', false);
-            disableGroup('downgrade_occurred', false);
-            setBlockDisabled('dgcBlockPast', false);
-            setBlockDisabled('dgcBlockNow', false);
-            if (notePast) notePast.style.display = 'none';
-            if (noteNow) noteNow.style.display = 'none';
-                // downgrade question remains visible based on user's choice
-            } else {
-                // fallback: keep groups enabled and notes hidden
-                disableGroup('reroute_extra_costs', false);
-                disableGroup('downgrade_occurred', false);
+                // Scenario C: offered within 100 AND self purchased
+                else if (isReroute && ri100 === 'yes' && selfBuy === 'yes') {
+                    if (!isFerryMode && opAppr === 'yes') {
+                        // Operator approved self-purchase: allow extra costs to be claimed; keep downgrade off
+                        if (!recVal || recVal === 'unknown') { setRadio('reroute_extra_costs', 'yes'); }
+                        disableGroup('reroute_extra_costs', false);
+                        setBlockDisabled('recBlockPast', false);
+                        setBlockDisabled('recBlockNow', false);
+                        setRadio('downgrade_occurred', 'no');
+                        disableGroup('downgrade_occurred', true);
+                        setBlockDisabled('dgcBlockPast', true);
+                        setBlockDisabled('dgcBlockNow', true);
+                        if (dgcPast) dgcPast.style.display = 'none';
+                        if (dgcNow) dgcNow.style.display = 'none';
+                        if (notePast) notePast.style.display = 'none';
+                        if (noteNow) noteNow.style.display = 'none';
+                    } else {
+                        // Self-purchase without approval when reroute was offered -> lock out extra costs
+                        setRadio('reroute_extra_costs', 'no');
+                        disableGroup('reroute_extra_costs', true); // locked
+                        setBlockDisabled('recBlockPast', true);
+                        setBlockDisabled('recBlockNow', true);
+                        setRadio('downgrade_occurred', 'no');
+                        disableGroup('downgrade_occurred', true);
+                        setBlockDisabled('dgcBlockPast', true);
+                        setBlockDisabled('dgcBlockNow', true);
+                        if (dgcPast) dgcPast.style.display = 'none';
+                        if (dgcNow) dgcNow.style.display = 'none';
+                        if (notePast) notePast.style.display = '';
+                        if (noteNow) noteNow.style.display = '';
+                    }
+                }
+                // Scenario A: NOT offered within 100 AND self purchased -> extra costs allowed; hide downgrade
+                else if (isReroute && (ri100 === 'no') && selfBuy === 'yes') {
+                setRadio('reroute_extra_costs', 'yes');
+                disableGroup('reroute_extra_costs', false); // user can edit amount
                 setBlockDisabled('recBlockPast', false);
                 setBlockDisabled('recBlockNow', false);
+                setRadio('downgrade_occurred', 'no');
+                disableGroup('downgrade_occurred', true);
+                setBlockDisabled('dgcBlockPast', true);
+                setBlockDisabled('dgcBlockNow', true);
+                if (dgcPast) dgcPast.style.display = 'none';
+                if (dgcNow) dgcNow.style.display = 'none';
+                if (notePast) notePast.style.display = 'none';
+                if (noteNow) noteNow.style.display = 'none';
+                }
+                // Scenario B: offered within 100 AND did not self purchase -> default no extra costs; show downgrade
+                else if (isReroute && ri100 === 'yes' && (selfBuy === 'no')) {
+                // Default only if user hasn't chosen yet (or chose 'unknown'); don't override an explicit Yes/No selection
+                if (!recVal || recVal === 'unknown') {
+                    setRadio('reroute_extra_costs', 'no');
+                }
+                disableGroup('reroute_extra_costs', false);
+                setBlockDisabled('recBlockPast', false);
+                setBlockDisabled('recBlockNow', false);
+                disableGroup('downgrade_occurred', false);
                 setBlockDisabled('dgcBlockPast', false);
                 setBlockDisabled('dgcBlockNow', false);
                 if (notePast) notePast.style.display = 'none';
                 if (noteNow) noteNow.style.display = 'none';
-            }
-        } else {
-            // OFF variant
-            if (selfBuy === 'yes') {
-                if (opAppr === 'yes') {
-                    // Allow extra costs
+                    // downgrade question remains visible based on user's choice
+                } else {
+                    // fallback: keep groups enabled and notes hidden
+                    disableGroup('reroute_extra_costs', false);
+                    disableGroup('downgrade_occurred', false);
+                    setBlockDisabled('recBlockPast', false);
+                    setBlockDisabled('recBlockNow', false);
+                    setBlockDisabled('dgcBlockPast', false);
+                    setBlockDisabled('dgcBlockNow', false);
+                    if (notePast) notePast.style.display = 'none';
+                    if (noteNow) noteNow.style.display = 'none';
+                }
+            } else {
+                // OFF variant
+                if (selfBuy === 'yes') {
+                    if (isAirMode || opAppr === 'yes') {
+                        // Allow extra costs
+                        disableGroup('reroute_extra_costs', false);
+                        setBlockDisabled('recBlockPast', false);
+                        setBlockDisabled('recBlockNow', false);
+                        if (!isAirMode) {
+                            if (noteApprovedPast) noteApprovedPast.style.display='';
+                            if (noteApprovedNow) noteApprovedNow.style.display='';
+                        }
+                    } else {
+                        // Force no extra costs
+                        setRadio('reroute_extra_costs','no');
+                        disableGroup('reroute_extra_costs', true);
+                        setBlockDisabled('recBlockPast', true);
+                        setBlockDisabled('recBlockNow', true);
+                    }
+                } else {
+                    // Not self purchase: keep groups available (user may be downgraded)
                     disableGroup('reroute_extra_costs', false);
                     setBlockDisabled('recBlockPast', false);
                     setBlockDisabled('recBlockNow', false);
-                    if (noteApprovedPast) noteApprovedPast.style.display='';
-                    if (noteApprovedNow) noteApprovedNow.style.display='';
-                } else {
-                    // Force no extra costs
-                    setRadio('reroute_extra_costs','no');
-                    disableGroup('reroute_extra_costs', true);
-                    setBlockDisabled('recBlockPast', true);
-                    setBlockDisabled('recBlockNow', true);
                 }
-            } else {
-                // Not self purchase: keep groups available (user may be downgraded)
-                disableGroup('reroute_extra_costs', false);
-                setBlockDisabled('recBlockPast', false);
-                setBlockDisabled('recBlockNow', false);
             }
         }
 
@@ -2336,6 +3304,22 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             window.__artFlags.art = <?= json_encode($profile['articles'] ?? []) ?>;
             window.__artFlags.scope = <?= json_encode($profile['scope'] ?? '') ?>;
         } catch(e) { /* no-op */ }
+        if (isAirMode) {
+            var airArticle8Wrap = document.getElementById('ri100PastWrap');
+            var airSelfArrangedWrap = document.getElementById('step2Past');
+            var airApprovalWrap = document.getElementById('opApprovalWrapPast');
+            var airExtraCostsWrap = document.getElementById('recBlockPast');
+            var airAltAirportCard = document.getElementById('airAlternativeAirportCard');
+            if (airArticle8Wrap && airSelfArrangedWrap && airSelfArrangedWrap.parentNode === airArticle8Wrap.parentNode) {
+                airSelfArrangedWrap.parentNode.insertBefore(airArticle8Wrap, airSelfArrangedWrap);
+            }
+            if (airApprovalWrap && airSelfArrangedWrap && airExtraCostsWrap && airExtraCostsWrap.parentNode === airSelfArrangedWrap.parentNode) {
+                airSelfArrangedWrap.parentNode.insertBefore(airApprovalWrap, airExtraCostsWrap);
+            }
+            if (airAltAirportCard && airExtraCostsWrap && airAltAirportCard.parentNode === airExtraCostsWrap.parentNode) {
+                airExtraCostsWrap.parentNode.insertBefore(airAltAirportCard, airExtraCostsWrap.nextSibling);
+            }
+        }
         updateReveal();
         s7Update();
         initStationAutocomplete();
@@ -2345,9 +3329,58 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
         mapsInitTrin7Refund(savedMapsTrin7);
         try { syncMapsTrin6FromStations(); } catch(e) { /* ignore */ }
         try { syncMapsTrin7RefundFromStations(); } catch(e) { /* ignore */ }
-        document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"]').forEach(function(el){
+        document.querySelectorAll('input[name="remedyChoice"], input[name="reroute_later_outcome"], input[name="return_to_origin_expense"], input[name="reroute_extra_costs"], input[name="air_reroute_expenses_incurred"], input[name="downgrade_occurred"], input[name="reroute_info_within_100min"], input[name="carrier_offered_choice"], input[name="self_purchased_new_ticket"], input[name="self_purchase_approved_by_operator"], input[name="offer_provided"], input[name="ferry_offer_provided"], input[name="ferry_first_usable_solution_timing"], input[name="ferry_self_arranged_solution"], input[name="bus_self_arranged_solution"], input[name="air_article8_choice_offered"], input[name="air_self_arranged_reroute"], input[name="air_airline_confirmed_self_arranged_solution"], input[name="air_alternative_airport_transfer_needed"], input[name="air_alternative_airport_used"], input[name="air_return_to_first_departure_point"], select[name="self_purchase_reason"], select[name="ferry_self_arranged_reason"], select[name="ferry_self_arranged_solution_type"], select[name="bus_self_arranged_reason"], select[name="bus_self_arranged_solution_type"], select[name="air_self_arranged_reroute_reason"], select[name="air_refund_scope"], select[name="air_reroute_expense_type"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, s7Update); });
         });
+        document.querySelectorAll('.js-air-expense-add').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                addAirExpenseRow();
+                s7Update();
+            });
+        });
+        document.querySelectorAll('.js-air-return-add').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                addAirReturnRow();
+                s7Update();
+            });
+        });
+        document.addEventListener('click', function(ev){
+            var btn = ev.target.closest('.js-air-expense-remove');
+            if (btn && airExpenseItemsPast) {
+                ev.preventDefault();
+                var rows = airExpenseItemsPast.querySelectorAll('[data-air-expense-row]');
+                if (rows.length > 1) {
+                    var row = btn.closest('[data-air-expense-row]');
+                    if (row) {
+                        row.remove();
+                        reindexAirExpenseRows();
+                        s7Update();
+                    }
+                }
+                return;
+            }
+            var returnBtn = ev.target.closest('.js-air-return-remove');
+            if (!returnBtn || !airReturnExpenseItemsPast) return;
+            ev.preventDefault();
+            var returnRows = airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]');
+            if (returnRows.length <= 1) return;
+            var returnRow = returnBtn.closest('[data-air-return-row]');
+            if (!returnRow) return;
+            returnRow.remove();
+            reindexAirReturnRows();
+            s7Update();
+        });
+        document.addEventListener('change', function(ev){
+            var target = ev.target;
+            if (target && target.matches('[data-air-expense-type]')) {
+                if (!hasAirAirportTransferItem()) {
+                    clearFields(['air_alternative_airport_used','air_alternative_airport_from','air_alternative_airport_to']);
+                }
+                s7Update();
+            }
+        });
+        updateAirExpenseRowButtons();
+        updateAirReturnRowButtons();
         function syncModeRemedyAliases(){
             var ferryChoice = document.querySelector('input[name="ferry_remedy_choice"]');
             var busChoice = document.querySelector('input[name="bus_remedy_choice"]');
@@ -2373,13 +3406,13 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             if (ferryReturnExp) { ferryReturnExp.value = rtVal; }
             if (busReturnExp) { busReturnExp.value = rtVal; }
             var rtAmt = document.querySelector('input[name="return_to_origin_amount"]');
-            var rtCur = document.querySelector('input[name="return_to_origin_currency"]');
+            var rtCur = document.querySelector('[name="return_to_origin_currency"]');
             if (ferryReturnAmt) { ferryReturnAmt.value = rtAmt ? (rtAmt.value || '') : ''; }
             if (ferryReturnCur) { ferryReturnCur.value = rtCur ? (rtCur.value || '') : ''; }
             if (busReturnAmt) { busReturnAmt.value = rtAmt ? (rtAmt.value || '') : ''; }
             if (busReturnCur) { busReturnCur.value = rtCur ? (rtCur.value || '') : ''; }
         }
-        document.querySelectorAll('input[name="remedyChoice"], input[name="return_to_origin_expense"], input[name="return_to_origin_amount"], input[name="return_to_origin_currency"]').forEach(function(el){
+        document.querySelectorAll('input[name="remedyChoice"], input[name="return_to_origin_expense"], input[name="return_to_origin_amount"], [name="return_to_origin_currency"]').forEach(function(el){
             ['change','click','input'].forEach(function(ev){ el.addEventListener(ev, syncModeRemedyAliases); });
         });
     // (No class/reservation fields in TRIN 5 now)

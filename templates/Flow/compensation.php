@@ -100,6 +100,72 @@ $returnAmt = is_numeric($form['return_to_origin_amount'] ?? null)
     : (float)preg_replace('/[^0-9.]/', '', (string)($form['return_to_origin_amount'] ?? '0'));
 $returnCur = (string)($form['return_to_origin_currency'] ?? $priceCurrency);
 if ($returnCur === '') { $returnCur = $priceCurrency; }
+$airAltAirportTransferAmt = is_numeric($form['air_alternative_airport_transfer_amount'] ?? null)
+    ? (float)$form['air_alternative_airport_transfer_amount']
+    : (float)preg_replace('/[^0-9.]/', '', (string)($form['air_alternative_airport_transfer_amount'] ?? '0'));
+$airAltAirportTransferCur = (string)($form['air_alternative_airport_transfer_currency'] ?? $priceCurrency);
+if ($airAltAirportTransferCur === '') { $airAltAirportTransferCur = $priceCurrency; }
+$airRerouteExpenseFlag = (string)($form['air_reroute_expenses_incurred'] ?? ($form['reroute_extra_costs'] ?? ''));
+$airRerouteExpenseType = (string)($form['air_reroute_expense_type'] ?? '');
+$airRerouteExpenseAmount = is_numeric($form['air_reroute_expense_amount'] ?? null)
+    ? (float)$form['air_reroute_expense_amount']
+    : (float)preg_replace('/[^0-9.]/', '', (string)($form['air_reroute_expense_amount'] ?? '0'));
+$airRerouteExpenseCur = (string)($form['air_reroute_expense_currency'] ?? $priceCurrency);
+if ($airRerouteExpenseCur === '') { $airRerouteExpenseCur = $priceCurrency; }
+$airRerouteExpenseDescription = (string)($form['air_reroute_expense_description'] ?? '');
+$airAlternativeAirportUsed = (string)($form['air_alternative_airport_used'] ?? '');
+$airRerouteExpenseTypeLabel = match ($airRerouteExpenseType) {
+    'new_ticket' => 'Ny billet',
+    'airport_transfer' => 'Transfer til/fra alternativ lufthavn',
+    'other_transport' => 'Anden noedvendig transport',
+    'expensive_solution' => 'Dyrere alternativ loesning',
+    'accommodation' => 'Indkvartering (legacy)',
+    'other' => 'Andet',
+    default => $airRerouteExpenseType,
+};
+$airRerouteExpenseItems = [];
+foreach ((array)($form['air_reroute_expense_items'] ?? []) as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $type = (string)($row['type'] ?? '');
+    if ($type === 'alt_transport') { $type = 'other_transport'; }
+    if ($type === 'higher_class') { $type = 'expensive_solution'; }
+    $amount = is_numeric($row['amount'] ?? null)
+        ? (float)$row['amount']
+        : (float)preg_replace('/[^0-9.]/', '', (string)($row['amount'] ?? '0'));
+    $currencyItem = strtoupper(trim((string)($row['currency'] ?? '')));
+    if ($type === '' && $amount <= 0 && $currencyItem === '' && trim((string)($row['description'] ?? '')) === '') {
+        continue;
+    }
+    if ($currencyItem === '') {
+        $currencyItem = $priceCurrency;
+    }
+    $airRerouteExpenseItems[] = [
+        'type' => $type,
+        'amount' => $amount,
+        'currency' => $currencyItem,
+        'description' => trim((string)($row['description'] ?? '')),
+        'label' => match ($type) {
+            'new_ticket' => 'Ny billet',
+            'airport_transfer' => 'Transfer til/fra alternativ lufthavn',
+            'other_transport' => 'Anden noedvendig transport',
+            'expensive_solution' => 'Dyrere alternativ loesning',
+            'accommodation' => 'Indkvartering (legacy)',
+            'other' => 'Andet',
+            default => $type,
+        },
+    ];
+}
+if ($airRerouteExpenseItems === [] && ($airRerouteExpenseType !== '' || $airRerouteExpenseAmount > 0 || $airRerouteExpenseDescription !== '')) {
+    $airRerouteExpenseItems[] = [
+        'type' => $airRerouteExpenseType,
+        'amount' => $airRerouteExpenseAmount,
+        'currency' => $airRerouteExpenseCur,
+        'description' => $airRerouteExpenseDescription,
+        'label' => $airRerouteExpenseTypeLabel,
+    ];
+}
 $downgradeBasis = (string)($form['downgrade_comp_basis'] ?? '');
 $downgradeShare = is_numeric($form['downgrade_segment_share'] ?? null)
     ? (float)$form['downgrade_segment_share']
@@ -107,6 +173,11 @@ $downgradeShare = is_numeric($form['downgrade_segment_share'] ?? null)
 $downgradeShare = max(0.0, min(1.0, $downgradeShare));
 $rateMap = ['seat' => 0.25, 'couchette' => 0.50, 'sleeper' => 0.75];
 $downgradeRate = $rateMap[$downgradeBasis] ?? 0.0;
+if ($isFerry) {
+    $downgradeBasis = '';
+    $downgradeShare = 0.0;
+    $downgradeRate = 0.0;
+}
 
 // Forsøg automatisk at udlede sats ud fra per-leg købt/leveret niveau, hvis ikke sat
 $legBuy = (array)($form['leg_class_purchased'] ?? []);
@@ -150,7 +221,7 @@ $autoRateFor = function(string $buy, string $del, string $buyRes, string $delRes
     return 0.0;
 };
 $countLegs = max(count($legBuy), count($legDel), count($legResBuy), count($legResDel), count($legDg));
-if ($downgradeRate <= 0 && $countLegs > 0) {
+if (!$isFerry && $downgradeRate <= 0 && $countLegs > 0) {
     $dgFound = false;
     for ($i = 0; $i < $countLegs; $i++) {
         $buy = (string)($legBuy[$i] ?? '');
@@ -176,6 +247,7 @@ $grossAdjusted = isset($claim['totals']['gross_claim']) ? (float)$claim['totals'
 $serviceFee = isset($claim['totals']['service_fee_amount']) ? (float)$claim['totals']['service_fee_amount'] : 0.0;
 $netPayout = isset($claim['totals']['net_to_client']) ? (float)$claim['totals']['net_to_client'] : 0.0;
 $downgradeAmount = isset($claim['breakdown']['art18']['downgrade_annexii']) ? (float)$claim['breakdown']['art18']['downgrade_annexii'] : 0.0;
+$ferryServiceDeviation = $isFerry && (string)($form['downgrade_occurred'] ?? '') === 'yes';
 // Static FX table (EUR base). Approximate mid-rates.
 // FX map loader: try cached daily rates from tmp/rates.json; fallback to ECB via frankfurter; else fallback static
 $fxStatic = [
@@ -276,8 +348,29 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   $ferryBand = (string)($ferryRights['art19_comp_band'] ?? ($flags['ferry_art19_comp_band'] ?? 'none'));
   $ferryClaimName = (string)($ferryContract['primary_claim_party_name'] ?? '');
   $ferryClaimType = (string)($ferryContract['primary_claim_party'] ?? '');
+  $ferryClaimPdfUrl = $this->Url->build(['controller' => 'Reimbursement', 'action' => 'official', '?' => ['template' => 'Form_ferry_claim_letter.pdf']]);
   $ferryScopeReason = (string)($ferryScope['scope_exclusion_reason'] ?? '');
   $ferryApplies = array_key_exists('regulation_applies', $ferryScope) ? (bool)$ferryScope['regulation_applies'] : true;
+  $ferryArt19Reasons = [];
+  if (!$ferryApplies) {
+      $ferryArt19Reasons[] = 'Forordningen finder ikke anvendelse paa denne sejlads.';
+  } else {
+      if ((string)($form['informed_before_purchase'] ?? '') === 'yes') {
+          $ferryArt19Reasons[] = 'Forsinkelsen blev oplyst foer koeb.';
+      }
+      if ((string)($form['weather_safety'] ?? '') === 'yes') {
+          $ferryArt19Reasons[] = 'Vejr- eller sikkerhedsforhold blokerer kompensation.';
+      }
+      if ((string)($form['extraordinary_circumstances'] ?? '') === 'yes') {
+          $ferryArt19Reasons[] = 'Carrier paaberaaber ekstraordinaere omstaendigheder.';
+      }
+      if ((string)($form['open_ticket_without_departure_time'] ?? '') === 'yes' && (string)($form['season_ticket'] ?? '') !== 'yes') {
+          $ferryArt19Reasons[] = 'Aaben billet uden afgangstid er undtaget.';
+      }
+      if (trim((string)($form['arrival_delay_minutes'] ?? '')) === '' || trim((string)($form['scheduled_journey_duration_minutes'] ?? '')) === '') {
+          $ferryArt19Reasons[] = 'Ankomstforsinkelse og planlagt rejsevarighed skal vaere udfyldt.';
+      }
+  }
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Faerge-resultat</strong>
@@ -290,18 +383,23 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <div class="small muted mt4">Faerge bruger ankomstforsinkelse og planlagt rejsevarighed til Art. 19-bandet, ligesom rail bruger sit kompensationstrin til den endelige beregning.</div>
     <div class="mt8">
       <label>Forsinkelse ved ankomst (minutter)
-        <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h((string)($form['arrival_delay_minutes'] ?? '')) ?>" placeholder="130" />
+        <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h((string)($form['arrival_delay_minutes'] ?? '')) ?>" placeholder="130" data-ferry-auto-submit="1" />
       </label>
     </div>
     <div class="mt8">
       <label>Planlagt rejsevarighed (minutter)
-        <input type="number" name="scheduled_journey_duration_minutes" min="0" step="1" value="<?= h((string)($form['scheduled_journey_duration_minutes'] ?? '')) ?>" placeholder="300" />
+        <input type="number" name="scheduled_journey_duration_minutes" min="0" step="1" value="<?= h((string)($form['scheduled_journey_duration_minutes'] ?? '')) ?>" placeholder="300" data-ferry-auto-submit="1" />
       </label>
     </div>
   </div>
   <?php if ($ferryClaimName !== ''): ?>
     <div class="small mt8">Primær claim-kanal: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
   <?php endif; ?>
+  <div class="mt8">
+    <button type="submit" class="button button-primary" formaction="<?= h($ferryClaimPdfUrl) ?>" formtarget="_blank">
+      Download ferry claim letter (PDF)
+    </button>
+  </div>
   <ul class="small mt8">
     <li>Scope: <strong><?= $ferryApplies ? 'omfattet' : 'ikke omfattet' ?></strong><?= $ferryScopeReason !== '' ? ' - ' . h($ferryScopeReason) : '' ?></li>
     <li>Art. 16 information: <strong><?= !empty($ferryRights['gate_art16_notice']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
@@ -328,6 +426,8 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <div class="ok mt8 small">Ankomstforsinkelsen peger paa ferry Art. 19 med et foreloebigt bånd paa <strong><?= h($ferryBand) ?>%</strong>.</div>
   <?php elseif (!$ferryApplies): ?>
     <div class="hl mt8 small">Faergeforordningen ser ikke ud til at finde anvendelse paa denne sejlads ud fra de nuvaerende scope-oplysninger.</div>
+  <?php elseif ($ferryArt19Reasons !== []): ?>
+    <div class="hl mt8 small">Art. 19 er ikke aktiveret endnu, fordi: <strong><?= h(implode(' ', $ferryArt19Reasons)) ?></strong></div>
   <?php else: ?>
     <div class="hl mt8 small">Brug data-pack og de aktive gates ovenfor som grundlag for claim-assist eller manuel vurdering.</div>
   <?php endif; ?>
@@ -348,10 +448,20 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       $hotelAmount = (float)($br['expenses']['hotel'] ?? 0);
       $altTransportAmount = (float)($br['expenses']['alt_transport'] ?? 0);
       $otherAmount = (float)($br['expenses']['other'] ?? 0);
+      $ferryCaps = (array)($br['ferry_caps'] ?? []);
+      $ferryCapsLegal = (array)($ferryCaps['legal'] ?? []);
+      $ferryCapsEngine = (array)($ferryCaps['engine'] ?? []);
+      $ferryHotelApproved = (float)($ferryCaps['hotel_legal_approved_amount'] ?? 0);
+      $ferryHotelExcess = (float)($ferryCaps['hotel_excess_amount'] ?? 0);
+      $ferryHotelManual = !empty($ferryCaps['hotel_manual_review_required']);
+      $ferryHotelWeatherBlocked = !empty($ferryCaps['hotel_weather_blocked']);
+      $ferryMealsManual = !empty($ferryCaps['meals_manual_review_required']);
+      $ferryHotelTransportManual = !empty($ferryCaps['hotel_transport_manual_review_required']);
+      $ferryAltTransportManual = !empty($ferryCaps['reroute_alt_transport_manual_review_required']);
     ?>
     <div class="card mt12" style="display:grid;gap:8px;">
       <strong>Ferry okonomi</strong>
-      <div class="small muted">Art. 19 beregnes paa baggrund af den faktisk betalte billetpris fra TRIN 2. Assistance og ombooking/refusion opgoeres med samme model som rail, men vises under ferry-artiklerne.</div>
+      <div class="small muted">TRIN 10 viser ferry-kravet i adskilte spande: Art. 18 refund/ombooking, Art. 17 assistance og Art. 19 ankomstkompensation. Eventuel serviceafvigelse fra TRIN 9 holdes uden for de lovbestemte ferry-artikler.</div>
       <div class="small">Billetpris fra TRIN 2: <strong><?= number_format($priceFromTicket, 2) ?> <?= h($priceCurrency) ?></strong></div>
       <div style="display:grid;gap:6px;">
         <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
@@ -359,20 +469,45 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
           <div class="small">Tilbagebetaling: <?= number_format($refundAmount, 2) ?> <?= h($summaryCurrency) ?><?= $refundBasis !== '' ? ' - ' . h($refundBasis) : '' ?></div>
           <div class="small">Retur til afgangshavn/udgangspunkt: <?= number_format($returnAmount, 2) ?> <?= h($summaryCurrency) ?></div>
           <div class="small">Ekstra omkostninger ved ombooking: <?= number_format($rerouteAmount, 2) ?> <?= h($summaryCurrency) ?></div>
+          <?php if ($ferryAltTransportManual): ?><div class="small muted">Kan kraeve manuel vurdering: selvbetalt alternativ transport ligger over internt standardniveau.</div><?php endif; ?>
+          <?php if (!empty($ferryCaps['accommodation_migrated_from_art18'])): ?><div class="small muted">Hotel/overnatning registreret under ombooking er flyttet til Art. 17 assistance for at undgaa dobbeltoptælling.</div><?php endif; ?>
         </div>
         <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
           <div class="small"><strong>Art. 17 - Assistance</strong></div>
           <div class="small">Samlede assistanceudgifter: <?= number_format($expenseTotal, 2) ?> <?= h($summaryCurrency) ?></div>
           <?php if ($mealAmount > 0): ?><div class="small">Maaltider/forfriskninger: <?= number_format($mealAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-          <?php if ($hotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($hotelAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-          <?php if ($altTransportAmount > 0): ?><div class="small">Transport: <?= number_format($altTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($hotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($hotelAmount, 2) ?> <?= h($summaryCurrency) ?><?= $ferryHotelApproved > 0 && abs($hotelAmount - $ferryHotelApproved) > 0.009 ? ' (efter legal cap: ' . number_format($ferryHotelApproved, 2) . ' ' . h($summaryCurrency) . ')' : '' ?></div><?php endif; ?>
+          <?php if ($altTransportAmount > 0): ?><div class="small">Lokal transport / hoteltransport: <?= number_format($altTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
           <?php if ($otherAmount > 0): ?><div class="small">Oevrige udgifter: <?= number_format($otherAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($ferryHotelWeatherBlocked): ?><div class="small muted">Hotel/overnatning er juridisk blokeret ved vejrsikkerhedsrisiko.</div><?php endif; ?>
+          <?php if ($ferryMealsManual): ?><div class="small muted">Maaltider overstiger internt standardniveau og boer vurderes manuelt.</div><?php endif; ?>
+          <?php if ($ferryHotelTransportManual): ?><div class="small muted">Transport til/fra hotel overstiger internt standardniveau og boer vurderes manuelt.</div><?php endif; ?>
           <?php if ($expenseTotal <= 0): ?><div class="small muted">Ingen assistanceudgifter registreret endnu.</div><?php endif; ?>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Ferry caps og daekning</strong></div>
+          <div class="small">Lovbestemt maksimum: hotel paa land <?= h((string)($ferryCapsLegal['hotel_land_per_night_eur'] ?? 80)) ?> EUR pr. nat i maks. <?= h((string)($ferryCapsLegal['hotel_land_max_nights'] ?? 3)) ?> naetter.</div>
+          <div class="small">Lovregel: maaltider/snacks vurderes som rimelige i forhold til ventetiden.</div>
+          <div class="small">Transport mellem havneterminal og hotel daekkes separat.</div>
+          <div class="small">Lovregel: omlaegning uden ekstraomkostninger og refusion af billetpris med <?= h((string)($ferryCapsLegal['refund_ticket_price_percent'] ?? 100)) ?>% inden for <?= h((string)($ferryCapsLegal['refund_deadline_days'] ?? 7)) ?> dage.</div>
+          <div class="small">Internt standardniveau: maaltider <?= h((string)($ferryCapsEngine['meals_per_day_eur'] ?? 40)) ?> EUR pr. dag, lokal transport <?= h((string)($ferryCapsEngine['local_transport_per_trip_eur'] ?? 50)) ?> EUR pr. tur (samlet <?= h((string)($ferryCapsEngine['total_local_transport_eur'] ?? 150)) ?> EUR).</div>
+          <div class="small">Internt standardniveau: taxi <?= h((string)($ferryCapsEngine['taxi_soft_cap_eur'] ?? 150)) ?> EUR og samlet alternativ transport <?= h((string)($ferryCapsEngine['self_arranged_alt_transport_total_eur'] ?? 400)) ?> EUR.</div>
+          <?php if ($ferryHotelExcess > 0): ?><div class="small muted">Kan kraeve manuel vurdering: hotelkrav over legal cap = <?= number_format($ferryHotelExcess, 2) ?> <?= h($summaryCurrency) ?>.</div><?php endif; ?>
+          <?php if ($ferryHotelManual || $ferryMealsManual || $ferryHotelTransportManual || $ferryAltTransportManual): ?><div class="small muted">Kan kraeve manuel vurdering: mindst et ferry-krav ligger over lovbestemt maksimum eller internt standardniveau.</div><?php endif; ?>
         </div>
         <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
           <div class="small"><strong>Art. 19 - Kompensation</strong></div>
           <div class="small">Kompensation: <?= number_format($compAmount, 2) ?> <?= h($summaryCurrency) ?> - <?= h((string)$compPct) ?>%<?= $compBasis !== '' ? ' - ' . h($compBasis) : '' ?></div>
           <div class="small muted">Dette er ferry-beloebet ud fra billetprisen fra TRIN 2 og det aktuelle Art. 19-band.</div>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Serviceafvigelse / prisdifference (TRIN 9)</strong></div>
+          <?php if ($ferryServiceDeviation): ?>
+            <div class="small">Der er registreret en serviceafvigelse i TRIN 9.</div>
+            <div class="small muted">Denne post holdes adskilt fra Art. 17, 18 og 19 og maa vurderes manuelt eller kontraktretligt. Den er ikke medregnet i de lovbestemte ferry-totaler ovenfor.</div>
+          <?php else: ?>
+            <div class="small muted">Ingen separat serviceafvigelse registreret.</div>
+          <?php endif; ?>
         </div>
         <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
           <div class="small"><strong>Total og udbetaling</strong></div>
@@ -384,6 +519,32 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     </div>
   <?php endif; ?>
 </div>
+<script>
+  (function() {
+    var fields = document.querySelectorAll('input[data-ferry-auto-submit="1"]');
+    if (!fields.length) { return; }
+    var form = fields[0].closest('form');
+    if (!form) { return; }
+
+    var timer = null;
+    var submitForm = function() {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    };
+
+    fields.forEach(function(field) {
+      var queueSubmit = function() {
+        if (timer) { clearTimeout(timer); }
+        timer = setTimeout(submitForm, 250);
+      };
+      field.addEventListener('input', queueSubmit);
+      field.addEventListener('change', queueSubmit);
+    });
+  })();
+</script>
 </fieldset>
 <?= $this->Form->end() ?>
 <?php return; ?>
@@ -396,6 +557,82 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   $airScopeReason = (string)($airScope['scope_exclusion_reason'] ?? '');
   $airScopeApplies = array_key_exists('regulation_applies', $airScope) ? (bool)$airScope['regulation_applies'] : null;
   $airCompBand = (string)($airRights['air_comp_band'] ?? ($flags['air_comp_band'] ?? 'none'));
+  $airBookedClass = strtolower(trim((string)($form['air_downgrade_booked_class'] ?? '')));
+  $airFlownClass = strtolower(trim((string)($form['air_downgrade_flown_class'] ?? '')));
+  $airDowngradeGate = (string)($form['downgrade_occurred'] ?? '') === 'yes'
+    || (string)($form['air_downgrade_refund_percent'] ?? '') !== ''
+    || ($airBookedClass !== '' && $airFlownClass !== '' && $airBookedClass !== $airFlownClass);
+  $airArticle8Offered = (string)($form['air_article8_choice_offered'] ?? '');
+  $airRefundScope = (string)($form['air_refund_scope'] ?? '');
+  $airAltAirportTransfer = (string)($form['air_alternative_airport_transfer_needed'] ?? '');
+  $airDowngradePct = (string)($form['air_downgrade_refund_percent'] ?? '');
+  $airDistanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($airScope['air_distance_band'] ?? ($airRights['air_distance_band'] ?? '')))));
+  $airTicketCurrency = strtoupper(trim((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? ''))));
+  if ($airTicketCurrency === '' || $airTicketCurrency === 'AUTO') {
+    $airTicketCurrency = 'EUR';
+  }
+  $airPdfUrl = $this->Url->build(['controller' => 'Reimbursement', 'action' => 'official', '?' => ['template' => 'Form_air_travel/air_travel_form.pdf']]);
+  $airTicketAmount = (float)($ticketPriceAmount ?? 0);
+  $airRefundActive = $airRefundScope !== ''
+    || !empty($airRights['gate_air_reroute_refund'])
+    || !empty($airRights['gate_air_delay_refund_5h']);
+  $airRefundComputedAmount = 0.0;
+  $airRefundComputedBasis = '';
+  if ($airRefundActive && $airTicketAmount > 0) {
+    $airRefundComputedAmount = $airTicketAmount;
+    $airRefundComputedBasis = match ($airRefundScope) {
+      'full_ticket' => 'Art. 8(1)(a) full ticket',
+      'unused_part' => 'Art. 8(1)(a) unused part',
+      'unused_plus_used_if_no_longer_serves_purpose' => 'Art. 8(1)(a) unused plus used if no longer serves purpose',
+      default => !empty($airRights['gate_air_delay_refund_5h'])
+        ? 'Art. 8(1)(a) refund after 5h+ delay'
+        : 'Art. 8(1)(a) refund',
+    };
+  }
+  $airCompFlatAmount = match ($airDistanceBand) {
+    'up_to_1500' => 250.0,
+    'intra_eu_over_1500', 'other_1500_to_3500' => 400.0,
+    'other_over_3500' => 600.0,
+    default => 250.0,
+  };
+  $airCompReductionThresholdMinutes = match ($airDistanceBand) {
+    'up_to_1500' => 120,
+    'intra_eu_over_1500', 'other_1500_to_3500' => 180,
+    'other_over_3500' => 240,
+    default => 120,
+  };
+  $airRerouteArrivalDelayMinutes = is_numeric($form['reroute_arrival_delay_minutes'] ?? null)
+    ? (int)$form['reroute_arrival_delay_minutes']
+    : 0;
+  $airCompReductionPct = (!empty($airRights['gate_air_compensation'])
+      && $airRerouteArrivalDelayMinutes > 0
+      && $airRerouteArrivalDelayMinutes <= $airCompReductionThresholdMinutes)
+    ? 50
+    : 0;
+  $airCompComputedAmount = !empty($airRights['gate_air_compensation'])
+    ? round($airCompFlatAmount * (($airCompReductionPct > 0 ? 50 : 100) / 100), 2)
+    : 0.0;
+  $airCompComputedBasis = !empty($airRights['gate_air_compensation'])
+    ? ('Art. 7 EC261 flat amount' . ($airCompReductionPct > 0 ? ' - reduced 50% under Art. 7(2)' : ''))
+    : '';
+  $airCompComputedLabel = match ($airDistanceBand) {
+    'up_to_1500' => '250 EUR',
+    'intra_eu_over_1500', 'other_1500_to_3500' => '400 EUR',
+    'other_over_3500' => '600 EUR',
+    default => '250 EUR',
+  };
+  $airDowngradePctNum = in_array((int)$airDowngradePct, [30, 50, 75], true)
+    ? (int)$airDowngradePct
+    : match ($airDistanceBand) {
+      'up_to_1500' => 30,
+      'intra_eu_over_1500', 'other_1500_to_3500' => 50,
+      'other_over_3500' => 75,
+      default => 30,
+    };
+  $airDowngradeComputedAmount = ($airDowngradeGate && $airTicketAmount > 0)
+    ? round($airTicketAmount * ($airDowngradePctNum / 100), 2)
+    : 0.0;
+  $airDowngradeComputedBasis = $airDowngradeGate ? 'Art. 10 EC261' : '';
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Fly-resultat</strong>
@@ -405,7 +642,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     <li>Connection type: <strong><?= h((string)($airContract['air_connection_type'] ?? 'unknown')) ?></strong></li>
     <li>Claim-kanal: <strong><?= h($airClaimPartyName !== '' ? $airClaimPartyName : ($airClaimPartyType !== '' ? $airClaimPartyType : 'manual_review')) ?></strong></li>
     <li>Care: <strong><?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
-    <li>Reroute / refund: <strong><?= !empty($airRights['gate_air_reroute_refund']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+    <li>Reroute / refund: <strong><?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></strong></li>
     <li>Kompensation: <strong><?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
     <?php if (!empty($claimDirection['recommended_documents'])): ?>
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
@@ -414,7 +651,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <div class="small muted mt8">
     Naeste handling:
     <strong><?=
-      !empty($airRights['gate_air_reroute_refund'])
+      $airRefundActive
         ? 'gaa til refund eller ombooking'
         : (!empty($airRights['gate_air_care'])
             ? 'registrer maaltider, hotel og anden care'
@@ -430,6 +667,176 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <?php else: ?>
     <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, mens flight-sagen afklares yderligere.</div>
   <?php endif; ?>
+  <?php if (!empty($claim)): ?>
+    <?php
+      $br = (array)($claim['breakdown'] ?? []);
+      $tot = (array)($claim['totals'] ?? []);
+      $summaryCurrency = (string)($tot['currency'] ?? ($priceCurrency !== '' ? $priceCurrency : 'EUR'));
+      $airExpenseTotal = (float)($br['expenses']['total'] ?? 0);
+      $airMealAmount = (float)($br['expenses']['meals'] ?? 0);
+      $airHotelAmount = (float)($br['expenses']['hotel'] ?? 0);
+      $airAltTransportAmount = (float)($br['expenses']['alt_transport'] ?? 0);
+      $airOtherAmount = (float)($br['expenses']['other'] ?? 0);
+      $airReturnToOriginAmount = (float)($br['art18']['return_to_origin'] ?? 0);
+      $airRerouteExtraAmount = (float)($br['art18']['reroute_extra_costs'] ?? 0);
+      $airReturnToOriginDisplayAmount = $airReturnToOriginAmount > 0 ? $airReturnToOriginAmount : (((string)($form['return_to_origin_expense'] ?? '') === 'yes' && $returnAmt > 0) ? $returnAmt : 0.0);
+      $airReturnToOriginDisplayCurrency = $airReturnToOriginAmount > 0 ? $summaryCurrency : ($returnCur !== '' ? $returnCur : $summaryCurrency);
+      $airUseNewExpense = ($airRerouteExpenseFlag === 'yes' && $airRerouteExpenseItems !== []);
+      $airRerouteExtraDisplayAmount = 0.0;
+      $airRerouteExtraDisplayCurrency = $summaryCurrency;
+      $airAltAirportTransferDisplayAmount = 0.0;
+      $airAltAirportTransferDisplayCurrency = $summaryCurrency;
+      $airRerouteExpenseDisplayRows = [];
+      if ($airUseNewExpense) {
+          foreach ($airRerouteExpenseItems as $expenseRow) {
+              $rowAmount = (float)($expenseRow['amount'] ?? 0.0);
+              $rowCurrency = (string)($expenseRow['currency'] ?? $summaryCurrency);
+              $rowLabel = (string)($expenseRow['label'] ?? ((string)($expenseRow['type'] ?? '') ?: 'Udgift'));
+              $rowDescription = trim((string)($expenseRow['description'] ?? ''));
+              $rowAmountSummary = $rowAmount > 0
+                ? ($rowCurrency === $summaryCurrency ? $rowAmount : ($fxConv ? ($fxConv($rowAmount, $rowCurrency, $summaryCurrency) ?? $rowAmount) : $rowAmount))
+                : 0.0;
+              if ((string)($expenseRow['type'] ?? '') === 'airport_transfer') {
+                  $airAltAirportTransferDisplayAmount += $rowAmountSummary;
+              } else {
+                  $airRerouteExtraDisplayAmount += $rowAmountSummary;
+              }
+              if ($rowAmount > 0 || $rowDescription !== '') {
+                  $airRerouteExpenseDisplayRows[] = [
+                      'label' => $rowLabel,
+                      'amount' => $rowAmount,
+                      'currency' => $rowCurrency,
+                      'description' => $rowDescription,
+                  ];
+              }
+          }
+      } else {
+          $airRerouteExtraDisplayAmount = $airRerouteExtraAmount > 0 ? $airRerouteExtraAmount : (((string)($form['reroute_extra_costs'] ?? '') === 'yes' && $rerouteExtraAmount > 0) ? $rerouteExtraAmount : 0.0);
+          $airRerouteExtraDisplayCurrency = $airRerouteExtraAmount > 0 ? $summaryCurrency : ($rerouteExtraCur !== '' ? $rerouteExtraCur : $summaryCurrency);
+          $airAltAirportTransferDisplayAmount = (((string)($form['air_alternative_airport_transfer_needed'] ?? '') === 'yes') && $airAltAirportTransferAmt > 0)
+            ? $airAltAirportTransferAmt
+            : 0.0;
+          $airAltAirportTransferDisplayCurrency = $airAltAirportTransferCur !== '' ? $airAltAirportTransferCur : $summaryCurrency;
+      }
+      $airRefundDisplayAmount = $airRefundComputedAmount > 0 ? ($fxConv ? ($fxConv($airRefundComputedAmount, $airTicketCurrency, $summaryCurrency) ?? $airRefundComputedAmount) : $airRefundComputedAmount) : 0.0;
+      $airCompDisplayAmount = $airCompComputedAmount > 0 ? ($fxConv ? ($fxConv($airCompComputedAmount, 'EUR', $summaryCurrency) ?? $airCompComputedAmount) : $airCompComputedAmount) : 0.0;
+      $airDowngradeDisplayAmount = $airDowngradeComputedAmount > 0 ? ($fxConv ? ($fxConv($airDowngradeComputedAmount, $airTicketCurrency, $summaryCurrency) ?? $airDowngradeComputedAmount) : $airDowngradeComputedAmount) : 0.0;
+      $airReturnToOriginDisplayAmountSummary = $airReturnToOriginDisplayAmount > 0 ? ($airReturnToOriginDisplayCurrency === $summaryCurrency ? $airReturnToOriginDisplayAmount : ($fxConv ? ($fxConv($airReturnToOriginDisplayAmount, $airReturnToOriginDisplayCurrency, $summaryCurrency) ?? $airReturnToOriginDisplayAmount) : $airReturnToOriginDisplayAmount)) : 0.0;
+      $airRerouteExtraDisplayAmountSummary = $airRerouteExtraDisplayAmount > 0 ? ($airRerouteExtraDisplayCurrency === $summaryCurrency ? $airRerouteExtraDisplayAmount : ($fxConv ? ($fxConv($airRerouteExtraDisplayAmount, $airRerouteExtraDisplayCurrency, $summaryCurrency) ?? $airRerouteExtraDisplayAmount) : $airRerouteExtraDisplayAmount)) : 0.0;
+      $airAltAirportTransferDisplayAmountSummary = $airAltAirportTransferDisplayAmount > 0 ? ($airAltAirportTransferDisplayCurrency === $summaryCurrency ? $airAltAirportTransferDisplayAmount : ($fxConv ? ($fxConv($airAltAirportTransferDisplayAmount, $airAltAirportTransferDisplayCurrency, $summaryCurrency) ?? $airAltAirportTransferDisplayAmount) : $airAltAirportTransferDisplayAmount)) : 0.0;
+      $airPreviewGross = round(
+        max(0.0, $airExpenseTotal)
+        + max(0.0, $airRefundDisplayAmount)
+        + max(0.0, $airReturnToOriginDisplayAmountSummary)
+        + max(0.0, $airRerouteExtraDisplayAmountSummary)
+        + max(0.0, $airAltAirportTransferDisplayAmountSummary)
+        + max(0.0, $airCompDisplayAmount)
+        + max(0.0, $airDowngradeDisplayAmount),
+        2
+      );
+      $airPreviewServiceFee = round($airPreviewGross * ($serviceFeePct / 100), 2);
+      $airPreviewNet = round(max(0.0, $airPreviewGross - $airPreviewServiceFee), 2);
+    ?>
+    <div class="card mt12" style="display:grid;gap:8px;">
+      <strong>Air kravspor</strong>
+      <div style="display:grid;gap:6px;">
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Care claim</strong></div>
+          <div class="small">Status: <?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></div>
+          <div class="small">Samlede care-udgifter: <?= number_format($airExpenseTotal, 2) ?> <?= h($summaryCurrency) ?></div>
+          <?php if ($airMealAmount > 0): ?><div class="small">Maaltider/forfriskninger: <?= number_format($airMealAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($airHotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($airHotelAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($airAltTransportAmount > 0): ?><div class="small">Transport: <?= number_format($airAltTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          <?php if ($airOtherAmount > 0): ?><div class="small">Oevrige udgifter: <?= number_format($airOtherAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Refund / reroute claim</strong></div>
+          <div class="small">Status: <?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></div>
+          <div class="small">Article 8-valg tilbudt: <?= h($airArticle8Offered !== '' ? $airArticle8Offered : '-') ?></div>
+          <?php if ((string)($form['air_self_arranged_reroute'] ?? '') !== ''): ?><div class="small">Selvarrangeret loesning: <?= h((string)$form['air_self_arranged_reroute']) ?></div><?php endif; ?>
+          <?php if ((string)($form['air_airline_confirmed_self_arranged_solution'] ?? '') !== ''): ?><div class="small">Bekraeftet af flyselskabet: <?= h((string)$form['air_airline_confirmed_self_arranged_solution']) ?></div><?php endif; ?>
+          <div class="small">Refusion / refund: <?= number_format($airRefundComputedAmount, 2) ?> <?= h($airTicketCurrency) ?><?= $airRefundComputedBasis !== '' ? ' - ' . h($airRefundComputedBasis) : '' ?></div>
+          <?php if ($airReturnToOriginDisplayAmount > 0): ?><div class="small">Retur til udgangspunkt: <?= number_format($airReturnToOriginDisplayAmount, 2) ?> <?= h($airReturnToOriginDisplayCurrency) ?></div><?php endif; ?>
+          <?php if ($airUseNewExpense && count($airRerouteExpenseDisplayRows) > 1): ?><div class="small">Reroute-udgifter: <?= count($airRerouteExpenseDisplayRows) ?> poster</div><?php endif; ?>
+          <?php foreach ($airRerouteExpenseDisplayRows as $row): ?>
+            <div class="small"><?= h((string)$row['label']) ?>: <?= number_format((float)$row['amount'], 2) ?> <?= h((string)$row['currency']) ?><?= (string)$row['description'] !== '' ? ' - ' . h((string)$row['description']) : '' ?></div>
+          <?php endforeach; ?>
+          <?php if ($airRerouteExtraDisplayAmount > 0): ?><div class="small">Ekstra ombookingsomkostninger: <?= number_format($airRerouteExtraDisplayAmount, 2) ?> <?= h($airRerouteExtraDisplayCurrency) ?></div><?php endif; ?>
+          <?php if ($airAltAirportTransferDisplayAmount > 0): ?><div class="small">Alternativ lufthavn-transfer: <?= number_format($airAltAirportTransferDisplayAmount, 2) ?> <?= h($airAltAirportTransferDisplayCurrency) ?></div><?php elseif ($airAltAirportTransfer !== ''): ?><div class="small">Alternativ lufthavn-transfer: <?= h($airAltAirportTransfer) ?></div><?php endif; ?>
+          <?php if ($airUseNewExpense && !$airRerouteExpenseDisplayRows && $airRerouteExpenseDescription !== ''): ?><div class="small muted">Beskrivelse: <?= h($airRerouteExpenseDescription) ?></div><?php endif; ?>
+          <?php if ($airRefundScope !== ''): ?><div class="small">Refund scope: <?= h($airRefundScope) ?></div><?php endif; ?>
+          <?php if ($airTicketAmount > 0): ?><div class="small muted">Billetpris fra TRIN 2: <?= number_format($airTicketAmount, 2) ?> <?= h($airTicketCurrency) ?></div><?php endif; ?>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Compensation claim</strong></div>
+          <div class="small">Status: <?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></div>
+          <div class="small">Kompensation: <?= number_format($airCompComputedAmount, 2) ?> EUR<?= $airCompComputedBasis !== '' ? ' - ' . h($airCompComputedBasis) : '' ?></div>
+          <?php if (!empty($airRights['gate_air_compensation'])): ?><div class="small muted">Distancekategori giver normalt <strong><?= h($airCompComputedLabel) ?></strong><?= $airCompReductionPct > 0 ? ' efter reroute-reduktion' : '' ?>.</div><?php endif; ?>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+          <div class="small"><strong>Downgrade claim</strong></div>
+          <div class="small">Status: <?= $airDowngradeGate ? 'relevant' : 'ikke aktiveret' ?></div>
+          <div class="small">Artikel 10-refusion: <?= number_format($airDowngradeComputedAmount, 2) ?> <?= h($airTicketCurrency) ?></div>
+          <?php if ($airDowngradeGate): ?><div class="small">Refusionsprocent: <?= h((string)$airDowngradePctNum) ?>%</div><?php endif; ?>
+          <?php if ($airBookedClass !== '' || $airFlownClass !== ''): ?><div class="small">Kabineklasse: <?= h($airBookedClass !== '' ? $airBookedClass : '-') ?> -> <?= h($airFlownClass !== '' ? $airFlownClass : '-') ?></div><?php endif; ?>
+          <?php if ($airDowngradeComputedBasis !== ''): ?><div class="small">Basis: <?= h($airDowngradeComputedBasis) ?></div><?php endif; ?>
+        </div>
+        <?php if ($airPreviewGross > 0 || $airPreviewServiceFee > 0 || $airPreviewNet > 0): ?>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+            <div class="small"><strong>Total og avance</strong></div>
+            <div class="small mt4">Samlet krav (brutto): <strong><?= number_format($airPreviewGross, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+            <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($airPreviewServiceFee, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+            <div class="small">Netto til kunde: <strong><?= number_format($airPreviewNet, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          </div>
+        <?php endif; ?>
+      </div>
+      <div class="mt12" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <?= $this->Form->hidden('air_postcode_city', ['value' => trim((string)($form['address_postalCode'] ?? '') . ' ' . (string)($form['address_city'] ?? ''))]) ?>
+        <?= $this->Form->hidden('air_signature_name', ['value' => trim((string)($form['firstName'] ?? '') . ' ' . (string)($form['lastName'] ?? ''))]) ?>
+        <?= $this->Form->hidden('signature_date', ['value' => date('Y-m-d')]) ?>
+        <?= $this->Form->hidden('air_refund_amount', ['value' => number_format($airRefundComputedAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_compensation_amount', ['value' => number_format($airCompComputedAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_downgrade_amount', ['value' => number_format($airDowngradeComputedAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_care_total', ['value' => number_format($airExpenseTotal, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_meals_amount', ['value' => number_format($airMealAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_hotel_amount', ['value' => number_format($airHotelAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_alt_transport_amount', ['value' => number_format($airAltTransportAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_alternative_airport_transfer_amount', ['value' => number_format($airAltAirportTransferDisplayAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_alternative_airport_transfer_currency', ['value' => (string)$airAltAirportTransferDisplayCurrency]) ?>
+        <?= $this->Form->hidden('air_other_amount', ['value' => number_format($airOtherAmount, 2, '.', '')]) ?>
+        <?= $this->Form->hidden('air_downgrade_booked_first', ['value' => $airBookedClass === 'first' ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_downgrade_booked_business', ['value' => $airBookedClass === 'business' ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_downgrade_flown_business', ['value' => $airFlownClass === 'business' ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_downgrade_flown_economy', ['value' => $airFlownClass === 'economy' ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_refund_active', ['value' => $airRefundActive ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_compensation_active', ['value' => !empty($airRights['gate_air_compensation']) ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_downgrade_active', ['value' => $airDowngradeGate ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_delay_incident', ['value' => (($form['incident_main'] ?? '') === 'delay') ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_cancellation_incident', ['value' => (($form['incident_main'] ?? '') === 'cancellation') ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_denied_boarding_incident', ['value' => (($form['incident_main'] ?? '') === 'denied_boarding') ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_missed_connection_incident', ['value' => (!empty($form['missed_connection']) || !empty($form['reason_missed_conn'])) ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_meals_offered', ['value' => (string)($form['meal_offered'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_refreshments_offered', ['value' => (string)($form['meal_offered'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_hotel_offered', ['value' => (string)($form['hotel_offered'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_hotel_transport_included', ['value' => (string)($form['assistance_hotel_transport_included'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_next_day_departure', ['value' => (string)($form['air_next_day_departure'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_transfer_offered', ['value' => (!empty($form['blocked_train_alt_transport']) || !empty($form['alt_transport_provided'])) ? 'yes' : '']) ?>
+        <?= $this->Form->hidden('air_communication_offered', ['value' => '']) ?>
+        <?= $this->Form->hidden('air_other_services_offered', ['value' => '']) ?>
+        <?= $this->Form->hidden('air_article8_choice_offered', ['value' => (string)($form['air_article8_choice_offered'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_refund_scope', ['value' => (string)($form['air_refund_scope'] ?? '')]) ?>
+        <?= $this->Form->hidden('arrival_delay_minutes', ['value' => (string)($form['arrival_delay_minutes'] ?? '')]) ?>
+        <?= $this->Form->hidden('scheduled_journey_duration_minutes', ['value' => (string)($form['scheduled_journey_duration_minutes'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_downgrade_booked_class', ['value' => (string)($form['air_downgrade_booked_class'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_downgrade_flown_class', ['value' => (string)($form['air_downgrade_flown_class'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_downgrade_refund_percent', ['value' => (string)($form['air_downgrade_refund_percent'] ?? '')]) ?>
+        <?= $this->Form->hidden('air_distance_band', ['value' => (string)($form['air_distance_band'] ?? '')]) ?>
+        <button type="submit" class="button button-primary" formaction="<?= h($airPdfUrl) ?>" formtarget="_blank">
+          Udfyld air-formular (PDF)
+        </button>
+      </div>
+    </div>
+  <?php endif; ?>
 </div>
 </fieldset>
 <?= $this->Form->end() ?>
@@ -440,9 +847,40 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 <?php
   $claimPartyName = (string)($busContract['primary_claim_party_name'] ?? '');
   $claimPartyType = (string)($busContract['primary_claim_party'] ?? '');
+  $busClaimPdfUrl = $this->Url->build(['controller' => 'Reimbursement', 'action' => 'official', '?' => ['template' => 'Form_bus_claim_letter.pdf']]);
   $scopeReason = (string)($busScope['scope_exclusion_reason'] ?? '');
   $scopeApplies = array_key_exists('regulation_applies', $busScope) ? (bool)$busScope['regulation_applies'] : null;
   $busCompBand = (string)($busRights['bus_comp_band'] ?? ($flags['bus_comp_band'] ?? 'none'));
+  $busClaimBreakdown = (array)($claim['breakdown'] ?? []);
+  $busClaimTotals = (array)($claim['totals'] ?? []);
+  $busCurrency = (string)($busClaimTotals['currency'] ?? ($priceCurrency !== '' ? $priceCurrency : 'EUR'));
+  $busCaps = (array)($busClaimBreakdown['bus_caps'] ?? []);
+  $busRefundAmount = (float)($busClaimBreakdown['refund']['amount'] ?? 0);
+  $busRefundBasis = (string)($busClaimBreakdown['refund']['basis'] ?? '');
+  $busCompAmount = (float)($busClaimBreakdown['compensation']['amount'] ?? 0);
+  $busCompPct = (float)($busClaimBreakdown['compensation']['pct'] ?? 0);
+  $busCompBasis = (string)($busClaimBreakdown['compensation']['basis'] ?? '');
+  $busExpenseTotal = (float)($busClaimBreakdown['expenses']['total'] ?? 0);
+  $busMealsAmount = (float)($busClaimBreakdown['expenses']['meals'] ?? 0);
+  $busHotelAmount = (float)($busClaimBreakdown['expenses']['hotel'] ?? 0);
+  $busHotelTransportAmount = (float)($busClaimBreakdown['expenses']['hotel_transport'] ?? 0);
+  $busAltTransportAmount = (float)($busClaimBreakdown['expenses']['alt_transport'] ?? 0);
+  $busOtherExpenseAmount = (float)($busClaimBreakdown['expenses']['other'] ?? 0);
+  $busArt18 = (array)($busClaimBreakdown['art18'] ?? []);
+  $busRerouteExtraAmount = (float)($busArt18['reroute_extra_costs'] ?? 0);
+  $busReturnToOriginAmount = (float)($busArt18['return_to_origin'] ?? 0);
+  $busDowngradeAnnexIIAmount = (float)($busArt18['downgrade_annexii'] ?? 0);
+  $busTicketAmount = (float)($ticketPriceAmount ?? 0);
+  $busHotelLegalCap = (float)($busCaps['hotel_legal_cap_amount'] ?? 0);
+  $busHotelLegalPerNightEur = (float)($busCaps['hotel_legal_per_night_eur'] ?? 80);
+  $busHotelRequested = (float)($busCaps['hotel_requested_amount'] ?? 0);
+  $busHotelCapApplied = !empty($busCaps['hotel_cap_applied']);
+  $busMealsSoftCap = (float)($busCaps['meals_soft_cap_amount'] ?? 0);
+  $busHotelTransportSoftCap = (float)($busCaps['hotel_transport_soft_cap_amount'] ?? 0);
+  $busAltTransportSoftCap = (float)($busCaps['alt_transport_soft_cap_amount'] ?? 0);
+  $busBreakdownFullCoverage = !empty($busCaps['breakdown_full_coverage']);
+  $busDistanceForCap = isset($busCaps['soft_cap_basis_distance_km']) && is_numeric($busCaps['soft_cap_basis_distance_km']) ? (int)$busCaps['soft_cap_basis_distance_km'] : null;
+  $busDelayHoursForCap = isset($busCaps['soft_cap_delay_hours']) && is_numeric($busCaps['soft_cap_delay_hours']) ? (int)$busCaps['soft_cap_delay_hours'] : null;
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Bus-resultat</strong>
@@ -458,6 +896,75 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
     <?php endif; ?>
   </ul>
+  <div class="mt8">
+    <button type="submit" class="button button-primary" formaction="<?= h($busClaimPdfUrl) ?>" formtarget="_blank">
+      Download bus claim letter (PDF)
+    </button>
+  </div>
+  <?php if ($busCompAmount > 0 || $busTicketAmount > 0): ?>
+    <div class="card mt8" style="border-color:#e5e7eb;background:#fff;">
+      <strong>Bus-kompensation</strong>
+      <div class="small mt4">Billetpris fra TRIN 2: <strong><?= number_format($busTicketAmount, 2) ?> <?= h($busCurrency) ?></strong></div>
+      <div class="small">Kompensation: <strong><?= number_format($busCompAmount, 2) ?> <?= h($busCurrency) ?></strong><?= $busCompPct > 0 ? ' - ' . h((string)$busCompPct) . '%' : '' ?><?= $busCompBasis !== '' ? ' - ' . h($busCompBasis) : '' ?></div>
+      <?php if (!empty($busRights['gate_bus_compensation_50'])): ?>
+        <div class="small muted mt4">Beløbet er den beregnede 50%-kompensation på baggrund af billettens pris og de aktive busgates.</div>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+  <?php if ($busCaps !== []): ?>
+    <div class="card mt8" style="border-color:#e5e7eb;background:#fff;">
+      <strong>Bus caps og dækning</strong>
+      <div class="small mt4">Hotel følger lovens loft paa <strong>80 EUR pr. nat, maks. 2 naetter</strong>. Maaltider, transport til/fra hotel og alternativ transport vises med interne standardsatser som vejledende cap.</div>
+      <?php if ($busHotelLegalCap > 0): ?>
+        <div class="small mt4">Hotel-loft i denne sag: <strong><?= number_format($busHotelLegalPerNightEur, 2) ?> EUR pr. nat</strong><?= !empty($busCaps['hotel_capped_nights']) ? ' (' . h((string)$busCaps['hotel_capped_nights']) . ' nat' . ((int)$busCaps['hotel_capped_nights'] === 1 ? '' : 'ter') . ')' : '' ?></div>
+      <?php endif; ?>
+      <?php if ($busHotelCapApplied): ?>
+        <div class="small">Registreret hoteludgift: <?= number_format($busHotelRequested, 2) ?> <?= h($busCurrency) ?>. Refunderbar hoteldel er capped til <?= number_format($busHotelAmount, 2) ?> <?= h($busCurrency) ?>.</div>
+      <?php endif; ?>
+      <?php if ($busMealsSoftCap > 0): ?>
+        <div class="small mt4">Maaltider soft cap: <?= number_format($busMealsSoftCap, 2) ?> <?= h($busCurrency) ?><?= $busDelayHoursForCap !== null ? ' (' . h((string)$busDelayHoursForCap) . ' forsinkelsestime' . ($busDelayHoursForCap === 1 ? '' : 'r') . ')' : '' ?>.</div>
+      <?php endif; ?>
+      <?php if ($busHotelTransportSoftCap > 0): ?>
+        <div class="small">Transport til/fra hotel soft cap: <?= number_format($busHotelTransportSoftCap, 2) ?> <?= h($busCurrency) ?>.</div>
+      <?php endif; ?>
+      <?php if ($busAltTransportSoftCap > 0): ?>
+        <div class="small">Alternativ transport soft cap: <?= number_format($busAltTransportSoftCap, 2) ?> <?= h($busCurrency) ?><?= $busDistanceForCap !== null ? ' (distancegrundlag: ' . h((string)$busDistanceForCap) . ' km)' : '' ?>.</div>
+      <?php endif; ?>
+      <?php if ($busBreakdownFullCoverage): ?>
+        <div class="ok mt8 small">Busnedbrud er markeret. Videre transport til nyt koeretoej, terminal eller afventningssted behandles derfor som full coverage-spor.</div>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+  <?php if ($busExpenseTotal > 0 || $busHotelTransportAmount > 0 || $busRefundAmount > 0 || $busRerouteExtraAmount > 0 || $busReturnToOriginAmount > 0 || $busDowngradeAnnexIIAmount > 0): ?>
+    <div class="card mt8" style="border-color:#e5e7eb;background:#fff;">
+      <strong>Udgifter og refusion</strong>
+      <?php if ($busRefundAmount > 0): ?>
+        <div class="small mt4">Refund: <strong><?= number_format($busRefundAmount, 2) ?> <?= h($busCurrency) ?></strong><?= $busRefundBasis !== '' ? ' - ' . h($busRefundBasis) : '' ?></div>
+      <?php endif; ?>
+      <?php if ($busExpenseTotal > 0): ?>
+        <div class="small mt4">Samlede assistanceudgifter: <strong><?= number_format($busExpenseTotal, 2) ?> <?= h($busCurrency) ?></strong></div>
+        <?php if ($busMealsAmount > 0): ?><div class="small">Måltider/forfriskninger: <?= number_format($busMealsAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+        <?php if ($busHotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($busHotelAmount, 2) ?> <?= h($busCurrency) ?><?php if ($busHotelCapApplied): ?> <span class="muted">(efter legal cap)</span><?php endif; ?></div><?php endif; ?>
+        <?php if ($busHotelTransportAmount > 0): ?><div class="small">Transport til/fra hotel: <?= number_format($busHotelTransportAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+        <?php if ($busAltTransportAmount > 0): ?><div class="small">Alternativ transport: <?= number_format($busAltTransportAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+        <?php if ($busOtherExpenseAmount > 0): ?><div class="small">Øvrige udgifter: <?= number_format($busOtherExpenseAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+      <?php endif; ?>
+      <?php if ($busRerouteExtraAmount > 0 || $busReturnToOriginAmount > 0 || $busDowngradeAnnexIIAmount > 0): ?>
+        <div class="small mt4"><strong>Art. 18 ekstraudgifter</strong></div>
+        <?php if ($busRerouteExtraAmount > 0): ?><div class="small">Ekstra ombookingsomkostninger: <?= number_format($busRerouteExtraAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+        <?php if ($busReturnToOriginAmount > 0): ?><div class="small">Retur til afgangssted: <?= number_format($busReturnToOriginAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+        <?php if ($busDowngradeAnnexIIAmount > 0): ?><div class="small">Nedgradering: <?= number_format($busDowngradeAnnexIIAmount, 2) ?> <?= h($busCurrency) ?></div><?php endif; ?>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+  <?php if ($grossAdjusted > 0 || $serviceFee > 0 || $netPayout > 0): ?>
+    <div class="card mt8" style="border-color:#e5e7eb;background:#fff;">
+      <strong>Total og avance</strong>
+      <div class="small mt4">Samlet krav (brutto): <strong><?= number_format($grossAdjusted, 2) ?> <?= h($busCurrency) ?></strong></div>
+      <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($serviceFee, 2) ?> <?= h($busCurrency) ?></strong></div>
+      <div class="small">Netto til kunde: <strong><?= number_format($netPayout, 2) ?> <?= h($busCurrency) ?></strong></div>
+    </div>
+  <?php endif; ?>
   <div class="small muted mt8">
     Naeste handling:
     <strong><?=
@@ -664,6 +1171,29 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
             var url = new URL(window.location.href);
             url.searchParams.set('band', this.value);
             window.location.href = url.toString();
+          });
+        });
+      })();
+
+      // Ferry Art. 19: submit form again when arrival delay or planned duration changes,
+      // so the compensation preview reflects the latest inputs immediately.
+      (function(){
+        var fields = document.querySelectorAll('input[data-ferry-auto-submit="1"]');
+        if (!fields.length) { return; }
+        var form = fields[0].closest('form');
+        if (!form) { return; }
+        var timer = null;
+        var submitForm = function() {
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+        };
+        fields.forEach(function(field){
+          field.addEventListener('change', function(){
+            if (timer) { clearTimeout(timer); }
+            timer = setTimeout(submitForm, 150);
           });
         });
       })();

@@ -1,13 +1,22 @@
 {
   "fixture": {
-    "id": "session_20260304_145943",
+    "id": "session_20260330_082600",
     "version": 2,
-    "label": "Captured wizard session 2026-03-04T14:59:43+00:00",
+    "label": "Captured wizard session 2026-03-30T08:26:00+00:00",
+    "transport_mode": "bus",
     "journey": {
       "seller_type": "operator",
-      "bookingRef": "55MPJ448",
+      "bookingRef": "BOOKING",
+      "gating_mode": "bus",
       "segments": [
         {
+          "from": "fq BUST me eee",
+          "to": ") to",
+          "schedDep": "",
+          "schedArr": "",
+          "trainNo": "",
+          "depDate": "",
+          "arrDate": "",
           "country": "DK"
         }
       ],
@@ -16,239 +25,725 @@
       }
     },
     "journeyBasic": {
-      "dep_date": "2024-03-18",
-      "dep_time": "05:56",
-      "dep_station": "København H",
-      "arr_station": "Herning Messecenter",
-      "arr_time": "09:04",
-      "train_no": "DSB 1",
-      "ticket_no": "55MPJ448",
-      "operator": "DSB",
+      "dep_date": "2023-05-03",
+      "dep_time": "08:00",
+      "dep_station": "Duisburg central train station",
+      "arr_station": "Budapest, Csepel, Szent Imre tér",
+      "arr_time": "10:30",
+      "train_no": "",
+      "ticket_no": "FLix 2074218768",
+      "operator": "Flix",
       "operator_country": "DK",
-      "operator_product": "DSB Orange",
-      "price": "139 kr."
+      "operator_product": "",
+      "price": "€19.98"
     },
     "segments": [
       {
-        "from": "København H",
-        "to": "Vejle St.",
-        "schedDep": "05:56",
-        "schedArr": "07:56",
+        "from": "Duisburg central train station",
+        "to": "Budapest, Csepel, Szent Imre tér",
+        "schedDep": "",
+        "schedArr": "",
         "trainNo": "",
-        "depDate": "2024-03-18",
-        "arrDate": "2024-03-18",
-        "pnr": "55MPJ448",
-        "carrier": "DSB"
-      },
-      {
-        "from": "Vejle St.",
-        "to": "Herning St.",
-        "schedDep": "08:03",
-        "schedArr": "08:57",
-        "trainNo": "",
-        "depDate": "2024-03-18",
-        "arrDate": "2024-03-18",
-        "pnr": "55MPJ448",
-        "carrier": "DSB"
-      },
-      {
-        "from": "Herning St.",
-        "to": "Herning Messecenter",
-        "schedDep": "09:02",
-        "schedArr": "09:04",
-        "trainNo": "",
-        "depDate": "2024-03-18",
-        "arrDate": "2024-03-18",
-        "pnr": "55MPJ448",
-        "carrier": "DSB"
+        "depDate": "",
+        "arrDate": "",
+        "pnr": "FLix 2074218768",
+        "carrier": "Flix"
       }
     ],
-    "meta": {
-      "_multi_tickets": [
-        {
-          "file": "Udrejse-billet.pdf",
-          "pnr": "55MPJ448",
-          "dep_date": "2024-03-05",
-          "passengers": [],
-          "segments": [
-            {
-              "from": "København H",
-              "to": "Vejle St.",
-              "schedDep": "05:56",
-              "schedArr": "07:56",
-              "trainNo": "",
-              "depDate": "2024-03-05",
-              "arrDate": "2024-03-05"
-            },
-            {
-              "from": "Vejle St.",
-              "to": "Herning St.",
-              "schedDep": "08:03",
-              "schedArr": "08:57",
-              "trainNo": "Arriva-tog 5917",
-              "depDate": "2024-03-05",
-              "arrDate": "2024-03-05"
-            },
-            {
-              "from": "Herning St.",
-              "to": "Herning Messecenter",
-              "schedDep": "09:02",
-              "schedArr": "09:04",
-              "trainNo": "",
-              "depDate": "2024-03-05",
-              "arrDate": "2024-03-05"
-            }
-          ],
-          "auto": {
-            "dep_station": {
-              "value": "København H",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "arr_station": {
-              "value": "Herning Messecenter",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "dep_date": {
-              "value": "2024-03-18",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "dep_time": {
-              "value": "05:56",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "arr_time": {
-              "value": "09:04",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "train_no": {
-              "value": "DSB 1",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "ticket_no": {
-              "value": "55MPJ448",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "price": {
-              "value": "139 kr.",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "operator": {
-              "value": "DSB",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "operator_country": {
-              "value": "Denmark",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            },
-            "operator_product": {
-              "value": "DSB Orange",
-              "source": "hybrid",
-              "provider": "hybrid",
-              "confidence": 1
-            }
-          },
-          "logs": [
-            "LLM base=https://api.groq.com/openai/v1, model=llama-3.3-70b-versatile",
-            "LLM hints loaded: date=31, dep_time=36, arr_time=33, dep_station=31, arr_station=34, from=17, to=21, train_no=29, price=47",
-            "LLM extractor success: fields=dep_station,arr_station,dep_date,dep_time,arr_time,ticket_no,price,operator,operator_country,operator_product",
-            "SKIP: dep_station candidate too short/code-like => ordinære domstole.",
-            "SKIP: arr_station candidate too short/code-like => den dag og den",
-            "AUTO: dep_station (arrow fallback)=Til rejsen København H",
-            "AUTO: arr_station (from labelled line)=Herning",
-            "AUTO: dep_time (DSB Afg/Ank)=05:56",
-            "AUTO: arr_time (DSB Afg/Ank)=09:04",
-            "AUTO: train_no=DSB 1",
-            "CAND: ticket_no (generic)=05",
-            "AUTO: ticket_no=05",
-            "AUTO: operator from catalog=DSB (DK)",
-            "AUTO: operator_product from catalog=IC",
-            "LLM seg base=https://api.groq.com/openai/v1, model=llama-3.3-70b-versatile",
-            "LLM segments ok: 2"
-          ]
-        }
-      ],
-      "saved_leg_by_file": {
-        "Udrejse-billet.pdf": {
-          "purchased": [
-            "couchette",
-            "couchette",
-            "couchette"
-          ],
-          "delivered": [
-            "",
-            "",
-            ""
-          ],
-          "reservation_purchased": [
-            "",
-            "",
-            ""
-          ],
-          "reservation_delivered": [
-            "",
-            "",
-            ""
-          ],
-          "downgraded": [
-            "",
-            "",
-            ""
-          ]
+    "ticket_extracts": [],
+    "grouped_contracts": [],
+    "canonical": {
+      "version": 1,
+      "journey_id": "journey_e90ff5ea87d2",
+      "transport_mode": "bus",
+      "journey": {
+        "journey_id": "journey_e90ff5ea87d2",
+        "transport_mode": "bus",
+        "operator": "Flix",
+        "operator_country": "DK",
+        "product": "",
+        "ticket_no": "FLix 2074218768",
+        "origin": "Duisburg central train station",
+        "destination": "Budapest, Csepel, Szent Imre tér",
+        "scheduled_distance_km": 992,
+        "flight_distance_km": null,
+        "route_distance_meters": null,
+        "journey_structure": "single_segment",
+        "ticket_upload_mode": "ticketless",
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "pmr_user": "Nej",
+            "pmr_companion": "Nej",
+            "notice_36h": "Nej",
+            "met_terminal_time": "Nej",
+            "special_seating_notified": "Nej",
+            "assistance_delivered": "unknown",
+            "boarding_refused": "Nej",
+            "refusal_basis": "other_or_unknown",
+            "reason_given": "Nej",
+            "alternative_transport_offered": "Nej"
+          }
         }
       },
-      "downgrade_by_file": {
-        "Udrejse-billet.pdf": {
-          "downgrade_occurred": "no",
-          "downgrade_comp_basis": "",
-          "downgrade_segment_share": "0.318",
-          "downgrade_segment_share_basis": "time_scope",
-          "downgrade_segment_share_conf": "0.9",
-          "purchased": [
-            "couchette",
-            "couchette",
-            "couchette"
-          ],
-          "delivered": [
-            "",
-            "",
-            ""
-          ],
-          "reservation_purchased": [
-            "",
-            "",
-            ""
-          ],
-          "reservation_delivered": [
-            "",
-            "",
-            ""
-          ],
-          "downgraded": [
-            "",
-            "",
-            ""
-          ]
+      "legs": [
+        {
+          "leg_id": "leg_1",
+          "mode": "bus",
+          "operator": "Flix",
+          "origin": "fq BUST me eee",
+          "destination": ") to",
+          "planned_departure": null,
+          "planned_arrival": null,
+          "actual_departure": null,
+          "actual_arrival": null,
+          "service_date": "",
+          "product": null,
+          "reference": null
         }
+      ],
+      "incident": {
+        "incident_id": "incident_primary",
+        "incident_type": "cancellation",
+        "incident_mode": "bus",
+        "incident_leg_id": "leg_1",
+        "incident_missed": null,
+        "protected_connection_missed": null,
+        "missed_connection_due_to_delay": false,
+        "delay_departure_band": null,
+        "delay_minutes_departure": null,
+        "delay_minutes_arrival": null,
+        "arrival_delay_minutes": null,
+        "expected_departure_delay_90": null,
+        "actual_departure_delay_90": null,
+        "ferry_art16_notice_within_30min": null,
+        "boarding_denied": null,
+        "voluntary_denied_boarding": null,
+        "pmr_user": false,
+        "pmr_companion": null,
+        "pmr_service_dog": null,
+        "unaccompanied_minor": null,
+        "ferry_pmr_companion": null,
+        "ferry_pmr_service_dog": null,
+        "ferry_pmr_notice_48h": null,
+        "ferry_pmr_met_checkin_time": null,
+        "ferry_pmr_assistance_delivered": null,
+        "ferry_pmr_boarding_refused": null,
+        "ferry_pmr_refusal_basis": null,
+        "ferry_pmr_reason_given": null,
+        "ferry_pmr_alternative_transport_offered": null,
+        "bus_pmr_companion": false,
+        "bus_pmr_notice_36h": false,
+        "bus_pmr_met_terminal_time": false,
+        "bus_pmr_special_seating_notified": false,
+        "bus_pmr_assistance_delivered": "unknown",
+        "bus_pmr_boarding_refused": false,
+        "bus_pmr_refusal_basis": "other_or_unknown",
+        "bus_pmr_reason_given": false,
+        "bus_pmr_alternative_transport_offered": false,
+        "reroute_offered": null,
+        "cancellation_notice_band": null,
+        "extraordinary_circumstances": null,
+        "weather_safety": null,
+        "operator_exceptional_circumstances": null,
+        "incident_chain": [
+          {
+            "segment_mode": "bus",
+            "incident_type": "cancellation"
+          }
+        ],
+        "incident_segment_mode": "bus",
+        "incident_segment_operator": null,
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "incident_type": "cancellation",
+            "planned_duration_band": "over_3h",
+            "vehicle_breakdown": "no",
+            "missed_connection_due_to_delay": "no",
+            "overbooking": "no",
+            "severe_weather": "no",
+            "major_natural_disaster": "no",
+            "incident_main": "cancellation",
+            "delay_departure_band": null,
+            "delay_minutes_departure": null
+          }
+        }
+      },
+      "contract": {
+        "contract_topology": "single_mode_single_contract",
+        "contract_topology_confidence": "medium",
+        "claim_transport_mode": "bus",
+        "original_contract_mode": "bus",
+        "seller_type": "operator",
+        "seller_name": "Flix",
+        "shared_booking_reference": true,
+        "single_transaction": null,
+        "incident_segment_mode": "bus",
+        "incident_segment_operator": "Flix",
+        "claim_direction": {
+          "transport_mode": "bus",
+          "contract_topology": "single_mode_single_contract",
+          "claim_transport_mode": "bus",
+          "original_contract_mode": "bus",
+          "claim_party_type": "carrier",
+          "claim_party_name": "Flix",
+          "rights_module": "bus",
+          "contract_stop": true,
+          "ticket_scope": "single",
+          "manual_review_required": false,
+          "scope_applies": true,
+          "scope_exclusion_reason": "",
+          "recommended_documents": [
+            "ticket_or_booking",
+            "operator_connection_or_terminal_evidence"
+          ]
+        },
+        "decision": {
+          "stage": "STOP",
+          "ticket_scope": "single",
+          "contract_label": "Samlet kontrakt",
+          "basis": "single_mode_single_contract",
+          "notes": [
+            "Rejsen behandles som én samlet kontrakt for den valgte transportform.",
+            "Booking cohesion: unknown",
+            "Service cohesion: unknown"
+          ],
+          "booking_cohesion": "unknown",
+          "service_cohesion": "unknown",
+          "contract_topology_confidence": "medium",
+          "contract_topology_hint": null,
+          "manual_review_reasons": [
+            "ticketless_estimate_only"
+          ],
+          "claim_transport_mode": "bus",
+          "original_contract_mode": "bus",
+          "claim_party_name": "Flix",
+          "rights_module": "bus",
+          "scope_applies": true
+        },
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "claim_transport_mode": "bus",
+            "original_contract_mode": "bus",
+            "incident_segment_mode": "bus",
+            "journey_structure": "single_segment"
+          }
+        }
+      },
+      "legal_assessment": {
+        "transport_mode": "bus",
+        "regulation_scope_applies": true,
+        "scope_exclusion_reason": null,
+        "rights_module": "bus",
+        "claim_party_type": "carrier",
+        "claim_party_name": "Flix",
+        "incident_type": "cancellation",
+        "generic_gates": {
+          "remedy": false,
+          "assistance": false,
+          "compensation": false,
+          "information": false
+        },
+        "article_flags": {
+          "art19": false,
+          "art20": false,
+          "art21_refreshments": false,
+          "art21_hotel": false,
+          "art19_compensation_50": false,
+          "pmr_assistance": false,
+          "pmr_assistance_partial": false,
+          "pmr_boarding_remedy": false,
+          "pmr_reason_notice": false
+        },
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "scheduled_distance_km": "992",
+            "departure_from_terminal": true,
+            "bus_regular_service": true,
+            "boarding_in_eu": true,
+            "alighting_in_eu": true,
+            "delay_at_final_minutes": null,
+            "compensation_band": null,
+            "vehicle_breakdown": "no",
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "hotel_legal_cap_eur_per_night": 80,
+            "hotel_legal_nights_max": 2,
+            "meals_soft_cap_eur_per_delay_hour": 20,
+            "hotel_transport_soft_cap_eur": 50
+          }
+        }
+      },
+      "evidence": {
+        "0": {
+          "type": "booking_reference",
+          "source": "form_or_ticket",
+          "value": "FLix 2074218768"
+        },
+        "1": {
+          "type": "ticket_file",
+          "source": "upload",
+          "value": "busbillet.webp"
+        },
+        "2": {
+          "type": "ocr_text_present",
+          "source": "ocr",
+          "value": true
+        },
+        "3": {
+          "type": "resolved_legs",
+          "source": "normalization",
+          "value": 1
+        },
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "remedy_choice": "reroute_soonest",
+            "refund_requested": "no",
+            "reroute_choice": "reroute_soonest",
+            "carrier_offered_choice": "no",
+            "self_arranged_solution": "yes",
+            "self_arranged_solution_type": "used_rail",
+            "self_arranged_reason": "no_choice_given",
+            "return_to_departure_stop_expense": null,
+            "return_to_departure_stop_amount": null,
+            "return_to_departure_stop_currency": null,
+            "refreshments_offered": "no",
+            "refreshments_self_paid_amount": "30.00",
+            "refreshments_self_paid_currency": "EUR",
+            "hotel_offered": "irrelevant",
+            "hotel_transport_included": null,
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "overnight_required": "yes",
+            "hotel_self_paid_amount": null,
+            "hotel_self_paid_currency": "EUR",
+            "hotel_self_paid_nights": null
+          }
+        }
+      },
+      "raw": {
+        "scope_meta": {
+          "transport_mode": "bus",
+          "service_type": null,
+          "departure_from_terminal": true,
+          "departure_port_in_eu": null,
+          "arrival_port_in_eu": null,
+          "carrier_is_eu": null,
+          "departure_airport_in_eu": null,
+          "arrival_airport_in_eu": null,
+          "operating_carrier_is_eu": null,
+          "marketing_carrier_is_eu": null,
+          "flight_distance_km": null,
+          "air_distance_band": null,
+          "air_delay_threshold_hours": null,
+          "intra_eu_over_1500": null,
+          "bus_regular_service": true,
+          "boarding_in_eu": true,
+          "alighting_in_eu": true,
+          "scheduled_distance_km": 992,
+          "vessel_passenger_capacity": null,
+          "vessel_operational_crew": null,
+          "route_distance_meters": null
+        },
+        "incident_meta": {
+          "transport_mode": "bus",
+          "gating_mode": "bus",
+          "initial_incident_mode": "bus",
+          "primary_incident_mode": "bus",
+          "primary_incident_type": "cancellation",
+          "incident_type": "cancellation",
+          "incident_missed": null,
+          "expected_delay_60": null,
+          "delay_already_60": null,
+          "missed_expected_delay_60": null,
+          "national_delay_minutes": null,
+          "preinformed_disruption": null,
+          "preinfo_channel": null,
+          "realtime_info_seen": null,
+          "operator_exceptional_circumstances": null,
+          "operator_exceptional_type": null,
+          "minimum_threshold_applies": null,
+          "arrival_delay_minutes": null,
+          "scheduled_journey_duration_minutes": null,
+          "expected_departure_delay_90": null,
+          "actual_departure_delay_90": null,
+          "ferry_art16_notice_within_30min": null,
+          "overnight_required": null,
+          "informed_before_purchase": null,
+          "passenger_fault": null,
+          "weather_safety": null,
+          "extraordinary_circumstances": null,
+          "open_ticket_without_departure_time": null,
+          "season_ticket": false,
+          "delay_departure_band": null,
+          "planned_duration_band": "over_3h",
+          "delay_minutes_departure": null,
+          "delay_minutes_arrival": null,
+          "boarding_denied": null,
+          "voluntary_denied_boarding": null,
+          "reroute_offered": null,
+          "cancellation_notice_band": null,
+          "reroute_departure_band": null,
+          "reroute_arrival_band": null,
+          "refund_offered": null,
+          "hotel_required": null,
+          "hotel_offered": null,
+          "meal_offered": false,
+          "pmr_user": false,
+          "pmr_companion": null,
+          "pmr_service_dog": null,
+          "unaccompanied_minor": null,
+          "ferry_pmr_companion": null,
+          "ferry_pmr_service_dog": null,
+          "ferry_pmr_notice_48h": null,
+          "ferry_pmr_met_checkin_time": null,
+          "ferry_pmr_assistance_delivered": null,
+          "ferry_pmr_boarding_refused": null,
+          "ferry_pmr_refusal_basis": null,
+          "ferry_pmr_reason_given": null,
+          "ferry_pmr_alternative_transport_offered": null,
+          "bus_pmr_companion": false,
+          "bus_pmr_notice_36h": false,
+          "bus_pmr_met_terminal_time": false,
+          "bus_pmr_special_seating_notified": false,
+          "bus_pmr_assistance_delivered": "unknown",
+          "bus_pmr_boarding_refused": false,
+          "bus_pmr_refusal_basis": "other_or_unknown",
+          "bus_pmr_reason_given": false,
+          "bus_pmr_alternative_transport_offered": false,
+          "protected_connection_missed": null,
+          "reroute_arrival_delay_minutes": null,
+          "overbooking": false,
+          "carrier_offered_choice": false,
+          "severe_weather": false,
+          "major_natural_disaster": false,
+          "missed_connection_due_to_delay": false,
+          "follow_on_missed_connection": null,
+          "next_segment_operated_normally": null,
+          "incident_chain": [
+            {
+              "segment_mode": "bus",
+              "incident_type": "cancellation"
+            }
+          ]
+        },
+        "rights": [],
+        "scope": {
+          "regulation_applies": true,
+          "scope_basis": "regular_service_250km_plus",
+          "scope_exclusion_reason": null,
+          "bus_regular_service": true,
+          "boarding_in_eu": true,
+          "alighting_in_eu": true,
+          "departure_from_terminal": true,
+          "scheduled_distance_km": 992
+        },
+        "contract": {
+          "contract_resolver": "bus",
+          "contract_topology": "single_mode_single_contract",
+          "seller_type": "operator",
+          "seller_name": "Flix",
+          "incident_segment_mode": "bus",
+          "incident_segment_operator": "Flix",
+          "primary_claim_party": "carrier",
+          "primary_claim_party_name": "Flix",
+          "rights_module": "bus",
+          "manual_review_required": false,
+          "decision_basis": "single_contract_direct_carrier"
+        },
+        "mode_classification": {
+          "primary_mode": "bus",
+          "mode_candidates": [
+            {
+              "mode": "bus",
+              "score": 34
+            },
+            {
+              "mode": "air",
+              "score": 14
+            },
+            {
+              "mode": "rail",
+              "score": 6
+            }
+          ],
+          "confidence": "high",
+          "scores": {
+            "bus": 34,
+            "air": 14,
+            "rail": 6,
+            "ferry": 0
+          },
+          "reasons": [
+            "lookup:bus",
+            "ocr:station-layout",
+            "ocr:bus-luggage",
+            "ocr:bus-boarding-pass-layout",
+            "structured:regular-service",
+            "structured:bus-scope"
+          ],
+          "reasons_by_mode": {
+            "rail": [
+              "ocr:train-word",
+              "ocr:rail-seat"
+            ],
+            "ferry": [],
+            "bus": [
+              "lookup:bus",
+              "ocr:station-layout",
+              "ocr:bus-luggage",
+              "ocr:bus-boarding-pass-layout",
+              "structured:regular-service",
+              "structured:bus-scope"
+            ],
+            "air": [
+              "ocr:boarding-pass",
+              "ocr:boarding",
+              "structured:air-field"
+            ]
+          }
+        },
+        "grouped_contract_count": 0
+      },
+      "_mode": "bus",
+      "_mode_fields": {
+        "bus": {
+          "journey": {
+            "pmr_user": "Nej",
+            "pmr_companion": "Nej",
+            "notice_36h": "Nej",
+            "met_terminal_time": "Nej",
+            "special_seating_notified": "Nej",
+            "assistance_delivered": "unknown",
+            "boarding_refused": "Nej",
+            "refusal_basis": "other_or_unknown",
+            "reason_given": "Nej",
+            "alternative_transport_offered": "Nej"
+          },
+          "incident": {
+            "incident_main": "cancellation",
+            "delay_departure_band": null,
+            "delay_minutes_departure": null,
+            "planned_duration_band": "over_3h",
+            "vehicle_breakdown": "no",
+            "missed_connection_due_to_delay": "no",
+            "overbooking": "no",
+            "severe_weather": "no",
+            "major_natural_disaster": "no"
+          },
+          "remedies": {
+            "remedy_choice": "reroute_soonest",
+            "refund_requested": "no",
+            "reroute_choice": "reroute_soonest",
+            "carrier_offered_choice": "no",
+            "self_arranged_solution": "yes",
+            "self_arranged_solution_type": "used_rail",
+            "self_arranged_reason": "no_choice_given",
+            "return_to_departure_stop_expense": null,
+            "return_to_departure_stop_amount": null,
+            "return_to_departure_stop_currency": null
+          },
+          "assistance": {
+            "refreshments_offered": "no",
+            "refreshments_self_paid_amount": "30.00",
+            "refreshments_self_paid_currency": "EUR",
+            "hotel_offered": "irrelevant",
+            "hotel_transport_included": null,
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "overnight_required": "yes",
+            "hotel_self_paid_amount": null,
+            "hotel_self_paid_currency": "EUR",
+            "hotel_self_paid_nights": null
+          },
+          "compensation": {
+            "delay_at_final_minutes": null,
+            "compensation_band": null,
+            "scheduled_distance_km": "992",
+            "vehicle_breakdown": "no",
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "hotel_legal_cap_eur_per_night": 80,
+            "hotel_legal_nights_max": 2,
+            "meals_soft_cap_eur_per_delay_hour": 20,
+            "hotel_transport_soft_cap_eur": 50
+          },
+          "scope": {
+            "scheduled_distance_km": 992,
+            "departure_from_terminal": true,
+            "bus_regular_service": true,
+            "boarding_in_eu": true,
+            "alighting_in_eu": true
+          },
+          "contract": {
+            "claim_transport_mode": "bus",
+            "original_contract_mode": "bus",
+            "incident_segment_mode": "bus",
+            "journey_structure": "single_segment"
+          },
+          "incident_meta": {
+            "incident_type": "cancellation",
+            "planned_duration_band": "over_3h",
+            "vehicle_breakdown": false,
+            "missed_connection_due_to_delay": false,
+            "overbooking": false,
+            "severe_weather": false,
+            "major_natural_disaster": false
+          }
+        }
+      }
+    },
+    "contract_meta": {
+      "seller_type": "operator",
+      "seller_name": "Flix",
+      "shared_booking_reference": true,
+      "single_transaction": null,
+      "contract_structure_disclosure": "unknown",
+      "separate_contract_notice": "unclear",
+      "original_contract_mode": "bus",
+      "journey_structure": "single_segment",
+      "contract_topology": "single_mode_single_contract",
+      "incident_segment_mode": "bus",
+      "incident_segment_operator": "Flix",
+      "primary_claim_party": "seller",
+      "claim_transport_mode": "bus",
+      "rights_module": "bus",
+      "manual_review_required": false,
+      "same_pnr": null,
+      "same_booking_reference": null,
+      "same_eticket": null,
+      "protected_connection_disclosed": null,
+      "self_transfer_notice": null,
+      "marketing_carrier": null,
+      "operating_carrier": null,
+      "air_connection_type": null,
+      "contract_topology_hint": null,
+      "contract_topology_confidence": "medium",
+      "booking_cohesion": "unknown",
+      "service_cohesion": "unknown",
+      "ticket_extract_count": 0,
+      "grouped_contract_count": 0,
+      "manual_review_reasons": [
+        "ticketless_estimate_only"
+      ]
+    },
+    "scope_meta": {
+      "transport_mode": "bus",
+      "service_type": null,
+      "departure_from_terminal": true,
+      "departure_port_in_eu": null,
+      "arrival_port_in_eu": null,
+      "carrier_is_eu": null,
+      "departure_airport_in_eu": null,
+      "arrival_airport_in_eu": null,
+      "operating_carrier_is_eu": null,
+      "marketing_carrier_is_eu": null,
+      "flight_distance_km": null,
+      "air_distance_band": null,
+      "air_delay_threshold_hours": null,
+      "intra_eu_over_1500": null,
+      "bus_regular_service": true,
+      "boarding_in_eu": true,
+      "alighting_in_eu": true,
+      "scheduled_distance_km": 992,
+      "vessel_passenger_capacity": null,
+      "vessel_operational_crew": null,
+      "route_distance_meters": null
+    },
+    "incident_meta": {
+      "transport_mode": "bus",
+      "incident_type": "cancellation",
+      "incident_missed": null,
+      "expected_delay_60": null,
+      "delay_already_60": null,
+      "missed_expected_delay_60": null,
+      "national_delay_minutes": null,
+      "preinformed_disruption": null,
+      "preinfo_channel": null,
+      "realtime_info_seen": null,
+      "operator_exceptional_circumstances": null,
+      "operator_exceptional_type": null,
+      "minimum_threshold_applies": null,
+      "arrival_delay_minutes": null,
+      "scheduled_journey_duration_minutes": null,
+      "expected_departure_delay_90": null,
+      "actual_departure_delay_90": null,
+      "ferry_art16_notice_within_30min": null,
+      "overnight_required": null,
+      "informed_before_purchase": null,
+      "passenger_fault": null,
+      "weather_safety": null,
+      "extraordinary_circumstances": null,
+      "open_ticket_without_departure_time": null,
+      "season_ticket": false,
+      "delay_departure_band": null,
+      "planned_duration_band": "over_3h",
+      "vehicle_breakdown": false,
+      "delay_minutes_departure": null,
+      "delay_minutes_arrival": null,
+      "boarding_denied": null,
+      "voluntary_denied_boarding": null,
+      "reroute_offered": null,
+      "cancellation_notice_band": null,
+      "reroute_departure_band": null,
+      "reroute_arrival_band": null,
+      "refund_offered": null,
+      "hotel_required": null,
+      "hotel_offered": null,
+      "meal_offered": false,
+      "pmr_user": false,
+      "ferry_pmr_companion": null,
+      "ferry_pmr_service_dog": null,
+      "ferry_pmr_notice_48h": null,
+      "ferry_pmr_met_checkin_time": null,
+      "ferry_pmr_assistance_delivered": null,
+      "ferry_pmr_boarding_refused": null,
+      "ferry_pmr_refusal_basis": null,
+      "ferry_pmr_reason_given": null,
+      "ferry_pmr_alternative_transport_offered": null,
+      "bus_pmr_companion": false,
+      "bus_pmr_notice_36h": false,
+      "bus_pmr_met_terminal_time": false,
+      "bus_pmr_special_seating_notified": false,
+      "bus_pmr_assistance_delivered": "unknown",
+      "bus_pmr_boarding_refused": false,
+      "bus_pmr_refusal_basis": "other_or_unknown",
+      "bus_pmr_reason_given": false,
+      "bus_pmr_alternative_transport_offered": false,
+      "protected_connection_missed": null,
+      "connection_protection_basis": null,
+      "reroute_arrival_delay_minutes": null,
+      "overbooking": false,
+      "carrier_offered_choice": false,
+      "severe_weather": false,
+      "major_natural_disaster": false,
+      "missed_connection_due_to_delay": false,
+      "gating_mode": "bus",
+      "initial_incident_mode": "bus",
+      "primary_incident_mode": "bus",
+      "primary_incident_type": "cancellation",
+      "pmr_companion": null,
+      "pmr_service_dog": null,
+      "unaccompanied_minor": null,
+      "follow_on_missed_connection": null,
+      "next_segment_operated_normally": null,
+      "incident_chain": [
+        {
+          "segment_mode": "bus",
+          "incident_type": "cancellation"
+        }
+      ]
+    },
+    "meta": {
+      "_multi_tickets": [],
+      "ticket_upload_count": "1",
+      "ticket_multi_passenger": "no",
+      "season_pass": {
+        "has": false
       }
     },
     "wizard": {
@@ -257,47 +752,32 @@
         "eu_only": true
       },
       "step2_entitlements": {
-        "ticket_upload_mode": "ticket",
-        "scope_choice": "",
-        "operator": "DSB",
+        "ticket_upload_mode": "ticketless",
+        "scope_choice": null,
+        "operator": "Flix",
         "operator_country": "DK",
-        "operator_product": "DSB Orange",
-        "ticket_no": "55MPJ448",
-        "dep_date": "2024-03-18",
-        "dep_time": "05:56",
-        "dep_station": "København H",
-        "arr_station": "Herning Messecenter",
-        "arr_time": "09:04",
-        "train_no": "DSB 1",
-        "price": "139 kr.",
-        "price_currency": "",
-        "price_known": "no",
+        "operator_product": "",
+        "ticket_no": "FLix 2074218768",
+        "dep_date": "2023-05-03",
+        "dep_time": "08:00",
+        "dep_station": "Duisburg central train station",
+        "arr_station": "Budapest, Csepel, Szent Imre tér",
+        "arr_time": "10:30",
+        "train_no": "",
+        "price": "€19.98",
+        "price_currency": "DKK",
+        "price_known": "yes",
         "seller_channel": null,
+        "original_contract_mode": "bus",
         "through_ticket_disclosure": null,
         "separate_contract_notice": null,
         "single_txn_operator": null,
         "single_txn_retailer": null
       },
-      "step3_journey": {
-        "pmr_user": "Nej",
-        "pmr_booked": "unknown",
-        "pmrQBooked": null,
-        "pmrQDelivered": null,
-        "pmrQPromised": null,
-        "pmr_facility_details": "",
-        "fare_flex_type": null,
-        "train_specificity": null,
-        "fare_class_purchased": null,
-        "berth_seat_type": "couchette",
-        "eligible_under_18_3": "0",
-        "bike_was_present": "Nej",
-        "bike_refusal_reason_type": "",
-        "bike_refusal_reason_other_text": ""
-      },
-      "step4_station": {
-        "a20_station_stranded": "no",
-        "is_stranded": "yes",
-        "stranded_location": "track",
+      "step3_station": {
+        "a20_station_stranded": null,
+        "is_stranded": null,
+        "stranded_location": null,
         "stranded_current_station": null,
         "stranded_current_station_other": null,
         "stranded_current_station_other_osm_id": null,
@@ -315,7 +795,7 @@
         "a20_3_self_paid_amount": null,
         "a20_3_self_paid_currency": null,
         "a20_3_self_paid_receipt": null,
-        "a20_where_ended": "final_destination",
+        "a20_where_ended": null,
         "a20_arrival_station": null,
         "a20_arrival_station_other": null,
         "a20_arrival_station_other_osm_id": null,
@@ -324,38 +804,122 @@
         "a20_arrival_station_other_country": null,
         "a20_arrival_station_other_type": null,
         "a20_arrival_station_other_source": null,
-        "a20_where_ended_assumed": "0",
+        "a20_where_ended_assumed": null,
         "handoff_station": null
       },
+      "step4_journey": {
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "pmr_user": "Nej",
+            "pmr_companion": "Nej",
+            "notice_36h": "Nej",
+            "met_terminal_time": "Nej",
+            "special_seating_notified": "Nej",
+            "assistance_delivered": "unknown",
+            "boarding_refused": "Nej",
+            "refusal_basis": "other_or_unknown",
+            "reason_given": "Nej",
+            "alternative_transport_offered": "Nej"
+          }
+        },
+        "pmr_user": "Nej",
+        "pmr_companion": "unknown",
+        "pmr_service_dog": "unknown",
+        "unaccompanied_minor": "unknown",
+        "ferry_pmr_companion": "unknown",
+        "ferry_pmr_service_dog": "unknown",
+        "ferry_pmr_notice_48h": "unknown",
+        "ferry_pmr_met_checkin_time": "unknown",
+        "ferry_pmr_assistance_delivered": "unknown",
+        "ferry_pmr_boarding_refused": "unknown",
+        "ferry_pmr_refusal_basis": null,
+        "ferry_pmr_reason_given": "unknown",
+        "ferry_pmr_alternative_transport_offered": "unknown",
+        "bus_pmr_companion": "Nej",
+        "bus_pmr_notice_36h": "Nej",
+        "bus_pmr_met_terminal_time": "Nej",
+        "bus_pmr_special_seating_notified": "Nej",
+        "bus_pmr_assistance_delivered": "unknown",
+        "bus_pmr_boarding_refused": "Nej",
+        "bus_pmr_refusal_basis": "other_or_unknown",
+        "bus_pmr_reason_given": "Nej",
+        "bus_pmr_alternative_transport_offered": "Nej",
+        "pmr_booked": "unknown",
+        "pmrQBooked": null,
+        "pmrQDelivered": null,
+        "pmrQPromised": null,
+        "pmr_facility_details": null,
+        "fare_flex_type": null,
+        "train_specificity": null,
+        "fare_class_purchased": null,
+        "berth_seat_type": null,
+        "eligible_under_18_3": "1",
+        "bike_was_present": "Nej"
+      },
       "step5_incident": {
-        "incident_main": "delay",
-        "incident_missed": "yes",
-        "expected_delay_60": "yes",
-        "delay_already_60": "no",
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "incident_main": "cancellation",
+            "delay_departure_band": null,
+            "delay_minutes_departure": null,
+            "planned_duration_band": "over_3h",
+            "vehicle_breakdown": "no",
+            "missed_connection_due_to_delay": "no",
+            "overbooking": "no",
+            "severe_weather": "no",
+            "major_natural_disaster": "no"
+          }
+        },
+        "incident_main": "cancellation",
+        "incident_missed": "",
+        "expected_delay_60": null,
+        "delay_already_60": null,
         "missed_expected_delay_60": null,
-        "national_delay_minutes": "",
-        "national_delay_reported_at": "",
-        "preinformed_disruption": "no",
-        "preinfo_channel": "",
+        "national_delay_minutes": null,
+        "national_delay_reported_at": null,
+        "preinformed_disruption": null,
+        "preinfo_channel": null,
         "realtime_info_seen": null,
-        "missed_connection_station": "Vejle St.",
-        "missed_connection_pick": "Vejle St.",
-        "voucherAccepted": "no",
-        "operatorExceptionalCircumstances": "unknown",
-        "operatorExceptionalType": "",
-        "minThresholdApplies": null
+        "missed_connection_station": ") to",
+        "missed_connection_pick": null,
+        "voucherAccepted": null,
+        "operatorExceptionalCircumstances": null,
+        "operatorExceptionalType": null,
+        "minThresholdApplies": null,
+        "ferry_art16_notice_within_30min": null,
+        "vehicle_breakdown": "no",
+        "delay_departure_band": null,
+        "delay_minutes_departure": null,
+        "planned_duration_band": "over_3h",
+        "missed_connection_due_to_delay": "no",
+        "overbooking": "no",
+        "severe_weather": "no",
+        "major_natural_disaster": "no",
+        "bus_incident_main": "cancellation",
+        "bus_delay_departure_band": null,
+        "bus_delay_minutes_departure": null,
+        "bus_planned_duration_band": "over_3h",
+        "bus_vehicle_breakdown": "no",
+        "bus_missed_connection_due_to_delay": "no",
+        "bus_overbooking": "no",
+        "bus_severe_weather": "no",
+        "bus_major_natural_disaster": "no"
       },
       "step6_choices": {
-        "is_stranded_trin5": "yes",
-        "maps_opt_in_trin5": "0",
-        "stranded_location": "track",
-        "blocked_train_alt_transport": "yes",
+        "_mode": "bus",
+        "_mode_fields": [],
+        "is_stranded_trin5": null,
+        "maps_opt_in_trin5": null,
+        "stranded_location": null,
+        "blocked_train_alt_transport": null,
         "blocked_no_transport_action": null,
-        "assistance_alt_transport_type": "bus",
-        "a20_where_ended": "final_destination",
+        "assistance_alt_transport_type": null,
+        "a20_where_ended": null,
         "a20_arrival_station": null,
         "a20_arrival_station_other": null,
-        "a20_where_ended_assumed": "0",
+        "a20_where_ended_assumed": null,
         "handoff_station": null,
         "blocked_self_paid_transport_type": null,
         "blocked_self_paid_amount": null,
@@ -363,127 +927,246 @@
         "blocked_self_paid_receipt": null
       },
       "step7_remedies": {
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "remedy_choice": "reroute_soonest",
+            "refund_requested": "no",
+            "reroute_choice": "reroute_soonest",
+            "carrier_offered_choice": "no",
+            "self_arranged_solution": "yes",
+            "self_arranged_solution_type": "used_rail",
+            "self_arranged_reason": "no_choice_given",
+            "return_to_departure_stop_expense": null,
+            "return_to_departure_stop_amount": null,
+            "return_to_departure_stop_currency": null
+          }
+        },
         "art18_expected_delay_60": "yes",
-        "remedyChoice": "refund_return",
-        "a18_from_station": "Vejle St.",
+        "remedyChoice": "reroute_soonest",
+        "rail_remedy_choice": null,
+        "ferry_remedy_choice": null,
+        "ferry_refund_requested": null,
+        "ferry_reroute_choice": null,
+        "bus_remedy_choice": "reroute_soonest",
+        "bus_refund_requested": "no",
+        "bus_reroute_choice": "reroute_soonest",
+        "a18_from_station": "Duisburg central train station",
         "a18_from_station_other": null,
-        "a18_return_to_station": "København H",
+        "a18_return_to_station": null,
         "a18_return_to_station_other": null,
-        "a18_reroute_mode": null,
-        "a18_reroute_endpoint": null,
+        "a18_reroute_mode": "rail",
+        "a18_reroute_endpoint": "final_destination",
         "a18_reroute_arrival_station": null,
         "a18_reroute_arrival_station_other": null,
-        "reroute_same_conditions_soonest": null,
+        "carrier_offered_choice": "no",
+        "reroute_same_conditions_soonest": "yes",
         "reroute_later_at_choice": null,
-        "reroute_info_within_100min": null,
-        "self_purchased_new_ticket": null,
+        "reroute_info_within_100min": "no",
+        "rail_reroute_info_within_100min": null,
+        "self_purchased_new_ticket": "yes",
+        "rail_self_arranged_solution": null,
         "self_purchase_approved_by_operator": null,
-        "reroute_extra_costs": null,
-        "reroute_extra_costs_amount": null,
-        "reroute_extra_costs_currency": null,
+        "rail_operator_confirmed_self_arranged_solution": null,
+        "self_purchase_reason": "no_choice_given",
+        "rail_self_arranged_reason": null,
+        "bus_self_arranged_solution": "yes",
+        "bus_self_arranged_solution_type": "used_rail",
+        "bus_self_arranged_reason": "no_choice_given",
+        "air_article8_choice_offered": null,
+        "air_self_arranged_reroute": null,
+        "air_self_arranged_reroute_reason": null,
+        "air_airline_confirmed_self_arranged_solution": null,
+        "air_refund_scope": null,
+        "air_return_to_first_departure_point": null,
+        "air_alternative_airport_transfer_needed": null,
+        "air_alternative_airport_transfer_amount": null,
+        "air_alternative_airport_transfer_currency": null,
+        "offer_provided": null,
+        "rail_offer_provided": null,
+        "ferry_offer_provided": null,
+        "ferry_self_arranged_solution": null,
+        "ferry_self_arranged_solution_type": null,
+        "ferry_self_arranged_reason": null,
+        "ferry_first_usable_solution_timing": null,
+        "reroute_extra_costs": "yes",
+        "reroute_extra_costs_type": "new_ticket",
+        "reroute_extra_costs_amount": "200",
+        "reroute_extra_costs_currency": "EUR",
+        "reroute_extra_costs_description": null,
+        "reroute_extra_costs_receipt": null,
         "reroute_later_ticket_upload": null,
         "reroute_later_ticket_file": null,
-        "trip_cancelled_return_to_origin": "yes",
-        "return_to_origin_expense": "yes",
-        "return_to_origin_amount": "200",
-        "return_to_origin_currency": "DKK",
+        "trip_cancelled_return_to_origin": null,
+        "return_to_origin_expense": null,
+        "return_to_origin_amount": null,
+        "return_to_origin_currency": null,
+        "rail_return_to_origin_expense": null,
+        "rail_return_to_origin_amount": null,
+        "rail_return_to_origin_currency": null,
         "return_to_origin_receipt": null,
+        "bus_return_to_departure_stop_expense": null,
+        "bus_return_to_departure_stop_amount": null,
+        "bus_return_to_departure_stop_currency": null,
+        "ferry_return_to_departure_port_expense": null,
+        "ferry_return_to_departure_port_amount": null,
+        "ferry_return_to_departure_port_currency": null,
         "delay_confirmation_info": null,
         "delay_confirmation_received": null,
         "delay_confirmation_upload": null,
         "delay_confirmation_type": null
       },
       "step8_assistance": {
-        "meal_offered": "yes",
-        "assistance_meals_unavailable_reason": null,
-        "meal_self_paid_amount": null,
-        "meal_self_paid_currency": null,
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "refreshments_offered": "no",
+            "refreshments_self_paid_amount": "30.00",
+            "refreshments_self_paid_currency": "EUR",
+            "hotel_offered": "irrelevant",
+            "hotel_transport_included": null,
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "overnight_required": "yes",
+            "hotel_self_paid_amount": null,
+            "hotel_self_paid_currency": "EUR",
+            "hotel_self_paid_nights": null
+          }
+        },
+        "meal_offered": "no",
+        "rail_refreshments_offered": null,
+        "bus_refreshments_offered": "no",
+        "ferry_refreshments_offered": null,
+        "assistance_meals_unavailable_reason": "unreasonable_terms",
+        "meal_self_paid_amount": "30.00",
+        "meal_self_paid_currency": "EUR",
         "meal_self_paid_receipt": null,
-        "meal_self_paid_amount_items": null,
-        "meal_self_paid_receipt_items": null,
+        "meal_self_paid_amount_items": [
+          "30"
+        ],
+        "meal_self_paid_receipt_items": [
+          ""
+        ],
+        "rail_refreshments_self_paid_amount": null,
+        "rail_refreshments_self_paid_currency": null,
+        "bus_refreshments_self_paid_amount": "30.00",
+        "bus_refreshments_self_paid_currency": "EUR",
+        "ferry_refreshments_self_paid_amount": null,
+        "ferry_refreshments_self_paid_currency": null,
         "hotel_offered": "irrelevant",
+        "rail_hotel_offered": null,
+        "bus_hotel_offered": "irrelevant",
+        "ferry_hotel_offered": null,
         "assistance_hotel_transport_included": null,
+        "rail_hotel_transport_included": null,
+        "bus_hotel_transport_included": null,
+        "ferry_hotel_transport_included": null,
         "hotel_transport_self_paid_amount": null,
         "hotel_transport_self_paid_currency": null,
         "hotel_transport_self_paid_receipt": null,
-        "overnight_needed": null,
+        "overnight_needed": "yes",
+        "rail_overnight_required": null,
+        "bus_overnight_required": "yes",
+        "ferry_overnight_required": null,
         "hotel_self_paid_nights": null,
         "hotel_self_paid_amount": null,
-        "hotel_self_paid_currency": null,
+        "hotel_self_paid_currency": "EUR",
         "hotel_self_paid_receipt": null,
         "hotel_self_paid_amount_items": null,
         "hotel_self_paid_nights_items": null,
         "hotel_self_paid_receipt_items": null,
+        "rail_hotel_self_paid_amount": null,
+        "rail_hotel_self_paid_currency": null,
+        "rail_hotel_self_paid_nights": null,
+        "bus_hotel_self_paid_amount": null,
+        "bus_hotel_self_paid_currency": "EUR",
+        "bus_hotel_self_paid_nights": null,
+        "ferry_hotel_self_paid_amount": null,
+        "ferry_hotel_self_paid_currency": null,
+        "ferry_hotel_self_paid_nights": null,
         "assistance_pmr_priority_applied": null,
         "assistance_pmr_companion_supported": null,
         "price_hints": {
           "meals": {
-            "min": 60,
-            "max": 110,
-            "currency": "DKK"
+            "min": 0,
+            "max": 20,
+            "currency": "EUR"
           },
           "hotelPerNight": {
-            "min": 600,
-            "max": 970,
-            "currency": "DKK"
+            "min": 80,
+            "max": 80,
+            "currency": "EUR"
           },
           "taxi": {
-            "min": 75,
-            "max": 135,
-            "currency": "DKK"
+            "min": 0,
+            "max": 300,
+            "currency": "EUR"
           },
           "altTransport": {
-            "min": 35,
-            "max": 90,
-            "currency": "DKK"
-          },
-          "upgradeFirstClass": {
-            "min": 110,
-            "max": 260,
-            "currency": "DKK"
+            "min": 0,
+            "max": 300,
+            "currency": "EUR"
           }
         }
       },
       "step9_downgrade": {
-        "downgrade_ticket_file": "Udrejse-billet.pdf",
+        "downgrade_ticket_file": null,
         "downgrade_occurred": "no",
         "downgrade_comp_basis": null,
-        "downgrade_segment_share": "0.318",
+        "downgrade_segment_share": null,
+        "air_downgrade_booked_class": null,
+        "air_downgrade_flown_class": null,
+        "air_downgrade_refund_percent": null,
         "leg_class_purchased": [
-          "couchette",
-          "couchette",
-          "couchette"
+          ""
         ],
         "leg_class_delivered": [
-          "",
-          "",
           ""
         ],
         "leg_reservation_purchased": [
-          "",
-          "",
           ""
         ],
         "leg_reservation_delivered": [
-          "",
-          "",
           ""
         ],
         "leg_downgraded": [
-          "",
-          "",
           ""
         ]
       },
       "step10_compensation": {
+        "_mode": "bus",
+        "_mode_fields": {
+          "bus": {
+            "delay_at_final_minutes": null,
+            "compensation_band": null,
+            "scheduled_distance_km": "992",
+            "vehicle_breakdown": "no",
+            "hotel_transport_self_paid_amount": null,
+            "hotel_transport_self_paid_currency": null,
+            "hotel_legal_cap_eur_per_night": 80,
+            "hotel_legal_nights_max": 2,
+            "meals_soft_cap_eur_per_delay_hour": 20,
+            "hotel_transport_soft_cap_eur": 50
+          }
+        },
         "delayAtFinalMinutes": null,
         "compensationBand": null,
-        "voucherAccepted": "no",
-        "operatorExceptionalCircumstances": "unknown",
-        "operatorExceptionalType": "",
+        "rail_delay_at_final_minutes": null,
+        "rail_compensation_band": null,
+        "voucherAccepted": null,
+        "operatorExceptionalCircumstances": null,
+        "operatorExceptionalType": null,
         "minThresholdApplies": null,
         "delayMinEU": null,
-        "knownDelayBeforePurchase": false
+        "knownDelayBeforePurchase": false,
+        "scheduled_distance_km": "992",
+        "vehicle_breakdown": "no",
+        "hotel_transport_self_paid_amount": null,
+        "hotel_transport_self_paid_currency": null,
+        "bus_hotel_legal_cap_eur_per_night": 80,
+        "bus_hotel_legal_nights_max": 2,
+        "bus_meals_soft_cap_eur_per_delay_hour": 20,
+        "bus_hotel_transport_soft_cap_eur": 50
       }
     },
     "art9_meta": {
@@ -491,7 +1174,7 @@
         "bike": {
           "art9_1": {
             "bike_reservation_made": "unknown",
-            "bike_reservation_required": "Ja"
+            "bike_reservation_required": "unknown"
           },
           "art9_2": {
             "bike_denied_boarding": "unknown",
@@ -503,7 +1186,7 @@
         },
         "pmr": {
           "art9_1": {
-            "pmr_booked": "Nej"
+            "pmr_booked": "unknown"
           },
           "art9_2": {
             "pmr_delivered_status": "unknown",
@@ -511,9 +1194,53 @@
           },
           "art9_3": []
         },
+        "air_art11": {
+          "priority": {
+            "pmr_user": "Nej",
+            "pmr_companion": "unknown",
+            "pmr_service_dog": "unknown",
+            "unaccompanied_minor": "unknown"
+          }
+        },
+        "ferry_pmr": {
+          "status": {
+            "pmr_user": "Nej",
+            "ferry_pmr_companion": "unknown",
+            "ferry_pmr_service_dog": "unknown"
+          },
+          "assistance": {
+            "ferry_pmr_notice_48h": "unknown",
+            "ferry_pmr_met_checkin_time": "unknown",
+            "ferry_pmr_assistance_delivered": "unknown"
+          },
+          "boarding": {
+            "ferry_pmr_boarding_refused": "unknown",
+            "ferry_pmr_refusal_basis": "",
+            "ferry_pmr_reason_given": "unknown",
+            "ferry_pmr_alternative_transport_offered": "unknown"
+          }
+        },
+        "bus_pmr": {
+          "status": {
+            "pmr_user": "Nej",
+            "bus_pmr_companion": "Nej"
+          },
+          "assistance": {
+            "bus_pmr_notice_36h": "Nej",
+            "bus_pmr_met_terminal_time": "Nej",
+            "bus_pmr_special_seating_notified": "Nej",
+            "bus_pmr_assistance_delivered": "unknown"
+          },
+          "boarding": {
+            "bus_pmr_boarding_refused": "Nej",
+            "bus_pmr_refusal_basis": "other_or_unknown",
+            "bus_pmr_reason_given": "Nej",
+            "bus_pmr_alternative_transport_offered": "Nej"
+          }
+        },
         "preinfo": {
           "art9_1": {
-            "preinformed_disruption": "Nej",
+            "preinformed_disruption": "unknown",
             "preinfo_channel": ""
           },
           "art9_2": {
@@ -525,15 +1252,36 @@
           }
         }
       },
-      "preinformed_disruption": "Nej",
+      "preinformed_disruption": "unknown",
       "preinfo_channel": "",
       "realtime_info_seen": "unknown",
       "pmr_user": "Nej",
-      "pmr_booked": "Nej",
+      "pmr_companion": "unknown",
+      "pmr_service_dog": "unknown",
+      "unaccompanied_minor": "unknown",
+      "ferry_pmr_companion": "unknown",
+      "ferry_pmr_service_dog": "unknown",
+      "ferry_pmr_notice_48h": "unknown",
+      "ferry_pmr_met_checkin_time": "unknown",
+      "ferry_pmr_assistance_delivered": "unknown",
+      "ferry_pmr_boarding_refused": "unknown",
+      "ferry_pmr_refusal_basis": "",
+      "ferry_pmr_reason_given": "unknown",
+      "ferry_pmr_alternative_transport_offered": "unknown",
+      "bus_pmr_companion": "Nej",
+      "bus_pmr_notice_36h": "Nej",
+      "bus_pmr_met_terminal_time": "Nej",
+      "bus_pmr_special_seating_notified": "Nej",
+      "bus_pmr_assistance_delivered": "unknown",
+      "bus_pmr_boarding_refused": "Nej",
+      "bus_pmr_refusal_basis": "other_or_unknown",
+      "bus_pmr_reason_given": "Nej",
+      "bus_pmr_alternative_transport_offered": "Nej",
+      "pmr_booked": "unknown",
       "pmr_promised_missing": "unknown",
       "pmr_delivered_status": "unknown",
       "bike_reservation_made": "unknown",
-      "bike_reservation_required": "Ja",
+      "bike_reservation_required": "unknown",
       "bike_denied_boarding": "unknown",
       "bike_refusal_reason_provided": "unknown",
       "bike_refusal_reason_type": "",
@@ -545,6 +1293,7 @@
       "single_booking_reference": "Ja",
       "shared_pnr_scope": "Ja",
       "multi_operator_trip": "Nej",
+      "original_contract_mode": "bus",
       "separate_contract_notice": "Ved ikke",
       "through_ticket_disclosure": "Ved ikke"
     },

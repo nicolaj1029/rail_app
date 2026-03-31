@@ -15,11 +15,14 @@ final class AdminDeskService
 
     private Table $claims;
 
+    private CaseRiskService $caseRisk;
+
     public function __construct()
     {
         $locator = TableRegistry::getTableLocator();
         $this->cases = $locator->get('Cases');
         $this->claims = $locator->get('Claims');
+        $this->caseRisk = new CaseRiskService($this->cases);
     }
 
     public function getRole(Session $session): string
@@ -125,6 +128,7 @@ final class AdminDeskService
                 (string)($item['ticket_mode'] ?? ''),
                 (string)($item['next_action'] ?? ''),
                 (string)(($item['follow_up']['reason'] ?? '')),
+                (string)(($item['risk']['summary'] ?? '')),
             ])));
 
             return str_contains($haystack, $normalizedSearch);
@@ -138,12 +142,16 @@ final class AdminDeskService
             'ready_to_submit' => 0,
             'submitted' => 0,
             'resolved' => 0,
+            'fraud_review' => 0,
         ];
 
         foreach ($items as $item) {
             $status = (string)($item['ops_status'] ?? '');
             if (isset($stats[$status])) {
                 $stats[$status]++;
+            }
+            if (!empty($item['risk']['fraud_review_required'])) {
+                $stats['fraud_review']++;
             }
         }
 
@@ -190,6 +198,7 @@ final class AdminDeskService
     {
         return [
             'all' => 'Alle',
+            'fraud_review' => 'Fraud review',
             'awaiting_passenger' => 'Afventer passager',
             'in_review' => 'Under behandling',
             'legal_review' => 'Juridisk review',
@@ -350,6 +359,12 @@ final class AdminDeskService
                     'text' => 'Denne sag har juridiske markører. Operator bør ikke afslutte den uden jurist.',
                 ];
             }
+            if (!empty($cockpit['risk_panel']['fraud_review_required'])) {
+                $playbooks[] = [
+                    'title' => 'Risk review',
+                    'text' => 'Sagen har risikosignaler og boer eskaleres til jurist eller intern kontrol.',
+                ];
+            }
         } else {
             $playbooks[] = [
                 'title' => 'Jurist review',
@@ -371,6 +386,12 @@ final class AdminDeskService
                 $playbooks[] = [
                     'title' => 'Live med passager',
                     'text' => 'Brug admin-chatten til at lukke blockers i realtid og opret sag fra sessionen, når kernen er bekræftet.',
+                ];
+            }
+            if (!empty($cockpit['risk_panel']['fraud_review_required'])) {
+                $playbooks[] = [
+                    'title' => 'Fraud review',
+                    'text' => 'Gennemgaa risk-flag, sammenhold snapshot med tidligere sager og beslut om sagen skal til intern kontrol.',
                 ];
             }
         }
@@ -425,6 +446,7 @@ final class AdminDeskService
 
         $preview = (array)($payload['preview'] ?? []);
         $opsStatus = $this->statusFromPreview($preview);
+        $riskPanel = $this->buildRiskPanel($this->readLiveFlow($session));
 
         return [
             'source' => 'session',
@@ -437,6 +459,7 @@ final class AdminDeskService
             'delay_minutes' => $summary['delay_minutes'] ?? null,
             'ticket_mode' => (string)($summary['ticket_mode'] ?? ''),
             'next_action' => $this->nextActionFromPayload($payload),
+            'risk' => $riskPanel,
         ];
     }
 
@@ -449,6 +472,11 @@ final class AdminDeskService
         $travelDate = $case->get('travel_date');
         $updated = $case->get('modified') ?: $case->get('created');
         $opsStatus = $this->normalizeOpsStatus((string)$case->get('status'));
+        $riskPanel = $this->storedRiskPanel($case);
+        $nextAction = $opsStatus === 'ready_to_submit' ? 'Tjek samtykke og indsendelse' : 'Aabn cockpit';
+        if (!empty($riskPanel['fraud_review_required'])) {
+            $nextAction = 'Aabn cockpit og kontroller risk review';
+        }
 
         return [
             'source' => 'case',
@@ -462,7 +490,8 @@ final class AdminDeskService
             'updated_at' => $updated ? (string)$updated : date('c'),
             'delay_minutes' => $case->get('delay_min_eu'),
             'ticket_mode' => '',
-            'next_action' => $opsStatus === 'ready_to_submit' ? 'Tjek samtykke og indsendelse' : 'Åbn cockpit',
+            'risk' => $riskPanel,
+            'next_action' => $nextAction,
             'meta' => [
                 'ref' => (string)$case->get('ref'),
                 'travel_date' => $travelDate ? (string)$travelDate : '',
@@ -496,6 +525,7 @@ final class AdminDeskService
             'delay_minutes' => $claim->get('delay_min'),
             'ticket_mode' => (string)$claim->get('product'),
             'next_action' => $payoutStatus === 'paid' ? 'Arkivér eller luk sag' : 'Følg op på claim-status',
+            'risk' => $this->emptyRiskPanel(),
             'meta' => [
                 'operator' => (string)$claim->get('operator'),
                 'email' => (string)$claim->get('client_email'),
@@ -521,6 +551,7 @@ final class AdminDeskService
             'updated_at' => (string)($shadowCase['modified'] ?? date('c')),
             'delay_minutes' => $shadowCase['delay_minutes'] ?? null,
             'ticket_mode' => (string)($shadowCase['ticket_mode'] ?? ''),
+            'risk' => $this->emptyRiskPanel(),
             'next_action' => 'Kontrollér backend-fil og match mod reel sag',
         ];
     }
@@ -534,6 +565,14 @@ final class AdminDeskService
         $summary = (array)($payload['summary'] ?? []);
         $preview = (array)($payload['preview'] ?? []);
         $question = (array)($payload['question'] ?? []);
+        $riskPanel = $this->buildRiskPanel($this->readLiveFlow($session));
+        $blockers = (array)($preview['blockers'] ?? []);
+        if (!empty($riskPanel['fraud_review_required'])) {
+            $blockers[] = [
+                'title' => 'Fraud review',
+                'text' => (string)($riskPanel['summary'] ?? 'Risk-signaler kraever manuel gennemgang.'),
+            ];
+        }
 
         $item = $this->buildCurrentSessionItem($session);
         if ($item === null) {
@@ -551,6 +590,7 @@ final class AdminDeskService
                 'Billetmode' => (string)($summary['ticket_mode'] ?? '-'),
                 'Rute' => (string)($summary['route'] ?? '-'),
                 'Forsinkelse' => ($summary['delay_minutes'] ?? null) !== null ? ((string)$summary['delay_minutes'] . ' min') : '-',
+                'Risk' => (string)($riskPanel['level_label'] ?? 'Low risk'),
             ],
             'action_panel' => [
                 'primary' => $this->nextActionFromPayload($payload),
@@ -558,11 +598,12 @@ final class AdminDeskService
                 'upload_hint' => (array)($payload['upload_hint'] ?? []),
             ],
             'ops_panel' => [
-                'blockers' => (array)($preview['blockers'] ?? []),
+                'blockers' => $blockers,
                 'actions' => (array)($preview['actions'] ?? []),
                 'steps' => (array)($payload['visible_steps'] ?? []),
             ],
             'legal_panel' => (array)($preview['summary'] ?? []),
+            'risk_panel' => $riskPanel,
             'citations' => (array)($payload['citations'] ?? []),
             'history' => (array)($payload['history'] ?? []),
         ];
@@ -586,6 +627,21 @@ final class AdminDeskService
         $snapshot = json_decode((string)$case->get('flow_snapshot'), true);
         $snapshot = is_array($snapshot) ? $snapshot : [];
         $summary = $this->summaryFromFlowSnapshot($snapshot);
+        $riskPanel = $this->storedRiskPanel($case, $snapshot, true);
+        $blockers = $this->blockersFromSnapshot($snapshot);
+        if (!empty($riskPanel['fraud_review_required'])) {
+            $blockers[] = [
+                'title' => 'Fraud review',
+                'text' => (string)($riskPanel['summary'] ?? 'Risk-signaler kraever manuel gennemgang.'),
+            ];
+        }
+        $actions = $this->actionsFromCase($case);
+        if (!empty($riskPanel['fraud_review_required'])) {
+            $actions[] = [
+                'title' => 'Risk review',
+                'text' => 'Gennemgaa duplicate-signaler og canonical journey, foer sagen sendes videre.',
+            ];
+        }
 
         return [
             'item' => $item,
@@ -598,6 +654,7 @@ final class AdminDeskService
                 'Land' => (string)$case->get('country'),
                 'Rejsedato' => (string)$case->get('travel_date'),
                 'Forsinkelse' => ((string)$case->get('delay_min_eu')) . ' min',
+                'Risk' => (string)($riskPanel['level_label'] ?? 'Ikke screenet'),
             ],
             'action_panel' => [
                 'primary' => $item['next_action'],
@@ -605,8 +662,8 @@ final class AdminDeskService
                 'upload_hint' => [],
             ],
             'ops_panel' => [
-                'blockers' => $this->blockersFromSnapshot($snapshot),
-                'actions' => $this->actionsFromCase($case),
+                'blockers' => $blockers,
+                'actions' => $actions,
                 'steps' => $summary['steps'],
             ],
             'legal_panel' => [
@@ -619,6 +676,7 @@ final class AdminDeskService
                 'eu_only' => (bool)$case->get('eu_only'),
                 'extraordinary' => (bool)$case->get('extraordinary'),
             ],
+            'risk_panel' => $riskPanel,
             'citations' => [],
             'history' => [],
             'snapshot' => $snapshot,
@@ -683,6 +741,7 @@ final class AdminDeskService
                 'currency' => (string)$claim->get('currency'),
                 'payout_status' => (string)$claim->get('payout_status'),
             ],
+            'risk_panel' => $this->emptyRiskPanel(),
             'citations' => [],
             'history' => [],
             'attachments' => $attachments,
@@ -729,12 +788,151 @@ final class AdminDeskService
                     'status' => (string)($shadowCase['status'] ?? ''),
                     'submitted_at' => (string)($shadowCase['submitted_at'] ?? ''),
                 ],
+                'risk_panel' => $this->emptyRiskPanel(),
                 'citations' => [],
                 'history' => [],
             ];
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function readLiveFlow(Session $session): array
+    {
+        $flow = $session->read('flow');
+
+        return is_array($flow) ? $flow : [];
+    }
+
+    /**
+     * @param array<string,mixed> $snapshot
+     * @return array<string,mixed>
+     */
+    private function buildRiskPanel(array $snapshot, ?string $excludeCaseId = null): array
+    {
+        if ($snapshot === []) {
+            return $this->emptyRiskPanel();
+        }
+
+        try {
+            $risk = $this->caseRisk->evaluate($snapshot, [], $excludeCaseId);
+
+            return $this->normalizeRiskPanel($risk + ['evaluated' => true]);
+        } catch (Throwable) {
+            return $this->emptyRiskPanel();
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $snapshot
+     * @return array<string,mixed>
+     */
+    private function storedRiskPanel(EntityInterface $case, array $snapshot = [], bool $allowLazyCompute = false): array
+    {
+        $hasStoredRisk = $case->get('risk_last_evaluated_at') !== null
+            || $case->get('risk_summary') !== null
+            || $case->get('risk_flags') !== null
+            || (int)($case->get('risk_score') ?? 0) > 0;
+
+        if ($hasStoredRisk) {
+            return $this->normalizeRiskPanel([
+                'evaluated' => true,
+                'score' => (int)($case->get('risk_score') ?? 0),
+                'level' => (string)($case->get('risk_level') ?? 'low'),
+                'summary' => (string)($case->get('risk_summary') ?? ''),
+                'fraud_review_required' => (bool)($case->get('fraud_review_required') ?? false),
+                'flags' => $this->caseRisk->decodeFlags($case->get('risk_flags')),
+                'computed_at' => $case->get('risk_last_evaluated_at') ? (string)$case->get('risk_last_evaluated_at') : '',
+            ]);
+        }
+
+        if ($allowLazyCompute && $snapshot !== []) {
+            return $this->buildRiskPanel($snapshot, (string)$case->get('id'));
+        }
+
+        return $this->emptyRiskPanel();
+    }
+
+    /**
+     * @param array<string,mixed> $risk
+     * @return array<string,mixed>
+     */
+    private function normalizeRiskPanel(array $risk): array
+    {
+        $score = max(0, (int)($risk['score'] ?? 0));
+        $level = strtolower(trim((string)($risk['level'] ?? '')));
+        if (!in_array($level, ['low', 'medium', 'high'], true)) {
+            $level = $score >= 60 ? 'high' : ($score >= 25 ? 'medium' : 'low');
+        }
+
+        $flags = [];
+        foreach ($this->caseRisk->decodeFlags($risk['flags'] ?? []) as $flag) {
+            $code = trim((string)($flag['code'] ?? ''));
+            $flags[] = [
+                'code' => $code,
+                'label' => trim((string)($flag['label'] ?? '')) !== ''
+                    ? (string)$flag['label']
+                    : ucwords(str_replace('_', ' ', $code !== '' ? $code : 'risk_flag')),
+                'detail' => (string)($flag['detail'] ?? ''),
+                'points' => (int)($flag['points'] ?? 0),
+                'severity' => strtolower(trim((string)($flag['severity'] ?? $level))),
+            ];
+        }
+
+        $evaluated = array_key_exists('evaluated', $risk)
+            ? (bool)$risk['evaluated']
+            : (
+                trim((string)($risk['computed_at'] ?? '')) !== ''
+                || $flags !== []
+                || trim((string)($risk['summary'] ?? '')) !== ''
+                || $score > 0
+            );
+
+        $summary = trim((string)($risk['summary'] ?? ''));
+        if ($summary === '' && $evaluated) {
+            $summary = $flags === []
+                ? 'Ingen staerke risikosignaler fundet i fase 1.'
+                : ('Risk score ' . $score . ' med ' . count($flags) . ' flag(s).');
+        }
+
+        if (!$evaluated) {
+            $summary = 'Fase 1 risk screening er ikke koert for denne post.';
+        }
+
+        return [
+            'evaluated' => $evaluated,
+            'score' => $score,
+            'level' => $level,
+            'level_label' => $evaluated ? $this->riskLevelLabel($level) : 'Ikke screenet',
+            'badge_class' => 'desk-risk-' . $level,
+            'fraud_review_required' => !empty($risk['fraud_review_required']),
+            'fraud_review_label' => !empty($risk['fraud_review_required']) ? 'Fraud review required' : 'Ingen fraud review',
+            'summary' => $summary,
+            'flags' => $flags,
+            'computed_at' => trim((string)($risk['computed_at'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function emptyRiskPanel(): array
+    {
+        return [
+            'evaluated' => false,
+            'score' => 0,
+            'level' => 'low',
+            'level_label' => 'Ikke screenet',
+            'badge_class' => 'desk-risk-low',
+            'fraud_review_required' => false,
+            'fraud_review_label' => 'Ingen fraud review',
+            'summary' => 'Fase 1 risk screening er ikke koert for denne post.',
+            'flags' => [],
+            'computed_at' => '',
+        ];
     }
 
     /**
@@ -770,6 +968,9 @@ final class AdminDeskService
     {
         if ($filter === 'all') {
             return true;
+        }
+        if ($filter === 'fraud_review') {
+            return !empty($item['risk']['fraud_review_required']);
         }
 
         $followUp = (array)($item['follow_up'] ?? []);
@@ -954,6 +1155,15 @@ final class AdminDeskService
             'resolved' => 'Løst',
             'closed' => 'Lukket',
             default => 'Under behandling',
+        };
+    }
+
+    private function riskLevelLabel(string $level): string
+    {
+        return match ($level) {
+            'high' => 'High risk',
+            'medium' => 'Medium risk',
+            default => 'Low risk',
         };
     }
 }

@@ -644,6 +644,70 @@ class FlowControllerTest extends TestCase
         $this->assertStringNotContainsString('Planlagt rejsevarighed (minutter)', $body);
     }
 
+    public function testRailIncidentRebuildsMissedConnectionChoicesFromOcrWhenStoredSegmentsAreShorter(): void
+    {
+        $ocrText = implode("\n", [
+            'Din Rejseplan',
+            'Detaljer',
+            'Kobenhavn H',
+            'Vejle St.',
+            'Afg: 05:56',
+            'Ank: 07:56',
+            'IC-Lyntog 19 til Vejle St.',
+            'Vejle St.',
+            'Herning St.',
+            'Afg: 08:03',
+            'Ank: 08:57',
+            'Arriva-tog 5917 til Herning St.',
+            'Herning St.',
+            'Herning Messecenter St.',
+            'Afg: 09:02',
+            'Ank: 09:04',
+            'Arriva-tog 5317 til Herning Messecenter St.',
+        ]);
+
+        $this->session([
+            'flow.flags' => [
+                'step1_done' => '1',
+                'step2_done' => '1',
+                'step3_done' => '1',
+                'step4_done' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'incident_missed' => 'yes',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                '_ocr_text' => $ocrText,
+                '_segments_auto' => [
+                    ['from' => 'Vejle St.', 'to' => 'Herning St.', 'schedDep' => '08:03', 'schedArr' => '08:57'],
+                    ['from' => 'Herning St.', 'to' => 'Herning Messecenter St.', 'schedDep' => '09:02', 'schedArr' => '09:04'],
+                ],
+            ],
+            'flow.journey' => [
+                'country' => ['value' => 'DK'],
+                'segments' => [
+                    ['from' => 'Vejle St.', 'to' => 'Herning St.', 'schedDep' => '08:03', 'schedArr' => '08:57'],
+                    ['from' => 'Herning St.', 'to' => 'Herning Messecenter St.', 'schedDep' => '09:02', 'schedArr' => '09:04'],
+                ],
+            ],
+        ]);
+
+        $this->get('/flow/incident');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Kobenhavn H -&gt; Vejle St.', $body);
+        $this->assertStringContainsString('name="missed_connection_pick" value="Vejle St."', $body);
+        $this->assertStringContainsString('name="missed_connection_pick" value="Herning St."', $body);
+    }
+
     public function testFerryIncidentHooksPanelShowsFerrySummary(): void
     {
         $this->session([

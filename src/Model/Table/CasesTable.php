@@ -17,7 +17,10 @@ class CasesTable extends Table
     public function validationDefault(Validator $validator): Validator
     {
         $validator->integer('delay_min_eu');
+        $validator->integer('risk_score');
         $validator->scalar('status');
+        $validator->scalar('risk_level');
+        $validator->boolean('fraud_review_required');
         return $validator;
     }
 }

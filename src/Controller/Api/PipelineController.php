@@ -384,7 +384,9 @@ class PipelineController extends AppController
             if ($pmrGate || $bikeGate) { $art18Active = true; }
         }
 
+        $transportMode = strtolower(trim((string)($payload['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
         $claim = (new \App\Service\ClaimCalculator())->calculate([
+            'transport_mode' => $transportMode,
             'country_code' => (string)($journey['country']['value'] ?? 'EU'),
             'currency' => $currency,
             'ticket_price_total' => $price,
@@ -407,6 +409,11 @@ class PipelineController extends AppController
             'expenses' => $expenses,
             'already_refunded' => 0,
             'apply_min_threshold' => $minThreshold,
+            'carrier_offered_choice' => $meta['carrier_offered_choice'] ?? null,
+            'scheduled_distance_km' => $meta['scheduled_distance_km'] ?? null,
+            'vehicle_breakdown' => $meta['vehicle_breakdown'] ?? null,
+            'hotel_self_paid_nights' => $meta['hotel_self_paid_nights'] ?? ($meta['bus_hotel_self_paid_nights'] ?? ($meta['ferry_hotel_self_paid_nights'] ?? null)),
+            'hotel_transport_self_paid_amount' => $meta['hotel_transport_self_paid_amount'] ?? null,
             // Allow claim to incorporate downgrade/refusion output where present
             'refusion' => $refusion,
             // Art. 18 extras + downgrade inputs

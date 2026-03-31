@@ -1,0 +1,316 @@
+{
+  "source": "webroot/files/Doku_og_setup_plane/codex_sourcing_plan_v1.xlsx",
+  "generated_at": "2026-03-25",
+  "format": "json",
+  "tabs": {
+    "cross": {
+      "goal": "Shared schema cleanup and normalization across all modes",
+      "priority_order": [
+        "schema fixes",
+        "operator keys + aliases",
+        "air carrier split",
+        "ferry route/port",
+        "bus service metadata",
+        "fill operators"
+      ],
+      "tasks": [
+        {
+          "priority": "high",
+          "task_type": "schema_fix",
+          "target": "global",
+          "field_or_path": "regular_service_hints",
+          "action": "replace_with_scalar",
+          "output_format": "json_patch",
+          "notes": "Use bool or enum, not [true]"
+        },
+        {
+          "priority": "high",
+          "task_type": "schema_fix",
+          "target": "global",
+          "field_or_path": "operator_key",
+          "action": "add",
+          "output_format": "json_patch",
+          "notes": "Canonical key for every operator"
+        },
+        {
+          "priority": "high",
+          "task_type": "schema_fix",
+          "target": "global",
+          "field_or_path": "aliases",
+          "action": "split_scope",
+          "output_format": "json_patch",
+          "notes": "Separate operator aliases from product aliases"
+        },
+        {
+          "priority": "high",
+          "task_type": "schema_fix",
+          "target": "global",
+          "field_or_path": "product_aliases",
+          "action": "scope_by_mode",
+          "output_format": "csv_or_json",
+          "notes": "Avoid FR collision: Frecciarossa vs Ryanair"
+        },
+        {
+          "priority": "high",
+          "task_type": "schema_fix",
+          "target": "global",
+          "field_or_path": "encoding",
+          "action": "cleanup_utf8",
+          "output_format": "json_patch",
+          "notes": "Fix mojibake before adding new rows"
+        }
+      ]
+    },
+    "air": {
+      "goal": "Normalize carrier identity, operating vs marketing split, and claim routing",
+      "priority_order": [
+        "brand_group + operating_carrier_name",
+        "IATA/ICAO codes",
+        "fare brands",
+        "claim URLs",
+        "boarding pass OCR aliases"
+      ],
+      "tasks": [
+        {
+          "priority": "high",
+          "operator_key": "all_air",
+          "source_type": "official_codes",
+          "source_name": "IATA code search",
+          "extract_field": "iata_designator",
+          "target_path": "codes.iata",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Primary for flight-prefix matching"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_air",
+          "source_type": "official_codes",
+          "source_name": "IATA code search",
+          "extract_field": "airline_name",
+          "target_path": "legal_entity_name",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Use legal/carrier name where available"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_air",
+          "source_type": "official_codes",
+          "source_name": "IATA code search",
+          "extract_field": "icao_designator",
+          "target_path": "codes.icao",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Useful secondary code"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_air",
+          "source_type": "operator_website",
+          "source_name": "carrier legal/about pages",
+          "extract_field": "operating_carrier_name",
+          "target_path": "operating_carrier_name",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": true,
+          "notes": "Confirm brand vs operating entity"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_air",
+          "source_type": "operator_website",
+          "source_name": "carrier legal/about pages",
+          "extract_field": "marketing_brand",
+          "target_path": "brand_group",
+          "action": "fill",
+          "confidence": "medium",
+          "review_flag": true,
+          "notes": "Normalize to brand group"
+        },
+        {
+          "priority": "high",
+          "operator_key": "norwegian_air_sweden",
+          "source_type": "official_codes",
+          "source_name": "IATA code search",
+          "extract_field": "iata_designator",
+          "target_path": "codes.iata",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Expected D8"
+        },
+        {
+          "priority": "high",
+          "operator_key": "norwegian_air_shuttle",
+          "source_type": "official_codes",
+          "source_name": "IATA code search",
+          "extract_field": "iata_designator",
+          "target_path": "codes.iata",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Expected DY"
+        }
+      ]
+    },
+    "ferry": {
+      "goal": "Normalize route, port and claims data instead of storing routes only as product strings",
+      "priority_order": [
+        "routes[] + ports",
+        "service_type",
+        "claim URLs",
+        "required document hints",
+        "route aliases"
+      ],
+      "tasks": [
+        {
+          "priority": "high",
+          "operator_key": "all_ferry",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "route_name",
+          "target_path": "routes[].display_name",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Do not keep only in products"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_ferry",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "departure_port",
+          "target_path": "routes[].departure_port",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Canonical port name"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_ferry",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "arrival_port",
+          "target_path": "routes[].arrival_port",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Canonical port name"
+        },
+        {
+          "priority": "medium",
+          "operator_key": "all_ferry",
+          "source_type": "operator_website",
+          "source_name": "booking pages",
+          "extract_field": "route_aliases",
+          "target_path": "routes[].aliases",
+          "action": "append",
+          "confidence": "medium",
+          "review_flag": true,
+          "notes": "Useful for OCR and ticketless matching"
+        }
+      ]
+    },
+    "bus": {
+      "goal": "Normalize legal entity, service type and claim routing for bus operators",
+      "priority_order": [
+        "legal entity",
+        "service_type",
+        "long_distance_support",
+        "claim URLs",
+        "required document hints"
+      ],
+      "tasks": [
+        {
+          "priority": "high",
+          "operator_key": "all_bus",
+          "source_type": "official_or_national",
+          "source_name": "operator legal pages / registers",
+          "extract_field": "legal_entity_name",
+          "target_path": "legal_entity_name",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": true,
+          "notes": "No single perfect EU-wide public brand source"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_bus",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "service_type",
+          "target_path": "service_type",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "regular_service / occasional / shuttle"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_bus",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "long_distance_support",
+          "target_path": "metadata.long_distance_support",
+          "action": "fill",
+          "confidence": "medium",
+          "review_flag": true,
+          "notes": "Prefer route-based if operator-wide not possible"
+        },
+        {
+          "priority": "medium",
+          "operator_key": "flixbus",
+          "source_type": "operator_website",
+          "source_name": "route/network pages",
+          "extract_field": "product_names",
+          "target_path": "products",
+          "action": "fill",
+          "confidence": "medium",
+          "review_flag": true,
+          "notes": "Keep service metadata separate from products"
+        }
+      ]
+    },
+    "rail": {
+      "goal": "Use codes and stable operator mapping for legacy rail coverage",
+      "priority_order": [
+        "ERA / RICS codes",
+        "legal entity",
+        "claim URLs",
+        "operator aliases"
+      ],
+      "tasks": [
+        {
+          "priority": "high",
+          "operator_key": "all_rail",
+          "source_type": "official_codes",
+          "source_name": "ERA / RICS / organization code sources",
+          "extract_field": "legacy_rics_code",
+          "target_path": "codes.rics",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Legacy and cross-border matching"
+        },
+        {
+          "priority": "high",
+          "operator_key": "all_rail",
+          "source_type": "official_codes",
+          "source_name": "ERA / RICS / organization code sources",
+          "extract_field": "era_org_code",
+          "target_path": "codes.era_org_code",
+          "action": "fill",
+          "confidence": "high",
+          "review_flag": false,
+          "notes": "Important from 2026 onward"
+        }
+      ]
+    }
+  }
+}

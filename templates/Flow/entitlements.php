@@ -33,6 +33,7 @@ $isFerry = $transportModeRender === 'ferry';
 $isBus = $transportModeRender === 'bus';
 $isAir = $transportModeRender === 'air';
 $isRail = $transportModeRender === 'rail';
+$isFerryTicketless = $isFerry && $ticketMode === 'ticketless';
 $seasonSupported = $transportModeChosen && in_array($transportMode, ['rail', 'ferry'], true);
 if (!$seasonSupported && $ticketMode === 'seasonpass') { $ticketMode = 'ticket'; }
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
@@ -42,6 +43,15 @@ $busScope = (array)($multimodal['bus_scope'] ?? []);
 $modeContract = $isBus ? (array)($multimodal['bus_contract'] ?? []) : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
 $claimDirection = (array)($multimodal['claim_direction'] ?? []);
 $isPreview = !empty($flowPreview);
+$firstNonEmpty = static function (...$values): string {
+  foreach ($values as $value) {
+    $value = is_string($value) ? trim($value) : trim((string)$value);
+    if ($value !== '') {
+      return $value;
+    }
+  }
+  return '';
+};
 $autoReturnSegment = null;
 if ($transportMode === 'ferry') {
   $candidateSegments = [];
@@ -263,6 +273,33 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       }
 
       return trim((string)($form['route_distance_meters'] ?? '')) !== '';
+  };
+  $ferryScopeComplete = static function (array $form): bool {
+      foreach (['departure_port_in_eu', 'arrival_port_in_eu', 'carrier_is_eu', 'departure_from_terminal'] as $field) {
+          if (trim((string)($form[$field] ?? '')) === '') {
+              return false;
+          }
+      }
+
+      return true;
+  };
+  $busScopeComplete = static function (array $form): bool {
+      foreach (['boarding_in_eu', 'alighting_in_eu', 'departure_from_terminal', 'scheduled_distance_km'] as $field) {
+          if (trim((string)($form[$field] ?? '')) === '') {
+              return false;
+          }
+      }
+
+      return true;
+  };
+  $airScopeComplete = static function (array $form): bool {
+      foreach (['departure_airport_in_eu', 'arrival_airport_in_eu', 'operating_carrier_is_eu', 'marketing_carrier_is_eu', 'flight_distance_km', 'air_distance_band'] as $field) {
+          if (trim((string)($form[$field] ?? '')) === '') {
+              return false;
+          }
+      }
+
+      return true;
   };
   $scopeValueLabel = static function (?string $value): string {
       $v = strtolower(trim((string)$value));
@@ -974,6 +1011,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           $carrierEuTl = (string)($form['carrier_is_eu'] ?? '');
           $depTerminalTl = (string)($form['departure_from_terminal'] ?? '');
           $ferryAutoReady = $ferryNodeLookupResolved || $ferryCarrierEuDerived !== null || $hasFerryScopeValues($form);
+          $ferryScopeResolved = $ferryScopeComplete($form);
         ?>
           <div class="small ferry-scope-auto-summary" data-ferry-scope-auto-summary="1" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;<?= $ferryAutoReady ? '' : ' display:none;' ?>">
             <div><strong>Auto-afledt scope</strong></div>
@@ -983,7 +1021,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Fra havneterminal: <span data-ferry-scope-summary="departure_from_terminal"><?= h($scopeValueLabel($depTerminalTl)) ?></span></div>
             <div>Ruteafstand i meter: <span data-ferry-scope-summary="route_distance_meters"><?= h((string)($form['route_distance_meters'] ?? 'Ikke afledt endnu')) ?></span></div>
           </div>
-          <details class="ferry-scope-manual-editor" data-ferry-scope-manual-editor="1" style="margin-top:10px;<?= $ferryAutoReady ? '' : ' display:none;' ?>">
+          <details class="ferry-scope-manual-editor" data-ferry-scope-manual-editor="1" style="margin-top:10px;<?= $ferryScopeResolved ? ' display:none;' : '' ?>" <?= $ferryAutoReady && !$ferryScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
             <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
               <label>Afgangshavn i EU?
@@ -1015,7 +1053,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
               </label>
             </div>
           </details>
-          <div class="grid-2 ferry-scope-manual-fields" data-ferry-scope-manual-fields="1" style="display:<?= $ferryAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+          <div class="grid-2 ferry-scope-manual-fields" data-ferry-scope-manual-fields="1" style="display:<?= $ferryAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;<?= $ferryScopeResolved ? ' display:none;' : '' ?>">
             <label>Afgangshavn i EU?
               <select name="departure_port_in_eu">
                 <option value="yes" <?= $depPortEu==='yes'?'selected':'' ?>>Ja</option>
@@ -1051,6 +1089,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           $boardingTl = (string)($form['boarding_in_eu'] ?? '');
           $alightingTl = (string)($form['alighting_in_eu'] ?? '');
           $busAutoReady = $busNodeLookupResolved || trim((string)($form['boarding_in_eu'] ?? '')) !== '' || trim((string)($form['alighting_in_eu'] ?? '')) !== '' || trim((string)($form['departure_from_terminal'] ?? '')) !== '' || trim((string)($form['scheduled_distance_km'] ?? '')) !== '';
+          $busScopeResolved = $busScopeComplete($form);
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Regular service?
@@ -1067,7 +1106,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
               <div>Fra terminal: <span data-bus-scope-summary="departure_from_terminal"><?= h($scopeValueLabel($busTerminalTl)) ?></span></div>
               <div>Planlagt distance (km): <span data-bus-scope-summary="scheduled_distance_km"><?= h((string)($form['scheduled_distance_km'] ?? 'Ikke afledt endnu')) ?></span></div>
             </div>
-            <details data-bus-scope-manual-editor="1" style="margin-top:10px;" <?= $busAutoReady ? '' : 'open' ?>>
+            <details data-bus-scope-manual-editor="1" style="margin-top:10px;<?= $busScopeResolved ? ' display:none;' : '' ?>" <?= $busScopeResolved ? '' : 'open' ?>>
               <summary class="small">Redigér auto-afledte scopefelter</summary>
               <div class="grid-2" data-bus-scope-manual-fields="1" style="display:<?= $busAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
                 <label>Fra terminal?
@@ -1109,6 +1148,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             || trim((string)($form['marketing_carrier_is_eu'] ?? '')) !== ''
             || trim((string)($form['flight_distance_km'] ?? '')) !== ''
             || trim((string)($form['air_distance_band'] ?? '')) !== '';
+          $airScopeResolved = $airScopeComplete($form);
         ?>
           <div class="small" data-air-scope-auto-summary="1" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;<?= $airAutoReady ? '' : ' display:none;' ?>">
             <div><strong>Auto-afledt scope</strong></div>
@@ -1120,9 +1160,9 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Distancekategori: <span data-air-scope-summary="air_distance_band"><?= h($airDistanceBandLabel($airDistBandTl)) ?></span></div>
             <div>Art. 6 delay-threshold: <span data-air-scope-summary="air_delay_threshold_hours"><?= h($airDelayThresholdLabel($airDelayThresholdTl)) ?></span></div>
           </div>
-          <details data-air-scope-manual-editor="1" style="margin-top:10px;" <?= $airAutoReady ? '' : 'open' ?>>
+          <details data-air-scope-manual-editor="1" style="margin-top:10px;<?= $airScopeResolved ? ' display:none;' : '' ?>" <?= $airScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
-            <div class="grid-2" data-air-scope-manual-fields="1" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+            <div class="grid-2" data-air-scope-manual-fields="1" style="display:<?= $airScopeResolved ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
               <label>Afgangslufthavn i EU?
                 <select name="departure_airport_in_eu">
                   <option value="yes" <?= $airDepEuTl==='yes'?'selected':'' ?>>Ja</option>
@@ -1437,14 +1477,20 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       <div class="small muted" style="margin-top:6px;">
         <?= $isFerry ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : ($isBus ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.') ?>
       </div>
+      <?php if ($isFerryTicketless): ?>
+      <div class="small" style="margin-top:10px; background:#eef6ff; border:1px solid #cfe2ff; border-radius:6px; padding:8px;">
+        <strong>Ticketless ferry:</strong>
+        Angiv planlagt afgangstid og planlagt ankomsttid, hvis du kender dem. Saa kan vi beregne rejsens varighed automatisk i kompensationstrinnet i stedet for at bede dig udfylde den manuelt senere.
+      </div>
+      <?php endif; ?>
       <div class="small" style="margin-top:12px; font-weight:600;">1. Basisrejse</div>
       <div class="small muted" style="margin-top:4px;">Carrier/operator, fra/til, tider, bookingreference og pris.</div>
       <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
         <label><?= $isAir ? 'Carrier / operating carrier' : ($isFerry ? 'Carrier' : 'Operatør') ?>
-          <input type="text" name="operator" list="<?= h($currentOperatorListId) ?>" value="<?= h($meta['_auto']['operator']['value'] ?? ($form['operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
+          <input type="text" name="operator" list="<?= h($currentOperatorListId) ?>" value="<?= h($firstNonEmpty($meta['_auto']['operator']['value'] ?? '', $form['operator'] ?? '', $modeContract['operator'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Scandlines' : ($isBus ? 'Fx FlixBus' : 'Fx SAS') ?>" />
         </label>
         <label>Produkt / bookingtype
-          <input type="text" name="operator_product" value="<?= h($meta['_auto']['operator_product']['value'] ?? ($form['operator_product'] ?? '')) ?>" placeholder="<?= $isAir ? 'Fx Economy / Flex' : 'Fx Standard ticket' ?>" />
+          <input type="text" name="operator_product" value="<?= h($firstNonEmpty($meta['_auto']['operator_product']['value'] ?? '', $form['operator_product'] ?? '', $modeContract['operator_product'] ?? '')) ?>" placeholder="<?= $isAir ? 'Fx Economy / Flex' : 'Fx Standard ticket' ?>" />
         </label>
         <label><?= $isFerry ? 'Afgangshavn' : ($isBus ? 'Afgangssted / terminal' : 'Afgangslufthavn') ?>
           <input type="text" name="dep_station" value="<?= h($meta['_auto']['dep_station']['value'] ?? ($form['dep_station'] ?? '')) ?>" placeholder="<?= $isFerry ? 'Fx Helsingør' : ($isBus ? 'Fx København Busterminal' : 'Fx CPH') ?>" />
@@ -1472,20 +1518,20 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           <input type="text" name="dep_date" value="<?= h($meta['_auto']['dep_date']['value'] ?? ($form['dep_date'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
         </label>
         <label>Planlagt afgangstid
-          <input type="text" name="dep_time" value="<?= h($meta['_auto']['dep_time']['value'] ?? ($form['dep_time'] ?? '')) ?>" placeholder="HH:MM" />
+          <input type="text" name="dep_time" value="<?= h($meta['_auto']['dep_time']['value'] ?? ($form['dep_time'] ?? '')) ?>" placeholder="HH:MM" <?= $isFerryTicketless ? 'required' : '' ?> />
         </label>
         <label>Planlagt ankomsttid
-          <input type="text" name="arr_time" value="<?= h($meta['_auto']['arr_time']['value'] ?? ($form['arr_time'] ?? '')) ?>" placeholder="HH:MM" />
+          <input type="text" name="arr_time" value="<?= h($meta['_auto']['arr_time']['value'] ?? ($form['arr_time'] ?? '')) ?>" placeholder="HH:MM" <?= $isFerryTicketless ? 'required' : '' ?> />
         </label>
         <label><?= $isAir ? 'Bookingreference / e-ticket' : 'Bookingreference / billetnummer' ?>
           <input type="text" name="ticket_no" value="<?= h((string)($meta['_auto']['ticket_no']['value'] ?? ($form['ticket_no'] ?? ($meta['_identifiers']['pnr'] ?? ($journey['bookingRef'] ?? ''))))) ?>" />
         </label>
         <?php if ($isAir): ?>
         <label>Marketing carrier
-          <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
+          <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h($firstNonEmpty($form['marketing_carrier'] ?? '', $meta['_auto']['marketing_carrier']['value'] ?? '', $modeContract['marketing_carrier'] ?? '')) ?>" placeholder="Fx SAS" />
         </label>
         <label>Operating carrier
-          <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
+          <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h($firstNonEmpty($form['operating_carrier'] ?? '', $meta['_auto']['operating_carrier']['value'] ?? '', $modeContract['operating_carrier'] ?? '')) ?>" placeholder="Fx CityJet" />
         </label>
         <?php endif; ?>
         <label>Pris (valgfri)
@@ -1571,6 +1617,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           $carrierEuUpload = (string)($form['carrier_is_eu'] ?? '');
           $depTerminalUpload = (string)($form['departure_from_terminal'] ?? '');
           $ferryUploadAutoReady = $ferryNodeLookupResolved || $ferryCarrierEuDerived !== null || $hasFerryScopeValues($form);
+          $ferryUploadScopeResolved = $ferryScopeComplete($form);
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Servicetype
@@ -1590,7 +1637,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Fra havneterminal: <span data-ferry-scope-summary="departure_from_terminal"><?= h($scopeValueLabel($depTerminalUpload)) ?></span></div>
             <div>Ruteafstand i meter: <span data-ferry-scope-summary="route_distance_meters"><?= h((string)($form['route_distance_meters'] ?? 'Ikke afledt endnu')) ?></span></div>
           </div>
-          <details class="ferry-scope-manual-editor" data-ferry-scope-manual-editor="1" style="margin-top:10px;<?= $ferryUploadAutoReady ? '' : ' display:none;' ?>">
+          <details class="ferry-scope-manual-editor" data-ferry-scope-manual-editor="1" style="margin-top:10px;<?= $ferryUploadScopeResolved ? ' display:none;' : '' ?>" <?= $ferryUploadAutoReady && !$ferryUploadScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
             <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
               <label>Afgangshavn i EU?
@@ -1622,7 +1669,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
               </label>
             </div>
           </details>
-          <div class="grid-2 ferry-scope-manual-fields" data-ferry-scope-manual-fields="1" style="display:<?= $ferryUploadAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+          <div class="grid-2 ferry-scope-manual-fields" data-ferry-scope-manual-fields="1" style="display:<?= $ferryUploadAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;<?= $ferryUploadScopeResolved ? ' display:none;' : '' ?>">
             <label>Afgangshavn i EU?
               <select name="departure_port_in_eu">
                 <option value="yes" <?= $depPortEuUpload==='yes'?'selected':'' ?>>Ja</option>
@@ -1658,6 +1705,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           $boardingInEuUpload = (string)($form['boarding_in_eu'] ?? '');
           $alightingInEuUpload = (string)($form['alighting_in_eu'] ?? '');
           $busUploadAutoReady = $busNodeLookupResolved || trim((string)($form['boarding_in_eu'] ?? '')) !== '' || trim((string)($form['alighting_in_eu'] ?? '')) !== '' || trim((string)($form['departure_from_terminal'] ?? '')) !== '' || trim((string)($form['scheduled_distance_km'] ?? '')) !== '';
+          $busUploadScopeResolved = $busScopeComplete($form);
         ?>
         <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
           <label>Regular service?
@@ -1674,7 +1722,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
               <div>Fra terminal: <span data-bus-scope-summary="departure_from_terminal"><?= h($scopeValueLabel($busTerminalUpload)) ?></span></div>
               <div>Planlagt distance (km): <span data-bus-scope-summary="scheduled_distance_km"><?= h((string)($form['scheduled_distance_km'] ?? 'Ikke afledt endnu')) ?></span></div>
             </div>
-            <details data-bus-scope-manual-editor="1" style="margin-top:10px;" <?= $busUploadAutoReady ? '' : 'open' ?>>
+            <details data-bus-scope-manual-editor="1" style="margin-top:10px;<?= $busUploadScopeResolved ? ' display:none;' : '' ?>" <?= $busUploadScopeResolved ? '' : 'open' ?>>
               <summary class="small">Redigér auto-afledte scopefelter</summary>
               <div class="grid-2" data-bus-scope-manual-fields="1" style="display:<?= $busUploadAutoReady ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
                 <label>Fra terminal?
@@ -1717,6 +1765,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             || trim((string)($form['marketing_carrier_is_eu'] ?? '')) !== ''
             || trim((string)($form['flight_distance_km'] ?? '')) !== ''
             || trim((string)($form['air_distance_band'] ?? '')) !== '';
+          $airUploadScopeResolved = $airScopeComplete($form);
         ?>
           <div class="small" data-air-scope-auto-summary="1" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;<?= $airUploadAutoReady ? '' : ' display:none;' ?>">
             <div><strong>Auto-afledt scope</strong></div>
@@ -1728,9 +1777,9 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Distancekategori: <span data-air-scope-summary="air_distance_band"><?= h($airDistanceBandLabel($airDistBandUpload)) ?></span></div>
             <div>Art. 6 delay-threshold: <span data-air-scope-summary="air_delay_threshold_hours"><?= h($airDelayThresholdLabel($airDelayThresholdUpload)) ?></span></div>
           </div>
-          <details data-air-scope-manual-editor="1" style="margin-top:10px;" <?= $airUploadAutoReady ? '' : 'open' ?>>
+          <details data-air-scope-manual-editor="1" style="margin-top:10px;<?= $airUploadScopeResolved ? ' display:none;' : '' ?>" <?= $airUploadScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
-            <div class="grid-2" data-air-scope-manual-fields="1" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+            <div class="grid-2" data-air-scope-manual-fields="1" style="display:<?= $airUploadScopeResolved ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
               <label>Afgangslufthavn i EU?
                 <select name="departure_airport_in_eu">
                   <option value="yes" <?= $airDepEuUpload==='yes'?'selected':'' ?>>Ja</option>
@@ -2164,7 +2213,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
     <strong>SE-specifik undtagelse</strong>
     <div class="small" style="margin-top:6px;">GÃ¦lder kun for regionale rejser under 150 km.</div>
     <label class="small" style="margin-top:6px; display:inline-block;">
-      <input type="checkbox" name="se_under_150km" value="1" <?= !empty($journey['se_under_150km']) ? 'checked' : '' ?> onchange="this.form.submit()" /> StrÃ¦kningen er under 150 km
+      <input type="checkbox" name="se_under_150km" value="1" <?= !empty($journey['se_under_150km']) ? 'checked' : '' ?> /> StrÃ¦kningen er under 150 km
     </label>
   </div>
   <?php endif; ?>
@@ -2284,6 +2333,8 @@ if ($a12Applies === false && !empty($contractsView)) {
 <script>
 (function(){
   const form = document.getElementById('entitlementsForm');
+  let entitlementsAutoSubmitReady = false;
+  window.setTimeout(() => { entitlementsAutoSubmitReady = true; }, 350);
   const journeyToggleSeed = document.getElementById('toggleJourneyFields');
   const stationsSearchUrl = <?= json_encode((string)$stationsSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
   const transportNodesSearchUrl = <?= json_encode((string)$transportNodesSearchUrl, JSON_UNESCAPED_SLASHES) ?>;
@@ -2567,6 +2618,12 @@ if ($a12Applies === false && !empty($contractsView)) {
       hasValue('departure_from_terminal') ||
       hasValue('route_distance_meters')
     );
+    const isScopeComplete = mode === 'ferry' && (
+      hasValue('departure_port_in_eu') &&
+      hasValue('arrival_port_in_eu') &&
+      hasValue('carrier_is_eu') &&
+      hasValue('departure_from_terminal')
+    );
     const labelFor = (value) => {
       const v = String(value || '').trim().toLowerCase();
       if (v === 'yes') return 'Ja';
@@ -2578,10 +2635,13 @@ if ($a12Applies === false && !empty($contractsView)) {
       node.style.display = isAutoReady ? '' : 'none';
     });
     form.querySelectorAll('[data-ferry-scope-manual-editor]').forEach((node) => {
-      node.style.display = isAutoReady ? '' : 'none';
+      node.style.display = isScopeComplete ? 'none' : '';
+      node.open = !isScopeComplete && !isAutoReady ? true : node.open;
     });
     form.querySelectorAll('[data-ferry-scope-manual-fields]').forEach((node) => {
-      node.style.display = isAutoReady ? 'none' : 'grid';
+      const details = node.closest('[data-ferry-scope-manual-editor]');
+      const showFields = !isScopeComplete && (!isAutoReady || (!!details && details.open));
+      node.style.display = showFields ? 'grid' : 'none';
     });
 
     form.querySelectorAll('[data-ferry-scope-summary="departure_port_in_eu"]').forEach((node) => {
@@ -2611,6 +2671,12 @@ if ($a12Applies === false && !empty($contractsView)) {
       hasValue('departure_from_terminal') ||
       hasValue('scheduled_distance_km')
     );
+    const isScopeComplete = mode === 'bus' && (
+      hasValue('boarding_in_eu') &&
+      hasValue('alighting_in_eu') &&
+      hasValue('departure_from_terminal') &&
+      hasValue('scheduled_distance_km')
+    );
     const labelFor = (value) => {
       const v = String(value || '').trim().toLowerCase();
       if (v === 'yes') return 'Ja';
@@ -2622,18 +2688,14 @@ if ($a12Applies === false && !empty($contractsView)) {
       node.style.display = isAutoReady ? '' : 'none';
     });
     form.querySelectorAll('[data-bus-scope-manual-editor]').forEach((node) => {
-      node.style.display = '';
-      const wasAutoReady = node.dataset.autoReady === '1';
-      node.dataset.autoReady = isAutoReady ? '1' : '0';
-      if (!isAutoReady) {
+      node.style.display = isScopeComplete ? 'none' : '';
+      if (!isScopeComplete && !isAutoReady) {
         node.open = true;
-      } else if (!wasAutoReady) {
-        node.open = false;
       }
     });
     form.querySelectorAll('[data-bus-scope-manual-fields]').forEach((node) => {
       const details = node.closest('[data-bus-scope-manual-editor]');
-      const showFields = !isAutoReady || (!!details && details.open);
+      const showFields = !isScopeComplete && (!isAutoReady || (!!details && details.open));
       node.style.display = showFields ? 'grid' : 'none';
     });
     form.querySelectorAll('[data-bus-scope-summary="boarding_in_eu"]').forEach((node) => {
@@ -2653,14 +2715,21 @@ if ($a12Applies === false && !empty($contractsView)) {
 
   form.querySelectorAll('[data-bus-scope-manual-editor]').forEach((node) => {
     node.addEventListener('toggle', function () {
-      const isAutoReady = currentTransportMode() === 'bus' && (
+      const isBusMode = currentTransportMode() === 'bus';
+      const isAutoReady = isBusMode && (
         String(getFieldValue('boarding_in_eu') || '').trim() !== '' ||
         String(getFieldValue('alighting_in_eu') || '').trim() !== '' ||
         String(getFieldValue('departure_from_terminal') || '').trim() !== '' ||
         String(getFieldValue('scheduled_distance_km') || '').trim() !== ''
       );
+      const isScopeComplete = isBusMode && (
+        String(getFieldValue('boarding_in_eu') || '').trim() !== '' &&
+        String(getFieldValue('alighting_in_eu') || '').trim() !== '' &&
+        String(getFieldValue('departure_from_terminal') || '').trim() !== '' &&
+        String(getFieldValue('scheduled_distance_km') || '').trim() !== ''
+      );
       node.querySelectorAll('[data-bus-scope-manual-fields]').forEach((fields) => {
-        fields.style.display = (!isAutoReady || node.open) ? 'grid' : 'none';
+        fields.style.display = (!isScopeComplete && (!isAutoReady || node.open)) ? 'grid' : 'none';
       });
     });
   });
@@ -2732,6 +2801,14 @@ if ($a12Applies === false && !empty($contractsView)) {
       hasValue('flight_distance_km') ||
       hasValue('air_distance_band')
     );
+    const isScopeComplete = mode === 'air' && (
+      hasValue('departure_airport_in_eu') &&
+      hasValue('arrival_airport_in_eu') &&
+      hasValue('operating_carrier_is_eu') &&
+      hasValue('marketing_carrier_is_eu') &&
+      hasValue('flight_distance_km') &&
+      hasValue('air_distance_band')
+    );
     const labelFor = (value) => {
       const v = String(value || '').trim().toLowerCase();
       if (v === 'yes') return 'Ja';
@@ -2743,8 +2820,13 @@ if ($a12Applies === false && !empty($contractsView)) {
       node.style.display = isAutoReady ? '' : 'none';
     });
     form.querySelectorAll('[data-air-scope-manual-editor]').forEach((node) => {
-      node.style.display = '';
-      node.open = !isAutoReady;
+      node.style.display = isScopeComplete ? 'none' : '';
+      node.open = !isScopeComplete && !isAutoReady;
+    });
+    form.querySelectorAll('[data-air-scope-manual-fields]').forEach((node) => {
+      const details = node.closest('[data-air-scope-manual-editor]');
+      const showFields = !isScopeComplete && (!isAutoReady || (!!details && details.open));
+      node.style.display = showFields ? 'grid' : 'none';
     });
     form.querySelectorAll('[data-air-scope-summary="departure_airport_in_eu"]').forEach((node) => {
       node.textContent = labelFor(getFieldValue('departure_airport_in_eu'));
@@ -3117,7 +3199,9 @@ if ($a12Applies === false && !empty($contractsView)) {
     async function fetchNodes(input, box) {
       if (!shouldUseTransportNodes(input)) { hide(box); return; }
       const q = String(input.value || '').trim();
-      if (q.length < 2) { hide(box); return; }
+      const mode = currentTransportMode();
+      const minChars = mode === 'bus' ? 3 : 2;
+      if (q.length < minChars) { hide(box); return; }
       const url = buildNodeSearchUrl(input, q);
 
       let localState = state.get(input);
@@ -3174,7 +3258,7 @@ if ($a12Applies === false && !empty($contractsView)) {
         clearDerivedScopeForNodeInput(input.name);
         deriveScopeFromNodes();
         if (localState.timer) clearTimeout(localState.timer);
-        localState.timer = setTimeout(() => fetchNodes(input, box), 180);
+        localState.timer = setTimeout(() => fetchNodes(input, box), currentTransportMode() === 'bus' ? 320 : 180);
       });
       input.addEventListener('focus', () => {
         if (!shouldUseTransportNodes(input)) { hide(box); return; }
@@ -3185,7 +3269,9 @@ if ($a12Applies === false && !empty($contractsView)) {
       });
       input.addEventListener('blur', () => {
         setTimeout(() => hide(box), 180);
-        setTimeout(() => resolveExactNode(input), 40);
+        if (currentTransportMode() !== 'bus') {
+          setTimeout(() => resolveExactNode(input), 40);
+        }
       });
       input.addEventListener('change', () => resolveExactNode(input));
       input.addEventListener('keydown', (e) => {
@@ -3351,7 +3437,21 @@ if ($a12Applies === false && !empty($contractsView)) {
       }
     }
     function maybeAutofillPriceCurrency(){
-      const cc = (ccInput && (ccInput.value||'').trim().toUpperCase()) || '';
+      const depTerminalCountry = (card.querySelector('input[name="dep_terminal_lookup_country"]') || {}).value || '';
+      const depStationLookupCountry = (card.querySelector('input[name="dep_station_lookup_country"]') || {}).value || '';
+      const depStationCountry = (card.querySelector('input[name="dep_station_country"]') || {}).value || '';
+      const arrTerminalCountry = (card.querySelector('input[name="arr_terminal_lookup_country"]') || {}).value || '';
+      const arrStationLookupCountry = (card.querySelector('input[name="arr_station_lookup_country"]') || {}).value || '';
+      const arrStationCountry = (card.querySelector('input[name="arr_station_country"]') || {}).value || '';
+      const cc = (
+        (ccInput && (ccInput.value || '').trim().toUpperCase()) ||
+        String(depTerminalCountry).trim().toUpperCase() ||
+        String(depStationLookupCountry).trim().toUpperCase() ||
+        String(depStationCountry).trim().toUpperCase() ||
+        String(arrTerminalCountry).trim().toUpperCase() ||
+        String(arrStationLookupCountry).trim().toUpperCase() ||
+        String(arrStationCountry).trim().toUpperCase()
+      );
       if (!cc) return;
       const cur = countryToCurrency && countryToCurrency[cc] ? countryToCurrency[cc] : 'EUR';
       const sel = card.querySelector('select[name=\"price_currency\"]');
@@ -3370,6 +3470,12 @@ if ($a12Applies === false && !empty($contractsView)) {
       ccInput.addEventListener('change', ()=>{ if (ccAssumed) ccAssumed.value = '0'; maybeAutofillPriceCurrency(); }, { passive:true });
       ccInput.addEventListener('blur', ()=>{ maybeAutofillPriceCurrency(); }, { passive:true });
     }
+    ['dep_station','arr_station','dep_terminal','arr_terminal','price'].forEach((name)=>{
+      const el = card.querySelector('[name="' + name + '"]');
+      if (!el) return;
+      el.addEventListener('change', ()=>{ window.setTimeout(maybeAutofillPriceCurrency, 0); }, { passive:true });
+      el.addEventListener('blur', ()=>{ window.setTimeout(maybeAutofillPriceCurrency, 0); }, { passive:true });
+    });
 
     updateProductSuggestions();
     maybeAutofillCountry();
@@ -3668,7 +3774,7 @@ if ($a12Applies === false && !empty($contractsView)) {
         updateTransportMode();
         updateModeContractQuestionVisibility();
         const activeTicketMode = radioVal('ticket_upload_mode') || 'ticket';
-        if (activeTicketMode === 'ticketless' || activeTicketMode === 'seasonpass') {
+        if (e.isTrusted && entitlementsAutoSubmitReady && (activeTicketMode === 'ticketless' || activeTicketMode === 'seasonpass')) {
           resetInheritedJourneyFieldsForModeSwitch();
           setTimeout(() => form.submit(), 0);
         }
@@ -3876,6 +3982,19 @@ if ($a12Applies === false && !empty($contractsView)) {
   if (loadHooksBtn) {
     loadHooksBtn.addEventListener('click', function(){
       loadHooksPanel();
+    });
+  }
+  const seUnder150 = form.querySelector('input[name="se_under_150km"]');
+  if (seUnder150) {
+    let allowAutoSubmit = false;
+    requestAnimationFrame(() => { allowAutoSubmit = true; });
+    seUnder150.addEventListener('change', function(e) {
+      if (!allowAutoSubmit || !entitlementsAutoSubmitReady || !e.isTrusted) return;
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
     });
   }
   // Upload UI wiring

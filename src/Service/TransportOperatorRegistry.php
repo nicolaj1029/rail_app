@@ -65,6 +65,11 @@ final class TransportOperatorRegistry
                     ? (bool)$row['is_eu_operator']
                     : $this->isEuCountryCode($countryCode),
                 'operator_type' => trim((string)($row['operator_type'] ?? $this->defaultOperatorType($mode))),
+                'operator_key' => trim((string)($row['operator_key'] ?? $metadata['operator_key'] ?? '')),
+                'brand_group' => trim((string)($row['brand_group'] ?? $metadata['brand_group'] ?? '')),
+                'legal_entity_name' => trim((string)($row['legal_entity_name'] ?? $metadata['legal_entity_name'] ?? '')),
+                'operating_carrier_name' => trim((string)($row['operating_carrier_name'] ?? $metadata['operating_carrier_name'] ?? '')),
+                'codes' => is_array($row['codes'] ?? null) ? (array)$row['codes'] : (is_array($metadata['codes'] ?? null) ? (array)$metadata['codes'] : []),
                 'metadata' => $metadata,
                 'products' => $products,
             ];
@@ -135,7 +140,7 @@ final class TransportOperatorRegistry
 
     public function deriveCountryCode(string $mode, string $text): ?string
     {
-        $match = $this->findByName($mode, $text);
+        $match = $this->findByIdentity($mode, $text);
         $country = strtoupper(trim((string)($match['country_code'] ?? '')));
 
         return $country !== '' ? $country : null;
@@ -143,12 +148,133 @@ final class TransportOperatorRegistry
 
     public function deriveEuFlag(string $mode, string $text): ?bool
     {
-        $match = $this->findByName($mode, $text);
+        $match = $this->findByIdentity($mode, $text);
         if ($match === null || !array_key_exists('is_eu_operator', $match)) {
             return null;
         }
 
         return (bool)$match['is_eu_operator'];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function findByCode(string $mode, string $code): ?array
+    {
+        $needle = strtoupper(trim($code));
+        if ($needle === '') {
+            return null;
+        }
+
+        $mode = strtolower(trim($mode));
+        foreach ($this->operators as $operator) {
+            if (strtolower((string)($operator['mode'] ?? '')) !== $mode) {
+                continue;
+            }
+
+            $codes = (array)($operator['codes'] ?? []);
+            foreach ($codes as $value) {
+                if (strtoupper(trim((string)$value)) === $needle) {
+                    return $operator;
+                }
+            }
+
+            foreach (array_keys($codes) as $type) {
+                if (strtoupper(trim((string)$type)) === $needle) {
+                    return $operator;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function extractAviationDesignator(string $text): ?string
+    {
+        $hay = strtoupper(trim($text));
+        if ($hay === '') {
+            return null;
+        }
+
+        if (preg_match('/\b([A-Z0-9]{2})(\d{2,5})\b/', $hay, $m)) {
+            return $m[1];
+        }
+
+        if (preg_match('/\b([A-Z0-9]{2})\s*[-\/]?\s*(\d{2,5})\b/', $hay, $m)) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function findByIdentity(string $mode, string $text): ?array
+    {
+        $needle = trim($text);
+        if ($needle === '') {
+            return null;
+        }
+
+        if (strtolower(trim($mode)) === 'air' && ($flight = $this->extractAviationDesignator($needle)) !== null) {
+            if (($match = $this->findByCode($mode, $flight)) !== null) {
+                return $match;
+            }
+        }
+
+        if (($match = $this->findByCode($mode, $needle)) !== null) {
+            return $match;
+        }
+
+        $mode = strtolower(trim($mode));
+        $exactFields = ['operator_key', 'brand_group', 'legal_entity_name', 'operating_carrier_name', 'display_name', 'name'];
+        foreach ($this->operators as $operator) {
+            if (strtolower((string)($operator['mode'] ?? '')) !== $mode) {
+                continue;
+            }
+
+            foreach ($exactFields as $field) {
+                $candidate = trim((string)($operator[$field] ?? ''));
+                if ($candidate === '') {
+                    continue;
+                }
+                if (mb_strtolower($candidate) === mb_strtolower($needle)) {
+                    return $operator;
+                }
+            }
+        }
+
+        foreach ($this->operators as $operator) {
+            if (strtolower((string)($operator['mode'] ?? '')) !== $mode) {
+                continue;
+            }
+
+            $candidates = array_values(array_merge(
+                (array)($operator['aliases'] ?? []),
+                array_keys((array)($operator['codes'] ?? [])),
+                array_values((array)($operator['codes'] ?? []))
+            ));
+
+            foreach ($candidates as $candidate) {
+                $candidate = trim((string)$candidate);
+                if ($candidate === '') {
+                    continue;
+                }
+                if (mb_strlen($candidate) < 3) {
+                    if (mb_strtolower($needle) === mb_strtolower($candidate)) {
+                        return $operator;
+                    }
+                    continue;
+                }
+                $pattern = '/(?<![A-Za-z0-9])' . preg_quote($candidate, '/') . '(?![A-Za-z0-9])/iu';
+                if (preg_match($pattern, $needle)) {
+                    return $operator;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function detectModeByName(string $text): ?string
