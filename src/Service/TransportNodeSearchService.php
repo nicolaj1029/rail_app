@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Cake\Cache\Cache;
+
 /**
  * Multimodal node search for ferry ports/terminals, bus stops/terminals and airports.
  *
@@ -56,10 +58,24 @@ final class TransportNodeSearchService
         }
         $limit = max(1, min(50, $limit));
 
+        $queryCacheKey = 'transport_node_search_v3_' . md5(json_encode([
+            'mode' => $mode,
+            'query' => $query,
+            'country' => $country,
+            'limit' => $limit,
+            'kind' => $kind,
+            'ai' => $enableAiNormalization,
+        ]));
+        $cachedQueryRows = Cache::read($queryCacheKey, 'default');
+        if (is_array($cachedQueryRows)) {
+            return $cachedQueryRows;
+        }
+
         $seedRows = $this->loadSeedRows($mode);
         if ($seedRows !== []) {
             $seedResults = $this->searchCandidateRows($seedRows, $mode, $query, $country, $kind, $limit, $enableAiNormalization);
             if ($seedResults !== []) {
+                Cache::write($queryCacheKey, $seedResults, 'default');
                 return $seedResults;
             }
         }
@@ -94,7 +110,9 @@ final class TransportNodeSearchService
         }
 
         if ($scored === []) {
-            return $mode === 'bus' ? $this->fallbackBusNodes($query, $country, $limit) : [];
+            $fallback = $mode === 'bus' ? $this->fallbackBusNodes($query, $country, $limit) : [];
+            Cache::write($queryCacheKey, $fallback, 'default');
+            return $fallback;
         }
 
         usort($scored, static function (array $a, array $b): int {
@@ -106,7 +124,10 @@ final class TransportNodeSearchService
             return strcmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
         });
 
-        return $this->dedupeAndLimitResults($scored, $limit);
+        $result = $this->dedupeAndLimitResults($scored, $limit);
+        Cache::write($queryCacheKey, $result, 'default');
+
+        return $result;
     }
 
     /**
@@ -226,6 +247,9 @@ final class TransportNodeSearchService
 
         foreach ($rows as $row) {
             if (($row['mode'] ?? '') !== $mode) {
+                continue;
+            }
+            if ($mode === 'air' && !$this->isAllowedAirFrontendRow($row)) {
                 continue;
             }
             $rowCountry = strtoupper((string)($row['country'] ?? ''));
@@ -368,8 +392,25 @@ final class TransportNodeSearchService
             } elseif ($nodeType === 'ferry_terminal') {
                 $score += 4;
             }
-        } elseif ($mode === 'air' && $nodeType === 'airport') {
-            $score += 6;
+        } elseif ($mode === 'air') {
+            if ($nodeType === 'airport') {
+                $score += 6;
+            }
+            if ($this->normalizeNullableBool($row['in_eu'] ?? null) === true) {
+                $score += 12;
+            }
+            if ($this->normalizeNullableBool($row['allow_in_claim_flow'] ?? null) === true) {
+                $score += 18;
+            }
+            if ($this->normalizeNullableBool($row['has_scheduled_passenger_service'] ?? null) === true) {
+                $score += 10;
+            }
+            if (!empty($row['lookup_priority'])) {
+                $score += max(0, min(12, (int)floor(((int)$row['lookup_priority']) / 10)));
+            }
+            if ($this->isQuestionableAirRowName($rawName)) {
+                $score -= 18;
+            }
         } elseif ($mode === 'bus' && ($nodeType === 'terminal' || $nodeType === 'stop' || $nodeType === 'bus_terminal')) {
             $score += 5;
         }
@@ -379,6 +420,149 @@ final class TransportNodeSearchService
         }
 
         return $score;
+    }
+
+    /**
+     * The current air node dataset does not carry a clean civilian/military flag,
+     * so keep a conservative name-based filter for obviously military-only airports.
+     *
+     * @param array<string,mixed> $row
+     */
+    private function isMilitaryOnlyAirRow(array $row): bool
+    {
+        $explicitMilitary = $this->normalizeNullableBool($row['is_military'] ?? null);
+        $explicitJointUse = $this->normalizeNullableBool($row['is_joint_use'] ?? null);
+        if ($explicitMilitary === true && $explicitJointUse !== true) {
+            return true;
+        }
+
+        $name = $this->ascii($this->norm((string)($row['name'] ?? '')));
+        if ($name === '') {
+            return false;
+        }
+
+        foreach ([
+            'former military',
+            ' military ',
+            'air base',
+            'airbase',
+            'air force base',
+            'army air field',
+            'naval air station',
+            'naval air facility',
+            'aerodrome militaire',
+        ] as $needle) {
+            if (str_contains(' ' . $name . ' ', ' ' . $needle . ' ')) {
+                return true;
+            }
+        }
+
+        if (preg_match('/\b(afb|raf|nas)\b/', $name) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     */
+    private function isAllowedAirFrontendRow(array $row): bool
+    {
+        $explicitFrontend = $this->normalizeNullableBool($row['allow_in_frontend_search'] ?? null);
+        if ($explicitFrontend !== null) {
+            return $explicitFrontend;
+        }
+
+        if ($this->isMilitaryOnlyAirRow($row)) {
+            return false;
+        }
+        if ($this->isQuestionableAirRowName((string)($row['name'] ?? ''))) {
+            return false;
+        }
+        if ($this->normalizeNullableBool($row['is_cargo_only'] ?? null) === true) {
+            return false;
+        }
+        if ($this->normalizeNullableBool($row['is_private_use'] ?? null) === true) {
+            return false;
+        }
+        if ($this->normalizeNullableBool($row['is_closed'] ?? null) === true) {
+            return false;
+        }
+        if ($this->looksLikeCargoOnlyAirName((string)($row['name'] ?? ''))) {
+            return false;
+        }
+        if ($this->looksLikeNonPassengerAirFacility((string)($row['name'] ?? ''))) {
+            return false;
+        }
+
+        $isActive = $this->normalizeNullableBool($row['is_active'] ?? null);
+        if ($isActive === false) {
+            return false;
+        }
+        $isPublicUse = $this->normalizeNullableBool($row['is_public_use'] ?? null);
+        if ($isPublicUse === false) {
+            return false;
+        }
+        $hasPassengerService = $this->normalizeNullableBool($row['has_scheduled_passenger_service'] ?? null);
+        if ($hasPassengerService === false) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isQuestionableAirRowName(string $name): bool
+    {
+        $normalized = $this->ascii($this->norm($name));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return str_contains($normalized, 'duplicate')
+            || str_contains($normalized, 'former military')
+            || str_contains($normalized, 'bogus')
+            || str_contains($normalized, 'test airport')
+            || str_contains($normalized, 'planet mars');
+    }
+
+    private function looksLikeCargoOnlyAirName(string $name): bool
+    {
+        $normalized = $this->ascii($this->norm($name));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach (['cargo', 'freight', 'logistics', 'parcel hub'] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function looksLikeNonPassengerAirFacility(string $name): bool
+    {
+        $normalized = $this->ascii($this->norm($name));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach ([
+            'heliport',
+            'seaplane',
+            'balloonport',
+            'training field',
+            'test range',
+            'maintenance base',
+        ] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -472,6 +656,15 @@ final class TransportNodeSearchService
         if ($signature !== '' && isset(self::$cacheRowsByKey[$cacheKey]) && (self::$cacheSignatureByKey[$cacheKey] ?? null) === $signature) {
             return self::$cacheRowsByKey[$cacheKey];
         }
+        $rowsCacheKey = $signature !== '' ? ('transport_nodes_rows_' . md5($cacheKey . '|' . $signature)) : null;
+        if ($rowsCacheKey !== null) {
+            $cachedRows = Cache::read($rowsCacheKey, 'default');
+            if (is_array($cachedRows)) {
+                self::$cacheRowsByKey[$cacheKey] = $cachedRows;
+                self::$cacheSignatureByKey[$cacheKey] = $signature;
+                return $cachedRows;
+            }
+        }
         if (!is_file($path)) {
             return [];
         }
@@ -492,6 +685,9 @@ final class TransportNodeSearchService
 
         self::$cacheRowsByKey[$cacheKey] = $rows;
         self::$cacheSignatureByKey[$cacheKey] = $signature;
+        if ($rowsCacheKey !== null) {
+            Cache::write($rowsCacheKey, $rows, 'default');
+        }
 
         return $rows;
     }

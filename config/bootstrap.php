@@ -98,6 +98,9 @@ try {
 if (file_exists(CONFIG . 'app_local.php')) {
     Configure::load('app_local', 'default');
 }
+if (file_exists(CONFIG . 'transport_caps.php')) {
+    Configure::load('transport_caps', 'default', true);
+}
 
 /*
  * When debug = true the metadata cache should only last for a short time.

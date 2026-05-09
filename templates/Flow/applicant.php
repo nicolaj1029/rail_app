@@ -37,8 +37,9 @@ $isPreview = !empty($flowPreview);
     <?= $this->Form->control('bic', ['label' => 'BIC']) ?>
 
     <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-        <?= $this->Html->link('Tilbage', ['action' => 'compensation'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+        <?= $this->Html->link('Tilbage', ['action' => (is_string($flowPrevAction ?? null) && $flowPrevAction !== '' ? $flowPrevAction : 'compensation')], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
         <?= $this->Form->button('Fortsaet', ['class' => 'button']) ?>
     </div>
 </fieldset>
 <?= $this->Form->end() ?>
+<?= $this->element('flow_autosave', ['step' => 'applicant']) ?>

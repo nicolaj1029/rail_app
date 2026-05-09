@@ -13,7 +13,7 @@ final class FerryRightsEvaluatorTest extends TestCase
         $result = (new FerryRightsEvaluator())->evaluate(
             [
                 'incident_type' => 'delay',
-                'actual_departure_delay_90' => true,
+                'ferry_departure_disruption_90' => true,
                 'arrival_delay_minutes' => 130,
                 'scheduled_journey_duration_minutes' => 300,
                 'overnight_required' => false,
@@ -49,7 +49,7 @@ final class FerryRightsEvaluatorTest extends TestCase
         $result = (new FerryRightsEvaluator())->evaluate(
             [
                 'incident_type' => 'cancellation',
-                'expected_departure_delay_90' => true,
+                'ferry_cancellation_confirmed' => true,
                 'arrival_delay_minutes' => 240,
                 'scheduled_journey_duration_minutes' => 300,
                 'overnight_required' => true,
@@ -79,7 +79,7 @@ final class FerryRightsEvaluatorTest extends TestCase
         $result = (new FerryRightsEvaluator())->evaluate(
             [
                 'incident_type' => 'delay',
-                'actual_departure_delay_90' => true,
+                'ferry_departure_disruption_90' => true,
                 'arrival_delay_minutes' => 180,
                 'scheduled_journey_duration_minutes' => 300,
                 'open_ticket_without_departure_time' => true,

@@ -3,6 +3,7 @@
 /** @var string $role */
 /** @var string $source */
 /** @var string $id */
+/** @var string $ref */
 /** @var array<string,mixed>|null $cockpit */
 /** @var array<string,string> $allowedStatuses */
 /** @var list<array<string,mixed>> $playbooks */
@@ -25,20 +26,63 @@ $notes = (array)($cockpit['notes'] ?? []);
 $followUp = (array)($cockpit['follow_up'] ?? []);
 $riskPanel = (array)($cockpit['risk_panel'] ?? []);
 $riskFlags = (array)($riskPanel['flags'] ?? []);
+$ticketReview = (array)($cockpit['ticket_review'] ?? []);
+$opsReview = (array)($cockpit['ops_review'] ?? []);
+$opsChecks = (array)($opsReview['match_checks'] ?? []);
 $playbooks = $playbooks ?? [];
 $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source) . '&id=' . urlencode($id));
+$legalLabels = [
+    'liable_party' => 'Ansvarlig part',
+    'compensation_eligible' => 'Kompensation mulig',
+    'compensation_amount' => 'Kompensationsbeloeb',
+    'compensation_amount_eur' => 'Kompensationsbeloeb',
+    'compensation_pct' => 'Kompensationsniveau',
+    'refund_eligible' => 'Afhjaelpning mulig',
+    'refund_choice' => 'Valgt afhjælpningsspor',
+    'remedy_choice' => 'Valgt afhjælpningsspor',
+    'care_eligible' => 'Assistance aktiv',
+    'care_status' => 'Assistancestatus',
+    'art20_expenses_total' => 'Assistanceudgifter i alt',
+    'eu_only' => 'EU-only',
+    'extraordinary' => 'Extraordinary review',
+    'currency' => 'Valuta',
+    'distance_km' => 'Distance',
+    'distance_band' => 'Distancekategori',
+    'operator' => 'Operator',
+    'incident_type' => 'Haendelse',
+];
+$formatDeskValue = static function ($value): string {
+    if (is_bool($value)) {
+        return $value ? 'Ja' : 'Nej';
+    }
+    if (is_array($value)) {
+        return $value === [] ? '-' : implode(', ', array_map(static fn($item): string => (string)$item, $value));
+    }
+    if ($value === null) {
+        return '-';
+    }
+    $text = trim((string)$value);
+    return $text !== '' ? $text : '-';
+};
+$formatDeskLabel = static function (string $key) use ($legalLabels): string {
+    if (isset($legalLabels[$key])) {
+        return $legalLabels[$key];
+    }
+    return ucfirst(str_replace('_', ' ', $key));
+};
 ?>
 <style>
-  .desk-page { max-width: 1360px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+  html, body { overflow-x:hidden; }
+  .desk-page { max-width: 1480px; margin: 0 auto; padding: 16px 20px 32px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; overflow-x:hidden; }
   .desk-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; }
-  .desk-grid { display:grid; grid-template-columns: 1.3fr .9fr; gap:16px; align-items:start; margin-top:16px; }
-  .desk-stack { display:grid; gap:16px; }
-  .desk-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .desk-grid { display:grid; grid-template-columns:minmax(0, 1.75fr) minmax(320px, 0.95fr); gap:16px; align-items:start; margin-top:16px; }
+  .desk-stack { display:grid; gap:16px; min-width:0; }
+  .desk-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); min-width:0; overflow:hidden; }
   .desk-title { margin:0 0 8px; }
   .desk-muted { color:#64748b; }
-  .desk-kv { display:grid; grid-template-columns: 150px 1fr; gap:8px; font-size:14px; }
+  .desk-kv { display:grid; grid-template-columns:minmax(120px, 180px) minmax(0, 1fr); gap:8px 12px; font-size:14px; align-items:start; }
   .desk-kv dt { font-weight:700; color:#0f172a; }
-  .desk-kv dd { margin:0; color:#334155; }
+  .desk-kv dd { margin:0; color:#334155; overflow-wrap:anywhere; word-break:break-word; }
   .desk-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; background:#eef2ff; color:#3730a3; border:1px solid transparent; }
   .desk-risk-low { background:#ecfccb; color:#3f6212; border-color:#bef264; }
   .desk-risk-medium { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
@@ -57,7 +101,21 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
   .desk-step { padding:6px 10px; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; font-size:13px; }
   .desk-note { border-left:4px solid #0a6fd8; background:#f5faff; padding:10px 12px; border-radius:8px; margin-top:12px; }
   pre.desk-pre { max-height:320px; overflow:auto; font-size:12px; background:#0f172a; color:#e2e8f0; padding:12px; border-radius:10px; }
+  .desk-side-card { position:sticky; top:16px; }
+  .desk-legal { display:grid; gap:12px; }
+  .desk-legal-row { display:grid; grid-template-columns:minmax(130px, 180px) minmax(0, 1fr); gap:10px 12px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#fafafa; }
+  .desk-legal-label { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
+  .desk-legal-value { color:#0f172a; font-weight:600; overflow-wrap:anywhere; word-break:break-word; }
+  .desk-panel-item,
+  .desk-toolbar,
+  .desk-note,
+  .desk-step { min-width:0; }
   @media (max-width: 980px) { .desk-grid { grid-template-columns:1fr; } }
+  @media (max-width: 980px) { .desk-side-card { position:static; } }
+  @media (max-width: 720px) {
+    .desk-page { padding:12px; }
+    .desk-kv, .desk-legal-row { grid-template-columns:1fr; }
+  }
 </style>
 
 <div class="desk-page">
@@ -65,6 +123,7 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
     <div class="desk-card">
       <h1 class="desk-title">Cockpit ikke fundet</h1>
       <div class="desk-muted">Kilden eller id'et findes ikke længere.</div>
+      <div class="desk-muted" style="margin-top:8px;">Source: <?= h($source) ?> · id: <?= h($id) ?><?php if (!empty($ref)): ?> · ref: <?= h($ref) ?><?php endif; ?></div>
       <div class="desk-toolbar">
         <a class="desk-button primary" href="<?= h($this->Url->build('/admin/desk')) ?>">Tilbage til inbox</a>
       </div>
@@ -82,6 +141,12 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
           <?php if (!empty($riskPanel['fraud_review_required'])): ?>
             <span class="desk-badge desk-risk-high">Fraud review</span>
           <?php endif; ?>
+          <?php if (!empty($ticketReview['available'])): ?>
+            <span class="desk-badge <?= h((string)($ticketReview['badge_class'] ?? 'desk-risk-medium')) ?>"><?= h((string)($ticketReview['label'] ?? 'Billet review')) ?></span>
+          <?php endif; ?>
+          <?php if (!empty($opsReview['available'])): ?>
+            <span class="desk-badge <?= h((string)($opsReview['badge_class'] ?? 'desk-risk-medium')) ?>"><?= h((string)($opsReview['label'] ?? 'Ops data')) ?></span>
+          <?php endif; ?>
           <span class="desk-badge"><?= h($role === 'jurist' ? 'Jurist' : 'Operator') ?></span>
           <?php if ($roleLocked): ?>
             <span class="desk-badge"><?= h($roleLabel) ?> · <?= h($authUser !== '' ? $authUser : 'ukendt') ?></span>
@@ -94,6 +159,20 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
         <a class="desk-button" href="<?= h($this->Url->build('/admin/chat')) ?>">Admin chat</a>
         <?php if ($source === 'session'): ?>
           <a class="desk-button primary" href="<?= h($this->Url->build('/admin/cases/create-from-session')) ?>">Opret sag fra live session</a>
+          <?php if (trim((string)(($item['meta']['ref'] ?? ''))) !== ''): ?>
+            <a class="desk-button" href="<?= $this->Url->build(['prefix' => false, 'controller' => 'Passenger', 'action' => 'case', '?' => ['ref' => (string)$item['meta']['ref'], 'admin' => '1']]) ?>">Aabn klientsag</a>
+          <?php endif; ?>
+          <?php if (strtolower(trim((string)(($item['meta']['transport_mode'] ?? '')))) === 'air'): ?>
+            <a class="desk-button" href="<?= h($this->Url->build('/reimbursement/official?template=Form_air_travel/air_travel_form.pdf')) ?>" target="_blank" rel="noopener">air_travel_form.pdf</a>
+            <a class="desk-button" href="<?= h($this->Url->build('/reimbursement/official?template=Staevning_template_air_DK/staevning-flysag-uncompressed.pdf')) ?>" target="_blank" rel="noopener">staevning-flysag.pdf</a>
+          <?php endif; ?>
+        <?php elseif ($source === 'case'): ?>
+          <a class="desk-button" href="<?= h($this->Url->build('/admin/cases/passenger/' . $id)) ?>">Aabn klientsag</a>
+          <a class="desk-button" href="<?= h($this->Url->build('/admin/cases/edit/' . $id)) ?>">Rediger admin-sag</a>
+          <?php if (strtolower(trim((string)(($item['meta']['transport_mode'] ?? '')))) === 'air'): ?>
+            <a class="desk-button" href="<?= h($this->Url->build('/admin/cases/air-travel-form/' . $id)) ?>" target="_blank" rel="noopener">air_travel_form.pdf</a>
+            <a class="desk-button" href="<?= h($this->Url->build('/admin/cases/air-statement-form/' . $id)) ?>" target="_blank" rel="noopener">staevning-flysag.pdf</a>
+          <?php endif; ?>
         <?php endif; ?>
       </div>
     </div>
@@ -297,14 +376,22 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
           <?php endif; ?>
         </section>
 
-        <section class="desk-card">
+        <section class="desk-card desk-side-card">
           <h2 class="desk-title"><?= $role === 'jurist' ? 'Juridisk vurdering' : 'Juridisk snapshot' ?></h2>
-          <dl class="desk-kv">
+          <div class="desk-legal">
             <?php foreach ($legalPanel as $label => $value): ?>
-              <dt><?= h((string)$label) ?></dt>
-              <dd><?= is_bool($value) ? ($value ? 'ja' : 'nej') : h($value === null || $value === '' ? '-' : (string)$value) ?></dd>
+              <div class="desk-legal-row">
+                <div class="desk-legal-label"><?= h($formatDeskLabel((string)$label)) ?></div>
+                <div class="desk-legal-value"><?= h($formatDeskValue($value)) ?></div>
+              </div>
             <?php endforeach; ?>
-          </dl>
+            <?php if ($legalPanel === []): ?>
+              <div class="desk-panel-item">
+                <strong>Ingen juridiske nøgler</strong>
+                <div>Panelet har ikke modtaget et juridisk snapshot endnu.</div>
+              </div>
+            <?php endif; ?>
+          </div>
           <?php if ($role === 'operator'): ?>
             <div class="desk-note">
               <strong>Operator-regel</strong><br>
@@ -312,6 +399,86 @@ $redirectUrl = $this->Url->build('/admin/desk/view?source=' . urlencode($source)
             </div>
           <?php endif; ?>
         </section>
+
+        <?php if (!empty($ticketReview['available'])): ?>
+          <section class="desk-card">
+            <h2 class="desk-title">Billetverificering</h2>
+            <div class="desk-toolbar">
+              <span class="desk-badge <?= h((string)($ticketReview['badge_class'] ?? 'desk-risk-medium')) ?>"><?= h((string)($ticketReview['label'] ?? 'Billet review')) ?></span>
+            </div>
+            <div class="desk-muted" style="margin-top:12px;"><?= h((string)($ticketReview['summary'] ?? '')) ?></div>
+          </section>
+        <?php endif; ?>
+
+        <?php if (!empty($opsReview['available'])): ?>
+          <section class="desk-card">
+            <h2 class="desk-title">Operationelle flight-data</h2>
+            <div class="desk-toolbar">
+              <span class="desk-badge <?= h((string)($opsReview['badge_class'] ?? 'desk-risk-medium')) ?>"><?= h((string)($opsReview['label'] ?? 'Ops data')) ?></span>
+              <?php if (trim((string)($opsReview['source'] ?? '')) !== ''): ?>
+                <span class="desk-badge"><?= h(strtoupper((string)$opsReview['source'])) ?></span>
+              <?php endif; ?>
+              <?php if (trim((string)($opsReview['confidence'] ?? '')) !== ''): ?>
+                <span class="desk-badge">Confidence <?= h((string)$opsReview['confidence']) ?></span>
+              <?php endif; ?>
+              <span class="desk-badge">Score <?= (int)($opsReview['evidence_score'] ?? 0) ?></span>
+            </div>
+
+            <div class="desk-muted" style="margin-top:12px;"><?= h((string)($opsReview['summary'] ?? '')) ?></div>
+
+            <dl class="desk-kv" style="margin-top:12px;">
+              <dt>Status</dt>
+              <dd><?= h((string)($opsReview['status'] ?? '') !== '' ? (string)$opsReview['status'] : '-') ?></dd>
+              <dt>Cancellation</dt>
+              <dd><?= ((string)($opsReview['cancelled'] ?? 'no') === 'yes') ? 'ja' : 'nej' ?></dd>
+              <dt>Est. ankomstafvigelse</dt>
+              <dd>
+                <?php $opsDelay = $opsReview['delay_minutes_estimated'] ?? null; ?>
+                <?= ($opsDelay === null || $opsDelay === '') ? '-' : h((string)$opsDelay . ' min') ?>
+              </dd>
+              <dt>Planlagt</dt>
+              <dd>
+                <?= h((string)($opsReview['scheduled_departure_local'] ?? '') !== '' ? (string)$opsReview['scheduled_departure_local'] : '-') ?>
+                <?php if (trim((string)($opsReview['scheduled_arrival_local'] ?? '')) !== ''): ?>
+                  → <?= h((string)$opsReview['scheduled_arrival_local']) ?>
+                <?php endif; ?>
+              </dd>
+              <dt>Observeret</dt>
+              <dd>
+                <?php
+                  $observedDeparture = trim((string)($opsReview['actual_departure_local'] ?? '')) !== ''
+                    ? (string)$opsReview['actual_departure_local']
+                    : (string)($opsReview['estimated_departure_local'] ?? '');
+                  $observedArrival = trim((string)($opsReview['actual_arrival_local'] ?? '')) !== ''
+                    ? (string)$opsReview['actual_arrival_local']
+                    : (string)($opsReview['estimated_arrival_local'] ?? '');
+                ?>
+                <?= h($observedDeparture !== '' ? $observedDeparture : '-') ?>
+                <?php if ($observedArrival !== ''): ?>
+                  → <?= h($observedArrival) ?>
+                <?php endif; ?>
+              </dd>
+            </dl>
+
+            <div class="desk-panel-list" style="margin-top:12px;">
+              <?php foreach ($opsChecks as $check): ?>
+                <div class="desk-panel-item <?= ((string)($check['status'] ?? '') === 'mismatch') ? 'warning' : '' ?>">
+                  <strong><?= h((string)($check['label'] ?? 'Match check')) ?></strong>
+                  <div class="desk-muted">
+                    Frontflow: <?= h((string)($check['current'] ?? '') !== '' ? (string)$check['current'] : '-') ?>
+                    · Detekteret: <?= h((string)($check['detected'] ?? '') !== '' ? (string)$check['detected'] : '-') ?>
+                  </div>
+                  <div><?= h(ucfirst((string)($check['status'] ?? 'unknown'))) ?></div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+
+            <div class="desk-note">
+              <strong>Ops-regel</strong><br>
+              AeroDataBox bruges her som drifts- og plausibilitetsstøtte. Dataene er ikke alene juridisk facit.
+            </div>
+          </section>
+        <?php endif; ?>
 
         <?php if (!empty($riskPanel['evaluated'])): ?>
           <section class="desk-card">

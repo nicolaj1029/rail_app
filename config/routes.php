@@ -71,11 +71,13 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/project/chat-qa', ['controller' => 'Project', 'action' => 'chatQa']);
         $builder->connect('/passenger', ['controller' => 'Passenger', 'action' => 'start']);
         $builder->connect('/passenger/start', ['controller' => 'Passenger', 'action' => 'start']);
+        $builder->connect('/passenger/case', ['controller' => 'Passenger', 'action' => 'case']);
         $builder->connect('/passenger/review', ['controller' => 'Passenger', 'action' => 'review']);
         $builder->connect('/passenger/commuter', ['controller' => 'Passenger', 'action' => 'commuter']);
         $builder->connect('/passenger/claims', ['controller' => 'Passenger', 'action' => 'claims']);
         $builder->connect('/passenger/trips', ['controller' => 'Passenger', 'action' => 'trips']);
         $builder->connect('/passenger/chat', ['controller' => 'Passenger', 'action' => 'chat']);
+        $builder->connect('/passenger/faq', ['controller' => 'Passenger', 'action' => 'faq']);
         $builder->connect('/project/{slug}', ['controller' => 'Project', 'action' => 'view'])
             ->setPass(['slug']);
         $builder->connect('/project/annotate/{slug}', ['controller' => 'Project', 'action' => 'annotate'])
@@ -138,6 +140,12 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/flow/start', ['controller' => 'Flow', 'action' => 'start']);
     $builder->connect('/flow/journey', ['controller' => 'Flow', 'action' => 'journey']);
     $builder->connect('/flow/station', ['controller' => 'Flow', 'action' => 'station']);
+    $builder->connect('/flow/rail-departure-select', ['controller' => 'Flow', 'action' => 'railDepartureSelect']);
+    $builder->connect('/flow/rail-departures/search', ['controller' => 'Flow', 'action' => 'railDepartureSelect']);
+    $builder->connect('/flow/rail-departures/select', ['controller' => 'Flow', 'action' => 'railDepartureSelect']);
+    $builder->connect('/flow/air-leg-select', ['controller' => 'Flow', 'action' => 'airLegSelect']);
+    $builder->connect('/flow/air-flight-select', ['controller' => 'Flow', 'action' => 'airFlightSelect']);
+    $builder->connect('/flow/ferry-departure-select', ['controller' => 'Flow', 'action' => 'ferryDepartureSelect']);
     $builder->connect('/flow/entitlements', ['controller' => 'Flow', 'action' => 'entitlements']);
     $builder->connect('/flow/summary', ['controller' => 'Flow', 'action' => 'summary']);
 
@@ -150,6 +158,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/admin/desk/update-status', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'updateStatus']);
         $builder->connect('/admin/desk/note', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'note']);
         $builder->connect('/admin/desk/follow-up', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'followUp']);
+        $builder->connect('/admin/desk/start-rail-transport', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'startRailTransport']);
+        $builder->connect('/admin/desk/stop-rail-transport', ['prefix' => 'Admin', 'controller' => 'Desk', 'action' => 'stopRailTransport']);
         $builder->connect('/admin/chat', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'index']);
         $builder->connect('/admin/chat/message', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'message']);
         $builder->connect('/admin/chat/reset', ['prefix' => 'Admin', 'controller' => 'Chat', 'action' => 'reset']);
@@ -159,6 +169,9 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/admin/cases', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'index']);
     $builder->connect('/admin/cases/view/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'view'])->setPass(['id']);
     $builder->connect('/admin/cases/edit/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'edit'])->setPass(['id']);
+    $builder->connect('/admin/cases/passenger/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'passenger'])->setPass(['id']);
+    $builder->connect('/admin/cases/air-travel-form/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'airTravelForm'])->setPass(['id']);
+    $builder->connect('/admin/cases/air-statement-form/{id}', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'airStatementForm'])->setPass(['id']);
     $builder->connect('/admin/cases/create-from-session', ['prefix' => 'Admin', 'controller' => 'Cases', 'action' => 'createFromSession']);
 
     // Admin area (non-auth demo)
@@ -197,6 +210,10 @@ return function (RouteBuilder $routes): void {
         // Regulation RAG helper (local index built from CELEX PDF)
         $builder->connect('/regulation/search', ['controller' => 'Regulation', 'action' => 'search']);
         $builder->connect('/regulation/quote', ['controller' => 'Regulation', 'action' => 'quote']);
+        $builder->connect('/air/flights/search', ['controller' => 'AirFlights', 'action' => 'search']);
+        $builder->connect('/ferry/departures/search', ['controller' => 'FerryDepartures', 'action' => 'search']);
+        $builder->connect('/ferry/incident/suggest', ['controller' => 'FerryDepartures', 'action' => 'suggestIncident']);
+        $builder->connect('/rail/departures/search', ['controller' => 'RailDepartures', 'action' => 'search']);
         // Demo v2 (fixtures/scenarios runner)
         $builder->scope('/demo/v2', function (RouteBuilder $demo): void {
             $demo->setRouteClass(DashedRoute::class);

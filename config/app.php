@@ -213,6 +213,20 @@ return [
         // Local/remote RNE mock base can be set via RNE_BASE_URL env, used by RneClient
     ],
 
+    'Rail' => [
+        'transportServiceEnabled' => filter_var(env('RAIL_TRANSPORT_SERVICE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'transportServiceBaseUrl' => env('RAIL_TRANSPORT_SERVICE_BASE_URL', 'http://127.0.0.1:7071'),
+        'transportServiceTimeout' => (int)env('RAIL_TRANSPORT_SERVICE_TIMEOUT', 15),
+        'hafas' => [
+            'enabled' => filter_var(env('RAIL_HAFAS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        ],
+        'rneTis' => [
+            'enabled' => filter_var(env('RAIL_RNE_TIS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+            'baseUrl' => env('RAIL_RNE_TIS_BASE_URL', ''),
+            'apiKey' => env('RAIL_RNE_TIS_API_KEY', ''),
+        ],
+    ],
+
     /*
      * Email configuration.
      *
@@ -431,6 +445,11 @@ return [
      */
     'Session' => [
         'defaults' => 'php',
+        'timeout' => 480,
+        'ini' => [
+            'session.cookie_lifetime' => 28800,
+            'session.gc_maxlifetime' => 28800,
+        ],
     ],
 
     /**

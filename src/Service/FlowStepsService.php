@@ -22,9 +22,13 @@ final class FlowStepsService
     public const STEPS = [
         ['id' => 'start',       'num' => 1,  'title' => 'Start & Rejsestatus',                            'action' => 'start',       'doneFlag' => 'step1_done',  'prereqFlags' => []],
         ['id' => 'entitlements','num' => 2,  'title' => 'Billet / Ticketless + Grunddata',               'action' => 'entitlements','doneFlag' => 'step2_done',  'prereqFlags' => ['step1_done']],
+        ['id' => 'air_flight_select','num' => 3, 'title' => 'Vaelg flyvning',                            'action' => 'airFlightSelect','doneFlag' => 'step25_done','prereqFlags' => ['step2_done']],
+        ['id' => 'ferry_departure_select','num' => 3, 'title' => 'Vaelg afgang',                         'action' => 'ferryDepartureSelect','doneFlag' => 'step26_done','prereqFlags' => ['step2_done']],
+        ['id' => 'rail_departure_select','num' => 3, 'title' => 'Vaelg afgang',                          'action' => 'railDepartureSelect','doneFlag' => 'step27_done','prereqFlags' => ['step2_done']],
+        ['id' => 'air_leg_select','num' => '3.1', 'title' => 'Vaelg berort leg',                         'action' => 'airLegSelect','doneFlag' => 'step24_done','prereqFlags' => ['step25_done']],
         // NOTE: Step 3/4 are intentionally ordered as station -> journey (and the step3_done/step4_done meanings follow that order).
         ['id' => 'station',     'num' => 3,  'title' => 'Foerste ramte segment',                          'action' => 'station',     'doneFlag' => 'step3_done',  'prereqFlags' => ['step2_done']],
-        ['id' => 'railstranding','num' => '3.5', 'title' => 'Strandet paa station/sporet',               'action' => 'railstranding','doneFlag' => 'step35_done','prereqFlags' => ['step2_done']],
+        ['id' => 'railstranding','num' => '3.5', 'title' => 'Strandet paa station',                      'action' => 'railstranding','doneFlag' => 'step35_done','prereqFlags' => ['step2_done']],
         ['id' => 'journey',     'num' => 4,  'title' => 'Mode-specifik gating',                           'action' => 'journey',     'doneFlag' => 'step4_done',  'prereqFlags' => ['step3_done']],
         ['id' => 'incident',    'num' => 5,  'title' => 'Haendelseskede + gating',                        'action' => 'incident',    'doneFlag' => 'step5_done',  'prereqFlags' => ['step4_done']],
         // Gate flags are written by TRIN 5 (incident) to prevent users from editing downstream steps
@@ -67,7 +71,6 @@ final class FlowStepsService
         $isBusSplit = $transportMode === 'bus' && $entryVariant === 'bus_split';
         $isFerrySplit = $transportMode === 'ferry' && $entryVariant === 'ferry_split';
         $travelState = strtolower((string)($flags['travel_state'] ?? ''));
-        $isAirShortCompleted = $isAirShort && $travelState === 'completed';
         $isCompleted = $travelState === 'completed';
         $isOngoing = $travelState === 'ongoing';
         $isFerry = $transportMode === 'ferry';
@@ -88,7 +91,47 @@ final class FlowStepsService
             switch ((string)($s['action'] ?? '')) {
                 case 'station':
                     $s['title'] = 'Foerste ramte segment';
-                    $visible = $isAirShort ? $isCurrent : (($needsRouter && $transportMode !== 'air') || $isCurrent);
+                    $visible = ($isAirShort || $isFerrySplit || $isRailSplit)
+                        ? $isCurrent
+                        : (($needsRouter && $transportMode !== 'air') || $isCurrent);
+                    break;
+                case 'airFlightSelect':
+                    if ($isAirShort) {
+                        // Keep the initial air short-flow identical for completed and ongoing journeys.
+                        $s['title'] = 'Vaelg flyvning';
+                        $visible = true;
+                        $prereqFlags = ['step2_done'];
+                    } else {
+                        $visible = false;
+                    }
+                    break;
+                case 'ferryDepartureSelect':
+                    if ($isFerrySplit) {
+                        $s['title'] = 'Vaelg afgang';
+                        $visible = true;
+                        $prereqFlags = ['step2_done'];
+                    } else {
+                        $visible = false;
+                    }
+                    break;
+                case 'railDepartureSelect':
+                    if ($isRailSplit) {
+                        $s['title'] = 'Vaelg afgang';
+                        $visible = true;
+                        $prereqFlags = ['step2_done'];
+                    } else {
+                        $visible = false;
+                    }
+                    break;
+                case 'airLegSelect':
+                    if ($isAirShort) {
+                        $s['title'] = 'Vaelg berort leg';
+                        $hasStopovers = ((string)($flags['air_has_stopovers'] ?? '')) === '1';
+                        $prereqFlags = ['step25_done'];
+                        $visible = $hasStopovers || $isCurrent;
+                    } else {
+                        $visible = false;
+                    }
                     break;
                 case 'railstranding':
                     if ($isRailSplit && $isCompleted) {
@@ -96,12 +139,20 @@ final class FlowStepsService
                     } else {
                         $visible = $isAirShort ? $isCurrent : ($gatingMode === 'rail' || $isCurrent);
                     }
-                    $prereqFlags = ($needsRouter && $transportMode !== 'air') ? ['step3_done'] : ['step2_done'];
+                    $s['title'] = ($isRailSplit && $isOngoing) ? 'Hvor er du nu / station' : 'Strandet paa station';
+                    if ($isRailSplit) {
+                        $prereqFlags = ['step27_done'];
+                    } else {
+                        $prereqFlags = ($needsRouter && $transportMode !== 'air') ? ['step3_done'] : ['step2_done'];
+                    }
                     break;
                 case 'journey':
                     if ($isAirShort) {
                         $visible = $isCurrent;
                         $prereqFlags = ['step2_done'];
+                    } elseif ($isFerrySplit) {
+                        $prereqFlags = ['step26_done'];
+                        $visible = $isCurrent;
                     } elseif ($gatingMode === 'rail') {
                         $prereqFlags = ['step35_done'];
                     } elseif ($transportMode === 'air') {
@@ -110,17 +161,22 @@ final class FlowStepsService
                         $prereqFlags = $needsRouter ? ['step3_done'] : ['step2_done'];
                     }
                     $s['title'] = match ($gatingMode) {
-                        'ferry' => 'Ferry gating + PMR',
+                        'ferry' => 'Ferry gating',
                         'bus' => 'Bus gating + PMR',
                         'air' => 'Air gating + saerlige behov',
-                        'rail' => 'Rail gating + strandet + PMR/Cykel',
+                        'rail' => 'Rail gating + station + PMR/Cykel',
                         default => 'Mode-specifik gating',
                     };
                     break;
                 case 'incident':
                     if ($isAirShort) {
-                        $s['title'] = 'Air haendelse + foreloebig vurdering';
-                        $prereqFlags = ['step2_done'];
+                        $s['title'] = $isOngoing
+                            ? 'Haendelse + dine muligheder nu'
+                            : 'Air haendelse + foreloebig vurdering';
+                        $prereqFlags = ['step25_done'];
+                        if (((string)($flags['air_has_stopovers'] ?? '')) === '1') {
+                            $prereqFlags[] = 'step24_done';
+                        }
                     } elseif ($isRailSplit || $isBusSplit || $isFerrySplit) {
                         $s['title'] = match (true) {
                             $isRailSplit && $isOngoing => 'Rail haendelse + live vurdering',
@@ -130,6 +186,9 @@ final class FlowStepsService
                             $isFerrySplit && $isOngoing => 'Ferry haendelse + live vurdering',
                             default => 'Ferry haendelse + foreloebig vurdering',
                         };
+                        if ($isFerrySplit) {
+                            $prereqFlags = ['step26_done'];
+                        }
                     }
                     break;
                 case 'choices':
@@ -139,6 +198,8 @@ final class FlowStepsService
                     // TRIN 6 only matters when Art.20(2)(c) transport/stranding is active.
                     if ($isAirShort) {
                         $visible = $isCurrent;
+                    } elseif ($isFerrySplit) {
+                        $visible = $gateArt20_2c || $isCurrent;
                     } elseif (($isRailSplit || $isBusSplit || $isFerrySplit) && $isCompleted) {
                         $visible = $done || $isCurrent;
                     } elseif ($gatingMode === 'bus') {
@@ -163,8 +224,17 @@ final class FlowStepsService
                         }
                         $visible = $gateArt18 || $gateBusPmrRemedy || $done || $isCurrent;
                     } elseif ($isAirShort) {
-                        $prereqFlags = ['step5_done', 'gate_art18'];
-                        $visible = $isAirShortCompleted ? $isCurrent : ($gateArt18 || $done || $isCurrent);
+                        $gateAirDelayRefund5h = ((string)($flags['gate_air_delay_refund_5h'] ?? '')) === '1';
+                        $gateAirRerouteRefund = ((string)($flags['gate_air_reroute_refund'] ?? '')) === '1';
+                        $s['title'] = $isOngoing ? 'Valg nu: refund / ombooking' : 'Afhjaelpning';
+                        if ($gateAirDelayRefund5h && !$gateAirRerouteRefund) {
+                            $s['title'] = $isOngoing ? 'Valg nu: refund ved 5+ timer' : 'Afhjaelpning ved 5+ timer';
+                            $prereqFlags = ['step5_done', 'gate_art18'];
+                            $visible = $gateArt18 || $done || $isCurrent;
+                        } else {
+                            $prereqFlags = ['step5_done', 'gate_art18'];
+                            $visible = $gateArt18 || $done || $isCurrent;
+                        }
                     } else {
                         $prereqFlags = ['step5_done', 'gate_art18'];
                         if ($gateArt20_2c) {
@@ -181,26 +251,46 @@ final class FlowStepsService
                             $prereqFlags[] = 'gate_art20';
                         }
                         $visible = $gateArt20 || $gateBusPmrAssistance || $gateBusPmrAssistancePartial || $done || $isCurrent;
-                    } elseif ($isAirShortCompleted) {
-                        $prereqFlags = ['step5_done', 'gate_art20'];
-                        $visible = $isCurrent;
                     } else {
+                        if ($isAirShort) {
+                            $s['title'] = $isOngoing ? 'Care lige nu' : 'Assistance';
+                        }
                         $prereqFlags = ['step5_done', 'gate_art20'];
                         $visible = $gateArt20 || $done || $isCurrent;
                     }
                     break;
                 case 'downgrade':
                     // TRIN 9 only when downgrade is relevant (or already completed/current).
-                    if ($gatingMode === 'bus' || $isAirShort) {
+                    if ($gatingMode === 'bus') {
                         $visible = false;
+                    } elseif ($isAirShort) {
+                        $s['title'] = $isOngoing ? 'Nedgradering (hvis relevant)' : 'Nedgradering';
+                        $visible = true;
                     } else {
                         $visible = $gateDowngrade || $done || $isCurrent;
                     }
                     break;
                 case 'compensation':
                     // TRIN 10 is normally after TRIN 5, but season/pendler setup should unlock it right after TRIN 2.
+                    if ($isAirShort) {
+                        $s['title'] = 'Kontakt & opret sag';
+                    } elseif ($isFerrySplit) {
+                        $s['title'] = 'Kontakt & opret ferry-sag';
+                    } elseif ($isRailSplit) {
+                        $s['title'] = 'Kontakt & opret rail-sag';
+                    }
                     if (!$step5Done && $gateSeasonPass) {
                         $prereqFlags = ['step2_done', 'gate_season_pass'];
+                    }
+                    break;
+                case 'applicant':
+                    if ($isAirShort || $isFerrySplit || $isRailSplit) {
+                        $visible = false;
+                    }
+                    break;
+                case 'consent':
+                    if ($isAirShort || $isFerrySplit || $isRailSplit) {
+                        $visible = false;
                     }
                     break;
                 default:
@@ -250,6 +340,40 @@ final class FlowStepsService
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $steps
+     * @return array<int,array<string,mixed>>
+     */
+    public function visibleSteps(array $steps): array
+    {
+        return array_values(array_filter($steps, static function (array $step): bool {
+            return !array_key_exists('visible', $step) || (bool)$step['visible'];
+        }));
+    }
+
+    /**
+     * @param array<string,mixed> $flags
+     * @return array{prev:?string,next:?string}
+     */
+    public function neighborActions(array $flags, string $currentAction): array
+    {
+        $steps = $this->visibleSteps($this->buildSteps($flags, $currentAction));
+        $count = count($steps);
+
+        for ($i = 0; $i < $count; $i++) {
+            if ((string)($steps[$i]['action'] ?? '') !== $currentAction) {
+                continue;
+            }
+
+            return [
+                'prev' => $i > 0 ? (string)($steps[$i - 1]['action'] ?? '') : null,
+                'next' => $i < ($count - 1) ? (string)($steps[$i + 1]['action'] ?? '') : null,
+            ];
+        }
+
+        return ['prev' => null, 'next' => null];
     }
 
     /**

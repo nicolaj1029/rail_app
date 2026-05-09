@@ -247,6 +247,37 @@ final class TransportNodeImportService
             $normalized['aliases'] = array_values(array_unique($aliases));
         }
 
+        foreach ([
+            'iata_code',
+            'icao_code',
+            'timezone',
+            'airport_type',
+            'is_civil',
+            'is_military',
+            'is_joint_use',
+            'is_cargo_only',
+            'has_scheduled_passenger_service',
+            'has_charter_passenger_service',
+            'is_international',
+            'is_domestic_only',
+            'is_private_use',
+            'is_public_use',
+            'is_active',
+            'is_seasonal',
+            'is_closed',
+            'in_eu261_departure_scope',
+            'likely_third_country_origin',
+            'allow_in_frontend_search',
+            'allow_in_claim_flow',
+            'allow_as_alternative_airport',
+            'lookup_priority',
+            'needs_manual_review',
+        ] as $extraKey) {
+            if (array_key_exists($extraKey, $row) && $row[$extraKey] !== null && $row[$extraKey] !== '') {
+                $normalized[$extraKey] = $row[$extraKey];
+            }
+        }
+
         return $normalized;
     }
 
@@ -263,6 +294,7 @@ final class TransportNodeImportService
         }
 
         return match ($transform) {
+            'air_ourairports' => $this->transformOurAirportsAirRow($row),
             'unlocode_ports' => $this->transformUnlocodePortRow($row),
             'osm_elements_terminals' => $this->transformOsmTerminalRow($row, $options),
             'osm_elements_bus_nodes' => $this->transformOsmBusNodeRow($row, $options),
@@ -425,6 +457,99 @@ final class TransportNodeImportService
     }
 
     /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>|null
+     */
+    private function transformOurAirportsAirRow(array $row): ?array
+    {
+        $name = trim((string)($row['name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $country = strtoupper(trim((string)($row['iso_country'] ?? ($row['country'] ?? ''))));
+        $type = strtolower(trim((string)($row['type'] ?? '')));
+        $iata = strtoupper(trim((string)($row['iata_code'] ?? '')));
+        $icao = strtoupper(trim((string)($row['icao_code'] ?? ($row['gps_code'] ?? ($row['local_code'] ?? '')))));
+        $city = trim((string)($row['municipality'] ?? ($row['city'] ?? '')));
+        $timezone = trim((string)($row['tz_database_timezone'] ?? ($row['timezone'] ?? '')));
+        $scheduledService = $this->asBool($row['scheduled_service'] ?? null);
+        $countryInEu = $this->countryInEu($country) === true;
+
+        $isAirportType = in_array($type, ['small_airport', 'medium_airport', 'large_airport'], true);
+        $isClosed = $type === 'closed';
+        $isPrivateUse = in_array($type, ['heliport', 'seaplane_base', 'balloonport'], true);
+        $isCargoOnly = $this->looksCargoOnlyAirportName($name);
+        $isMilitary = $this->looksMilitaryAirportName($name);
+        $isJointUse = $isMilitary && $this->looksJointUseAirportName($name);
+        $isCivil = !$isMilitary || $isJointUse;
+        $isPublicUse = !$isClosed && !$isPrivateUse;
+        $isActive = !$isClosed;
+        $isSeasonal = strtolower(trim((string)($row['seasonal'] ?? ''))) === 'yes';
+        $hasScheduledPassengerService = $scheduledService ?? ($iata !== '' && $isAirportType && !$isCargoOnly);
+
+        $allowInClaimFlow = $isCivil
+            && $isActive
+            && $isPublicUse
+            && $hasScheduledPassengerService
+            && !$isCargoOnly;
+
+        if ($type === 'small_airport' && !$countryInEu && $scheduledService !== true) {
+            $allowInClaimFlow = false;
+        }
+
+        $allowInFrontendSearch = $allowInClaimFlow;
+        $allowAsAlternativeAirport = $allowInClaimFlow;
+        $needsManualReview = $isJointUse || $scheduledService === null;
+        $lookupPriority = 0;
+        if ($allowInFrontendSearch) {
+            if ($isJointUse) {
+                $lookupPriority = 30;
+            } elseif ($type === 'large_airport') {
+                $lookupPriority = 100;
+            } elseif ($countryInEu) {
+                $lookupPriority = 80;
+            } else {
+                $lookupPriority = 60;
+            }
+        }
+
+        return [
+            'name' => $name,
+            'country' => $country,
+            'code' => $iata !== '' ? $iata : $icao,
+            'iata_code' => $iata !== '' ? $iata : null,
+            'icao_code' => $icao !== '' ? $icao : null,
+            'lat' => $this->asFloat($row['latitude_deg'] ?? ($row['lat'] ?? null)),
+            'lon' => $this->asFloat($row['longitude_deg'] ?? ($row['lon'] ?? null)),
+            'city' => $city,
+            'node_type' => 'airport',
+            'timezone' => $timezone !== '' ? $timezone : null,
+            'airport_type' => $type !== '' ? $type : null,
+            'is_civil' => $isCivil,
+            'is_military' => $isMilitary,
+            'is_joint_use' => $isJointUse,
+            'is_cargo_only' => $isCargoOnly,
+            'has_scheduled_passenger_service' => $hasScheduledPassengerService,
+            'has_charter_passenger_service' => null,
+            'is_international' => in_array($type, ['medium_airport', 'large_airport'], true),
+            'is_domestic_only' => $type === 'small_airport' ? true : null,
+            'is_private_use' => $isPrivateUse,
+            'is_public_use' => $isPublicUse,
+            'is_active' => $isActive,
+            'is_seasonal' => $isSeasonal,
+            'is_closed' => $isClosed,
+            'in_eu261_departure_scope' => $countryInEu,
+            'likely_third_country_origin' => $country !== '' && !$countryInEu,
+            'allow_in_frontend_search' => $allowInFrontendSearch,
+            'allow_in_claim_flow' => $allowInClaimFlow,
+            'allow_as_alternative_airport' => $allowAsAlternativeAirport,
+            'lookup_priority' => $lookupPriority,
+            'needs_manual_review' => $needsManualReview,
+        ];
+    }
+
+    /**
      * @return array{0:?float,1:?float}
      */
     private function parseUnlocodeCoordinates(string $raw): array
@@ -570,5 +695,56 @@ final class TransportNodeImportService
             return null;
         }
         return in_array($country, $eu, true);
+    }
+
+    private function looksMilitaryAirportName(string $name): bool
+    {
+        $normalized = strtolower(trim((string)(@iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) ?: $name)));
+        foreach ([
+            'air base',
+            'airbase',
+            'air force base',
+            'army air field',
+            'army airfield',
+            'naval air station',
+            'naval air facility',
+            'military',
+            'militaire',
+            ' raf ',
+            ' afb ',
+            ' nas ',
+        ] as $needle) {
+            if (str_contains(' ' . $normalized . ' ', ' ' . $needle . ' ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function looksJointUseAirportName(string $name): bool
+    {
+        $normalized = strtolower(trim((string)(@iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) ?: $name)));
+        return str_contains($normalized, 'airport')
+            || str_contains($normalized, 'international')
+            || str_contains($normalized, 'civil');
+    }
+
+    private function looksCargoOnlyAirportName(string $name): bool
+    {
+        $normalized = strtolower(trim((string)(@iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) ?: $name)));
+        foreach ([
+            'cargo',
+            'freight',
+            'logistics',
+            'parcel hub',
+            'distribution center',
+        ] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -370,8 +370,10 @@ final class MultimodalFlowResolver
             $incidentSegmentMode = $transportMode;
         }
         if ($journeyStructure === 'single_segment' && in_array($transportMode, ['rail', 'ferry', 'bus', 'air'], true)) {
-            $originalContractMode = $transportMode;
             $incidentSegmentMode = $transportMode;
+            if ($originalContractMode === null) {
+                $originalContractMode = $transportMode;
+            }
         }
         $claimTransportMode = $contractTopology === 'separate_contracts'
             ? $incidentSegmentMode
@@ -739,13 +741,21 @@ final class MultimodalFlowResolver
             ? null
             : $this->normalizeNullableBool($form['passenger_fault'] ?? null);
 
-        $incidentType = strtolower(trim((string)($incident['main'] ?? ($form['incident_main'] ?? ''))));
+        $incidentType = strtolower(trim((string)($form['incident_main'] ?? ($incident['main'] ?? ''))));
         if (!in_array($incidentType, ['delay', 'cancellation', 'denied_boarding', 'missed_connection'], true)) {
             $incidentType = $incidentType !== '' ? $incidentType : null;
         }
 
+        $arrivalDelayMinutes = $this->normalizeNullableInt($form['arrival_delay_minutes'] ?? null);
+        $departureDelayMinutes = $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null);
+        if ($transportMode === 'air') {
+            $arrivalDelayMinutes ??= $this->deriveAirArrivalDelayMinutes($form);
+            $departureDelayMinutes ??= $this->deriveAirDepartureDelayMinutes($form, $flow);
+        }
+
         return [
             'transport_mode' => $transportMode,
+            'travel_state' => strtolower(trim((string)($form['travel_state'] ?? ($flow['flags']['travel_state'] ?? '')))),
             'gating_mode' => $this->normalizeIncidentMode($form['gating_mode'] ?? ($flow['flags']['gating_mode'] ?? null), $transportMode),
             'initial_incident_mode' => $this->normalizeIncidentMode($form['initial_incident_mode'] ?? ($flow['flags']['initial_incident_mode'] ?? null), $transportMode),
             'primary_incident_mode' => $this->normalizeIncidentMode($form['primary_incident_mode'] ?? ($form['gating_mode'] ?? null), $transportMode),
@@ -762,10 +772,12 @@ final class MultimodalFlowResolver
             'operator_exceptional_circumstances' => $this->normalizeNullableBool($form['operatorExceptionalCircumstances'] ?? null),
             'operator_exceptional_type' => $form['operatorExceptionalType'] ?? null,
             'minimum_threshold_applies' => $this->normalizeNullableBool($form['minThresholdApplies'] ?? null),
-            'arrival_delay_minutes' => $this->normalizeNullableInt($form['arrival_delay_minutes'] ?? null),
+            'arrival_delay_minutes' => $arrivalDelayMinutes,
             'scheduled_journey_duration_minutes' => $this->normalizeNullableInt($form['scheduled_journey_duration_minutes'] ?? null),
+            'ferry_departure_disruption_90' => $this->normalizeNullableBool($form['ferry_departure_disruption_90'] ?? null),
             'expected_departure_delay_90' => $this->normalizeNullableBool($form['expected_departure_delay_90'] ?? null),
             'actual_departure_delay_90' => $this->normalizeNullableBool($form['actual_departure_delay_90'] ?? null),
+            'ferry_cancellation_confirmed' => $this->normalizeNullableBool($form['ferry_cancellation_confirmed'] ?? null),
             'ferry_art16_notice_within_30min' => $this->normalizeNullableBool($form['ferry_art16_notice_within_30min'] ?? null),
             'overnight_required' => $this->normalizeNullableBool($overnightRequired),
             'informed_before_purchase' => $this->normalizeNullableBool($form['informed_before_purchase'] ?? null),
@@ -778,7 +790,7 @@ final class MultimodalFlowResolver
                 : (($form['ticket_upload_mode'] ?? null) === 'seasonpass'),
             'delay_departure_band' => $form['delay_departure_band'] ?? null,
             'planned_duration_band' => $form['planned_duration_band'] ?? null,
-            'delay_minutes_departure' => $this->normalizeNullableInt($form['delay_minutes_departure'] ?? null),
+            'delay_minutes_departure' => $departureDelayMinutes,
             'delay_minutes_arrival' => $this->normalizeNullableInt($form['delay_minutes_arrival'] ?? null),
             'boarding_denied' => $this->normalizeNullableBool($form['boarding_denied'] ?? null),
             'voluntary_denied_boarding' => $this->normalizeNullableBool($form['voluntary_denied_boarding'] ?? null),
@@ -786,6 +798,7 @@ final class MultimodalFlowResolver
             'cancellation_notice_band' => $form['cancellation_notice_band'] ?? null,
             'reroute_departure_band' => $form['reroute_departure_band'] ?? null,
             'reroute_arrival_band' => $form['reroute_arrival_band'] ?? null,
+            'remedy_choice' => $form['remedyChoice'] ?? null,
             'refund_offered' => $this->normalizeNullableBool($form['refund_offered'] ?? null),
             'hotel_required' => $this->normalizeNullableBool($form['hotel_required'] ?? null),
             'hotel_offered' => $this->normalizeNullableBool($form['hotel_offered'] ?? null),
@@ -798,6 +811,7 @@ final class MultimodalFlowResolver
             'ferry_pmr_service_dog' => $this->normalizeNullableBool($form['ferry_pmr_service_dog'] ?? null),
             'ferry_pmr_notice_48h' => $this->normalizeNullableBool($form['ferry_pmr_notice_48h'] ?? null),
             'ferry_pmr_met_checkin_time' => $this->normalizeNullableBool($form['ferry_pmr_met_checkin_time'] ?? null),
+            'ferry_pmr_special_needs_notified_at_booking' => $this->normalizeAllowedString($form['ferry_pmr_special_needs_notified_at_booking'] ?? null, ['yes', 'no', 'unknown', 'not_relevant']),
             'ferry_pmr_assistance_delivered' => $this->normalizeAllowedString($form['ferry_pmr_assistance_delivered'] ?? null, ['full', 'partial', 'none', 'unknown']),
             'ferry_pmr_boarding_refused' => $this->normalizeNullableBool($form['ferry_pmr_boarding_refused'] ?? null),
             'ferry_pmr_refusal_basis' => $this->normalizeAllowedString($form['ferry_pmr_refusal_basis'] ?? null, ['safety_requirements', 'port_or_ship_infrastructure', 'other_or_unknown']),
@@ -814,6 +828,7 @@ final class MultimodalFlowResolver
             'bus_pmr_alternative_transport_offered' => $this->normalizeNullableBool($form['bus_pmr_alternative_transport_offered'] ?? null),
             'protected_connection_missed' => $this->normalizeNullableBool($form['protected_connection_missed'] ?? null),
             'reroute_arrival_delay_minutes' => $this->normalizeNullableInt($form['reroute_arrival_delay_minutes'] ?? null),
+            'reroute_used_or_accepted' => $this->normalizeNullableBool($form['reroute_used_or_accepted'] ?? null),
             'overbooking' => $this->normalizeNullableBool($form['overbooking'] ?? null),
             'carrier_offered_choice' => $this->normalizeNullableBool($form['carrier_offered_choice'] ?? null),
             'severe_weather' => $this->normalizeNullableBool($form['severe_weather'] ?? null),
@@ -823,6 +838,44 @@ final class MultimodalFlowResolver
             'next_segment_operated_normally' => $this->normalizeNullableBool($form['next_segment_operated_normally'] ?? null),
             'incident_chain' => (array)($flow['meta']['incident_chain'] ?? []),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     */
+    private function deriveAirArrivalDelayMinutes(array $form): ?int
+    {
+        $bucket = strtolower(trim((string)($form['air_actual_arrival_delay_bucket'] ?? '')));
+        return match ($bucket) {
+            'under_3h' => 179,
+            'three_to_four' => 180,
+            'four_plus' => 240,
+            'never_arrived' => 999,
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $flow
+     */
+    private function deriveAirDepartureDelayMinutes(array $form, array $flow): ?int
+    {
+        $bucket = strtolower(trim((string)($form['air_expected_delay_bucket'] ?? '')));
+        $thresholdHours = null;
+        $scope = (array)(($flow['meta']['_multimodal']['scope_result'] ?? []) ?: []);
+        if (isset($scope['air_delay_threshold_hours']) && is_numeric($scope['air_delay_threshold_hours'])) {
+            $thresholdHours = (int)$scope['air_delay_threshold_hours'];
+        } elseif (isset($form['air_delay_threshold_hours']) && is_numeric($form['air_delay_threshold_hours'])) {
+            $thresholdHours = (int)$form['air_delay_threshold_hours'];
+        }
+
+        return match ($bucket) {
+            'under_threshold' => 0,
+            'threshold_to_under_5h' => ($thresholdHours !== null && $thresholdHours > 0) ? ($thresholdHours * 60) : null,
+            'five_plus', 'next_day' => 300,
+            default => null,
+        };
     }
 
     /**
@@ -1028,6 +1081,7 @@ final class MultimodalFlowResolver
             'ferry_pmr_service_dog' => $incidentMeta['ferry_pmr_service_dog'] ?? null,
             'ferry_pmr_notice_48h' => $incidentMeta['ferry_pmr_notice_48h'] ?? null,
             'ferry_pmr_met_checkin_time' => $incidentMeta['ferry_pmr_met_checkin_time'] ?? null,
+            'ferry_pmr_special_needs_notified_at_booking' => $incidentMeta['ferry_pmr_special_needs_notified_at_booking'] ?? null,
             'ferry_pmr_assistance_delivered' => $incidentMeta['ferry_pmr_assistance_delivered'] ?? null,
             'ferry_pmr_boarding_refused' => $incidentMeta['ferry_pmr_boarding_refused'] ?? null,
             'ferry_pmr_refusal_basis' => $incidentMeta['ferry_pmr_refusal_basis'] ?? null,
@@ -1093,7 +1147,9 @@ final class MultimodalFlowResolver
         $articleFlags = [];
 
         if ($transportMode === 'ferry') {
-            $genericGates['remedy'] = !empty($rightsResult['gate_art18']);
+            $genericGates['remedy'] = !empty($rightsResult['gate_art18'])
+                || !empty($rightsResult['gate_ferry_pmr_remedy_art8_3'])
+                || !empty($rightsResult['gate_ferry_pmr_boarding_remedy']);
             $genericGates['assistance'] = !empty($rightsResult['gate_art17_refreshments']) || !empty($rightsResult['gate_art17_hotel']);
             $genericGates['compensation'] = !empty($rightsResult['gate_art19']);
             $genericGates['information'] = !empty($rightsResult['gate_art16_notice']) || !empty($rightsResult['gate_art16_alt_connections']);
@@ -1106,8 +1162,12 @@ final class MultimodalFlowResolver
                 'art19' => !empty($rightsResult['gate_art19']),
                 'pmr_assistance' => !empty($rightsResult['gate_ferry_pmr_assistance']),
                 'pmr_assistance_partial' => !empty($rightsResult['gate_ferry_pmr_assistance_partial']),
+                'pmr_art8_3_boarding_remedy' => !empty($rightsResult['gate_ferry_pmr_remedy_art8_3']) || !empty($rightsResult['gate_ferry_pmr_boarding_remedy']),
                 'pmr_boarding_remedy' => !empty($rightsResult['gate_ferry_pmr_boarding_remedy']),
+                'pmr_art8_5_reason_notice' => !empty($rightsResult['gate_ferry_pmr_reason_notice']),
                 'pmr_reason_notice' => !empty($rightsResult['gate_ferry_pmr_reason_notice']),
+                'pmr_refusal_basis_valid_art8_1' => !empty($rightsResult['ferry_pmr_refusal_basis_valid_art8_1']),
+                'pmr_art11_2_status' => (string)($rightsResult['pmr_art11_2_status'] ?? 'unknown'),
             ];
         } elseif ($transportMode === 'bus') {
             $genericGates['remedy'] = !empty($rightsResult['gate_bus_reroute_refund']) || !empty($rightsResult['gate_bus_pmr_boarding_remedy']);
@@ -1361,6 +1421,15 @@ final class MultimodalFlowResolver
             }
             if (!empty($rightsResult['gate_art16_notice']) || !empty($rightsResult['gate_art16_alt_connections'])) {
                 $requiredDocuments[] = 'operator_information_evidence';
+            }
+            if (!empty($rightsResult['gate_ferry_pmr_remedy_art8_3']) || !empty($rightsResult['gate_ferry_pmr_boarding_remedy'])) {
+                $requiredDocuments[] = 'pmr_boarding_refusal_evidence';
+                $requiredDocuments[] = 'booking_or_reservation_evidence';
+                $requiredDocuments[] = 'operator_reason_or_refusal_notice';
+                $requiredDocuments[] = 'pmr_needs_notification_evidence_if_available';
+            }
+            if (!empty($rightsResult['gate_ferry_pmr_reason_notice'])) {
+                $requiredDocuments[] = 'request_written_reason_under_art8_5';
             }
         } elseif ($transportMode === 'bus') {
             $requiredDocuments[] = 'operator_connection_or_terminal_evidence';

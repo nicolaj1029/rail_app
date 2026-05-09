@@ -2,6 +2,7 @@
   "format": "csv",
   "replace": true,
   "source_label": "ourairports",
+  "source_transform": "air_ourairports",
   "name_col": "name",
   "country_col": "iso_country",
   "code_col": "iata_code",
@@ -12,6 +13,7 @@
   "require_code": true,
   "filter_col": "type",
   "filter_allow": [
+    "small_airport",
     "large_airport",
     "medium_airport"
   ]

@@ -175,6 +175,7 @@ if (empty($journeyRowsDowng)) {
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Afgang</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;">Ankomst</th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Fly' : ($isFerry ? 'Overfart' : 'Tog') ?></th>
+            <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Nedgraderet?' : ($isFerry ? 'Afvigelse?' : 'Nedgraderet?') ?></th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Koebt kabineklasse' : ($isFerry ? 'Koebt service/niveau' : 'Koebt klasse') ?></th>
             <th style="text-align:left; border-bottom:1px solid #eee; padding:4px;"><?= $isAir ? 'Faktisk floejet kabineklasse' : ($isFerry ? 'Faktisk leveret service/niveau' : 'Leveret klasse') ?></th>
             <?php if (!$isAir && !$isFerry): ?>
@@ -215,6 +216,7 @@ if (empty($journeyRowsDowng)) {
                 $resPurchasedVal = $mapRes($resPurchasedVal);
               }
               $resDeliveredVal = $isAir ? '' : $mapRes($form["leg_reservation_delivered"][$idx] ?? "");
+              $downgradeChecked = ((string)($form["leg_downgraded"][$idx] ?? '') === '1');
               $phase = '';
               if ($missedIdx !== null) {
                 $phase = ($idx < $missedIdx) ? 'F&oslash;r skift' : 'Efter skift';
@@ -227,6 +229,19 @@ if (empty($journeyRowsDowng)) {
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["dep"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["arr"]) ?></td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;"><?= h($r["train"]) ?></td>
+              <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
+                <input type="hidden" name="leg_downgraded[<?= (int)$idx ?>]" value="" />
+                <label class="small" style="display:inline-flex; align-items:center; gap:6px;">
+                  <input
+                    type="checkbox"
+                    value="1"
+                    <?= $downgradeChecked ? 'checked' : '' ?>
+                    data-leg-downgraded-toggle
+                    data-leg-index="<?= (int)$idx ?>"
+                  />
+                  <?= $isAir ? 'Ja, dette leg blev downgradet' : ($isFerry ? 'Ja, dette ben afveg' : 'Ja, dette ben blev downgradet') ?>
+                </label>
+              </td>
               <td style="padding:4px; border-bottom:1px solid #f3f3f3;">
                 <select name="leg_class_purchased[<?= (int)$idx ?>]" style="width:100%; min-width:140px;">
                   <option value=""><?= $isAir ? __("Vaelg koebt kabineklasse") : __("Vaelg koebt niveau") ?></option>
@@ -306,34 +321,44 @@ if (empty($journeyRowsDowng)) {
         function bindRow(row, idx){
           const selBuy = row.querySelector('select[name="leg_class_purchased['+idx+']"]');
           const selDel = row.querySelector('select[name="leg_class_delivered['+idx+']"]');
-        const selResBuy = row.querySelector('select[name="leg_reservation_purchased['+idx+']"]');
-        const selResDel = row.querySelector('select[name="leg_reservation_delivered['+idx+']"]');
-        if (!selBuy || !selDel) return;
-          let hid = row.querySelector('input[name="leg_downgraded['+idx+']"]');
-          if (!hid) {
-            hid = document.createElement('input');
-            hid.type = 'hidden';
-            hid.name = 'leg_downgraded['+idx+']';
-            row.appendChild(hid);
+          const selResBuy = row.querySelector('select[name="leg_reservation_purchased['+idx+']"]');
+          const selResDel = row.querySelector('select[name="leg_reservation_delivered['+idx+']"]');
+          const hidden = row.querySelector('input[type="hidden"][name="leg_downgraded['+idx+']"]');
+          const checkbox = row.querySelector('input[type="checkbox"][data-leg-downgraded-toggle][data-leg-index="'+idx+'"]');
+          if (!selBuy || !selDel || !hidden || !checkbox) return;
+          if (hidden.value === '1') {
+            checkbox.checked = true;
+            checkbox.dataset.userTouched = '1';
           }
+          const syncExplicit = () => {
+            hidden.value = checkbox.checked ? '1' : '';
+          };
           const auto = () => {
             const cBuy = normClass(selBuy.value);
             const cDel = normClass(selDel.value);
             const rBuy = classRank[cBuy] || 0;
             const rDel = classRank[cDel] || 0;
             const classDown = rDel > 0 && rBuy > rDel;
-          const resDown = selResBuy && selResDel
-            ? ((normRes(selResBuy.value) === 'reserved') && (normRes(selResDel.value) !== '' && normRes(selResDel.value) !== 'reserved'))
-            : false;
-          const downg = classDown || resDown;
-          hid.value = downg ? '1' : '';
-        };
-        selBuy.addEventListener('change', auto);
-        selDel.addEventListener('change', auto);
-        if (selResBuy) { selResBuy.addEventListener('change', auto); }
-        if (selResDel) { selResDel.addEventListener('change', auto); }
-        auto();
-      }
+            const resDown = selResBuy && selResDel
+              ? ((normRes(selResBuy.value) === 'reserved') && (normRes(selResDel.value) !== '' && normRes(selResDel.value) !== 'reserved'))
+              : false;
+            const downg = classDown || resDown;
+            if (checkbox.dataset.userTouched !== '1') {
+              checkbox.checked = downg;
+              hidden.value = downg ? '1' : '';
+            }
+          };
+          checkbox.addEventListener('change', function(){
+            checkbox.dataset.userTouched = '1';
+            syncExplicit();
+          });
+          selBuy.addEventListener('change', auto);
+          selDel.addEventListener('change', auto);
+          if (selResBuy) { selResBuy.addEventListener('change', auto); }
+          if (selResDel) { selResDel.addEventListener('change', auto); }
+          auto();
+          syncExplicit();
+        }
         document.querySelectorAll('#perLegDowngrade table tbody tr').forEach((tr,i)=>bindRow(tr,i));
 
         var btn = document.getElementById('toggleAllDowngLegs');

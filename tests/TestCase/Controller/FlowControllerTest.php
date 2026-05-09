@@ -206,21 +206,49 @@ class FlowControllerTest extends TestCase
         $this->assertStringNotContainsString('<html', $body);
     }
 
-    public function testFerryStationActsAsEarlyIncidentRouter(): void
+    public function testFerryStationRedirectsToDepartureSelectInSplitFlow(): void
     {
         $this->session([
-            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'transport_mode' => 'ferry', 'needs_initial_incident_router' => '1'],
+            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'transport_mode' => 'ferry', 'entry_variant' => 'ferry_split', 'needs_initial_incident_router' => '1'],
             'flow.form' => ['transport_mode' => 'ferry'],
-            'flow.meta' => ['transport_mode' => 'ferry'],
+            'flow.meta' => ['transport_mode' => 'ferry', 'entry_variant' => 'ferry_split'],
         ]);
 
         $this->get('/flow/station');
+        $this->assertResponseCode(302);
+        $this->assertStringContainsString('/flow/ferry-departure-select', $this->_response->getHeaderLine('Location'));
+    }
 
+    public function testFerryDepartureSelectRendersRouteCandidates(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step1_done' => '1',
+                'step2_done' => '1',
+                'transport_mode' => 'ferry',
+                'entry_variant' => 'ferry_split',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'ferry',
+                'dep_station' => 'Ronne',
+                'arr_station' => 'Ystad',
+                'dep_date' => '2026-04-23',
+                'dep_time' => '08:30',
+                'arr_time' => '09:50',
+                'operator' => 'Bornholmslinjen',
+            ],
+            'flow.meta' => ['transport_mode' => 'ferry', 'entry_variant' => 'ferry_split'],
+        ]);
+
+        $this->get('/flow/ferry-departure-select');
         $this->assertResponseOk();
         $body = (string)$this->_response->getBody();
-        $this->assertStringContainsString('TRIN 3 - Foerste ramte segment', $body);
-        $this->assertStringContainsString('name="initial_incident_mode"', $body);
-        $this->assertStringContainsString('Faerge / havn / terminal', $body);
+
+        $this->assertStringContainsString('TRIN 3 - Vaelg afgang', $body);
+        $this->assertStringContainsString('Vaelg din afgang fra listen', $body);
+        $this->assertStringContainsString('name="selected_ferry_departure_key"', $body);
+        $this->assertStringContainsString('Bornholmslinjen', $body);
     }
 
     public function testRailStationRedirectsToRailStrandingWhenRouterIsNotNeeded(): void
@@ -269,9 +297,9 @@ class FlowControllerTest extends TestCase
     public function testFerryJourneySkipsStationAndShowsOnlyPmrForm(): void
     {
         $this->session([
-            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'step3_done' => '1', 'transport_mode' => 'ferry', 'gating_mode' => 'ferry', 'travel_state' => 'ongoing'],
+            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'step26_done' => '1', 'transport_mode' => 'ferry', 'entry_variant' => 'ferry_split', 'gating_mode' => 'ferry', 'travel_state' => 'ongoing'],
             'flow.form' => ['transport_mode' => 'ferry', 'gating_mode' => 'ferry'],
-            'flow.meta' => ['transport_mode' => 'ferry', 'gating_mode' => 'ferry'],
+            'flow.meta' => ['transport_mode' => 'ferry', 'entry_variant' => 'ferry_split', 'gating_mode' => 'ferry'],
         ]);
 
         $this->get('/flow/journey');
@@ -279,9 +307,23 @@ class FlowControllerTest extends TestCase
         $body = (string)$this->_response->getBody();
 
         $this->assertStringContainsString('TRIN 4 - PMR / handicap (faerge, igangvaerende rejse)', $body);
-        $this->assertStringContainsString('Foreloebig vises kun PMR-delen for faergeflowet i dette trin.', $body);
+        $this->assertStringContainsString('PMR-status', $body);
+        $this->assertStringContainsString('/flow/ferry-departure-select', $body);
         $this->assertStringNotContainsString('TRIN 4a - Cykel og bagage (Art.6)', $body);
         $this->assertStringNotContainsString('Transport fra station? (Art. 20(3))', $body);
+    }
+
+    public function testFerryJourneyRequiresDepartureSelectionBeforeAccess(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'transport_mode' => 'ferry', 'entry_variant' => 'ferry_split', 'gating_mode' => 'ferry', 'travel_state' => 'ongoing'],
+            'flow.form' => ['transport_mode' => 'ferry', 'gating_mode' => 'ferry'],
+            'flow.meta' => ['transport_mode' => 'ferry', 'entry_variant' => 'ferry_split', 'gating_mode' => 'ferry'],
+        ]);
+
+        $this->get('/flow/journey');
+        $this->assertResponseCode(302);
+        $this->assertStringContainsString('/flow/ferry-departure-select', $this->_response->getHeaderLine('Location'));
     }
 
     public function testBusJourneyUsesBusGatingWhenInitialIncidentModeIsBus(): void
@@ -790,6 +832,165 @@ class FlowControllerTest extends TestCase
         $body = (string)$this->_response->getBody();
 
         $this->assertStringContainsString('name="overnight_needed"', $body);
+    }
+
+    public function testAirDelayRemediesShowsOnlyRefundChoicesAtFivePlusHours(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'gate_air_delay_refund_5h' => '1',
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                'travel_state' => 'completed',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'incident_main' => 'delay',
+                'remedyChoice' => 'refund_return',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                '_multimodal' => [
+                    'transport_mode' => 'air',
+                    'air_rights' => [
+                        'gate_air_delay_refund_5h' => true,
+                    ],
+                ],
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->get('/flow/remedies');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('name="remedyChoice" value="refund_return"', $body);
+        $this->assertStringContainsString('name="remedyChoice" value="no_refund_continue"', $body);
+        $this->assertStringContainsString('name="air_refund_scope"', $body);
+        $this->assertStringNotContainsString('name="remedyChoice" value="reroute_soonest"', $body);
+        $this->assertStringNotContainsString('name="remedyChoice" value="reroute_later"', $body);
+    }
+
+    public function testAirRerouteLaterDoesNotRenderLegacyLaterOutcomeQuestion(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                'travel_state' => 'completed',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'incident_main' => 'denied_boarding',
+                'remedyChoice' => 'reroute_later',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                '_multimodal' => [
+                    'transport_mode' => 'air',
+                    'air_rights' => [
+                        'gate_air_reroute_refund' => true,
+                    ],
+                ],
+            ],
+            'flow.incident' => ['main' => 'denied_boarding'],
+        ]);
+
+        $this->get('/flow/remedies');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('name="air_self_arranged_reroute"', $body);
+        $this->assertStringNotContainsString('Operat&oslash;ren tilb&oslash;d senere oml&aelig;gning', $body);
+        $this->assertStringNotContainsString('Jeg k&oslash;bte selv en billet til senere', $body);
+    }
+
+    public function testCompletedAirAssistanceUsesLiteFrontendWithoutExpenseFieldsOrPmrPanel(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art20' => '1',
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                'travel_state' => 'completed',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'meal_offered' => 'no',
+                'hotel_offered' => 'no',
+                'air_next_day_departure' => 'yes',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                '_multimodal' => [
+                    'transport_mode' => 'air',
+                    'air_rights' => [
+                        'gate_air_art11_priority_assistance' => true,
+                    ],
+                ],
+            ],
+            'flow.incident' => ['main' => 'cancellation'],
+        ]);
+
+        $this->get('/flow/assistance');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('name="meal_offered"', $body);
+        $this->assertStringContainsString('name="hotel_offered"', $body);
+        $this->assertStringNotContainsString('name="meal_self_paid_amount_items[]"', $body);
+        $this->assertStringNotContainsString('name="hotel_self_paid_amount_items[]"', $body);
+        $this->assertStringNotContainsString('name="assistance_pmr_priority_applied"', $body);
+    }
+
+    public function testCompletedAirDowngradeBackLinkPointsToAssistance(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'step8_done' => '1',
+                'gate_art20' => '1',
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                'travel_state' => 'completed',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+                '_multimodal' => [
+                    'transport_mode' => 'air',
+                ],
+            ],
+        ]);
+
+        $this->get('/flow/downgrade');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('href="/flow/assistance"', $body);
     }
 
     public function testFerryCompensationContainsArrivalDelayInputs(): void

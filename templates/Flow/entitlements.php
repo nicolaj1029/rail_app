@@ -3,10 +3,15 @@
 $compute = $compute ?? [];
 $form = $form ?? [];
 $incident = $incident ?? [];
+$flags = $flags ?? [];
 $meta = $meta ?? [];
+$journey = $journey ?? [];
 $groupedTickets = $groupedTickets ?? [];
 $hasTickets = !empty($groupedTickets) || !empty($form['_ticketFilename']) || !empty($meta['_multi_tickets']);
 $hasUploadedTickets = !empty($groupedTickets);
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$isModeEntryFlow = in_array($entryVariant, ['air_short', 'rail_split', 'bus_split', 'ferry_split'], true);
+$isAirShortEntryFlow = $entryVariant === 'air_short';
 $seasonMeta0 = (array)($meta['season_pass'] ?? []);
 $fftSeason0 = strtolower((string)($meta['fare_flex_type'] ?? ($meta['_auto']['fare_flex_type']['value'] ?? '')));
 $hasSeason0 = array_key_exists('has', $seasonMeta0) ? (bool)$seasonMeta0['has'] : ($fftSeason0 === 'pass');
@@ -52,6 +57,40 @@ $firstNonEmpty = static function (...$values): string {
   }
   return '';
 };
+$parseAirStopoversForDisplay = static function (string $raw): array {
+  $raw = str_replace(["\r\n", "\r", ';', '|', '/'], "\n", $raw);
+  $chunks = preg_split('/[\n,]+/', $raw) ?: [];
+  $out = [];
+  $seen = [];
+  foreach ($chunks as $chunk) {
+    $value = trim((string)$chunk);
+    if ($value === '') {
+      continue;
+    }
+    $key = mb_strtolower($value, 'UTF-8');
+    if (isset($seen[$key])) {
+      continue;
+    }
+    $seen[$key] = true;
+    $out[] = $value;
+  }
+  return $out;
+};
+$buildAirRoutePreview = static function (string $dep, string $rawStops, string $arr) use ($parseAirStopoversForDisplay): string {
+  $points = [];
+  $dep = trim($dep);
+  $arr = trim($arr);
+  if ($dep !== '') {
+    $points[] = $dep;
+  }
+  foreach ($parseAirStopoversForDisplay($rawStops) as $stop) {
+    $points[] = $stop;
+  }
+  if ($arr !== '') {
+    $points[] = $arr;
+  }
+  return implode(' -> ', $points);
+};
 $autoReturnSegment = null;
 if ($transportMode === 'ferry') {
   $candidateSegments = [];
@@ -70,6 +109,17 @@ if ($transportMode === 'ferry') {
     $autoReturnSegment = (array)$candidateSegments[1];
   }
 }
+$ticketAnalysisAppliedFields = array_values(array_filter(
+  (array)($meta['air_backend_ticket_analysis']['applied_fields'] ?? []),
+  static fn($value): bool => is_string($value) && $value !== ''
+));
+$ignoreAppliedAirStopovers = in_array('air_stopover_airports', $ticketAnalysisAppliedFields, true);
+$ignoreAppliedAirRouteType = in_array('air_route_type', $ticketAnalysisAppliedFields, true);
+$airStopoverSeed = trim((string)($airStopoverSeed ?? ($meta['air_stopover_seed'] ?? ($form['air_stopover_airports'] ?? ''))));
+if ($ignoreAppliedAirStopovers) {
+  $airStopoverSeed = '';
+}
+$airRouteTypeSeed = $ignoreAppliedAirRouteType ? '' : (string)($form['air_route_type'] ?? '');
 $transportModeLabel = match ($transportModeRender) {
   'ferry' => 'Færge',
   'bus' => 'Bus',
@@ -100,17 +150,25 @@ $forceJourneyFieldsOpen = $ticketMode === 'ticket'
 $journeyFieldsCollapsible = true;
 $journeyFieldsOpenDefault = $ticketMode !== 'ticketless'
   && ($hasTickets || $hasJourneyFieldPrefill || ($transportModeChosen && !$isRail));
-$uploadIntroTitle = (!$transportModeSelectionRequired && $ticketMode === 'ticket')
-  ? 'Har du en booking eller billet du kan uploade?'
-  : ($isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?')));
-$uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired)
-  ? 'Ved upload bruger vi LLM/OCR og kontraktmotoren til at finde den relevante transportgren. Ticketless kræver stadig et manuelt valg.'
-  : ($isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.');
+$uploadIntroTitle = $isModeEntryFlow
+  ? ($isAir ? 'Flyflowet starter ticketless' : ($isFerry ? 'Færgeflowet starter ticketless' : ($isBus ? 'Busflowet starter ticketless' : 'Togflowet starter ticketless')))
+  : ((!$transportModeSelectionRequired && $ticketMode === 'ticket')
+      ? 'Har du en booking eller billet du kan uploade?'
+      : ($isAir ? 'Har du en booking eller billet du kan uploade?' : ($isFerry ? 'Har du en booking eller færgebillet du kan uploade?' : ($isBus ? 'Har du en busbillet eller booking du kan uploade?' : 'Har du en billet du kan uploade?'))));
+$uploadIntroText = $isModeEntryFlow
+  ? 'Det korte mode-flow kører ticketless fra start. Billet, booking og kvitteringer kan uploades senere, når sagen er oprettet.'
+  : (($ticketMode === 'ticket' && !$transportModeSelectionRequired)
+      ? 'Ved upload bruger vi LLM/OCR og kontraktmotoren til at finde den relevante transportgren. Ticketless kræver stadig et manuelt valg.'
+      : ($isRail ? 'Vælg ticketless hvis du vil lave et hurtigt estimat uden upload. Du kan altid uploade senere.' : 'Vælg ticketless hvis du vil fortsætte uden upload. Du kan altid tilføje booking eller dokumentation senere.'));
 ?>
 <?php echo $this->Html->css('flow-entitlements', ['block' => true]); ?>
 <style>
   /* Skjul PMR/cykel i Trin 2 – håndteres i Trin 3 */
   #pmrFlowCard, #bikeFlowCard { display:none !important; }
+  [data-air-stopovers-ticketless].hidden,
+  [data-air-connection-type-ticketless].hidden { display:none !important; }
+  .air-stopovers-textarea { width:100%; min-height:74px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; resize:vertical; font:inherit; }
+  .air-route-preview { margin-top:6px; padding:8px 10px; border:1px solid #dbeafe; background:#f8fafc; border-radius:8px; color:#0f172a; }
   .fe-wrapper { max-width: 1200px; margin: 0 auto; }
   .fe-wide { width: 100%; }
   #ticketlessCard,
@@ -336,23 +394,28 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
   <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;">
     <strong><?= h($uploadIntroTitle) ?></strong>
     <div class="small muted" style="margin-top:6px;"><?= h($uploadIntroText) ?></div>
-    <?php if ($ticketMode === 'ticket' && !$transportModeSelectionRequired): ?>
+    <?php if ($ticketMode === 'ticket' && !$transportModeSelectionRequired && !$isModeEntryFlow): ?>
       <div class="small muted" style="margin-top:6px;">Transportformen vælges automatisk, når der er analyseret mindst én billet eller booking.</div>
     <?php endif; ?>
-    <?php if (!$isRail): ?>
+    <?php if (!$isRail && !$isModeEntryFlow): ?>
       <div class="small muted" style="margin-top:6px;">Ved upload analyserer vi først dokumenterne med LLM og den multimodale kontraktmotor. Kontrakt og ansvar vises derefter som auto-summary med STOP, hvis sagen kan afgøres tidligt.</div>
     <?php endif; ?>
-    <?php if ($ticketMode === 'ticket' && $transportModeAutoReady): ?>
+    <?php if ($ticketMode === 'ticket' && $transportModeAutoReady && !$isModeEntryFlow): ?>
       <div class="small" style="margin-top:8px;"><strong>Auto-detekteret transportform:</strong> <?= h($transportModeLabel) ?></div>
     <?php endif; ?>
+    <?php if ($isModeEntryFlow): ?>
+      <input type="hidden" name="ticket_upload_mode" value="<?= h($ticketMode === 'seasonpass' ? 'seasonpass' : 'ticketless') ?>" />
+      <div class="small" style="margin-top:8px;"><strong>Valgt flow:</strong> <?= h($transportModeLabel) ?><?= $entryVariant === 'air_short' ? ' (kort flow)' : '' ?></div>
+    <?php else: ?>
     <div class="small" style="margin-top:8px;">
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticket" <?= $ticketMode==='ticket'?'checked':'' ?> /> <?= $isAir ? 'Ja, jeg kan uploade booking/billet' : ($isFerry ? 'Ja, jeg kan uploade booking/færgebillet' : ($isBus ? 'Ja, jeg kan uploade booking/busbillet' : 'Ja, jeg kan uploade billet')) ?></label>
       <label class="mr8"><input type="radio" name="ticket_upload_mode" value="ticketless" <?= $ticketMode==='ticketless'?'checked':'' ?> /> Nej, ticketless</label>
       <label class="mr8" id="seasonPassOptionWrap" style="<?= $seasonSupported ? '' : 'display:none;' ?>"><input type="radio" name="ticket_upload_mode" value="seasonpass" <?= $ticketMode==='seasonpass'?'checked':'' ?> /> Jeg rejser på pendler-/periodekort</label>
     </div>
+    <?php endif; ?>
   </div>
 
-  <div class="card" id="transportModeCard" data-auto-ready="<?= $transportModeAutoReady ? '1' : '0' ?>" style="padding:10px 12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= $transportModeSelectionRequired ? '' : ' display:none;' ?>">
+  <div class="card" id="transportModeCard" data-auto-ready="<?= $transportModeAutoReady ? '1' : '0' ?>" data-mode-entry="<?= $isModeEntryFlow ? '1' : '0' ?>" style="padding:10px 12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-bottom:12px;<?= ($transportModeSelectionRequired && !$isModeEntryFlow) ? '' : ' display:none;' ?>">
     <div class="small" style="font-weight:700;">Vælg transportmåde</div>
     <div id="transportModeManualBlock">
       <div class="small muted" style="margin-top:4px;">Vaelg den transportmåde sagen starter i. Hvis rejsen er multimodal, finder vi senere det først ramte segment.</div>
@@ -364,7 +427,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       <label class="mr8"><input type="radio" name="transport_mode" value="air" <?= $transportMode==='air'?'checked':'' ?> <?= $transportModeSelectionRequired ? '' : 'disabled' ?> /> Fly</label>
     </div>
   </div>
-  <input type="hidden" id="transportModeHidden" name="transport_mode" value="<?= h($transportMode) ?>" <?= $transportModeSelectionRequired ? 'disabled' : '' ?> />
+  <input type="hidden" id="transportModeHidden" name="transport_mode" value="<?= h($transportMode) ?>" <?= ($transportModeSelectionRequired && !$isModeEntryFlow) ? 'disabled' : '' ?> />
   <input type="hidden" name="dep_station_lookup_id" value="<?= h((string)($form['dep_station_lookup_id'] ?? '')) ?>" />
   <input type="hidden" name="dep_station_lookup_code" value="<?= h((string)($form['dep_station_lookup_code'] ?? '')) ?>" />
   <input type="hidden" name="dep_station_lookup_mode" value="<?= h((string)($form['dep_station_lookup_mode'] ?? '')) ?>" />
@@ -443,6 +506,9 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
     $modeContractVisible = ($ticketMode === 'ticket')
       ? $modeHasAnalysis
       : $transportModeChosen;
+    if ($isAirShortEntryFlow) {
+      $modeContractVisible = false;
+    }
     $modeContractModel = (string)($form['contract_model'] ?? ($contractTopologyResolved === 'separate_contracts' ? 'separate' : ($modeStop ? 'through' : '')));
     $modeProblemContractId = (string)($form['problem_contract_id'] ?? '');
     $modeShowProblemContract = $modeStop && $modeContractModel === 'separate';
@@ -694,7 +760,31 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       <div class="small muted" style="margin-top:10px;">TRIN 2 stopper nu ved kontraktanalysen. Foerste ramte segment vaelges i naeste trin, og mode-specifik gating sker derefter.</div>
     </div>
   </div>
-  <?php $modeContractCardHtml = (string)ob_get_clean(); ?>
+  <?php
+    $modeContractCardHtml = (string)ob_get_clean();
+    if ($isAirShortEntryFlow) {
+      $modeContractCardHtml = '';
+    }
+    if ($isFerry) {
+      ob_start();
+  ?>
+  <div class="card" style="padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; margin-top:12px; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>Kontrakt og ansvar (færge)</strong>
+    </div>
+    <div class="small muted" style="margin-top:6px;">Færge kører her som et direkte single-mode-flow. Den multimodale Art. 12-kontraktanalyse er derfor slået fra for denne variant.</div>
+    <div class="card" style="margin-top:10px; padding:10px; border:1px solid #dbeafe; background:#f8fafc; border-radius:6px;">
+      <div><strong>Fast model for ferry</strong></div>
+      <div class="small" style="margin-top:6px;">Kontraktmodel: direkte færgeafgang</div>
+      <div class="small">journey_structure: single_segment</div>
+      <div class="small">rights_module: ferry</div>
+      <div class="small muted" style="margin-top:6px;">Flowet går derfor direkte videre til afgangsvalg, incident og ferry-specifik gating uden separat checkout for mellemliggende led eller separate billetter.</div>
+    </div>
+  </div>
+  <?php
+      $modeContractCardHtml = (string)ob_get_clean();
+    }
+  ?>
 
   <?php
     // Season/period pass (Art. 19(2)) is a top-level entitlement choice in TRIN 2
@@ -980,12 +1070,41 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       <label>Ankomstlufthavn
         <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx ARN" />
       </label>
+      <?php $airRouteTypeInput = (string)($airRouteTypeSeed !== '' ? $airRouteTypeSeed : ($airStopoverSeed !== '' ? 'connecting' : 'direct')); ?>
+      <label>Rejsetype
+        <select
+          name="air_route_type"
+          data-air-route-context="ticketless"
+          onchange="(function(sel){var ctx=sel.getAttribute('data-air-route-context')||''; var show=sel.value==='connecting'; document.querySelectorAll('select[name=&quot;air_route_type&quot;]').forEach(function(other){other.value=sel.value;}); document.querySelectorAll('[data-air-stopovers-ticketless][data-air-route-context=&quot;'+ctx+'&quot;],[data-air-connection-type-ticketless][data-air-route-context=&quot;'+ctx+'&quot;]').forEach(function(node){node.classList.toggle('hidden',!show); node.style.display=show?'':'none';});})(this)">
+          <option value="direct" <?= $airRouteTypeInput==='direct'?'selected':'' ?>>Direkte fly</option>
+          <option value="connecting" <?= $airRouteTypeInput==='connecting'?'selected':'' ?>>Med mellemlanding(er)</option>
+        </select>
+      </label>
+      <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-stopovers-ticketless data-air-route-context="ticketless">Mellemlanding(er) i raekkefolge
+        <textarea class="air-stopovers-textarea" name="air_stopover_airports" placeholder="Fx AMS, CDG&#10;eller en lufthavn pr. linje"><?= h($airStopoverSeed) ?></textarea>
+        <div class="small muted" style="margin-top:4px;">Kun relevant hvis rejsen ikke er direkte. Skriv flere mellemlandinger i den raekkefolge, du skulle flyve dem, adskilt med komma eller ny linje.</div>
+        <div class="small air-route-preview" data-air-route-preview data-air-route-context="ticketless">
+          <?= h($buildAirRoutePreview((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')), $airStopoverSeed, (string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')))) ?>
+        </div>
+      </label>
+      <?php $airConnectionTypeTicketless = (string)($form['air_connection_type'] ?? ''); ?>
+      <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-connection-type-ticketless data-air-route-context="ticketless">
+        Var videreforbindelsen del af samme booking?
+        <select name="air_connection_type">
+          <option value="" <?= $airConnectionTypeTicketless===''?'selected':'' ?>>Ved ikke endnu</option>
+          <option value="protected_connection" <?= $airConnectionTypeTicketless==='protected_connection'?'selected':'' ?>>Ja, samme booking / protected connection</option>
+          <option value="self_transfer" <?= $airConnectionTypeTicketless==='self_transfer'?'selected':'' ?>>Nej, separat billet / self-transfer</option>
+        </select>
+        <div class="small muted" style="margin-top:4px;">Brug kun dette ved mellemlandinger. Den tunge kontraktanalyse kan stadig koeres senere efter billetupload.</div>
+      </label>
+      <?php if (!$isAirShortEntryFlow): ?>
       <label>Marketing carrier
           <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['marketing_carrier'] ?? ($modeContract['marketing_carrier'] ?? ''))) ?>" placeholder="Fx SAS" />
       </label>
       <label>Operating carrier
           <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
       </label>
+      <?php endif; ?>
       <label class="ticketless-optional">Bookingreference / PNR (valgfri)
         <input type="text" name="ticket_no" value="<?= h((string)($form['ticket_no'] ?? ($meta['_auto']['ticket_no']['value'] ?? ''))) ?>" placeholder="Fx X7YZ12" />
       </label>
@@ -1160,6 +1279,11 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Distancekategori: <span data-air-scope-summary="air_distance_band"><?= h($airDistanceBandLabel($airDistBandTl)) ?></span></div>
             <div>Art. 6 delay-threshold: <span data-air-scope-summary="air_delay_threshold_hours"><?= h($airDelayThresholdLabel($airDelayThresholdTl)) ?></span></div>
           </div>
+          <?php if ($isAirShortEntryFlow): ?>
+            <div class="small muted" style="margin-top:8px;<?= $airAutoReady ? '' : ' background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;' ?>">Scope og kompensationslogik afledes saa vidt muligt automatisk i air short-flowet. Mere detaljeret scopevurdering koeres senere ud fra valgt fly eller uploadet billet.</div>
+            <input type="hidden" name="air_delay_threshold_hours" value="<?= h($airDelayThresholdTl) ?>" />
+            <input type="hidden" name="intra_eu_over_1500" value="<?= h((string)($form['intra_eu_over_1500'] ?? '')) ?>" />
+          <?php else: ?>
           <details data-air-scope-manual-editor="1" style="margin-top:10px;<?= $airScopeResolved ? ' display:none;' : '' ?>" <?= $airScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
             <div class="grid-2" data-air-scope-manual-fields="1" style="display:<?= $airScopeResolved ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -1203,6 +1327,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <input type="hidden" name="air_delay_threshold_hours" value="<?= h($airDelayThresholdTl) ?>" />
             <input type="hidden" name="intra_eu_over_1500" value="<?= h((string)($form['intra_eu_over_1500'] ?? '')) ?>" />
           </details>
+          <?php endif; ?>
       <?php endif; ?>
     <?php endif; ?>
 
@@ -1233,6 +1358,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
       <?php endforeach; ?>
     </datalist>
 
+    <?php if (!($isAir && $isAirShortEntryFlow)): ?>
     <?php $pk = (string)($form['price_known'] ?? ((string)($form['price'] ?? '') !== '' ? 'yes' : 'no')); ?>
     <div class="small" style="margin-top:12px;"><strong>Kender du prisen?</strong></div>
     <div class="small" style="margin-top:6px;">
@@ -1251,6 +1377,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
         </select>
       </div>
       <div class="small muted" style="margin-top:4px;">Hvis prisen er ukendt, viser vi kun kompensation i procent.</div>
+    <?php endif; ?>
       <?php if ($isFerry): ?>
         <?php
           $tripTypeTicketless = (string)($form['trip_type'] ?? 'single');
@@ -1475,7 +1602,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
     <div class="card" style="margin-top:12px; padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px;">
       <strong><?= $isFerry ? 'Færge — basisrejse og scope' : ($isBus ? 'Bus — basisrejse og scope' : 'Fly — basisrejse og scope') ?></strong>
       <div class="small muted" style="margin-top:6px;">
-        <?= $isFerry ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : ($isBus ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.') ?>
+        <?= $isFerry ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Færge bruger her en fast direkte kontraktmodel uden multimodal checkout.' : ($isBus ? 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.' : 'LLM har allerede læst det den kan fra uploaden. Udfyld kun det der mangler i basisrejsen og scopefelterne. Kontrakt og ansvar håndteres i den fælles multimodale blok ovenfor.') ?>
       </div>
       <?php if ($isFerryTicketless): ?>
       <div class="small" style="margin-top:10px; background:#eef6ff; border:1px solid #cfe2ff; border-radius:6px; padding:8px;">
@@ -1527,6 +1654,33 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
           <input type="text" name="ticket_no" value="<?= h((string)($meta['_auto']['ticket_no']['value'] ?? ($form['ticket_no'] ?? ($meta['_identifiers']['pnr'] ?? ($journey['bookingRef'] ?? ''))))) ?>" />
         </label>
         <?php if ($isAir): ?>
+        <?php $airRouteTypeInput = (string)($airRouteTypeSeed !== '' ? $airRouteTypeSeed : ($airStopoverSeed !== '' ? 'connecting' : 'direct')); ?>
+        <label>Rejsetype
+          <select
+            name="air_route_type"
+            data-air-route-context="journey"
+            onchange="(function(sel){var ctx=sel.getAttribute('data-air-route-context')||''; var show=sel.value==='connecting'; document.querySelectorAll('select[name=&quot;air_route_type&quot;]').forEach(function(other){other.value=sel.value;}); document.querySelectorAll('[data-air-stopovers-ticketless][data-air-route-context=&quot;'+ctx+'&quot;],[data-air-connection-type-ticketless][data-air-route-context=&quot;'+ctx+'&quot;]').forEach(function(node){node.classList.toggle('hidden',!show); node.style.display=show?'':'none';});})(this)">
+            <option value="direct" <?= $airRouteTypeInput==='direct'?'selected':'' ?>>Direkte fly</option>
+            <option value="connecting" <?= $airRouteTypeInput==='connecting'?'selected':'' ?>>Med mellemlanding(er)</option>
+          </select>
+        </label>
+        <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-stopovers-ticketless data-air-route-context="journey">Mellemlanding(er) i raekkefolge
+          <textarea class="air-stopovers-textarea" name="air_stopover_airports" placeholder="Fx AMS, CDG&#10;eller en lufthavn pr. linje"><?= h($airStopoverSeed) ?></textarea>
+          <div class="small muted" style="margin-top:4px;">Kun relevant hvis rejsen ikke er direkte. Skriv flere mellemlandinger i den raekkefolge, du skulle flyve dem, adskilt med komma eller ny linje.</div>
+          <div class="small air-route-preview" data-air-route-preview data-air-route-context="journey">
+            <?= h($buildAirRoutePreview((string)($meta['_auto']['dep_station']['value'] ?? ($form['dep_station'] ?? '')), $airStopoverSeed, (string)($meta['_auto']['arr_station']['value'] ?? ($form['arr_station'] ?? '')))) ?>
+          </div>
+        </label>
+        <?php $airConnectionTypeTicketless = (string)($form['air_connection_type'] ?? ''); ?>
+        <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-connection-type-ticketless data-air-route-context="journey">
+          Var videreforbindelsen del af samme booking?
+          <select name="air_connection_type">
+            <option value="" <?= $airConnectionTypeTicketless===''?'selected':'' ?>>Ved ikke endnu</option>
+            <option value="protected_connection" <?= $airConnectionTypeTicketless==='protected_connection'?'selected':'' ?>>Ja, samme booking / protected connection</option>
+            <option value="self_transfer" <?= $airConnectionTypeTicketless==='self_transfer'?'selected':'' ?>>Nej, separate kontrakter / self-transfer</option>
+          </select>
+          <div class="small muted" style="margin-top:4px;">Brug kun dette ved mellemlandinger. Billetupload kan senere bekraefte eller korrigere kontraktanalysen.</div>
+        </label>
         <label>Marketing carrier
           <input type="text" name="marketing_carrier" list="airOperatorSuggestions" value="<?= h($firstNonEmpty($form['marketing_carrier'] ?? '', $meta['_auto']['marketing_carrier']['value'] ?? '', $modeContract['marketing_carrier'] ?? '')) ?>" placeholder="Fx SAS" />
         </label>
@@ -1777,6 +1931,11 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <div>Distancekategori: <span data-air-scope-summary="air_distance_band"><?= h($airDistanceBandLabel($airDistBandUpload)) ?></span></div>
             <div>Art. 6 delay-threshold: <span data-air-scope-summary="air_delay_threshold_hours"><?= h($airDelayThresholdLabel($airDelayThresholdUpload)) ?></span></div>
           </div>
+          <?php if ($isAirShortEntryFlow): ?>
+            <div class="small muted" style="margin-top:8px;<?= $airUploadAutoReady ? '' : ' background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;' ?>">Scopefelter holdes passive i air short-flowet. Systemet bruger valgt fly, rute og evt. upload til at aflede resten.</div>
+            <input type="hidden" name="air_delay_threshold_hours" value="<?= h($airDelayThresholdUpload) ?>" />
+            <input type="hidden" name="intra_eu_over_1500" value="<?= h((string)($form['intra_eu_over_1500'] ?? '')) ?>" />
+          <?php else: ?>
           <details data-air-scope-manual-editor="1" style="margin-top:10px;<?= $airUploadScopeResolved ? ' display:none;' : '' ?>" <?= $airUploadScopeResolved ? '' : 'open' ?>>
             <summary class="small">Redigér auto-afledte scopefelter</summary>
             <div class="grid-2" data-air-scope-manual-fields="1" style="display:<?= $airUploadScopeResolved ? 'none' : 'grid' ?>; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
@@ -1820,16 +1979,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
             <input type="hidden" name="air_delay_threshold_hours" value="<?= h($airDelayThresholdUpload) ?>" />
             <input type="hidden" name="intra_eu_over_1500" value="<?= h((string)($form['intra_eu_over_1500'] ?? '')) ?>" />
           </details>
-        <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-          <label>Forbindelsestype
-            <select name="air_connection_type">
-              <option value="">Auto / resolver</option>
-              <option value="single_flight" <?= $airConnectionTypeUpload==='single_flight'?'selected':'' ?>>Enkelt flight</option>
-              <option value="protected_connection" <?= $airConnectionTypeUpload==='protected_connection'?'selected':'' ?>>Protected connection</option>
-              <option value="self_transfer" <?= $airConnectionTypeUpload==='self_transfer'?'selected':'' ?>>Self-transfer</option>
-            </select>
-          </label>
-        </div>
+          <?php endif; ?>
       <?php endif; ?>
       <?php if (!empty($claimDirection) || !empty($modeContract) || !empty($ferryContract)): ?>
         <div class="small" style="margin-top:10px; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
@@ -2229,8 +2379,9 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
 </div>
 </fieldset>
 <?= $this->Form->end() ?>
+<?= $this->element('flow_autosave', ['step' => 'entitlements']) ?>
 
-<?php if ($this->getRequest()->getQuery('debug')): ?>
+<?php if (!$isAirShortEntryFlow && $this->getRequest()->getQuery('debug')): ?>
   <div class="card" style="margin-top:12px; padding:12px; border:1px solid #eef; background:#f9fbff; border-radius:6px;">
     <strong>Debug</strong>
     <div class="small" style="margin-top:6px;">EU only (anbefalet): <code><?= h((string)($euOnlySuggested ?? 'unknown')) ?></code></div>
@@ -2310,6 +2461,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
   </div>
 <?php endif; ?>
 
+<?php if (!$isAirShortEntryFlow): ?>
   <div class="card hooks-card">
   <div id="hooksPanel">
     <div class="small muted">Sidepanelet indlaeses kun manuelt i Trin 2 for at undgaa lange baggrunds-requests efter upload og fjern billet.</div>
@@ -2321,6 +2473,7 @@ $uploadIntroText = ($ticketMode === 'ticket' && !$transportModeSelectionRequired
     <label style="margin-left:auto;"><input type="checkbox" id="toggleDebugChk" <?= $this->getRequest()->getQuery('debug') ? 'checked' : '' ?> /> Debug</label>
   </div>
   </div>
+<?php endif; ?>
 
 <?php
 // If Art. 12 does not apply (no through-ticket), display per-contract table (TRIN 3 grouping)
@@ -2899,6 +3052,11 @@ if ($a12Applies === false && !empty($contractsView)) {
     if (!card) return;
     const ccInput = card.querySelector('input[name="operator_country"]');
 
+    function shouldUseStationAutocomplete() {
+      const mode = currentTransportMode();
+      return mode === '' || mode === 'rail';
+    }
+
 	    function setup(name){
 	      const input = card.querySelector('input[name="'+name+'"]');
 	      const box = card.querySelector('.station-suggest[data-for="'+name+'"]');
@@ -3019,11 +3177,13 @@ if ($a12Applies === false && !empty($contractsView)) {
       }
 
 	      input.addEventListener('input', ()=>{
+          if (!shouldUseStationAutocomplete()) { clearMeta(); hide(); return; }
 	        clearMeta(); // user is typing; metadata no longer trusted
 	        if (timer) clearTimeout(timer);
 	        timer = setTimeout(fetchStations, 200);
 	      });
       input.addEventListener('focus', ()=>{
+        if (!shouldUseStationAutocomplete()) { hide(); return; }
         if (box.innerHTML.trim() !== '') { box.style.display = 'block'; }
       });
       input.addEventListener('blur', ()=> setTimeout(hide, 180));
@@ -3038,7 +3198,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   // Multimodal node autocomplete for ferry ports, bus stops/terminals and airports.
   (function(){
     if (!form || !transportNodesSearchUrl) return;
-    const inputs = Array.from(form.querySelectorAll('input[name="dep_station"], input[name="arr_station"], input[name="dep_terminal"], input[name="arr_terminal"]'));
+    const inputs = Array.from(form.querySelectorAll('input[name="dep_station"], input[name="arr_station"], input[name="dep_terminal"], input[name="arr_terminal"], input[name="air_stopover_airports"]'));
     if (!inputs.length) return;
     const state = new WeakMap();
     const nodeSearchCache = new Map();
@@ -3050,7 +3210,35 @@ if ($a12Applies === false && !empty($contractsView)) {
       if (input.offsetParent === null) return false;
       if (input.closest('fieldset[disabled]')) return false;
       const mode = currentTransportMode();
+      if (input.name === 'air_stopover_airports') {
+        return mode === 'air';
+      }
       return mode === 'ferry' || mode === 'bus' || mode === 'air';
+    }
+
+    function getNodeSearchQuery(input) {
+      const raw = String(input && input.value ? input.value : '').trim();
+      if (input && input.name === 'air_stopover_airports') {
+        const splitIndex = Math.max(raw.lastIndexOf(','), raw.lastIndexOf('\n'));
+        if (splitIndex === -1) {
+          return raw.trim();
+        }
+        return raw.slice(splitIndex + 1).trim();
+      }
+      return raw;
+    }
+
+    function applyStopoverSelection(input, node) {
+      const raw = String(input && input.value ? input.value : '');
+      const nextValue = node && node.name ? String(node.name) : '';
+      const splitIndex = Math.max(raw.lastIndexOf(','), raw.lastIndexOf('\n'));
+      if (splitIndex === -1) {
+        input.value = nextValue;
+        return;
+      }
+      const separator = raw[splitIndex] === '\n' ? '\n' : ', ';
+      const prefix = raw.slice(0, splitIndex).replace(/\s+$/, '');
+      input.value = prefix + separator + nextValue;
     }
 
     function ensureBox(input) {
@@ -3122,10 +3310,14 @@ if ($a12Applies === false && !empty($contractsView)) {
           btn.appendChild(meta);
         }
         btn.addEventListener('click', () => {
-          form.querySelectorAll('input[name="' + input.name + '"]').forEach((field) => {
-            field.value = node.name ? String(node.name) : '';
-          });
-          setGenericLookupMeta(input.name, node);
+          if (input.name === 'air_stopover_airports') {
+            applyStopoverSelection(input, node);
+          } else {
+            form.querySelectorAll('input[name="' + input.name + '"]').forEach((field) => {
+              field.value = node.name ? String(node.name) : '';
+            });
+            setGenericLookupMeta(input.name, node);
+          }
           if (currentTransportMode() === 'ferry' && (input.name === 'dep_terminal' || input.name === 'arr_terminal')) {
             const portFieldName = input.name === 'dep_terminal' ? 'dep_station' : 'arr_station';
             const portField = form.querySelector('input[name="' + portFieldName + '"]');
@@ -3198,9 +3390,9 @@ if ($a12Applies === false && !empty($contractsView)) {
 
     async function fetchNodes(input, box) {
       if (!shouldUseTransportNodes(input)) { hide(box); return; }
-      const q = String(input.value || '').trim();
+      const q = getNodeSearchQuery(input);
       const mode = currentTransportMode();
-      const minChars = mode === 'bus' ? 3 : 2;
+      const minChars = mode === 'air' ? 3 : (mode === 'bus' ? 3 : 2);
       if (q.length < minChars) { hide(box); return; }
       const url = buildNodeSearchUrl(input, q);
 
@@ -3225,6 +3417,7 @@ if ($a12Applies === false && !empty($contractsView)) {
 
     async function resolveExactNode(input) {
       if (!shouldUseTransportNodes(input)) return;
+      if (currentTransportMode() === 'air') return;
       const meta = genericLookupMeta(input.name);
       if (meta.id && String(meta.id.value || '').trim() !== '') return;
       const q = String(input.value || '').trim();
@@ -3258,10 +3451,13 @@ if ($a12Applies === false && !empty($contractsView)) {
         clearDerivedScopeForNodeInput(input.name);
         deriveScopeFromNodes();
         if (localState.timer) clearTimeout(localState.timer);
-        localState.timer = setTimeout(() => fetchNodes(input, box), currentTransportMode() === 'bus' ? 320 : 180);
+        localState.timer = setTimeout(() => fetchNodes(input, box), currentTransportMode() === 'air' ? 260 : (currentTransportMode() === 'bus' ? 320 : 180));
       });
       input.addEventListener('focus', () => {
         if (!shouldUseTransportNodes(input)) { hide(box); return; }
+        if (currentTransportMode() === 'air') {
+          prewarmAirNodeSearch();
+        }
         if (box.innerHTML.trim() !== '') {
           positionBox(box, input);
           box.style.display = 'block';
@@ -3269,11 +3465,14 @@ if ($a12Applies === false && !empty($contractsView)) {
       });
       input.addEventListener('blur', () => {
         setTimeout(() => hide(box), 180);
-        if (currentTransportMode() !== 'bus') {
+        if (currentTransportMode() !== 'bus' && currentTransportMode() !== 'air') {
           setTimeout(() => resolveExactNode(input), 40);
         }
       });
-      input.addEventListener('change', () => resolveExactNode(input));
+      input.addEventListener('change', () => {
+        if (currentTransportMode() === 'air') return;
+        resolveExactNode(input);
+      });
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') hide(box);
       });
@@ -3290,6 +3489,11 @@ if ($a12Applies === false && !empty($contractsView)) {
       if (currentTransportMode() === 'bus') {
         deriveScopeFromNodes();
         updateBusScopeUi();
+        return;
+      }
+      if (currentTransportMode() === 'air') {
+        deriveScopeFromNodes();
+        updateAirScopeUi();
         return;
       }
       if (hydratePrefilledBusy) return;
@@ -3326,6 +3530,27 @@ if ($a12Applies === false && !empty($contractsView)) {
           run();
         }
       }, typeof delay === 'number' ? delay : 120);
+    }
+
+    let airNodeCachePrewarmed = false;
+    async function prewarmAirNodeSearch() {
+      if (airNodeCachePrewarmed || currentTransportMode() !== 'air') {
+        return;
+      }
+      const probeInput = form.querySelector('input[name="dep_station"]') || form.querySelector('input[name="arr_station"]');
+      if (!probeInput) {
+        return;
+      }
+      const probeValue = String(probeInput.value || '').trim();
+      if (probeValue.length < 3) {
+        return;
+      }
+      airNodeCachePrewarmed = true;
+      try {
+        await fetchNodeSearchJson(buildNodeSearchUrl(probeInput, probeValue));
+      } catch (e) {
+        // ignore background warmup failures
+      }
     }
 
     form.querySelectorAll('input[name="transport_mode"]').forEach((input) => {
@@ -3619,21 +3844,22 @@ if ($a12Applies === false && !empty($contractsView)) {
       const mode = radioVal('ticket_upload_mode') || 'ticket';
       const isTicketless = mode === 'ticketless';
       const transportMode = resolvedTransportMode() || '';
+      const modeEntryFlow = transportModeCard && transportModeCard.dataset.modeEntry === '1';
       const seasonAllowed = transportMode === 'rail' || transportMode === 'ferry';
       const isSeason = seasonAllowed && mode === 'seasonpass';
       const transportAutoReady = transportModeCard && transportModeCard.dataset.autoReady === '1';
       const transportModeChosen = transportMode !== '';
       const transportSelectionRequired = isTicketless || isSeason;
       const hasModeAnalysis = modeContractCard && modeContractCard.dataset.hasAnalysis === '1';
-      show(uploadCard, mode === 'ticket');
+      show(uploadCard, !modeEntryFlow && mode === 'ticket');
       show(ticketlessCard, isTicketless && transportModeChosen);
       show(seasonCard, isSeason);
-      show(transportModeCard, transportSelectionRequired);
+      show(transportModeCard, !modeEntryFlow && transportSelectionRequired);
       show(transportModeAutoBlock, !transportSelectionRequired);
-      show(transportModeManualBlock, transportSelectionRequired);
+      show(transportModeManualBlock, !modeEntryFlow && transportSelectionRequired);
       show(transportModeAutoPending, !transportSelectionRequired && !transportAutoReady);
       show(transportModeAutoReadyBlock, !transportSelectionRequired && transportAutoReady);
-      show(transportModeChoices, transportSelectionRequired || transportAutoReady);
+      show(transportModeChoices, !modeEntryFlow && (transportSelectionRequired || transportAutoReady));
       show(seasonOptionWrap, seasonAllowed);
       show(modeContractCard, transportModeChosen && (mode !== 'ticket' || hasModeAnalysis));
       // Prevent duplicate-name inputs from overwriting each other on submit.
@@ -3650,9 +3876,9 @@ if ($a12Applies === false && !empty($contractsView)) {
       if (journeyFieldsWrap) {
         journeyFieldsWrap.style.display = mode === 'ticket' ? 'block' : 'none';
       }
-      setTransportModeEnabled(transportSelectionRequired || transportAutoReady);
+      setTransportModeEnabled(!modeEntryFlow && (transportSelectionRequired || transportAutoReady));
       if (transportModeHidden) {
-        transportModeHidden.disabled = transportSelectionRequired;
+        transportModeHidden.disabled = modeEntryFlow ? false : transportSelectionRequired;
         transportModeHidden.value = transportMode;
       }
       setDisabledWithin(modeContractCard, !transportModeChosen || (mode === 'ticket' && !hasModeAnalysis));
@@ -3663,6 +3889,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       }
       // In ticketless mode we always want Art.12 questions available, even before the first submit.
       if (a12Qs && (isTicketless || isSeason) && transportModeChosen) { a12Qs.style.display = 'block'; }
+      updateAirRouteTypeHints();
     }
     function updatePriceKnown(){
       if (!priceBlock) return;
@@ -3714,6 +3941,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       show(modeJourneyFields, renderMode !== '' && renderMode !== 'rail');
       show(modeContractCard, hasMode && (ticketMode !== 'ticket' || hasModeAnalysis));
       setDisabledWithin(modeContractCard, !hasMode || (ticketMode === 'ticket' && !hasModeAnalysis));
+      updateAirRouteTypeHints();
     }
     function activeSelectValue(name){
       const selects = Array.from(form.querySelectorAll('select[name="' + name + '"]'));
@@ -3929,16 +4157,16 @@ if ($a12Applies === false && !empty($contractsView)) {
   if (toggleBtn && !journeyFieldsCollapsible) {
     toggleBtn.setAttribute('aria-hidden', 'true');
   }
-  if (toggleBtn && pinJourneyFieldsOpen) {
-    toggleBtn.setAttribute('aria-hidden', 'true');
-    toggleBtn.style.display = 'none';
-  }
-  updateJourneyToggleUi();
-  if (form && toggleBtn) {
-    form.addEventListener('change', function(e){
-      if (e.target && e.target.name === 'ticket_upload_mode') {
-        toggleBtn.dataset.ticketMode = e.target.value || 'ticket';
-      }
+    if (toggleBtn && pinJourneyFieldsOpen) {
+      toggleBtn.setAttribute('aria-hidden', 'true');
+      toggleBtn.style.display = 'none';
+    }
+    updateJourneyToggleUi();
+    if (form && toggleBtn) {
+      form.addEventListener('change', function(e){
+        if (e.target && e.target.name === 'ticket_upload_mode') {
+          toggleBtn.dataset.ticketMode = e.target.value || 'ticket';
+        }
       if (e.target && e.target.name === 'transport_mode') {
         toggleBtn.dataset.transportMode = e.target.value || '';
         syncJourneyModeBlocks();
@@ -3949,8 +4177,9 @@ if ($a12Applies === false && !empty($contractsView)) {
   syncJourneyModeBlocks();
   const panel = document.getElementById('hooksPanel');
   const loadHooksBtn = document.getElementById('loadHooksBtn');
-  if (!form || !panel) return;
+  if (!form) return;
   function loadHooksPanel() {
+    if (!panel) return;
     if (panel.dataset.loading === '1') return;
     if (panel.dataset.loaded === '1') return;
     panel.dataset.loading = '1';
@@ -3979,7 +4208,7 @@ if ($a12Applies === false && !empty($contractsView)) {
         }
       });
   }
-  if (loadHooksBtn) {
+  if (panel && loadHooksBtn) {
     loadHooksBtn.addEventListener('click', function(){
       loadHooksPanel();
     });
@@ -4306,6 +4535,91 @@ if ($a12Applies === false && !empty($contractsView)) {
     if (q3) q3.style.display = (q1==='yes' && art10Applies) ? 'block' : 'none';
   }
   updateDisruption();
+
+  const airRouteTypeSelects = Array.from(form.querySelectorAll('select[name="air_route_type"]'));
+  function activeAirRouteTypeContext() {
+    for (const select of airRouteTypeSelects) {
+      if (!select || select.disabled) continue;
+      const wrapper = select.closest('label');
+      if (wrapper && wrapper.offsetParent === null) continue;
+      return String(select.dataset.airRouteContext || '');
+    }
+    return '';
+  }
+  function activeAirRouteTypeValue() {
+    for (const select of airRouteTypeSelects) {
+      if (!select || select.disabled) continue;
+      const wrapper = select.closest('label');
+      if (wrapper && wrapper.offsetParent === null) continue;
+      return String(select.value || '');
+    }
+    return airRouteTypeSelects.length ? String(airRouteTypeSelects[0].value || '') : '';
+  }
+  function syncAirRouteTypeSelects(source) {
+    airRouteTypeSelects.forEach((select) => {
+      if (!select || select === source) return;
+      select.value = source.value;
+    });
+  }
+  function updateAirRouteTypeHints() {
+    if (!airRouteTypeSelects.length) return;
+    const isConnecting = activeAirRouteTypeValue() === 'connecting';
+    const activeContext = activeAirRouteTypeContext();
+    document.querySelectorAll('[data-air-stopovers-ticketless]').forEach((node) => {
+      const sameContext = !activeContext || String(node.dataset.airRouteContext || '') === activeContext;
+      const show = isConnecting && sameContext;
+      node.classList.toggle('hidden', !show);
+      node.style.display = show ? '' : 'none';
+    });
+    document.querySelectorAll('[data-air-connection-type-ticketless]').forEach((node) => {
+      const sameContext = !activeContext || String(node.dataset.airRouteContext || '') === activeContext;
+      const show = isConnecting && sameContext;
+      node.classList.toggle('hidden', !show);
+      node.style.display = show ? '' : 'none';
+    });
+  }
+  function parseAirStopoverPreview(raw) {
+    return String(raw || '')
+      .replace(/\r\n?/g, '\n')
+      .split(/[\n,]+/)
+      .map((part) => String(part || '').trim())
+      .filter((part, index, arr) => part && arr.findIndex((x) => x.toLowerCase() === part.toLowerCase()) === index);
+  }
+  function updateAirRoutePreview() {
+    const depField = form.querySelector('input[name="dep_station"]');
+    const arrField = form.querySelector('input[name="arr_station"]');
+    const dep = depField ? String(depField.value || '').trim() : '';
+    const arr = arrField ? String(arrField.value || '').trim() : '';
+    const stopoverFields = Array.from(form.querySelectorAll('[data-air-stopovers-ticketless] textarea[name="air_stopover_airports"]'));
+    const activeContext = activeAirRouteTypeContext();
+    document.querySelectorAll('[data-air-route-preview]').forEach((node) => {
+      const nodeContext = String(node.dataset.airRouteContext || '');
+      const field = stopoverFields.find((item) => {
+        const owner = item.closest('[data-air-stopovers-ticketless]');
+        const ownerContext = owner ? String(owner.dataset.airRouteContext || '') : '';
+        return (!activeContext || ownerContext === activeContext) && ownerContext === nodeContext;
+      }) || stopoverFields[0];
+      const stops = parseAirStopoverPreview(field ? field.value : '');
+      const points = [];
+      if (dep) points.push(dep);
+      points.push(...stops);
+      if (arr) points.push(arr);
+      node.textContent = points.length ? points.join(' -> ') : 'Rute-preview kommer her, naar fra/til og mellemlandinger er udfyldt.';
+    });
+  }
+  airRouteTypeSelects.forEach((select) => {
+    select.addEventListener('change', function () {
+      syncAirRouteTypeSelects(select);
+      updateAirRouteTypeHints();
+      updateAirRoutePreview();
+    }, { passive: true });
+  });
+  updateAirRouteTypeHints();
+  form.querySelectorAll('input[name="dep_station"], input[name="arr_station"], textarea[name="air_stopover_airports"]').forEach((field) => {
+    field.addEventListener('input', updateAirRoutePreview, { passive: true });
+    field.addEventListener('change', updateAirRoutePreview, { passive: true });
+  });
+  updateAirRoutePreview();
 
   window.__modeContractShowAll = false;
   const modeContractEditBtn = document.getElementById('modeContractEditBtn');

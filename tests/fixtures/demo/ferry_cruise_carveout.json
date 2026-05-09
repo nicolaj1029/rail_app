@@ -50,7 +50,7 @@
     "incident_meta": {
       "transport_mode": "ferry",
       "incident_type": "delay",
-      "actual_departure_delay_90": true,
+      "ferry_departure_disruption_90": true,
       "arrival_delay_minutes": 360,
       "scheduled_journey_duration_minutes": 1440,
       "overnight_required": true,

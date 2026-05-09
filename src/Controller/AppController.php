@@ -82,10 +82,25 @@ class AppController extends Controller
             if ($transportMode !== '') {
                 $flags['transport_mode'] = $transportMode;
             }
+            $entryVariant = strtolower(trim((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? ''))));
+            if ($entryVariant !== '') {
+                $flags['entry_variant'] = $entryVariant;
+            }
+            $travelState = strtolower(trim((string)($flags['travel_state'] ?? ($form['travel_state'] ?? ($meta['entry_travel_state'] ?? '')))));
+            if (in_array($travelState, ['completed', 'ongoing', 'before_start'], true)) {
+                $flags['travel_state'] = $travelState;
+            }
+            $gatingMode = strtolower(trim((string)($flags['gating_mode'] ?? ($form['gating_mode'] ?? ($meta['gating_mode'] ?? '')))));
+            if (in_array($gatingMode, ['rail', 'ferry', 'bus', 'air'], true)) {
+                $flags['gating_mode'] = $gatingMode;
+            }
             $steps = $svc->buildSteps($flags, $action);
+            $neighbors = $svc->neighborActions($flags, $action);
 
             $this->set('flowSteps', $steps);
             $this->set('flowCurrentAction', $action);
+            $this->set('flowPrevAction', $neighbors['prev']);
+            $this->set('flowNextAction', $neighbors['next']);
         } catch (\Throwable $e) {
             // Stepper is non-critical; ignore errors.
         }

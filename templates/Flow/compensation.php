@@ -27,12 +27,40 @@ $busContract = (array)($multimodal['bus_contract'] ?? []);
 $busRights = (array)($multimodal['bus_rights'] ?? []);
 $modeContract = $isBus ? $busContract : (($isAir ? (array)($multimodal['air_contract'] ?? []) : []));
 $claimDirection = (array)($multimodal['claim_direction'] ?? []);
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
+$isAirShortCase = $isAir && $entryVariant === 'air_short';
+$isAirShortCompleted = $isAirShortCase && $isCompleted;
+$airCaseCreatedAt = (string)($meta['air_case_created_at'] ?? '');
+$airCaseRef = trim((string)($meta['air_case_ref'] ?? ''));
+$airCaseQuery = [];
+if ($airCaseRef !== '') {
+    $airCaseQuery['ref'] = $airCaseRef;
+}
+if ($airCaseCreatedAt === '') {
+    $airCaseQuery['create'] = '1';
+}
+$airCaseUrl = $this->Url->build([
+    'controller' => 'Passenger',
+    'action' => 'case',
+    '?' => $airCaseQuery,
+]);
 $compTitle = $isOngoing
     ? (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat (foreloebigt)' : 'TRIN 10 - Kompensation (foreloebig)')
     : ($isCompleted ? (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat (afsluttet rejse)' : 'TRIN 10 - Kompensation (afsluttet rejse)') : (($isFerry || $isBus || $isAir) ? 'TRIN 10 - Resultat' : 'TRIN 10 - Kompensation (Art. 19)'));
 $compHint = $isOngoing
     ? (($isFerry || $isBus || $isAir) ? 'Resultatet kan aendre sig, naar kontrakt- og haendelsesoplysningerne er fuldt afklaret.' : 'Beregningen kan aendre sig, naar rejsen er afsluttet.')
     : ($isCompleted ? (($isFerry || $isBus || $isAir) ? 'Resultatet er baseret paa den afsluttede rejse og den nuvaerende kontraktvurdering.' : 'Beregningen er baseret paa den afsluttede rejse.') : '');
+if ($isAirShortCase && !empty($flowSteps) && is_array($flowSteps)) {
+    foreach ($flowSteps as $flowStep) {
+        if ((string)($flowStep['action'] ?? '') !== 'compensation') {
+            continue;
+        }
+        $stepNum = $flowStep['ui_num'] ?? $flowStep['num'] ?? 10;
+        $stepTitle = (string)($flowStep['title'] ?? 'Beregning & resultat');
+        $compTitle = 'TRIN ' . (string)$stepNum . ' - ' . $stepTitle;
+        break;
+    }
+}
 $delayAtFinal = (int)($delayAtFinal ?? 0);
 $bandAuto = (string)($bandAuto ?? '0');
 $refundChosen = (bool)($refundChosen ?? false);
@@ -310,6 +338,9 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <p class="small muted"><?= h($compHint) ?></p>
 <?php endif; ?>
 <?= $this->element('flow_locked_notice') ?>
+<?php if ($isAir): ?>
+  <?= $this->element('air_downgrade_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+<?php endif; ?>
 <?= $this->Form->create(null) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
@@ -372,9 +403,10 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       }
   }
 ?>
+<?= $this->element('ferry_live_estimate', compact('form', 'flags', 'meta', 'journey', 'ferryRights', 'ferryScope')) ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
   <strong>Faerge-resultat</strong>
-  <div class="small muted mt4">TRIN 10 samler scope, claim-kanal og aktive ferry-rettigheder. Brug resultatet til claim-assist, dokumentpakke eller manuel vurdering.</div>
+  <div class="small muted mt4">TRIN 10 samler scope, operator, valgt faergeafgang og aktive ferry-rettigheder. Ferry-flowet behandles foreloebigt som single-mode, ikke som multimodal claim-kanal routing.</div>
   <div class="card mt12" style="border-color:#e5e7eb;background:#fff">
     <div class="widget-title">
       <span class="step-badge" aria-hidden="true">K</span>
@@ -393,7 +425,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     </div>
   </div>
   <?php if ($ferryClaimName !== ''): ?>
-    <div class="small mt8">Primær claim-kanal: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
+    <div class="small mt8">Operator / ansvarlig transportoer: <strong><?= h($ferryClaimName) ?></strong><?= $ferryClaimType !== '' ? ' (' . h($ferryClaimType) . ')' : '' ?></div>
   <?php endif; ?>
   <div class="mt8">
     <button type="submit" class="button button-primary" formaction="<?= h($ferryClaimPdfUrl) ?>" formtarget="_blank">
@@ -419,7 +451,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
             ? 'gaa til tilbagebetaling eller ombooking'
             : ((!empty($ferryRights['gate_art17_refreshments']) || !empty($ferryRights['gate_art17_hotel']))
                 ? 'registrer assistance og egne udgifter'
-                : 'byg data-pack og vurder claim-kanalen manuelt'))
+                : 'byg data-pack og vurder operatoeransvar manuelt'))
     ?></strong>
   </div>
   <?php if (!empty($ferryRights['gate_art19']) && $ferryBand !== 'none'): ?>
@@ -573,6 +605,22 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   }
   $airPdfUrl = $this->Url->build(['controller' => 'Reimbursement', 'action' => 'official', '?' => ['template' => 'Form_air_travel/air_travel_form.pdf']]);
   $airTicketAmount = (float)($ticketPriceAmount ?? 0);
+  $airDowngradeTicketPriceKnown = strtolower(trim((string)($form['air_downgrade_ticket_price_known'] ?? '')));
+  $airDowngradeTicketCurrency = strtoupper(trim((string)($form['air_downgrade_ticket_price_currency'] ?? $airTicketCurrency)));
+  if ($airDowngradeTicketCurrency === '' || $airDowngradeTicketCurrency === 'AUTO') {
+    $airDowngradeTicketCurrency = $airTicketCurrency;
+  }
+  $airDowngradeTicketAmount = is_numeric($form['air_downgrade_ticket_price'] ?? null)
+    ? (float)$form['air_downgrade_ticket_price']
+    : (float)preg_replace('/[^0-9.]/', '', (string)($form['air_downgrade_ticket_price'] ?? '0'));
+  if ($airDowngradeTicketPriceKnown !== 'yes' || $airDowngradeTicketAmount <= 0) {
+    $airDowngradeTicketAmount = $airTicketAmount;
+    $airDowngradeTicketCurrency = $airTicketCurrency;
+  }
+  $airDelayRefundOnly = (string)($form['incident_main'] ?? '') === 'delay'
+    && empty($airRights['gate_air_reroute_refund'])
+    && !empty($airRights['gate_air_delay_refund_5h']);
+  $airRefundLabel = $airDelayRefundOnly ? 'Refund ved 5+ timer' : 'Reroute / refund';
   $airRefundActive = $airRefundScope !== ''
     || !empty($airRights['gate_air_reroute_refund'])
     || !empty($airRights['gate_air_delay_refund_5h']);
@@ -604,15 +652,13 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   $airRerouteArrivalDelayMinutes = is_numeric($form['reroute_arrival_delay_minutes'] ?? null)
     ? (int)$form['reroute_arrival_delay_minutes']
     : 0;
-  $airCompReductionPct = (!empty($airRights['gate_air_compensation'])
-      && $airRerouteArrivalDelayMinutes > 0
-      && $airRerouteArrivalDelayMinutes <= $airCompReductionThresholdMinutes)
-    ? 50
-    : 0;
-  $airCompComputedAmount = !empty($airRights['gate_air_compensation'])
-    ? round($airCompFlatAmount * (($airCompReductionPct > 0 ? 50 : 100) / 100), 2)
+  $airEligibilityStatus = strtolower(trim((string)($airRights['article7_eligibility_status'] ?? (!empty($airRights['gate_air_compensation']) ? 'eligible' : 'not_eligible'))));
+  $airReductionStatus = strtolower(trim((string)($airRights['article7_reduction_status'] ?? 'not_applicable')));
+  $airCompReductionPct = !empty($airRights['article7_reduction_applies']) ? 50 : 0;
+  $airCompComputedAmount = $airEligibilityStatus === 'eligible'
+    ? (float)($airRights['article7_final_amount_eur'] ?? round($airCompFlatAmount * (($airCompReductionPct > 0 ? 50 : 100) / 100), 2))
     : 0.0;
-  $airCompComputedBasis = !empty($airRights['gate_air_compensation'])
+  $airCompComputedBasis = $airEligibilityStatus === 'eligible'
     ? ('Art. 7 EC261 flat amount' . ($airCompReductionPct > 0 ? ' - reduced 50% under Art. 7(2)' : ''))
     : '';
   $airCompComputedLabel = match ($airDistanceBand) {
@@ -629,43 +675,91 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       'other_over_3500' => 75,
       default => 30,
     };
-  $airDowngradeComputedAmount = ($airDowngradeGate && $airTicketAmount > 0)
-    ? round($airTicketAmount * ($airDowngradePctNum / 100), 2)
+  $airDowngradeComputedAmount = ($airDowngradeGate && $airDowngradeTicketAmount > 0)
+    ? round($airDowngradeTicketAmount * ($airDowngradePctNum / 100), 2)
     : 0.0;
   $airDowngradeComputedBasis = $airDowngradeGate ? 'Art. 10 EC261' : '';
+  $airCareStatusLabel = !empty($airRights['gate_air_care']) ? 'Aktiv nu' : 'Ikke aktiv endnu';
+  $airRefundStatusLabel = $airRefundActive ? 'Aktiv nu' : 'Ikke aktiv endnu';
+  $airCompStatusLabel = $airEligibilityStatus === 'eligible'
+    ? 'Mulig'
+    : ($airEligibilityStatus === 'uncertain' ? 'Usikker' : 'Ikke aktiveret');
+  $airDowngradeStatusLabel = $airDowngradeGate
+    ? ($airDowngradeComputedAmount > 0 ? 'Registreret' : 'Afventer billetpris')
+    : 'Ikke relevant endnu';
 ?>
 <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
-  <strong>Fly-resultat</strong>
-  <div class="small muted mt4">TRIN 10 samler scope, bookingtype og aktive flight-rettigheder. Brug resultatet til claim-assist og til at skelne mellem protected connection og self-transfer.</div>
-  <ul class="small mt8">
-    <li>Scope: <strong><?= $airScopeApplies === true ? 'omfattet' : ($airScopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $airScopeReason !== '' ? ' - ' . h($airScopeReason) : '' ?></li>
-    <li>Connection type: <strong><?= h((string)($airContract['air_connection_type'] ?? 'unknown')) ?></strong></li>
-    <li>Claim-kanal: <strong><?= h($airClaimPartyName !== '' ? $airClaimPartyName : ($airClaimPartyType !== '' ? $airClaimPartyType : 'manual_review')) ?></strong></li>
-    <li>Care: <strong><?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
-    <li>Reroute / refund: <strong><?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></strong></li>
-    <li>Kompensation: <strong><?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
-    <?php if (!empty($claimDirection['recommended_documents'])): ?>
-      <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
+  <?php if ($isOngoing): ?>
+    <strong>Foreloebig air-oversigt</strong>
+    <div class="small muted mt4">Trinnet viser kun, hvad der er aktiveret nu, hvad der foreloebigt kan kraeves, og hvad det naturlige naeste skridt er.</div>
+    <div class="mt12" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+      <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+        <div class="small muted">Article 7 kompensation</div>
+        <div><strong><?= h($airCompStatusLabel) ?></strong></div>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+        <div class="small muted"><?= h($airRefundLabel) ?></div>
+        <div><strong><?= h($airRefundStatusLabel) ?></strong></div>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+        <div class="small muted">Article 9 assistance</div>
+        <div><strong><?= h($airCareStatusLabel) ?></strong></div>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+        <div class="small muted">Article 10 downgrade</div>
+        <div><strong><?= h($airDowngradeStatusLabel) ?></strong></div>
+      </div>
+    </div>
+    <?php if ($airEligibilityStatus === 'eligible'): ?>
+      <div class="ok mt8 small">Kompensation er foreloebigt mulig ud fra de nuvaerende svar.</div>
+      <?php if ($airReductionStatus === 'provisional'): ?>
+        <div class="hl mt8 small">Mulig 50% reduktion er registreret, men behandles stadig som foreloebig i den igangvaerende sag.</div>
+      <?php endif; ?>
+    <?php elseif ($airEligibilityStatus === 'uncertain'): ?>
+      <div class="hl mt8 small">Kompensationsretten er stadig usikker. Der mangler afklaring af varsel, ombooking eller extraordinary circumstances.</div>
+    <?php elseif (!empty($airRights['compensation_block_reason']) && $airRights['compensation_block_reason'] !== 'none'): ?>
+      <div class="hl mt8 small">Kompensation er foreloebigt blokeret af: <strong><?= h((string)$airRights['compensation_block_reason']) ?></strong>.</div>
+    <?php else: ?>
+      <div class="hl mt8 small">Kompensationssporet er ikke aktiveret endnu ud fra de nuvaerende svar.</div>
     <?php endif; ?>
-  </ul>
-  <div class="small muted mt8">
-    Naeste handling:
-    <strong><?=
-      $airRefundActive
-        ? 'gaa til refund eller ombooking'
-        : (!empty($airRights['gate_air_care'])
-            ? 'registrer maaltider, hotel og anden care'
-            : (!empty($airRights['gate_air_compensation'])
-                ? 'byg data-pack og forbered kompensationsclaim'
-                : 'afklar bookingtype, scope eller manuel vurdering'))
-    ?></strong>
-  </div>
-  <?php if (!empty($airRights['gate_air_compensation'])): ?>
-    <div class="ok mt8 small">Sagen peger paa flight-kompensation som kandidat. Brug data-pack og flightdokumentation til claim-assist eller videre juridisk vurdering.</div>
-  <?php elseif (!empty($airRights['compensation_block_reason']) && $airRights['compensation_block_reason'] !== 'none'): ?>
-    <div class="hl mt8 small">Kompensation er foreloebigt blokeret af: <strong><?= h((string)$airRights['compensation_block_reason']) ?></strong>.</div>
   <?php else: ?>
-    <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, mens flight-sagen afklares yderligere.</div>
+    <strong>Fly-resultat</strong>
+    <div class="small muted mt4">TRIN 10 samler scope, bookingtype og aktive flight-rettigheder. Brug resultatet til claim-assist og til at skelne mellem protected connection og self-transfer.</div>
+    <ul class="small mt8">
+      <li>Scope: <strong><?= $airScopeApplies === true ? 'omfattet' : ($airScopeApplies === false ? 'ikke omfattet' : 'uklart') ?></strong><?= $airScopeReason !== '' ? ' - ' . h($airScopeReason) : '' ?></li>
+      <li>Connection type: <strong><?= h((string)($airContract['air_connection_type'] ?? 'unknown')) ?></strong></li>
+      <li>Claim-kanal: <strong><?= h($airClaimPartyName !== '' ? $airClaimPartyName : ($airClaimPartyType !== '' ? $airClaimPartyType : 'manual_review')) ?></strong></li>
+      <li>Care: <strong><?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+      <li><?= h($airRefundLabel) ?>: <strong><?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></strong></li>
+      <li>Kompensation: <strong><?= $airEligibilityStatus === 'eligible' ? 'mulig' : ($airEligibilityStatus === 'uncertain' ? 'usikker' : 'ikke aktiveret') ?></strong><?= $airCompBand !== '' && $airCompBand !== 'none' ? ' - ' . h($airCompBand) : '' ?></li>
+      <?php if (!empty($claimDirection['recommended_documents'])): ?>
+        <li>Anbefalet dokumentation: <strong><?= h(implode(', ', (array)$claimDirection['recommended_documents'])) ?></strong></li>
+      <?php endif; ?>
+    </ul>
+    <div class="small muted mt8">
+      Naeste handling:
+      <strong><?=
+        $airRefundActive
+          ? ($airDelayRefundOnly ? 'gaa til refund ved 5+ timer' : 'gaa til refund eller ombooking')
+          : (!empty($airRights['gate_air_care'])
+              ? 'registrer maaltider, hotel og anden care'
+              : ($airEligibilityStatus === 'eligible'
+                  ? 'byg data-pack og forbered kompensationsclaim'
+                  : 'afklar bookingtype, scope eller manuel vurdering'))
+      ?></strong>
+    </div>
+    <?php if ($airEligibilityStatus === 'eligible'): ?>
+      <div class="ok mt8 small">Sagen peger paa flight-kompensation som kandidat. Brug data-pack og flightdokumentation til claim-assist eller videre juridisk vurdering.</div>
+      <?php if ($airReductionStatus === 'provisional'): ?>
+        <div class="hl mt8 small">En mulig 50% reduktion er identificeret ud fra den nuvaerende reroute-ankomst, men den behandles foreloebigt og reducerer ikke slutbelobet i den igangvaerende sag endnu.</div>
+      <?php endif; ?>
+    <?php elseif ($airEligibilityStatus === 'uncertain'): ?>
+      <div class="hl mt8 small">Kompensationsretten er foreloebigt usikker. Der mangler stadig sikker afklaring af varsel, ombooking eller extraordinary circumstances.</div>
+    <?php elseif (!empty($airRights['compensation_block_reason']) && $airRights['compensation_block_reason'] !== 'none'): ?>
+      <div class="hl mt8 small">Kompensation er foreloebigt blokeret af: <strong><?= h((string)$airRights['compensation_block_reason']) ?></strong>.</div>
+    <?php else: ?>
+      <div class="hl mt8 small">Brug data-pack og claim-kanalen ovenfor som grundlag for claim-assist, mens flight-sagen afklares yderligere.</div>
+    <?php endif; ?>
   <?php endif; ?>
   <?php if (!empty($claim)): ?>
     <?php
@@ -720,7 +814,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       }
       $airRefundDisplayAmount = $airRefundComputedAmount > 0 ? ($fxConv ? ($fxConv($airRefundComputedAmount, $airTicketCurrency, $summaryCurrency) ?? $airRefundComputedAmount) : $airRefundComputedAmount) : 0.0;
       $airCompDisplayAmount = $airCompComputedAmount > 0 ? ($fxConv ? ($fxConv($airCompComputedAmount, 'EUR', $summaryCurrency) ?? $airCompComputedAmount) : $airCompComputedAmount) : 0.0;
-      $airDowngradeDisplayAmount = $airDowngradeComputedAmount > 0 ? ($fxConv ? ($fxConv($airDowngradeComputedAmount, $airTicketCurrency, $summaryCurrency) ?? $airDowngradeComputedAmount) : $airDowngradeComputedAmount) : 0.0;
+      $airDowngradeDisplayAmount = $airDowngradeComputedAmount > 0 ? ($fxConv ? ($fxConv($airDowngradeComputedAmount, $airDowngradeTicketCurrency, $summaryCurrency) ?? $airDowngradeComputedAmount) : $airDowngradeComputedAmount) : 0.0;
       $airReturnToOriginDisplayAmountSummary = $airReturnToOriginDisplayAmount > 0 ? ($airReturnToOriginDisplayCurrency === $summaryCurrency ? $airReturnToOriginDisplayAmount : ($fxConv ? ($fxConv($airReturnToOriginDisplayAmount, $airReturnToOriginDisplayCurrency, $summaryCurrency) ?? $airReturnToOriginDisplayAmount) : $airReturnToOriginDisplayAmount)) : 0.0;
       $airRerouteExtraDisplayAmountSummary = $airRerouteExtraDisplayAmount > 0 ? ($airRerouteExtraDisplayCurrency === $summaryCurrency ? $airRerouteExtraDisplayAmount : ($fxConv ? ($fxConv($airRerouteExtraDisplayAmount, $airRerouteExtraDisplayCurrency, $summaryCurrency) ?? $airRerouteExtraDisplayAmount) : $airRerouteExtraDisplayAmount)) : 0.0;
       $airAltAirportTransferDisplayAmountSummary = $airAltAirportTransferDisplayAmount > 0 ? ($airAltAirportTransferDisplayCurrency === $summaryCurrency ? $airAltAirportTransferDisplayAmount : ($fxConv ? ($fxConv($airAltAirportTransferDisplayAmount, $airAltAirportTransferDisplayCurrency, $summaryCurrency) ?? $airAltAirportTransferDisplayAmount) : $airAltAirportTransferDisplayAmount)) : 0.0;
@@ -738,58 +832,106 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
       $airPreviewNet = round(max(0.0, $airPreviewGross - $airPreviewServiceFee), 2);
     ?>
     <div class="card mt12" style="display:grid;gap:8px;">
-      <strong>Air kravspor</strong>
-      <div style="display:grid;gap:6px;">
-        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-          <div class="small"><strong>Care claim</strong></div>
-          <div class="small">Status: <?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></div>
-          <div class="small">Samlede care-udgifter: <?= number_format($airExpenseTotal, 2) ?> <?= h($summaryCurrency) ?></div>
-          <?php if ($airMealAmount > 0): ?><div class="small">Maaltider/forfriskninger: <?= number_format($airMealAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-          <?php if ($airHotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($airHotelAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-          <?php if ($airAltTransportAmount > 0): ?><div class="small">Transport: <?= number_format($airAltTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-          <?php if ($airOtherAmount > 0): ?><div class="small">Oevrige udgifter: <?= number_format($airOtherAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
-        </div>
-        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-          <div class="small"><strong>Refund / reroute claim</strong></div>
-          <div class="small">Status: <?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></div>
-          <div class="small">Article 8-valg tilbudt: <?= h($airArticle8Offered !== '' ? $airArticle8Offered : '-') ?></div>
-          <?php if ((string)($form['air_self_arranged_reroute'] ?? '') !== ''): ?><div class="small">Selvarrangeret loesning: <?= h((string)$form['air_self_arranged_reroute']) ?></div><?php endif; ?>
-          <?php if ((string)($form['air_airline_confirmed_self_arranged_solution'] ?? '') !== ''): ?><div class="small">Bekraeftet af flyselskabet: <?= h((string)$form['air_airline_confirmed_self_arranged_solution']) ?></div><?php endif; ?>
-          <div class="small">Refusion / refund: <?= number_format($airRefundComputedAmount, 2) ?> <?= h($airTicketCurrency) ?><?= $airRefundComputedBasis !== '' ? ' - ' . h($airRefundComputedBasis) : '' ?></div>
-          <?php if ($airReturnToOriginDisplayAmount > 0): ?><div class="small">Retur til udgangspunkt: <?= number_format($airReturnToOriginDisplayAmount, 2) ?> <?= h($airReturnToOriginDisplayCurrency) ?></div><?php endif; ?>
-          <?php if ($airUseNewExpense && count($airRerouteExpenseDisplayRows) > 1): ?><div class="small">Reroute-udgifter: <?= count($airRerouteExpenseDisplayRows) ?> poster</div><?php endif; ?>
-          <?php foreach ($airRerouteExpenseDisplayRows as $row): ?>
-            <div class="small"><?= h((string)$row['label']) ?>: <?= number_format((float)$row['amount'], 2) ?> <?= h((string)$row['currency']) ?><?= (string)$row['description'] !== '' ? ' - ' . h((string)$row['description']) : '' ?></div>
-          <?php endforeach; ?>
-          <?php if ($airRerouteExtraDisplayAmount > 0): ?><div class="small">Ekstra ombookingsomkostninger: <?= number_format($airRerouteExtraDisplayAmount, 2) ?> <?= h($airRerouteExtraDisplayCurrency) ?></div><?php endif; ?>
-          <?php if ($airAltAirportTransferDisplayAmount > 0): ?><div class="small">Alternativ lufthavn-transfer: <?= number_format($airAltAirportTransferDisplayAmount, 2) ?> <?= h($airAltAirportTransferDisplayCurrency) ?></div><?php elseif ($airAltAirportTransfer !== ''): ?><div class="small">Alternativ lufthavn-transfer: <?= h($airAltAirportTransfer) ?></div><?php endif; ?>
-          <?php if ($airUseNewExpense && !$airRerouteExpenseDisplayRows && $airRerouteExpenseDescription !== ''): ?><div class="small muted">Beskrivelse: <?= h($airRerouteExpenseDescription) ?></div><?php endif; ?>
-          <?php if ($airRefundScope !== ''): ?><div class="small">Refund scope: <?= h($airRefundScope) ?></div><?php endif; ?>
-          <?php if ($airTicketAmount > 0): ?><div class="small muted">Billetpris fra TRIN 2: <?= number_format($airTicketAmount, 2) ?> <?= h($airTicketCurrency) ?></div><?php endif; ?>
-        </div>
-        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-          <div class="small"><strong>Compensation claim</strong></div>
-          <div class="small">Status: <?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></div>
-          <div class="small">Kompensation: <?= number_format($airCompComputedAmount, 2) ?> EUR<?= $airCompComputedBasis !== '' ? ' - ' . h($airCompComputedBasis) : '' ?></div>
-          <?php if (!empty($airRights['gate_air_compensation'])): ?><div class="small muted">Distancekategori giver normalt <strong><?= h($airCompComputedLabel) ?></strong><?= $airCompReductionPct > 0 ? ' efter reroute-reduktion' : '' ?>.</div><?php endif; ?>
-        </div>
-        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-          <div class="small"><strong>Downgrade claim</strong></div>
-          <div class="small">Status: <?= $airDowngradeGate ? 'relevant' : 'ikke aktiveret' ?></div>
-          <div class="small">Artikel 10-refusion: <?= number_format($airDowngradeComputedAmount, 2) ?> <?= h($airTicketCurrency) ?></div>
-          <?php if ($airDowngradeGate): ?><div class="small">Refusionsprocent: <?= h((string)$airDowngradePctNum) ?>%</div><?php endif; ?>
-          <?php if ($airBookedClass !== '' || $airFlownClass !== ''): ?><div class="small">Kabineklasse: <?= h($airBookedClass !== '' ? $airBookedClass : '-') ?> -> <?= h($airFlownClass !== '' ? $airFlownClass : '-') ?></div><?php endif; ?>
-          <?php if ($airDowngradeComputedBasis !== ''): ?><div class="small">Basis: <?= h($airDowngradeComputedBasis) ?></div><?php endif; ?>
-        </div>
-        <?php if ($airPreviewGross > 0 || $airPreviewServiceFee > 0 || $airPreviewNet > 0): ?>
-          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
-            <div class="small"><strong>Total og avance</strong></div>
-            <div class="small mt4">Samlet krav (brutto): <strong><?= number_format($airPreviewGross, 2) ?> <?= h($summaryCurrency) ?></strong></div>
-            <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($airPreviewServiceFee, 2) ?> <?= h($summaryCurrency) ?></strong></div>
-            <div class="small">Netto til kunde: <strong><?= number_format($airPreviewNet, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+      <?php if ($isOngoing): ?>
+        <strong>Foreloebig oekonomi</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+            <div class="small muted">Kompensation</div>
+            <div><strong><?= number_format($airCompComputedAmount, 2) ?> EUR</strong></div>
           </div>
-        <?php endif; ?>
-      </div>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+            <div class="small muted"><?= h($airRefundLabel) ?></div>
+            <div><strong><?= number_format($airRefundDisplayAmount, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+            <div class="small muted">Registrerede udgifter</div>
+            <div><strong><?= number_format($airExpenseTotal + $airReturnToOriginDisplayAmountSummary + $airRerouteExtraDisplayAmountSummary + $airAltAirportTransferDisplayAmountSummary, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+            <div class="small muted">Downgrade</div>
+            <div><strong><?= $airDowngradeComputedAmount > 0 ? number_format($airDowngradeDisplayAmount, 2) . ' ' . h($summaryCurrency) : 'Afventer / 0' ?></strong></div>
+          </div>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;background:#fff;">
+          <div class="small"><strong>Foreloebigt samlet krav</strong></div>
+          <div class="small mt4">Brutto: <strong><?= number_format($airPreviewGross, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($airPreviewServiceFee, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+          <div class="small">Foreloebig netto til kunde: <strong><?= number_format($airPreviewNet, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+        </div>
+        <div style="border:1px solid #dbeafe;border-radius:10px;padding:10px;background:#f8fbff;">
+          <div class="small"><strong>Naeste skridt</strong></div>
+          <div class="small mt4">
+            <?=
+              $airRefundActive
+                ? 'Gaa videre til afhjaelpning og registrer refund eller ombooking.'
+                : (!empty($airRights['gate_air_care'])
+                    ? 'Gaa videre til assistance og registrer maaltider, hotel og anden care.'
+                    : ($airEligibilityStatus === 'eligible'
+                        ? 'Opret sagen og flyt det foreloebige krav videre til backend.'
+                        : 'Afklar flere svar i incident eller fortsat i backend, hvis du allerede vil oprette sagen.'))
+            ?>
+          </div>
+          <?php if ($isAirShortCase): ?>
+            <div class="mt8">
+              <a class="button button-primary" href="<?= h($airCaseUrl) ?>"><?= $airCaseCreatedAt === '' ? 'Opret sag' : 'Aabn sag' ?></a>
+            </div>
+          <?php endif; ?>
+        </div>
+      <?php else: ?>
+        <strong>Air kravspor</strong>
+        <div style="display:grid;gap:6px;">
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+            <div class="small"><strong>Care claim</strong></div>
+            <div class="small">Status: <?= !empty($airRights['gate_air_care']) ? 'relevant' : 'ikke aktiveret' ?></div>
+            <div class="small">Samlede care-udgifter: <?= number_format($airExpenseTotal, 2) ?> <?= h($summaryCurrency) ?></div>
+            <?php if ($airMealAmount > 0): ?><div class="small">Maaltider/forfriskninger: <?= number_format($airMealAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+            <?php if ($airHotelAmount > 0): ?><div class="small">Hotel/overnatning: <?= number_format($airHotelAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+            <?php if ($airAltTransportAmount > 0): ?><div class="small">Transport: <?= number_format($airAltTransportAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+            <?php if ($airOtherAmount > 0): ?><div class="small">Oevrige udgifter: <?= number_format($airOtherAmount, 2) ?> <?= h($summaryCurrency) ?></div><?php endif; ?>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+            <div class="small"><strong>Refund / reroute claim</strong></div>
+            <div class="small">Status: <?= $airRefundActive ? 'relevant' : 'ikke aktiveret' ?></div>
+            <div class="small">Article 8-valg tilbudt: <?= h($airArticle8Offered !== '' ? $airArticle8Offered : '-') ?></div>
+            <?php if ((string)($form['air_self_arranged_reroute'] ?? '') !== ''): ?><div class="small">Selvarrangeret loesning: <?= h((string)$form['air_self_arranged_reroute']) ?></div><?php endif; ?>
+            <?php if ((string)($form['air_airline_confirmed_self_arranged_solution'] ?? '') !== ''): ?><div class="small">Bekraeftet af flyselskabet: <?= h((string)$form['air_airline_confirmed_self_arranged_solution']) ?></div><?php endif; ?>
+            <div class="small">Refusion / refund: <?= number_format($airRefundComputedAmount, 2) ?> <?= h($airTicketCurrency) ?><?= $airRefundComputedBasis !== '' ? ' - ' . h($airRefundComputedBasis) : '' ?></div>
+            <?php if ($airReturnToOriginDisplayAmount > 0): ?><div class="small">Retur til udgangspunkt: <?= number_format($airReturnToOriginDisplayAmount, 2) ?> <?= h($airReturnToOriginDisplayCurrency) ?></div><?php endif; ?>
+            <?php if ($airUseNewExpense && count($airRerouteExpenseDisplayRows) > 1): ?><div class="small">Reroute-udgifter: <?= count($airRerouteExpenseDisplayRows) ?> poster</div><?php endif; ?>
+            <?php foreach ($airRerouteExpenseDisplayRows as $row): ?>
+              <div class="small"><?= h((string)$row['label']) ?>: <?= number_format((float)$row['amount'], 2) ?> <?= h((string)$row['currency']) ?><?= (string)$row['description'] !== '' ? ' - ' . h((string)$row['description']) : '' ?></div>
+            <?php endforeach; ?>
+            <?php if ($airRerouteExtraDisplayAmount > 0): ?><div class="small">Ekstra ombookingsomkostninger: <?= number_format($airRerouteExtraDisplayAmount, 2) ?> <?= h($airRerouteExtraDisplayCurrency) ?></div><?php endif; ?>
+            <?php if ($airAltAirportTransferDisplayAmount > 0): ?><div class="small">Alternativ lufthavn-transfer: <?= number_format($airAltAirportTransferDisplayAmount, 2) ?> <?= h($airAltAirportTransferDisplayCurrency) ?></div><?php elseif ($airAltAirportTransfer !== ''): ?><div class="small">Alternativ lufthavn-transfer: <?= h($airAltAirportTransfer) ?></div><?php endif; ?>
+            <?php if ($airUseNewExpense && !$airRerouteExpenseDisplayRows && $airRerouteExpenseDescription !== ''): ?><div class="small muted">Beskrivelse: <?= h($airRerouteExpenseDescription) ?></div><?php endif; ?>
+            <?php if ($airRefundScope !== ''): ?><div class="small">Refund scope: <?= h($airRefundScope) ?></div><?php endif; ?>
+            <?php if ($airTicketAmount > 0): ?><div class="small muted">Billetpris fra TRIN 2: <?= number_format($airTicketAmount, 2) ?> <?= h($airTicketCurrency) ?></div><?php endif; ?>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+            <div class="small"><strong>Compensation claim</strong></div>
+            <div class="small">Status: <?= !empty($airRights['gate_air_compensation']) ? 'mulig' : 'ikke aktiveret' ?></div>
+            <div class="small">Kompensation: <?= number_format($airCompComputedAmount, 2) ?> EUR<?= $airCompComputedBasis !== '' ? ' - ' . h($airCompComputedBasis) : '' ?></div>
+            <?php if (!empty($airRights['gate_air_compensation'])): ?><div class="small muted">Distancekategori giver normalt <strong><?= h($airCompComputedLabel) ?></strong><?= $airCompReductionPct > 0 ? ' efter reroute-reduktion' : '' ?>.</div><?php endif; ?>
+          </div>
+          <?php if ($airPreviewGross > 0 || $airPreviewServiceFee > 0 || $airPreviewNet > 0): ?>
+            <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
+              <div class="small"><strong>Total og avance</strong></div>
+              <div class="small mt4">Samlet krav (brutto): <strong><?= number_format($airPreviewGross, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+              <div class="small">Servicefee <?= h((string)$serviceFeePct) ?>%: <strong><?= number_format($airPreviewServiceFee, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+              <div class="small">Netto til kunde: <strong><?= number_format($airPreviewNet, 2) ?> <?= h($summaryCurrency) ?></strong></div>
+            </div>
+          <?php endif; ?>
+          <?php if ($isAirShortCase): ?>
+            <div style="border:1px solid #dbeafe;border-radius:10px;padding:10px;background:#f8fbff;">
+              <div class="small"><strong>Naeste skridt</strong></div>
+              <div class="small mt4"><?= $isOngoing ? 'Du kan allerede nu oprette sagen og flytte foreloebige booking-, kvitterings- og ekstraudgifter videre til kontrolpanelet.' : 'Opret sagen nu og flyt booking, fuldmagt, kvitteringer og ekstraudgifter videre til kontrolpanelet.' ?></div>
+              <div class="mt8">
+                <a class="button button-primary" href="<?= h($airCaseUrl) ?>"><?= $airCaseCreatedAt === '' ? 'Opret sag' : 'Aabn sag' ?></a>
+              </div>
+            </div>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
       <div class="mt12" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
         <?= $this->Form->hidden('air_postcode_city', ['value' => trim((string)($form['address_postalCode'] ?? '') . ' ' . (string)($form['address_city'] ?? ''))]) ?>
         <?= $this->Form->hidden('air_signature_name', ['value' => trim((string)($form['firstName'] ?? '') . ' ' . (string)($form['lastName'] ?? ''))]) ?>
@@ -831,9 +973,11 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
         <?= $this->Form->hidden('air_downgrade_flown_class', ['value' => (string)($form['air_downgrade_flown_class'] ?? '')]) ?>
         <?= $this->Form->hidden('air_downgrade_refund_percent', ['value' => (string)($form['air_downgrade_refund_percent'] ?? '')]) ?>
         <?= $this->Form->hidden('air_distance_band', ['value' => (string)($form['air_distance_band'] ?? '')]) ?>
-        <button type="submit" class="button button-primary" formaction="<?= h($airPdfUrl) ?>" formtarget="_blank">
-          Udfyld air-formular (PDF)
-        </button>
+        <?php if (!$isOngoing): ?>
+          <button type="submit" class="button button-primary" formaction="<?= h($airPdfUrl) ?>" formtarget="_blank">
+            Udfyld air-formular (PDF)
+          </button>
+        <?php endif; ?>
       </div>
     </div>
   <?php endif; ?>
@@ -1399,7 +1543,7 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
 </div>
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-  <?= $this->Html->link('<- Tilbage', ['action' => 'downgrade'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Html->link('<- Tilbage', ['action' => (is_string($flowPrevAction ?? null) && $flowPrevAction !== '' ? $flowPrevAction : 'downgrade')], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 </div>
 
 </fieldset>

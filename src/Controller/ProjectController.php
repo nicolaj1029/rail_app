@@ -135,6 +135,18 @@ class ProjectController extends AppController
                 ],
             ],
             [
+                'name' => 'Air regressions (verified)',
+                'links' => [
+                    ['title' => 'All air scenarios (eval)', 'href' => '/api/demo/v2/scenarios?transport=air&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Kun air-fixtures. Viser ongoing + completed i kompakt format.'],
+                    ['title' => 'Run all air scenarios', 'href' => '/api/demo/v2/run-scenarios?transport=air', 'method' => 'GET', 'desc' => 'Batch-kør kun air-fixtures og få pass/fail pr. case.'],
+                    ['title' => 'Air cancellation (completed)', 'href' => '/api/demo/v2/scenarios?id=air_cancellation_eu_departure&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Completed cancellation med Article 5-logik.'],
+                    ['title' => 'Air denied boarding (completed)', 'href' => '/api/demo/v2/scenarios?id=air_denied_boarding_non_voluntary&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Completed denied boarding uden frivillig waiver.'],
+                    ['title' => 'Air self-transfer (completed)', 'href' => '/api/demo/v2/scenarios?id=air_self_transfer_separate_tickets&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Completed self-transfer / separate tickets.'],
+                    ['title' => 'Air protected connection (completed)', 'href' => '/api/demo/v2/scenarios?id=air_protected_connection_same_booking&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Completed protected connection / same booking.'],
+                    ['title' => 'Air delay 5+ (ongoing)', 'href' => '/api/demo/v2/scenarios?id=air_delay_ongoing_five_plus&withEval=1&compact=1', 'method' => 'GET', 'desc' => 'Ongoing delay med care + refund gate, uden completed compensation endnu.'],
+                ],
+            ],
+            [
                 'name' => 'Demo legacy (v1 endpoints)',
                 'links' => [
                     ['title' => 'Fixtures', 'href' => '/api/demo/fixtures', 'method' => 'GET', 'desc' => 'Legacy fixtures (JSON).'],

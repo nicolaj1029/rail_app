@@ -100,11 +100,12 @@
 }
 
 .hooks-card {
-    position: sticky;
-    top: 12px;
-    max-height: 80vh;
-    overflow: auto;
+    position: static;
+    top: auto;
+    max-height: none;
+    overflow: visible;
     background: #f9fbff;
+    margin-top: 12px;
 }
 
 /* Badges */
@@ -211,6 +212,11 @@
     gap: 8px;
     align-items: center;
     margin-top: 12px;
+    position: static;
+    bottom: auto;
+    z-index: auto;
+    padding: 0;
+    background: transparent;
 }
 
 /* Hooks toolbar */

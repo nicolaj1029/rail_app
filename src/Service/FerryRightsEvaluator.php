@@ -19,10 +19,13 @@ final class FerryRightsEvaluator
         $departureFromTerminal = ($scopeResult['departure_from_terminal'] ?? null);
 
         $incidentType = strtolower(trim((string)($incidentMeta['incident_type'] ?? '')));
+        $combinedDepartureDelay90 = $incidentMeta['ferry_departure_disruption_90'] ?? null;
         $expectedDepartureDelay90 = (bool)($incidentMeta['expected_departure_delay_90'] ?? false);
         $actualDepartureDelay90 = (bool)($incidentMeta['actual_departure_delay_90'] ?? false);
+        $cancellationConfirmed = (bool)($incidentMeta['ferry_cancellation_confirmed'] ?? false);
         $arrivalDelayMinutes = $this->normalizeNullableInt($incidentMeta['arrival_delay_minutes'] ?? null);
         $scheduledDurationMinutes = $this->normalizeNullableInt($incidentMeta['scheduled_journey_duration_minutes'] ?? null);
+        $overnightRequired = (bool)($incidentMeta['overnight_required'] ?? false);
         $informedBeforePurchase = (bool)($incidentMeta['informed_before_purchase'] ?? false);
         $passengerFault = (bool)($incidentMeta['passenger_fault'] ?? false);
         $weatherSafety = (bool)($incidentMeta['weather_safety'] ?? false);
@@ -30,7 +33,18 @@ final class FerryRightsEvaluator
         $openTicketWithoutDepartureTime = (bool)($incidentMeta['open_ticket_without_departure_time'] ?? false);
         $seasonTicket = (bool)($incidentMeta['season_ticket'] ?? false);
 
-        $hasDepartureDisruption = $incidentType === 'cancellation' || $expectedDepartureDelay90 || $actualDepartureDelay90;
+        $hasDepartureDisruption = false;
+        if ($incidentType === 'cancellation') {
+            $hasDepartureDisruption = $cancellationConfirmed;
+        } elseif ($incidentType === 'delay') {
+            if (is_bool($combinedDepartureDelay90)) {
+                $hasDepartureDisruption = $combinedDepartureDelay90;
+            } else {
+                $hasDepartureDisruption = $expectedDepartureDelay90 || $actualDepartureDelay90;
+            }
+        } else {
+            $hasDepartureDisruption = $expectedDepartureDelay90 || $actualDepartureDelay90;
+        }
 
         $gateArt16Notice = false;
         $gateArt16AltConnections = false;
@@ -79,7 +93,7 @@ final class FerryRightsEvaluator
 
         if ($hasDepartureDisruption && $departureFromTerminal === true && !$openTicketWithoutDepartureTime) {
             $gateArt17Refreshments = true;
-            if (!$weatherSafety) {
+            if ($overnightRequired && !$weatherSafety) {
                 $gateArt17Hotel = true;
             }
         }

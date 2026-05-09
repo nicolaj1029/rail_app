@@ -1,0 +1,14 @@
+{
+  "name": "rail-transport-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Transport-data microservice for rail journeys. Keeps legal logic in CakePHP.",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

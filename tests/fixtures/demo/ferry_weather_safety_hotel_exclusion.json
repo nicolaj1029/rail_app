@@ -51,7 +51,7 @@
     "incident_meta": {
       "transport_mode": "ferry",
       "incident_type": "cancellation",
-      "expected_departure_delay_90": true,
+      "ferry_cancellation_confirmed": true,
       "arrival_delay_minutes": 240,
       "scheduled_journey_duration_minutes": 300,
       "overnight_required": true,

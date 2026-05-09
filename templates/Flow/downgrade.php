@@ -5,18 +5,23 @@ $flags = $flags ?? [];
 $incident = $incident ?? [];
 $metaView = $metaView ?? null;
 $meta = is_array($metaView) ? $metaView : ($meta ?? []);
+$multimodal = (array)($meta['_multimodal'] ?? []);
+$airScope = (array)($multimodal['air_scope'] ?? []);
+$airContract = (array)($multimodal['air_contract'] ?? []);
+$airRights = (array)($multimodal['air_rights'] ?? []);
 $profile = $profile ?? ['articles' => []];
 $affectedLegsAuto = $affectedLegsAuto ?? [];
 $downgradeScopeAuto = $downgradeScopeAuto ?? ['from' => null, 'to' => null, 'basis' => '', 'confidence' => 0.0];
 $journeyRowsDowng = $journeyRowsDowng ?? [];
 $downgradeTicketOptions = $downgradeTicketOptions ?? [];
 $downgradeTicketFile = (string)($downgradeTicketFile ?? ($form['downgrade_ticket_file'] ?? ''));
-$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail')));
+$transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
 $isAir = ($transportMode === 'air');
 $isFerry = ($transportMode === 'ferry');
 
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isCompleted = ($travelState === 'completed');
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
 $isOngoing = ($travelState === 'ongoing');
 
 $title = $isAir
@@ -51,6 +56,100 @@ $airAutoRefundPercent = match ($airDistanceBand) {
 $airBookedClass = strtolower((string)($form['air_downgrade_booked_class'] ?? ''));
 $airFlownClass = strtolower((string)($form['air_downgrade_flown_class'] ?? ''));
 $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoRefundPercent !== '' ? $airAutoRefundPercent : ''));
+$airBaseTicketCurrency = strtoupper(trim((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? 'EUR'))));
+if ($airBaseTicketCurrency === '' || $airBaseTicketCurrency === 'AUTO') {
+  $airBaseTicketCurrency = 'EUR';
+}
+$airBaseTicketPrice = trim((string)($form['price'] ?? ''));
+if ($airBaseTicketPrice === '') {
+  $airBaseTicketPrice = trim((string)($meta['_auto']['price']['value'] ?? ''));
+}
+$airDowngradeTicketPriceKnown = strtolower((string)($form['air_downgrade_ticket_price_known'] ?? ($airBaseTicketPrice !== '' ? 'yes' : 'no')));
+if (!in_array($airDowngradeTicketPriceKnown, ['yes', 'no'], true)) {
+  $airDowngradeTicketPriceKnown = $airBaseTicketPrice !== '' ? 'yes' : 'no';
+}
+$airDowngradeTicketPriceBasis = strtolower(trim((string)($form['air_downgrade_ticket_price_basis'] ?? ($airBaseTicketPrice !== '' ? 'affected_legs' : 'unknown'))));
+if (!in_array($airDowngradeTicketPriceBasis, ['affected_legs', 'whole_ticket', 'unknown'], true)) {
+  $airDowngradeTicketPriceBasis = $airBaseTicketPrice !== '' ? 'affected_legs' : 'unknown';
+}
+$airDowngradeTicketPrice = (string)($form['air_downgrade_ticket_price'] ?? ($airBaseTicketPrice !== '' ? preg_replace('/[^0-9.,]/', '', $airBaseTicketPrice) : ''));
+$airDowngradeTicketPriceCurrency = strtoupper(trim((string)($form['air_downgrade_ticket_price_currency'] ?? $airBaseTicketCurrency)));
+if ($airDowngradeTicketPriceCurrency === '' || $airDowngradeTicketPriceCurrency === 'AUTO') {
+  $airDowngradeTicketPriceCurrency = $airBaseTicketCurrency;
+}
+$airArticle10RateLabel = $airAutoRefundPercent !== '' ? ($airAutoRefundPercent . '%') : ($airRefundPercent !== '' ? ($airRefundPercent . '%') : 'ukendt');
+$airDistanceBandLabels = [
+  'up_to_1500' => 'Op til 1500 km',
+  'intra_eu_over_1500' => 'Inden for EU over 1500 km',
+  'other_1500_to_3500' => 'Andre flyvninger 1500-3500 km',
+  'other_over_3500' => 'Andre flyvninger over 3500 km',
+];
+$airClassLabels = [
+  'economy' => 'Economy',
+  'premium_economy' => 'Premium Economy',
+  'business' => 'Business',
+  'first' => 'First',
+];
+$airSelectedRatePercent = is_numeric($airRefundPercent !== '' ? $airRefundPercent : $airAutoRefundPercent)
+  ? (float)($airRefundPercent !== '' ? $airRefundPercent : $airAutoRefundPercent)
+  : 0.0;
+$airSegmentShare = is_numeric($form['downgrade_segment_share'] ?? null)
+  ? max(0.0, min(1.0, (float)$form['downgrade_segment_share']))
+  : 1.0;
+$airDowngradedLegs = array_values(array_filter((array)($form['leg_downgraded'] ?? []), static fn($value): bool => (string)$value === '1'));
+$airDowngradedLegCount = count($airDowngradedLegs);
+$airAppliedSegmentShare = $airDowngradeTicketPriceBasis === 'whole_ticket' ? $airSegmentShare : 1.0;
+$airTicketPriceNumeric = 0.0;
+if ($airDowngradeTicketPrice !== '') {
+  $airTicketPriceNumeric = (float)str_replace(',', '.', preg_replace('/[^0-9,.-]/', '', $airDowngradeTicketPrice));
+}
+$airDowngradeOccurred = $v('downgrade_occurred') === 'yes';
+$airDowngradeEstimateAmount = null;
+if ($isAir && $airDowngradeOccurred && $airDowngradeTicketPriceKnown === 'yes' && $airTicketPriceNumeric > 0 && $airSelectedRatePercent > 0) {
+  $airDowngradeEstimateAmount = round($airTicketPriceNumeric * ($airSelectedRatePercent / 100) * $airAppliedSegmentShare, 2);
+}
+$airDowngradeEstimateLabel = 'Ikke beregnet endnu';
+if ($isAir) {
+  if (!$airDowngradeOccurred) {
+    $airDowngradeEstimateLabel = 'Ingen nedgradering registreret';
+  } elseif ($airDowngradeEstimateAmount !== null) {
+    $airDowngradeEstimateLabel = number_format($airDowngradeEstimateAmount, 2, ',', '.') . ' ' . $airDowngradeTicketPriceCurrency;
+  } elseif ($airDowngradeTicketPriceKnown !== 'yes') {
+    $airDowngradeEstimateLabel = 'Afventer billetpris';
+  } elseif ($airSelectedRatePercent <= 0) {
+    $airDowngradeEstimateLabel = 'Afventer sats';
+  }
+}
+if ($isAir && !empty($flowSteps) && is_array($flowSteps)) {
+  foreach ($flowSteps as $flowStep) {
+    if ((string)($flowStep['action'] ?? '') !== 'downgrade') {
+      continue;
+    }
+    $stepNum = $flowStep['ui_num'] ?? $flowStep['num'] ?? 9;
+    $stepTitle = (string)($flowStep['title'] ?? 'Nedgradering');
+    $title = 'TRIN ' . (string)$stepNum . ' - ' . $stepTitle;
+    break;
+  }
+}
+$hasArt18Gate = ((string)($flags['gate_art18'] ?? '')) === '1';
+$hasArt20Gate = ((string)($flags['gate_art20'] ?? '')) === '1';
+$step7Done = ((string)($flags['step7_done'] ?? '')) === '1';
+$step8Done = ((string)($flags['step8_done'] ?? '')) === '1';
+$downgradePrevAction = 'incident';
+if ($isAir) {
+  if ($hasArt20Gate || $step8Done) {
+    $downgradePrevAction = 'assistance';
+  } elseif ($hasArt18Gate || $step7Done) {
+    $downgradePrevAction = 'remedies';
+  }
+} elseif ($hasArt20Gate || $step8Done) {
+  $downgradePrevAction = 'assistance';
+} elseif ($hasArt18Gate || $step7Done) {
+  $downgradePrevAction = 'remedies';
+}
+if (is_string($flowPrevAction ?? null) && $flowPrevAction !== '') {
+  $downgradePrevAction = $flowPrevAction;
+}
 ?>
 
 <style>
@@ -63,6 +162,7 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
   .ml8 { margin-left:8px; }
   .hidden { display:none; }
   .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
   .flow-wrapper { max-width: 1100px; margin: 0 auto; }
   select, input[type="text"], input[type="number"] { max-width: 520px; width: 100%; }
 
@@ -100,11 +200,16 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
     </div>
   <?php endif; ?>
 
-  <?php if (!$showArt18 || !$showArt182): ?>
+  <?php if (!$isAir && (!$showArt18 || !$showArt182)): ?>
     <div class="card mt12" style="background:#fff3cd;border-color:#eed27c;">
       <strong>Bemaerk</strong>
       <div class="small muted mt4">Nedgradering kan vaere undtaget for denne sag (profil/exemptions).</div>
     </div>
+  <?php endif; ?>
+
+  <?php if ($isAir): ?>
+    <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+    <?= $this->element('air_downgrade_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
   <?php endif; ?>
 
   <?= $this->element('flow_locked_notice') ?>
@@ -131,9 +236,93 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
 
     <div id="downgradeDetails" class="mt12 <?= $v('downgrade_occurred')==='yes' ? '' : 'hidden' ?>">
       <?php if (!$isFerry): ?>
+      <?php if ($isAir): ?>
+      <div class="small muted mt8">Distancekategorien giver normalt <strong><?= h($airArticle10RateLabel) ?></strong> af billetprisen tilbage ved nedgradering. Vaelg foerst hvilke ben der faktisk blev ramt, og oplys derefter billetpris for netop de ben eller for hele billetten.</div>
+      <div class="card mt12">
+        <div class="widget-title">
+          <span class="icon-badge" aria-hidden="true" style="background:#f3f4f6;border-color:#e5e7eb;">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path fill="#374151" d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm2 0v14h12V5H6z"/>
+              <path fill="#374151" d="M8 8h8v2H8V8zm0 4h8v2H8v-2zm0 4h5v2H8v-2z"/>
+            </svg>
+          </span>
+          <span><?= $isAir ? 'Flight-segmenter (koebt vs floejet)' : ($isFerry ? 'Overfart / service (koebt vs leveret)' : 'Per-leg (koebt vs leveret)') ?></span>
+        </div>
+        <div class="small muted mt4"><strong>2.</strong> Start med at markere hvilke ben der faktisk blev downgradet. Prisgrundlag og billetpris nedenfor skal knyttes til de valgte ben.</div>
+        <?php if (!empty($affectedLegsAuto)): ?>
+          <div class="small muted mt4">
+            Auto-scope: ben <?= h(implode(', ', array_map(static fn($i)=> (string)(((int)$i)+1), $affectedLegsAuto))) ?>
+            <?php if (!empty($downgradeScopeAuto['from']) || !empty($downgradeScopeAuto['to'])): ?>
+              (<?= h((string)($downgradeScopeAuto['from'] ?? '')) ?> &rarr; <?= h((string)($downgradeScopeAuto['to'] ?? '')) ?>)
+            <?php endif; ?>
+            <?php if (!empty($downgradeScopeAuto['basis'])): ?>
+              â€” <?= h((string)$downgradeScopeAuto['basis']) ?> (conf: <?= h((string)($downgradeScopeAuto['confidence'] ?? '')) ?>)
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+        <?= $this->element('downgrade_table', [
+            'journeyRowsDowng' => $journeyRowsDowng,
+            'form' => $form,
+            'meta' => $meta,
+            'missedStation' => $missedStation,
+            'affectedLegsAuto' => $affectedLegsAuto ?? [],
+            'isAir' => $isAir,
+            'isFerry' => $isFerry,
+        ]) ?>
+      </div>
+      <div class="mt12">
+        <div>3. Kender du billetprisen for den relevante flyvning/billet?</div>
+        <label><input type="radio" name="air_downgrade_ticket_price_known" value="yes" <?= $airDowngradeTicketPriceKnown==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="air_downgrade_ticket_price_known" value="no" <?= $airDowngradeTicketPriceKnown!=='yes'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div id="airDowngradeTicketPriceWrap" class="mt8 <?= $airDowngradeTicketPriceKnown==='yes' ? '' : 'hidden' ?>">
+        <div class="grid-3">
+          <label>Prisgrundlag
+            <select name="air_downgrade_ticket_price_basis" id="airDowngradeTicketPriceBasis">
+              <option value="affected_legs" <?= $airDowngradeTicketPriceBasis==='affected_legs'?'selected':'' ?>>Pris for markerede downgradede leg(s)</option>
+              <option value="whole_ticket" <?= $airDowngradeTicketPriceBasis==='whole_ticket'?'selected':'' ?>>Pris for hele billetten</option>
+              <option value="unknown" <?= $airDowngradeTicketPriceBasis==='unknown'?'selected':'' ?>>Ved ikke</option>
+            </select>
+          </label>
+          <label>Billetpris for relevant flyvning
+            <input type="number" name="air_downgrade_ticket_price" min="0" step="0.01" value="<?= h($airDowngradeTicketPrice) ?>" />
+          </label>
+          <label>Valuta
+            <select name="air_downgrade_ticket_price_currency">
+              <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON','USD','CAD'] as $cur): ?>
+                <option value="<?= h($cur) ?>" <?= $airDowngradeTicketPriceCurrency===$cur?'selected':'' ?>><?= h($cur) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+          <div class="small muted" style="align-self:end;">
+            <?= $airDowngradedLegCount > 0
+              ? h('Markeret downgradede legs: ' . $airDowngradedLegCount . '. Brug pris for netop disse legs eller hele billetten.')
+              : 'Brug prisen for den flyvning eller billetdel, som faktisk blev nedgraderet.' ?>
+          </div>
+        </div>
+        <div id="airDowngradeWholeTicketShareWrap" class="mt8 hidden" hidden>
+          <div class="grid-2">
+            <label>Hvor stor andel af hele billetten vedroerer de markerede downgradede leg(s)?
+              <?php $share = $v('downgrade_segment_share'); ?>
+              <input type="number" name="downgrade_segment_share_legacy" min="0" max="1" step="0.01" value="<?= h($share !== '' ? $share : '1') ?>" disabled />
+            </label>
+            <div class="small muted" style="align-self:end;">Brug kun denne andel, hvis beloebet ovenfor er hele billetprisen. Hvis beloebet allerede kun dækker de markerede legs, skal prisgrundlaget staa til "Pris for markerede downgradede leg(s)".</div>
+          </div>
+        </div>
+        <div id="airDowngradeWholeTicketAutoWrap" class="mt8 small muted <?= $airDowngradeTicketPriceBasis==='whole_ticket' ? '' : 'hidden' ?>">
+          Hvis billetprisen ovenfor er for hele billetten, fordeler vi automatisk den relevante andel ud fra de markerede downgradede ben.
+          <?php if ($v('downgrade_segment_share_basis') !== ''): ?>
+            <div class="mt4">Auto-fordeling: <?= h($v('downgrade_segment_share_basis')) ?><?= $v('downgrade_segment_share_conf') !== '' ? ' (conf: ' . h($v('downgrade_segment_share_conf')) . ')' : '' ?></div>
+          <?php endif; ?>
+        </div>
+      </div>
+      <div id="airDowngradeBackendNote" class="small muted mt8 <?= $airDowngradeTicketPriceKnown==='yes' ? 'hidden' : '' ?>">
+        Endeligt downgrade-beloeb kan stadig beregnes senere i sagen, naar billetpris eller dokumentation er kendt.
+      </div>
+      <?php endif; ?>
       <details class="quick">
         <summary><span class="chev">&gt;</span>Avanceret (valgfrit)</summary>
-        <div class="small muted mt4"><?= $isAir ? 'Hurtig artikel 10-vurdering. Du kan springe dette over og i stedet bruge flight-segmenterne nedenfor som dokumentation.' : 'Hurtig beregning. Du kan springe dette over og i stedet udfylde per-leg tabellen nedenfor.' ?></div>
+        <div class="small muted mt4"><?= $isAir ? 'Hurtig artikel 10-vurdering. Du kan springe dette over og i stedet bruge flight-segmenterne ovenfor som dokumentation.' : 'Hurtig beregning. Du kan springe dette over og i stedet udfylde per-leg tabellen ovenfor.' ?></div>
         <div class="grid-2 mt8">
           <?php if ($isAir): ?>
             <label>Koebt kabineklasse
@@ -165,10 +354,7 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
                 <div class="small muted mt4">Auto fra distancekategori: <?= h($airDistanceBand) ?> -> <?= h($airAutoRefundPercent) ?>%</div>
               <?php endif; ?>
             </label>
-            <label>Andel af den relevante flyvning (0-1)
-              <?php $share = $v('downgrade_segment_share'); ?>
-              <input type="number" name="downgrade_segment_share" min="0" max="1" step="0.01" value="<?= h($share !== '' ? $share : '1') ?>" />
-            </label>
+            <div class="small muted" style="align-self:end;">Andelsfeltet styres nu i hovedblokken ovenfor, hvis prisgrundlaget er hele billetten.</div>
           <?php else: ?>
             <label>Basis (CIV/Bilag II)
               <?php $basis = $v('downgrade_comp_basis'); ?>
@@ -197,7 +383,7 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
     </div>
   </div>
 
-    <div class="card mt12">
+    <div id="legacyDowngradeSegmentCard" class="card mt12 hidden" hidden>
     <div class="widget-title">
       <span class="icon-badge" aria-hidden="true" style="background:#f3f4f6;border-color:#e5e7eb;">
         <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -231,12 +417,13 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
   </div>
 
   <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-    <?= $this->Html->link('Tilbage', ['action' => 'assistance'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+    <?= $this->Html->link('Tilbage', ['action' => $downgradePrevAction], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
     <?= $this->Form->button('Fortsaet', ['class' => 'button', 'type' => 'submit']) ?>
   </div>
 
   </fieldset>
   <?= $this->Form->end() ?>
+  <?= $this->element('flow_autosave', ['step' => 'downgrade']) ?>
 </div>
 
 <script>
@@ -250,6 +437,24 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
       if (!wrap) return;
       var on = !!(yes && yes.checked);
       wrap.classList.toggle('hidden', !on);
+      toggleAirTicketPrice();
+    }
+
+    function toggleAirTicketPrice(){
+      var yes = q('input[name="downgrade_occurred"][value="yes"]');
+      var knownYes = q('input[name="air_downgrade_ticket_price_known"][value="yes"]');
+      var wrap = document.getElementById('airDowngradeTicketPriceWrap');
+      var note = document.getElementById('airDowngradeBackendNote');
+      var basis = document.getElementById('airDowngradeTicketPriceBasis');
+      var shareWrap = document.getElementById('airDowngradeWholeTicketAutoWrap');
+      var showMain = !!(yes && yes.checked);
+      var showPrice = showMain && !!(knownYes && knownYes.checked);
+      if (wrap) wrap.classList.toggle('hidden', !showPrice);
+      if (note) note.classList.toggle('hidden', !showMain || showPrice);
+      if (shareWrap) {
+        var showShare = showPrice && basis && basis.value === 'whole_ticket';
+        shareWrap.classList.toggle('hidden', !showShare);
+      }
     }
 
     // Safe bus/taxi prefill: only fill blank delivered fields when reroute + bus/taxi + downgrade=yes.
@@ -302,6 +507,12 @@ $airRefundPercent = (string)($form['air_downgrade_refund_percent'] ?? ($airAutoR
           maybePrefillBusTaxi();
         });
       });
+      qa('input[name="air_downgrade_ticket_price_known"]').forEach(function(r){
+        r.addEventListener('change', toggleAirTicketPrice);
+      });
+      var basis = document.getElementById('airDowngradeTicketPriceBasis');
+      if (basis) basis.addEventListener('change', toggleAirTicketPrice);
+      toggleAirTicketPrice();
       maybePrefillBusTaxi();
     });
   })();

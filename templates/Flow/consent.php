@@ -20,9 +20,10 @@ $isPreview = !empty($flowPreview);
     <?= $this->Form->textarea('additionalInfo', ['rows' => 5]) ?>
 
     <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
-        <?= $this->Html->link('Tilbage', ['action' => 'applicant'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+        <?= $this->Html->link('Tilbage', ['action' => (is_string($flowPrevAction ?? null) && $flowPrevAction !== '' ? $flowPrevAction : 'applicant')], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
         <?= $this->Form->button('Afslut', ['class' => 'button']) ?>
         <?= $this->Html->link('Til summary', ['action' => 'summary'], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;']) ?>
     </div>
 </fieldset>
 <?= $this->Form->end() ?>
+<?= $this->element('flow_autosave', ['step' => 'consent']) ?>

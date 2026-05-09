@@ -502,6 +502,13 @@ class ReimbursementController extends AppController
         $source = null;
         $forceName = (string)($this->request->getQuery('template') ?? '');
         if ($forceName !== '') {
+            $normalizedTemplate = str_replace('\\', '/', $forceName);
+            if (
+                $normalizedTemplate === 'Staevning_template_air_DK/staevning-flysag.pdf'
+                || $normalizedTemplate === 'staevning-flysag.pdf'
+            ) {
+                $forceName = 'Staevning_template_air_DK/staevning-flysag-uncompressed.pdf';
+            }
             $try = [WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . $forceName, WWW_ROOT . $forceName];
             foreach ($try as $p) {
                 if (is_file($p)) { $source = $p; break; }
@@ -558,6 +565,15 @@ class ReimbursementController extends AppController
             $pdf->MultiCell(0, 7, "Looked in: webroot/files and webroot. Filenames tried include 'reimbursement_form_uncompressed.pdf' and '(reimboursement|reimbursement) form - EN - accessible.pdf' (spaces or %20).\nYou can also force a file with ?template=FILENAME.pdf");
             $this->response = $this->response->withType('pdf')->withStringBody($pdf->Output('S'));
             return;
+        }
+
+        // Force the uncompressed air statement template even if an old link still points
+        // at the original compressed file.
+        if (str_ends_with(str_replace('\\', '/', (string)$source), 'Staevning_template_air_DK/staevning-flysag.pdf')) {
+            $altStatement = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'Staevning_template_air_DK' . DIRECTORY_SEPARATOR . 'staevning-flysag-uncompressed.pdf';
+            if (is_file($altStatement)) {
+                $source = $altStatement;
+            }
         }
 
     // Prefer national mapping if a national template is selected; else fallback to EU mapping

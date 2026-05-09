@@ -8,6 +8,8 @@ $flags    = $flags ?? [];
 
 $incident = $incident ?? [];
 
+$journey  = $journey ?? [];
+
 $profile  = $profile ?? ['articles' => []];
 $articles = (array)($profile['articles'] ?? []);
 
@@ -20,9 +22,11 @@ $transportMode = strtolower((string)($form['gating_mode'] ?? ($meta['gating_mode
 $isFerry = ($transportMode === 'ferry');
 $isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
-$isAirShortView = $isAir && strtolower((string)($flags['entry_variant'] ?? '')) === 'air_short';
+$isRail = ($transportMode === 'rail');
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
+$isAirShortView = $isAir && $entryVariant === 'air_short';
 $isAirShortOngoingView = $isAirShortView && $isOngoing;
-$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$airShortExpenseLite = $isAirShortView;
 $isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
@@ -39,11 +43,11 @@ $airPmrCompanion = !empty($airRights['air_pmr_companion']);
 $airPmrServiceDog = !empty($airRights['air_pmr_service_dog']);
 $airUnaccompaniedMinor = !empty($airRights['air_unaccompanied_minor']);
 $assistTitle = $isOngoing
-    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)')))
-    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)'))) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isBus ? 'TRIN 8 - Assistance (bus)' : ($isAir ? 'TRIN 8 - Care (flight)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)'))));
+    ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (igangvaerende rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (igangvaerende rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (igangvaerende rejse)' : ($isRail ? 'TRIN 8 - Assistance under togrejsen (igangvaerende rejse)' : 'TRIN 8 - Mad og drikke, hotel (igangvaerende rejse)'))))
+    : ($isCompleted ? ($isFerry ? 'TRIN 8 - Assistance under faergerejsen (afsluttet rejse)' : ($isBus ? 'TRIN 8 - Assistance under busturen (afsluttet rejse)' : ($isAir ? 'TRIN 8 - Care under flight-forloebet (afsluttet rejse)' : ($isRail ? 'TRIN 8 - Assistance under togrejsen (afsluttet rejse)' : 'TRIN 8 - Mad og drikke, hotel (afsluttet rejse)')))) : ($isFerry ? 'TRIN 8 - Assistance (faerge Art. 17)' : ($isBus ? 'TRIN 8 - Assistance (bus)' : ($isAir ? 'TRIN 8 - Care (flight)' : ($isRail ? 'TRIN 8 - Assistance (rail Art. 20)' : 'TRIN 8 - Mad og drikke, hotel (Art. 20)')))));
 $assistHint = $isOngoing
-    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : ($isBus ? 'Registrer maaltider, hotel og egne udgifter under busforloebet indtil nu.' : ($isAir ? 'Registrer maaltider, hotel og egne udgifter under flight-forloebet indtil nu.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).')))
-    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : ($isBus ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under busturen.' : ($isAir ? 'Registrer den care der blev tilbudt eller de udgifter du selv afholdt under flight-forloebet.' : 'Udgifter under hele rejsen.'))) : '');
+    ? ($isFerry ? 'Registrer maaltider, hotel og egne udgifter under faergeforloebet indtil nu.' : ($isBus ? 'Registrer maaltider, hotel og egne udgifter under busforloebet indtil nu.' : ($isAir ? 'Registrer kun den care, der er relevant lige nu: maaltider, hotel ved overnatning og eventuel hoteltransport. Du kan tilfoeje mere senere paa sagen.' : ($isRail ? 'Afklar kun om maaltider, hotel eller station-transport blev tilbudt eller manglede. Konkrete rail-udgifter registreres senere i backend-sagen.' : 'Udgifter indtil nu (du kan tilfoeje flere senere).'))))
+    : ($isCompleted ? ($isFerry ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under faergerejsen.' : ($isBus ? 'Registrer den assistance der blev tilbudt eller de udgifter du selv afholdt under busturen.' : ($isAir ? 'Registrer kun om care blev tilbudt eller manglede under flight-forloebet. Konkrete maaltids-, hotel- og transportudgifter opgoeres i backend.' : ($isRail ? 'Registrer kun om assistance blev tilbudt eller manglede under togforloebet. Rail Art. 20 samles som dokumentations- og udgiftsspor i backend.' : 'Udgifter under hele rejsen.')))) : '');
 $assistMealsOff = ($articles['art20_2a'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistHotelOff = ($articles['art20_2b'] ?? ($articles['art20_2'] ?? true)) === false;
 $assistTrackOff = ($articles['art20_2c'] ?? ($articles['art20_2'] ?? true)) === false;
@@ -67,12 +71,32 @@ $busPmrMetTerminalTime = !empty($busPmrRights['pmr_met_terminal_time']);
 $busPmrSpecialSeatingNotified = !empty($busPmrRights['pmr_special_seating_notified']);
 $modeMealsSectionVisible = $isFerry ? $ferryMealsGateActive : ($isBus ? $busMealsGateActive : true);
 $modeHotelSectionVisible = $isFerry ? $ferryHotelGateActive : ($isBus ? $busHotelGateActive : true);
+$airDelayRemedyGate = $isAir && ((string)($flags['gate_art18'] ?? '')) === '1' && (string)($form['incident_main'] ?? '') === 'delay';
+$assistPrevAction = ($isAirShortOngoingView && $airDelayRemedyGate) ? 'remedies' : ($isAirShortOngoingView ? 'incident' : 'remedies');
+$assistNextLabel = $airDelayRemedyGate ? 'Videre til refusion' : 'Fortsaet';
+if (is_string($flowPrevAction ?? null) && $flowPrevAction !== '') {
+  $assistPrevAction = $flowPrevAction;
+}
+if (is_string($flowNextAction ?? null) && $flowNextAction !== '' && $flowNextAction !== 'remedies') {
+  $assistNextLabel = 'Fortsaet';
+}
 if ($isAir || $isBus) {
   $assistMealsOff = false;
   $assistHotelOff = false;
   $assistTrackOff = false;
   $assistStationOff = false;
   $assistOff = false;
+}
+if ($isAirShortView && !empty($flowSteps) && is_array($flowSteps)) {
+    foreach ($flowSteps as $flowStep) {
+        if ((string)($flowStep['action'] ?? '') !== 'assistance') {
+            continue;
+        }
+        $stepNum = $flowStep['ui_num'] ?? $flowStep['num'] ?? 8;
+        $stepTitle = (string)($flowStep['title'] ?? 'Assistance');
+        $assistTitle = 'TRIN ' . (string)$stepNum . ' - ' . $stepTitle;
+        break;
+    }
 }
 
 
@@ -149,6 +173,17 @@ $toEur = static function ($amount, string $currency) use ($capFx): float {
 $ferryOpenTicket = $isFerry && strtolower(trim((string)($form['open_ticket_without_departure_time'] ?? ''))) === 'yes';
 $ferryNotifiedBefore = $isFerry && strtolower(trim((string)($form['informed_before_purchase'] ?? ''))) === 'yes';
 $ferryWeatherRisk = $isFerry && strtolower(trim((string)($form['weather_safety'] ?? ''))) === 'yes';
+$ferryDepartureFromTerminalRaw = strtolower(trim((string)($form['departure_from_terminal'] ?? '')));
+$ferryDepartureFromTerminal = $ferryScope['departure_from_terminal'] ?? null;
+if (!is_bool($ferryDepartureFromTerminal)) {
+    if ($ferryDepartureFromTerminalRaw === 'yes') {
+        $ferryDepartureFromTerminal = true;
+    } elseif ($ferryDepartureFromTerminalRaw === 'no') {
+        $ferryDepartureFromTerminal = false;
+    } else {
+        $ferryDepartureFromTerminal = null;
+    }
+}
 $ferryMealAmountEur = $toEur($form['meal_self_paid_amount'] ?? '0', (string)($form['meal_self_paid_currency'] ?? 'EUR'));
 $ferryHotelAmountRaw = is_numeric($form['hotel_self_paid_amount'] ?? null) ? (float)$form['hotel_self_paid_amount'] : (float)preg_replace('/[^0-9.]/', '', (string)($form['hotel_self_paid_amount'] ?? '0'));
 $ferryHotelCurrency = (string)($form['hotel_self_paid_currency'] ?? 'EUR');
@@ -200,7 +235,13 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 <h1><?= h($assistTitle) ?></h1>
 <?php if ($isAirShortView): ?>
 <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
-<?php elseif ($isModeSplitView): ?>
+<?= $this->element('air_downgrade_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
+<?php elseif ($isFerry): ?>
+<?= $this->element('ferry_live_estimate', compact('form', 'flags', 'meta', 'journey', 'ferryRights', 'ferryScope')) ?>
+<?php elseif ($isRail && $entryVariant === 'rail_split'): ?>
+<?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+<?php endif; ?>
+<?php if ($isModeSplitView): ?>
 <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
   <?= $isOngoing
       ? 'Dette assistance-trin er den igangvaerende variant. Registrer kun de ydelser eller udgifter, der er aktuelle lige nu.'
@@ -213,14 +254,29 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <?php if ($isFerry): ?>
   <input type="hidden" name="ferry_refreshments_offered" value="<?= h((string)($form['ferry_refreshments_offered'] ?? ($form['meal_offered'] ?? ''))) ?>" />
-  <input type="hidden" name="ferry_refreshments_self_paid_amount" value="<?= h((string)($form['ferry_refreshments_self_paid_amount'] ?? ($form['meal_self_paid_amount'] ?? ''))) ?>" />
-  <input type="hidden" name="ferry_refreshments_self_paid_currency" value="<?= h((string)($form['ferry_refreshments_self_paid_currency'] ?? ($form['meal_self_paid_currency'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_refreshments_self_paid_amount" value="" />
+  <input type="hidden" name="ferry_refreshments_self_paid_currency" value="" />
   <input type="hidden" name="ferry_hotel_offered" value="<?= h((string)($form['ferry_hotel_offered'] ?? ($form['hotel_offered'] ?? ''))) ?>" />
   <input type="hidden" name="ferry_overnight_required" value="<?= h((string)($form['ferry_overnight_required'] ?? ($form['overnight_needed'] ?? ''))) ?>" />
   <input type="hidden" name="ferry_hotel_transport_included" value="<?= h((string)($form['ferry_hotel_transport_included'] ?? ($form['assistance_hotel_transport_included'] ?? ''))) ?>" />
-  <input type="hidden" name="ferry_hotel_self_paid_amount" value="<?= h((string)($form['ferry_hotel_self_paid_amount'] ?? ($form['hotel_self_paid_amount'] ?? ''))) ?>" />
-  <input type="hidden" name="ferry_hotel_self_paid_currency" value="<?= h((string)($form['ferry_hotel_self_paid_currency'] ?? ($form['hotel_self_paid_currency'] ?? ''))) ?>" />
-  <input type="hidden" name="ferry_hotel_self_paid_nights" value="<?= h((string)($form['ferry_hotel_self_paid_nights'] ?? ($form['hotel_self_paid_nights'] ?? ''))) ?>" />
+  <input type="hidden" name="ferry_hotel_self_paid_amount" value="" />
+  <input type="hidden" name="ferry_hotel_self_paid_currency" value="" />
+  <input type="hidden" name="ferry_hotel_self_paid_nights" value="" />
+  <input type="hidden" name="meal_self_paid_amount" value="" />
+  <input type="hidden" name="meal_self_paid_currency" value="" />
+  <input type="hidden" name="meal_self_paid_receipt" value="" />
+  <input type="hidden" name="meal_self_paid_amount_items[]" value="" />
+  <input type="hidden" name="meal_self_paid_receipt_items_existing[]" value="" />
+  <input type="hidden" name="hotel_transport_self_paid_amount" value="" />
+  <input type="hidden" name="hotel_transport_self_paid_currency" value="" />
+  <input type="hidden" name="hotel_transport_self_paid_receipt" value="" />
+  <input type="hidden" name="hotel_self_paid_amount" value="" />
+  <input type="hidden" name="hotel_self_paid_currency" value="" />
+  <input type="hidden" name="hotel_self_paid_nights" value="" />
+  <input type="hidden" name="hotel_self_paid_receipt" value="" />
+  <input type="hidden" name="hotel_self_paid_amount_items[]" value="" />
+  <input type="hidden" name="hotel_self_paid_nights_items[]" value="" />
+  <input type="hidden" name="hotel_self_paid_receipt_items_existing[]" value="" />
 <?php elseif ($isBus): ?>
   <input type="hidden" name="bus_refreshments_offered" value="<?= h((string)($form['bus_refreshments_offered'] ?? ($form['meal_offered'] ?? ''))) ?>" />
   <input type="hidden" name="bus_refreshments_self_paid_amount" value="<?= h((string)($form['bus_refreshments_self_paid_amount'] ?? ($form['meal_self_paid_amount'] ?? ''))) ?>" />
@@ -298,10 +354,13 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
   </div>
 <?php elseif ($isAirShortView): ?>
   <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
-    <strong>Air-care lige nu</strong>
-    <div class="small muted mt4">Registrer kun de udgifter eller manglende ydelser, der er relevante indtil nu. Mere dokumentation kan laegges paa sagen bagefter.</div>
+    <strong><?= $isOngoing ? 'Air-care lige nu' : 'Air-care under flight-forloebet' ?></strong>
+    <div class="small muted mt4"><?= $isOngoing
+      ? 'Dette trin handler kun om akut care lige nu: maaltider, hotel hvis ny afgang foerst er dagen efter, og transport til/fra hotel. Mere dokumentation kan laegges paa sagen bagefter.'
+      : 'Dette trin handler kun om, hvilken care der blev tilbudt eller manglede under flight-forloebet: maaltider, hotel hvis ny afgang foerst var dagen efter, og transport til/fra hotel. Konkrete udgifter opgoeres i backend bagefter.'
+    ?></div>
     <?php if ($isAirShortOngoingView): ?>
-      <div class="small muted mt4">Hold dette trin kort: maaltider, hotel og transport til hotel. Mere saerlige eller tekniske forhold kan vurderes senere paa sagen.</div>
+      <div class="small muted mt4">Hold dette trin kort og konkret. Hvis du selv betalte, eller hvis noget ikke blev tilbudt, registreres det her. Mere saerlige eller tekniske forhold kan vurderes senere paa sagen.</div>
     <?php endif; ?>
   </div>
 <?php endif; ?>
@@ -348,7 +407,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 <!-- Måltider / drikke -->
 <div class="card mt12 <?= (($assistMealsOff || !$modeMealsSectionVisible) && !$isPreview) ? 'hidden' : '' ?>" data-art="20(2a),20(2)">
   <strong>🍽️ <?= $isFerry ? 'Måltider og forfriskninger (Art. 17)' : ($isBus ? 'Maaltider og forfriskninger (bus)' : ($isAir ? 'Maaltider og forfriskninger (flight Art. 9)' : 'Måltider og drikke (Art.20)')) ?></strong>
-  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : ($isBus ? 'Busoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller forsinkelse paa mindst 90 minutter, naar rejsen varer over 3 timer og assistancebetingelserne er opfyldt.' : ($isAir ? 'Flyselskabet skal tilbyde maaltider og forfriskninger, naar din delay eller haendelse har naet den relevante Art. 6-threshold.' : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.')) ?></p>
+  <p class="small muted"><?= $isFerry ? 'Faergeoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller afgangsforsinkelse paa mindst 90 minutter, naar det er praktisk muligt.' : ($isBus ? 'Busoperatoeren skal tilbyde maaltider eller forfriskninger ved aflysning eller forsinkelse paa mindst 90 minutter, naar rejsen varer over 3 timer og assistancebetingelserne er opfyldt.' : ($isAir ? ($isOngoing ? 'Hvis din nuvaerende delay eller haendelse har naet Art. 6-threshold, skal flyselskabet tilbyde maaltider og forfriskninger nu.' : 'Flyselskabet skal tilbyde maaltider og forfriskninger, naar din delay eller haendelse har naet den relevante Art. 6-threshold.') : 'Jernbanen skal tilbyde forfriskninger ved aflysning eller ≥60 min. forsinkelse.')) ?></p>
   <?php if ($isBus): ?>
     <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
       <strong>Bus-cap / maaltider</strong>
@@ -358,7 +417,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <div class="small muted mt4">Lovbestemt maksimum: intet fast beloeb. Internt standardniveau: <strong>40 EUR pr. dag</strong>.</div>
   <?php endif; ?>
   <div class="mt8">
-    <div>1. Fik du måltider eller forfriskninger?</div>
+    <div>1. <?= ($isAir && $isOngoing) ? 'Har du faaet maaltider eller forfriskninger?' : 'Fik du måltider eller forfriskninger?' ?></div>
     <label><input type="radio" name="meal_offered" value="yes" <?= $v('meal_offered')==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="meal_offered" value="no" <?= $v('meal_offered')==='no'?'checked':'' ?> /> Nej</label>
   </div>
@@ -373,6 +432,29 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     </label>
   </div>
   <div class="mt8" data-show-if="meal_offered:no">
+    <?php if ($airShortExpenseLite): ?>
+      <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+        <strong>Hvad maa du typisk koebe?</strong>
+        <div class="muted mt4">Hold dig til almindelige maaltider og drikkevarer, som passer til ventetiden. Undgaa luksusforbrug og gem kvitteringer. Beloeb og dokumentation laegges paa sagen bagefter.</div>
+      </div>
+      <input type="hidden" name="meal_self_paid_currency" value="<?= h($v('meal_self_paid_currency')) ?>" />
+      <?php foreach ((array)($form['meal_self_paid_amount_items'] ?? []) as $hiddenMealAmount): ?>
+        <input type="hidden" name="meal_self_paid_amount_items[]" value="<?= h((string)$hiddenMealAmount) ?>" />
+      <?php endforeach; ?>
+      <?php foreach ((array)($form['meal_self_paid_receipt_items_existing'] ?? []) as $hiddenMealReceiptExisting): ?>
+        <input type="hidden" name="meal_self_paid_receipt_items_existing[]" value="<?= h((string)$hiddenMealReceiptExisting) ?>" />
+      <?php endforeach; ?>
+      <?php foreach ((array)($form['meal_self_paid_receipt_items'] ?? []) as $hiddenMealReceipt): ?>
+        <input type="hidden" name="meal_self_paid_receipt_items[]" value="<?= h((string)$hiddenMealReceipt) ?>" />
+      <?php endforeach; ?>
+      <input type="hidden" name="meal_self_paid_amount" value="<?= h($v('meal_self_paid_amount')) ?>" />
+      <input type="hidden" name="meal_self_paid_receipt" value="<?= h($v('meal_self_paid_receipt')) ?>" />
+    <?php elseif ($isFerry || $isRail): ?>
+    <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+      <strong>Frontend registrerer ikke udgifter her</strong>
+      <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv betalte maaltider eller forfriskninger, registreres beloeb, valuta og kvitteringer i backend-sagen under assistance.' : 'Hvis passageren selv betalte maaltider eller forfriskninger under togforloebet, registreres beloeb, valuta og kvitteringer i backend-sagen under assistance.') ?></div>
+    </div>
+    <?php else: ?>
     <div class="grid-3">
       <label>Valuta
         <select name="meal_self_paid_currency">
@@ -422,6 +504,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <?php if ($isFerry && $ferryMealAmountEur > 40): ?>
       <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">Kan kraeve manuel vurdering: forordningen har ikke et fast maaltidsbeloeb, men dette overstiger vores interne standardniveau paa 40 EUR pr. dag.</div>
     <?php endif; ?>
+    <?php endif; ?>
   </div>
 </div>
 <!-- Hotel / overnatning -->
@@ -437,11 +520,11 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <?= $isFerry ? 'Hotel og indkvartering (Art. 17)' : ($isBus ? 'Hotel og indkvartering (bus)' : ($isAir ? 'Hotel og indkvartering (flight Art. 9)' : 'Hotel og indkvartering (Art.20)')) ?>
   </strong>
 
-  <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : ($isBus ? 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' : ($isAir ? 'Hotel og transport hertil bliver kun relevant, hvis den nye forventede afgang foerst er dagen efter den planlagte afgang.' : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.')) ?></p>
+  <p class="small muted"><?= $isFerry ? 'Hotel og transport hertil skal tilbydes, hvis overnatning bliver noedvendig efter aflysning eller afgangsforsinkelse paa mindst 90 minutter, med forbehold for vejrsikkerhed.' : ($isBus ? 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.' : ($isAir ? ($isOngoing ? 'Hotel og transport hertil bliver kun relevant nu, hvis den nye forventede afgang foerst er dagen efter den planlagte afgang.' : 'Hotel og transport hertil bliver kun relevant, hvis den nye forventede afgang foerst er dagen efter den planlagte afgang.') : 'Hotel og transport hertil skal tilbydes ved aflysning eller lang forsinkelse, hvis nødvendigt.')) ?></p>
 
   <?php if ($isAir): ?>
   <div class="mt8">
-    <div>1. Var den nye forventede afgang foerst dagen efter den planlagte afgang?</div>
+    <div>1. <?= ($isAir && $isOngoing) ? 'Er den nye forventede afgang foerst dagen efter den planlagte afgang?' : 'Var den nye forventede afgang foerst dagen efter den planlagte afgang?' ?></div>
     <label><input type="radio" name="air_next_day_departure" value="yes" <?= $airNextDayDeparture==='yes'?'checked':'' ?> /> Ja</label>
     <label class="ml8"><input type="radio" name="air_next_day_departure" value="no" <?= $airNextDayDeparture==='no'?'checked':'' ?> /> Nej</label>
   </div>
@@ -453,7 +536,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <label class="ml8"><input type="radio" name="overnight_needed" value="no" <?= $overnightNeeded==='no'?'checked':'' ?> /> Nej</label>
   </div>
   <div class="small muted mt4" data-show-if="overnight_needed:no">Hotel og indkvartering er kun relevant i bus-flowet, hvis overnatning faktisk blev noedvendig.</div>
-  <?php elseif ($isFerry): ?>
+  <?php elseif ($isFerry && $ferryDepartureFromTerminal !== false): ?>
   <div class="mt8">
     <div>1. Blev overnatning noedvendig pga. aflysningen eller forsinkelsen?</div>
     <label><input type="radio" name="overnight_needed" value="yes" <?= $overnightNeeded==='yes'?'checked':'' ?> /> Ja</label>
@@ -467,6 +550,9 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <?php if ($ferryWeatherRisk): ?>
       <div class="small mt4" style="background:#fff8e8; padding:8px; border-radius:6px;">Ved vejrforhold, der bringer sikker sejlads i fare, kan retten til hotel/overnatning bortfalde.</div>
     <?php endif; ?>
+    <?php if ($ferryDepartureFromTerminal === false): ?>
+      <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">Trin 2 viser, at afgangen ikke var fra en havneterminal. Derfor aabnes hotel og transport efter ferry Art. 17, stk. 2 ikke i dette spor.</div>
+    <?php endif; ?>
   <?php endif; ?>
 
   <?php if ($isBus): ?>
@@ -475,10 +561,11 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
       <div class="muted mt4">Lovens hotel-loft er <strong>80 EUR pr. nat, maks. 2 naetter</strong>. Transport til/fra hotel vises med en intern standardcap paa <strong>50 EUR</strong> og omregnes senere til sagens valuta i resultatet.</div>
     </div>
   <?php endif; ?>
+  <?php if (!$isFerry || $ferryDepartureFromTerminal !== false): ?>
   <div<?= $isAir ? ' data-show-if="air_next_day_departure:yes"' : (($isFerry || $isBus) ? ' data-show-if="overnight_needed:yes"' : '') ?>>
   <div class="mt8">
 
-    <div><?= $isAir ? '2. Fik du hotel/indkvartering plus transport hertil?' : '2. Fik du hotel/indkvartering plus transport hertil?' ?></div>
+    <div><?= $isFerry ? '2. Fik du hotel/indkvartering?' : '2. Fik du hotel/indkvartering plus transport hertil?' ?></div>
 
     <label><input type="radio" name="hotel_offered" value="yes" <?= $v('hotel_offered')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -490,7 +577,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
   <div class="mt4" data-show-if="hotel_offered:yes">
 
-    <span>Indgik transport til hotellet?</span>
+    <span><?= $isFerry ? 'Indgik transport til og fra indkvarteringen?' : 'Indgik transport til hotellet?' ?></span>
 
     <label class="ml8"><input type="radio" name="assistance_hotel_transport_included" value="yes" <?= $v('assistance_hotel_transport_included')==='yes'?'checked':'' ?> /> Ja</label>
 
@@ -499,6 +586,20 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
   </div>
 
   <div class="mt8" data-show-if="assistance_hotel_transport_included:no">
+    <?php if ($airShortExpenseLite): ?>
+    <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+      <strong>Transport til hotel</strong>
+      <div class="muted mt4">Vaelg kun noedvendig lokal transport mellem lufthavn og hotel. Beloeb, valuta og kvitteringer registreres senere i sagen.</div>
+    </div>
+    <input type="hidden" name="hotel_transport_self_paid_amount" value="<?= h($v('hotel_transport_self_paid_amount')) ?>" />
+    <input type="hidden" name="hotel_transport_self_paid_currency" value="<?= h($v('hotel_transport_self_paid_currency')) ?>" />
+    <input type="hidden" name="hotel_transport_self_paid_receipt" value="<?= h($v('hotel_transport_self_paid_receipt')) ?>" />
+    <?php elseif ($isFerry || $isRail): ?>
+    <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+      <strong>Transport til/fra hotel registreres i backend</strong>
+      <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv betalte lokal transport mellem havneterminal og hotel, registreres beloeb, valuta og kvittering i backend-sagen.' : 'Hvis passageren selv betalte lokal transport mellem station og hotel, registreres beloeb, valuta og kvittering i backend-sagen.') ?></div>
+    </div>
+    <?php else: ?>
 
     <div class="small muted">Angiv evt. egne udgifter til transport mellem stoppested/terminal og hotel.</div>
     <?php if ($isBus): ?><div class="small muted mt4">Bus bruger her en vejledende soft cap paa 50 EUR for transport til/fra hotel. I resultatet vises beloebet i sagens valuta.</div><?php endif; ?>
@@ -542,6 +643,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <?php if ($isFerry && $ferryHotelTransportAmountEur > 50): ?>
       <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">Kan kraeve manuel vurdering: lokal transport overstiger vores interne standardniveau paa 50 EUR pr. tur.</div>
     <?php endif; ?>
+    <?php endif; ?>
 
   </div>
 
@@ -568,6 +670,33 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
   <?php endif; ?>
 
   <div class="mt8" data-show-if="hotel_offered:no">
+    <?php if ($airShortExpenseLite): ?>
+    <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+      <strong>Hotel lige nu</strong>
+      <div class="muted mt4">Hvis du selv maa finde hotel, saa hold dig til rimelig indkvartering taet paa lufthavnen. Antal naetter, beloeb og kvitteringer laegges paa sagen bagefter.</div>
+    </div>
+    <input type="hidden" name="hotel_self_paid_currency" value="<?= h($v('hotel_self_paid_currency')) ?>" />
+    <?php foreach ((array)($form['hotel_self_paid_amount_items'] ?? []) as $hiddenHotelAmount): ?>
+      <input type="hidden" name="hotel_self_paid_amount_items[]" value="<?= h((string)$hiddenHotelAmount) ?>" />
+    <?php endforeach; ?>
+    <?php foreach ((array)($form['hotel_self_paid_nights_items'] ?? []) as $hiddenHotelNights): ?>
+      <input type="hidden" name="hotel_self_paid_nights_items[]" value="<?= h((string)$hiddenHotelNights) ?>" />
+    <?php endforeach; ?>
+    <?php foreach ((array)($form['hotel_self_paid_receipt_items_existing'] ?? []) as $hiddenHotelReceiptExisting): ?>
+      <input type="hidden" name="hotel_self_paid_receipt_items_existing[]" value="<?= h((string)$hiddenHotelReceiptExisting) ?>" />
+    <?php endforeach; ?>
+    <?php foreach ((array)($form['hotel_self_paid_receipt_items'] ?? []) as $hiddenHotelReceipt): ?>
+      <input type="hidden" name="hotel_self_paid_receipt_items[]" value="<?= h((string)$hiddenHotelReceipt) ?>" />
+    <?php endforeach; ?>
+    <input type="hidden" name="hotel_self_paid_amount" value="<?= h($v('hotel_self_paid_amount')) ?>" />
+    <input type="hidden" name="hotel_self_paid_nights" value="<?= h($v('hotel_self_paid_nights')) ?>" />
+    <input type="hidden" name="hotel_self_paid_receipt" value="<?= h($v('hotel_self_paid_receipt')) ?>" />
+    <?php elseif ($isFerry || $isRail): ?>
+    <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
+      <strong>Hoteludgifter registreres i backend</strong>
+      <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv maatte finde hotel eller indkvartering, registreres antal naetter, beloeb, valuta og kvitteringer i backend-sagen under assistance.' : 'Hvis passageren selv maatte finde hotel eller anden overnatning under togforloebet, registreres antal naetter, beloeb, valuta og kvitteringer i backend-sagen under assistance.') ?></div>
+    </div>
+    <?php else: ?>
     <div class="grid-3">
       <label>Valuta
         <select name="hotel_self_paid_currency">
@@ -630,16 +759,18 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <?php if ($isFerry && $ferryHotelNightsCurrent > 3): ?>
       <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">Lovens maksimum er 3 naetter. Yderligere naetter kraever manuel vurdering.</div>
     <?php endif; ?>
+    <?php endif; ?>
 
   </div>
 
   </div>
+  <?php endif; ?>
 
 </div>
 
 
 
-<?php if (($isBus && ($busPmrAssistGateActive || $busPmrAssistPartialActive)) || ($isAir && $airPriorityAssistGate && !$isAirShortOngoingView) || (!$isFerry && !$isBus && $pmrUser && ($art20Active || $art20Partial))): ?>
+<?php if (($isBus && ($busPmrAssistGateActive || $busPmrAssistPartialActive)) || ($isAir && $airPriorityAssistGate && !$isAirShortView) || (!$isFerry && !$isBus && $pmrUser && ($art20Active || $art20Partial))): ?>
 
   <div class="card mt12">
 
@@ -703,9 +834,9 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 <div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
 
-  <?= $this->Html->link('Tilbage', ['action' => 'remedies'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+  <?= $this->Html->link('Tilbage', ['action' => $assistPrevAction], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
 
-  <?= $this->Form->button('Næste ?', ['class' => 'button']) ?>
+  <?= $this->Form->button($assistNextLabel, ['class' => 'button']) ?>
 
 </div>
 
@@ -713,6 +844,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 </fieldset>
 <?= $this->Form->end() ?>
+<?= $this->element('flow_autosave', ['step' => 'assistance']) ?>
 
 
 

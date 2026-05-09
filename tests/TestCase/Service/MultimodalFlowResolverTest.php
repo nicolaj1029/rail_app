@@ -343,7 +343,7 @@ TEXT,
                 'vessel_operational_crew' => '12',
                 'route_distance_meters' => '10000',
                 'incident_main' => 'delay',
-                'actual_departure_delay_90' => 'yes',
+                'ferry_departure_disruption_90' => 'yes',
                 'arrival_delay_minutes' => '130',
                 'scheduled_journey_duration_minutes' => '300',
             ],
@@ -378,7 +378,7 @@ TEXT,
                 'vessel_operational_crew' => '12',
                 'route_distance_meters' => '10000',
                 'incident_main' => 'cancellation',
-                'expected_departure_delay_90' => 'yes',
+                'ferry_cancellation_confirmed' => 'yes',
                 'scheduled_journey_duration_minutes' => '300',
                 'ferry_overnight_required' => 'yes',
                 'weather_safety' => 'yes',
@@ -395,6 +395,44 @@ TEXT,
         $this->assertFalse($result['ferry_rights']['gate_art17_hotel']);
     }
 
+    public function testFerryPmrBoardingRefusalOpensSeparateRemedyGate(): void
+    {
+        $result = (new MultimodalFlowResolver())->evaluate([
+            'form' => [
+                'transport_mode' => 'ferry',
+                'operator' => 'Example Ferry',
+                'service_type' => 'passenger_service',
+                'departure_from_terminal' => 'yes',
+                'departure_port_in_eu' => 'yes',
+                'arrival_port_in_eu' => 'yes',
+                'carrier_is_eu' => 'yes',
+                'vessel_passenger_capacity' => '200',
+                'vessel_operational_crew' => '12',
+                'route_distance_meters' => '10000',
+                'pmr_user' => 'yes',
+                'ferry_pmr_assistance_delivered' => 'full',
+                'ferry_pmr_boarding_refused' => 'yes',
+                'ferry_pmr_refusal_basis' => 'safety_requirements',
+                'ferry_pmr_reason_given' => 'no',
+                'ferry_pmr_special_needs_notified_at_booking' => 'unknown',
+            ],
+            'meta' => [],
+            'journey' => [],
+            'incident' => [],
+        ]);
+
+        $this->assertFalse($result['ferry_rights']['gate_art18']);
+        $this->assertTrue($result['ferry_pmr_rights']['gate_ferry_pmr_remedy_art8_3']);
+        $this->assertTrue($result['ferry_pmr_rights']['gate_ferry_pmr_boarding_remedy']);
+        $this->assertTrue($result['ferry_pmr_rights']['gate_ferry_pmr_reason_notice']);
+        $this->assertSame('medium_legal_review', $result['ferry_pmr_rights']['ferry_pmr_claim_strength']);
+        $this->assertTrue($result['canonical']['legal_assessment']['generic_gates']['remedy']);
+        $this->assertTrue($result['canonical']['legal_assessment']['article_flags']['pmr_art8_3_boarding_remedy']);
+        $this->assertSame('unknown', $result['canonical']['legal_assessment']['article_flags']['pmr_art11_2_status']);
+        $this->assertContains('pmr_boarding_refusal_evidence', $result['claim_direction']['recommended_documents']);
+        $this->assertContains('request_written_reason_under_art8_5', $result['claim_direction']['recommended_documents']);
+    }
+
     public function testFerryAssistanceOvernightOverridesLegacyIncidentField(): void
     {
         $result = (new MultimodalFlowResolver())->evaluate([
@@ -407,7 +445,7 @@ TEXT,
                 'arrival_port_in_eu' => 'yes',
                 'carrier_is_eu' => 'yes',
                 'incident_main' => 'cancellation',
-                'expected_departure_delay_90' => 'yes',
+                'ferry_cancellation_confirmed' => 'yes',
                 'arrival_delay_minutes' => '130',
                 'scheduled_journey_duration_minutes' => '300',
                 'overnight_required' => 'no',
@@ -487,6 +525,8 @@ TEXT,
                 'separate_contract_notice' => 'no',
                 'same_pnr' => 'yes',
                 'incident_main' => 'cancellation',
+                'cancellation_notice_band' => 'under_7_days',
+                'reroute_offered' => 'no',
                 'arrival_delay_minutes' => '240',
                 'reroute_arrival_delay_minutes' => '240',
             ],

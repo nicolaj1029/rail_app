@@ -46,6 +46,8 @@ $nextActionText = is_array($nextStep)
   .kpi { font-size: 28px; font-weight: 700; margin: 4px 0; }
 </style>
 
+<?= $this->element('passenger_sidebar', compact('passengerNav')) ?>
+
 <div class="passenger-page" id="passenger-v2-root"
      data-journeys-api="<?= h($journeysApi) ?>"
      data-cases-api="<?= h($casesApi) ?>"
@@ -116,6 +118,8 @@ $nextActionText = is_array($nextStep)
       <h2>Hurtige handlinger</h2>
       <p class="muted">Brug dette som den enkle indgang. Det eksisterende flow findes stadig bagved.</p>
       <a class="cta" href="<?= h($quickLinks['flowStart']) ?>">Start ny sag</a>
+      <br>
+      <a class="cta secondary" href="<?= h($quickLinks['case']) ?>">Faerdiggoer dit krav</a>
       <br>
       <a class="cta secondary" href="<?= h($quickLinks['review']) ?>">Åbn review</a>
       <br>
@@ -190,6 +194,8 @@ $nextActionText = is_array($nextStep)
       <div id="passenger-cases-list" class="backend-list"><div class="muted">Ingen claims hentet endnu.</div></div>
     </div>
   </div>
+</div>
+</div>
 </div>
 
 <script>

@@ -22,6 +22,10 @@ $incidentHint = $isOngoing ? 'Hvad er situationen nu?' : ($isCompleted ? 'Hvad v
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 $isPreview = !empty($flowPreview);
 $segCount = is_array($journey['segments'] ?? null) ? count($journey['segments']) : 0;
+$airRouteLegs = is_array($meta['air_route_legs'] ?? null) ? (array)$meta['air_route_legs'] : [];
+if (count($airRouteLegs) > $segCount) {
+    $segCount = count($airRouteLegs);
+}
 if ($segCount < 2) {
     $altSegs = $meta['_miss_conn_segments'] ?? ($meta['_segments_all'] ?? ($meta['_segments_llm_suggest'] ?? ($meta['_segments_auto'] ?? [])));
     if (is_array($altSegs)) { $segCount = max($segCount, count($altSegs)); }
@@ -29,6 +33,7 @@ if ($segCount < 2) {
 $multimodal = $multimodal ?? (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($multimodal['transport_mode'] ?? ($meta['transport_mode'] ?? 'rail'))));
 $gatingMode = strtolower((string)($form['gating_mode'] ?? ($meta['gating_mode'] ?? ($flags['gating_mode'] ?? $transportMode))));
+ $incidentPrevAction = trim((string)($incidentPrevAction ?? 'journey'));
 if (!in_array($transportMode, ['rail','ferry','bus','air'], true)) { $transportMode = 'rail'; }
 if (!in_array($gatingMode, ['rail','ferry','bus','air'], true)) { $gatingMode = $transportMode; }
 $isFerry = $gatingMode === 'ferry';
@@ -37,16 +42,36 @@ $isAir = $gatingMode === 'air';
 $ferryRights = (array)($multimodal['ferry_rights'] ?? []);
 $ferryContract = (array)($multimodal['ferry_contract'] ?? []);
 $ferryScope = (array)($multimodal['ferry_scope'] ?? []);
+$ferryOpsEvidence = (array)($meta['ferry_operational_evidence'] ?? []);
+$ferryIncidentSuggestion = (array)($meta['ferry_incident_suggestion'] ?? []);
+$ferrySystemIncident = (string)($ferryIncidentSuggestion['suggested_incident_main'] ?? '');
+$ferrySystemDuration = trim((string)($form['scheduled_journey_duration_minutes'] ?? ($ferryIncidentSuggestion['suggested_scheduled_journey_duration_minutes'] ?? '')));
+$ferrySystemDepartureDelay = trim((string)($form['delay_minutes_departure'] ?? ($ferryIncidentSuggestion['suggested_departure_delay_minutes'] ?? '')));
+$ferrySystemArrivalDelay = trim((string)($form['arrival_delay_minutes'] ?? ($ferryIncidentSuggestion['suggested_arrival_delay_minutes'] ?? '')));
+$ferrySystemExpected90 = (string)($form['expected_departure_delay_90'] ?? ($ferryIncidentSuggestion['suggested_expected_departure_delay_90'] ?? ''));
+$ferrySystemActual90 = (string)($form['actual_departure_delay_90'] ?? ($ferryIncidentSuggestion['suggested_actual_departure_delay_90'] ?? ''));
+$ferryDisruption90Value = (string)($form['ferry_departure_disruption_90'] ?? ($meta['ferry_departure_disruption_90'] ?? ''));
+$ferryCancellationConfirmedValue = (string)($form['ferry_cancellation_confirmed'] ?? ($meta['ferry_cancellation_confirmed'] ?? ''));
+$ferrySuggestionConfidence = (string)($ferryIncidentSuggestion['suggestion_confidence'] ?? ($ferryOpsEvidence['confidence'] ?? ''));
 $busRights = (array)($multimodal['bus_rights'] ?? []);
 $busContract = (array)($multimodal['bus_contract'] ?? []);
 $busScope = (array)($multimodal['bus_scope'] ?? []);
 $airRights = (array)($multimodal['air_rights'] ?? []);
 $airContract = (array)($multimodal['air_contract'] ?? []);
 $airScope = (array)($multimodal['air_scope'] ?? []);
-$isAirShortView = $isAir && strtolower((string)($flags['entry_variant'] ?? '')) === 'air_short';
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
+$isAirShortView = $isAir && $entryVariant === 'air_short';
 $isAirShortOngoingView = $isAirShortView && $isOngoing;
-$entryVariant = strtolower((string)($flags['entry_variant'] ?? ''));
+$isAirShortCompletedView = $isAirShortView && $isCompleted;
 $isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
+$isRailSplitView = !$isFerry && !$isBus && !$isAir && $entryVariant === 'rail_split';
+$isSplitCompletedView = $isModeSplitView && $isCompleted;
+$airRouteType = strtolower(trim((string)($form['air_route_type'] ?? '')));
+$airHasExplicitStopovers = (
+    $airRouteType === 'connecting'
+    || ((string)($flags['air_has_stopovers'] ?? '') === '1')
+    || count($airRouteLegs) > 1
+);
 $airDistanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($airScope['air_distance_band'] ?? ''))));
 $airDistanceBandLabel = match ($airDistanceBand) {
     'up_to_1500' => '1500 km eller mindre',
@@ -59,19 +84,127 @@ $airDelayThresholdHours = (int)($form['air_delay_threshold_hours'] ?? ($airScope
 $airDelayThresholdLabel = $airDelayThresholdHours > 0 ? ($airDelayThresholdHours . '+ timer') : 'Ikke afledt endnu';
 $airFlightDistanceKm = trim((string)($form['flight_distance_km'] ?? ($airScope['flight_distance_km'] ?? '')));
 $airDelayBandValue = strtolower(trim((string)($form['delay_departure_band'] ?? '')));
+$airExpectedDelayBucket = strtolower(trim((string)($form['air_expected_delay_bucket'] ?? '')));
+$airActualArrivalBucket = strtolower(trim((string)($form['air_actual_arrival_delay_bucket'] ?? '')));
 $airCancellationNoticeBand = strtolower(trim((string)($form['cancellation_notice_band'] ?? '')));
 $airRerouteDepartureBand = strtolower(trim((string)($form['reroute_departure_band'] ?? '')));
 $airRerouteArrivalBand = strtolower(trim((string)($form['reroute_arrival_band'] ?? '')));
+$airRerouteUsedOrAccepted = strtolower(trim((string)($form['reroute_used_or_accepted'] ?? '')));
 $airConnectionType = strtolower(trim((string)($airContract['air_connection_type'] ?? $form['air_connection_type'] ?? '')));
+$showAirCancellationWindows = $isAir;
+$showAirCancellationDetailQuestions = $showAirCancellationWindows && !$isAirShortView;
 $airConnectionKnown = in_array($airConnectionType, ['single_flight', 'protected_connection', 'self_transfer'], true);
 $airConnectionNeedsFallback = !$airConnectionKnown || !empty($airContract['manual_review_required']);
-$showAirMissedConnection = $isAir && (
-    $segCount > 1
-    || in_array($airConnectionType, ['protected_connection', 'self_transfer'], true)
-);
+$showAirMissedConnection = $isAirShortView
+    ? $airHasExplicitStopovers
+    : ($isAir && (
+        $segCount > 1
+        || in_array($airConnectionType, ['protected_connection', 'self_transfer'], true)
+    ));
+$selectedAirFlight = (array)($meta['air_selected_flight'] ?? []);
+$selectedAirLeg = (array)($meta['air_selected_leg'] ?? []);
+$railIncidentSeed = [];
+if (!$isFerry && !$isBus && !$isAir) {
+    $railIncidentSeed = (array)($meta['rail_incident_seed'] ?? []);
+    if (($railIncidentSeed['mode'] ?? '') !== 'rail') {
+        $fallbackRailSeed = (array)($meta['incident_seed'] ?? []);
+        if (($fallbackRailSeed['mode'] ?? '') === 'rail') {
+            $railIncidentSeed = $fallbackRailSeed;
+        }
+    }
+}
+$railSeedIncidentType = strtolower(trim((string)($railIncidentSeed['incident_type'] ?? 'unknown')));
+$railSeedTransferCount = is_numeric($railIncidentSeed['transfer_count'] ?? null) ? (int)$railIncidentSeed['transfer_count'] : 0;
+$railSeedMissedConnectionSuspected = !empty($railIncidentSeed['missed_connection_suspected']);
+$railProblemAnchor = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_problem_anchor'] ?? []) : [];
+$selectedRailDeparture = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_selected_departure'] ?? []) : [];
+$railProblemAnchorType = strtolower(trim((string)($railProblemAnchor['type'] ?? '')));
+$railProblemAnchorStation = trim((string)($railProblemAnchor['station_name'] ?? ''));
+$railProblemAnchorLabel = trim((string)($railProblemAnchor['label'] ?? ''));
+$railProblemAnchorSummary = match ($railProblemAnchorType) {
+    'before_departure' => ($railProblemAnchorStation !== '' ? ('problem foer afgang fra ' . $railProblemAnchorStation) : 'problem foer afgang'),
+    'transfer' => ($railProblemAnchorLabel !== '' ? strtolower($railProblemAnchorLabel) : ($railProblemAnchorStation !== '' ? ('problem ved skift i ' . $railProblemAnchorStation) : 'problem ved skift')),
+    'en_route' => 'problem senere paa den valgte kontrakt',
+    default => '',
+};
+$railSeedMain = match ($railSeedIncidentType) {
+    'cancellation', 'partial_cancellation', 'replacement_transport' => 'cancellation',
+    'delay' => 'delay',
+    default => '',
+};
+$railIncidentMainValue = $v('incident_main');
+if ($railIncidentMainValue === '' && $railSeedMain !== '') {
+    $railIncidentMainValue = $railSeedMain;
+}
+$railSeedArrivalDelay = is_numeric($railIncidentSeed['arrival_delay_minutes_seed'] ?? null) ? (int)$railIncidentSeed['arrival_delay_minutes_seed'] : null;
+$railSeedStatus = strtolower(trim((string)($meta['rail_selected_departure']['status'] ?? 'unknown')));
+$railExpectedDelay60Value = $v('expected_delay_60');
+if ($railExpectedDelay60Value === '' && $railSeedMain === 'delay' && $railSeedArrivalDelay !== null) {
+    $railExpectedDelay60Value = $railSeedArrivalDelay >= 60 ? 'yes' : 'no';
+}
+$railDelayAlready60Value = $v('delay_already_60');
+if ($railDelayAlready60Value === '' && $railSeedMain === 'delay' && $railSeedArrivalDelay !== null && in_array($railSeedStatus, ['arrived'], true)) {
+    $railDelayAlready60Value = $railSeedArrivalDelay >= 60 ? 'yes' : 'no';
+}
+$railExpectedDelayPrompt = $isCompleted
+    ? 'Fik du besked om mindst 60 minutters forsinkelse ved endelig destination?'
+    : 'Har du faaet besked om mindst 60 minutters forsinkelse ved endelig destination?';
+$railActualDelayPrompt = $isCompleted
+    ? 'Ankom du mindst 60 minutter senere til din endelige destination?'
+    : 'Er du allerede mindst 60 minutter forsinket i forhold til din endelige destination?';
+$railActualDelayNoLabel = $isCompleted ? 'Nej / ved ikke' : 'Nej';
+$railActualDelayNote = $isCompleted
+    ? 'Hvis du ikke kender det praecise minutantal endnu, kan du fortsaette og justere senere i sagen.'
+    : 'Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.';
+$railMissedConnectionPrompt = $isCompleted
+    ? 'Blev den valgte forbindelse faktisk misset?'
+    : 'Er forbindelsen ved problemstedet faktisk misset?';
+$railMissedConnectionDelayPrompt = $isCompleted
+    ? 'Medfoerte den mistede forbindelse, at du ankom mindst 60 minutter senere til din endelige destination?'
+    : 'Betyder den mistede forbindelse, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?';
+$railTransferStations = [];
+foreach ((array)(($selectedRailDeparture['raw'] ?? [])['transfer_station_names'] ?? []) as $transferStationName) {
+    $transferStationName = trim((string)$transferStationName);
+    if ($transferStationName === '') {
+        continue;
+    }
+    $railTransferStations[] = $transferStationName;
+}
+$railTransferStations = array_values(array_unique($railTransferStations));
+$railTransferStationsSummary = implode(' -> ', $railTransferStations);
+$airOpsEvidence = (array)($meta['air_operational_evidence'] ?? []);
+$airOpsAvailable = !empty($airOpsEvidence['available']);
+$airOpsStatus = trim((string)($airOpsEvidence['status'] ?? ''));
+$airOpsSource = strtoupper(trim((string)($airOpsEvidence['source'] ?? '')));
+$airOpsConfidence = trim((string)($airOpsEvidence['confidence'] ?? ''));
+$airOpsScore = isset($airOpsEvidence['evidence_score']) ? (int)$airOpsEvidence['evidence_score'] : 0;
+$airOpsDelayMinutes = is_numeric($airOpsEvidence['delay_minutes_estimated'] ?? null) ? (int)$airOpsEvidence['delay_minutes_estimated'] : null;
+$airOpsCancelled = (string)($airOpsEvidence['cancelled'] ?? 'no') === 'yes';
+$airOpsDelaySuggestionFloor = 15;
+$airOpsCanSuggestDelay = $airOpsDelayMinutes !== null && $airOpsDelayMinutes >= $airOpsDelaySuggestionFloor;
+$airOpsDelayDisplay = null;
+if ($airOpsDelayMinutes !== null) {
+    $airOpsDelayDisplay = $airOpsDelayMinutes > 0
+        ? ('+' . $airOpsDelayMinutes . ' min')
+        : ($airOpsDelayMinutes < 0 ? ($airOpsDelayMinutes . ' min (foran schedule)') : '0 min');
+}
+$airOpsSuggestedDelayBand = '';
+if ($airOpsCanSuggestDelay) {
+    if ($airOpsDelayMinutes >= 300) {
+        $airOpsSuggestedDelayBand = 'five_plus';
+    } elseif ($airDelayThresholdHours > 0 && $airOpsDelayMinutes >= ($airDelayThresholdHours * 60)) {
+        $airOpsSuggestedDelayBand = 'threshold_to_under_5h';
+    } else {
+        $airOpsSuggestedDelayBand = 'under_threshold';
+    }
+}
 $missedConnectionStation = trim((string)($form['missed_connection_station'] ?? ''));
 $missedConnectionPick = trim((string)($form['missed_connection_pick'] ?? ''));
 $missedConnectionChosen = $missedConnectionStation !== '' || $missedConnectionPick !== '';
+$railIncidentMissedValue = strtolower(trim((string)($form['incident_missed'] ?? ($incident['missed'] ?? ($missedConnectionChosen ? 'yes' : 'no')))));
+if (!in_array($railIncidentMissedValue, ['yes', 'no'], true)) {
+    $railIncidentMissedValue = $missedConnectionChosen ? 'yes' : 'no';
+}
 $airDelayBandOptions = match ($airDelayThresholdHours) {
     2 => [
         'under_threshold' => 'Under 2 timer',
@@ -94,6 +227,20 @@ $airDelayBandOptions = match ($airDelayThresholdHours) {
         'five_plus' => '5+ timer',
     ],
 };
+$airExpectedDelayOptions = [
+    'under_threshold' => ($airDelayThresholdHours > 0 ? ('Under ' . $airDelayThresholdHours . ' timer') : 'Under threshold'),
+    'threshold_to_under_5h' => ($airDelayThresholdHours > 0 ? ('Mindst ' . $airDelayThresholdHours . ' timer') : 'Threshold naaet'),
+    'five_plus' => '5+ timer',
+    'next_day' => 'Ny afgang foerst naeste dag',
+    'unknown' => 'Ved ikke',
+];
+$airActualArrivalOptions = [
+    'under_3h' => 'Under 3 timer',
+    'three_to_four' => '3-3 timer 59 min',
+    'four_plus' => '4+ timer',
+    'never_arrived' => 'Ankom aldrig',
+    'unknown' => 'Ved ikke',
+];
 
 // National policy hint (optional) used for TRIN 5 "national fallback" UX (e.g., DK 30 min).
 $nationalPolicy = $nationalPolicy ?? null;
@@ -160,6 +307,29 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <?php if ($isAirShortView): ?>
     <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
     <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Air-incident er holdt kort her: haendelse, missed connection og kompensationsnaere fakta. Mere teknisk kontraktanalyse kan flyttes til sagen bagefter.</div>
+  <?php elseif ($isFerry): ?>
+    <?= $this->element('ferry_live_estimate', compact('form', 'flags', 'meta', 'journey', 'ferryRights', 'ferryScope')) ?>
+    <div class="small muted mt8" style="background:#f8fafc; border:1px solid #bae6fd; border-radius:6px; padding:8px;">Ferry-estimatet viser operator, valgt afgang, AIS/ETA-stoette og foreloebige Art. 17/18/19-gates. Det er ikke et multimodalt claim-kanal step.</div>
+  <?php elseif ($isRailSplitView): ?>
+    <?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+    <div class="small muted mt8" style="background:#f8fafc; border:1px solid #c7d2fe; border-radius:6px; padding:8px;">Rail-estimatet bygger paa den valgte afgang og fungerer kun som UX-seed. Brug altid incident-spoergsmaalene til at bekraefte, om Art. 18, 19 og 20 faktisk er opfyldt.</div>
+  <?php endif; ?>
+  <?php if ($isAirShortView): ?>
+    <?php if (!empty($selectedAirFlight)): ?>
+      <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+        <strong>Valgt flyvning:</strong>
+        <?= h((string)($selectedAirFlight['flight_number'] ?? '-')) ?>
+        <?php if (!empty($selectedAirLeg['title'])): ?>
+          | <?= h((string)$selectedAirLeg['title']) ?>
+        <?php endif; ?>
+        <?php if (!empty($selectedAirFlight['carrier_name'])): ?>
+          | <?= h((string)$selectedAirFlight['carrier_name']) ?>
+        <?php endif; ?>
+        <?php if (!empty($selectedAirFlight['scheduled_departure_local'])): ?>
+          | <?= h((string)$selectedAirFlight['scheduled_departure_local']) ?>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
   <?php elseif ($isModeSplitView): ?>
     <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
       <?= $isOngoing
@@ -215,6 +385,49 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       </div>
     </div>
 
+    <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+      <div class="widget-title">
+        <span class="step-badge" aria-hidden="true">P</span>
+        <span>Artikel 11 / Art. 8(3): PMR</span>
+      </div>
+      <p class="small muted mt8">For ferry afklarer vi her baade PMR-status og et eventuelt spor om naegtet indskibning. Den assistance-orienterede dokumentation samles bagefter i backend-supporttrinnet.</p>
+      <div class="mt8">
+        <div>Har passageren behov for saerlig assistance / PMR?</div>
+        <label><input type="radio" name="pmr_user" value="yes" <?= $v('pmr_user')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="pmr_user" value="no" <?= $v('pmr_user')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div class="mt8" data-show-if="pmr_user:yes">
+        <div>Blev du naegtet at komme om bord paa faergen paa grund af handicap / nedsat mobilitet?</div>
+        <label><input type="radio" name="ferry_pmr_boarding_refused" value="yes" <?= $v('ferry_pmr_boarding_refused')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="ferry_pmr_boarding_refused" value="no" <?= $v('ferry_pmr_boarding_refused')==='no'?'checked':'' ?> /> Nej</label>
+        <div class="small muted mt4">Reservation eller billetafvisning alene aabner ikke dette PMR-remedy-spor. Her ser vi kun paa naegtet indskibning.</div>
+      </div>
+      <div class="mt8" data-show-if="ferry_pmr_boarding_refused:yes">
+        <div>Oplyste du ved booking eller forhaandskoeb om saerlige behov, hvis behovet var kendt?</div>
+        <select name="ferry_pmr_special_needs_notified_at_booking">
+          <option value="unknown" <?= $v('ferry_pmr_special_needs_notified_at_booking')==='unknown'?'selected':'' ?>>Ved ikke</option>
+          <option value="yes" <?= $v('ferry_pmr_special_needs_notified_at_booking')==='yes'?'selected':'' ?>>Ja</option>
+          <option value="no" <?= $v('ferry_pmr_special_needs_notified_at_booking')==='no'?'selected':'' ?>>Nej</option>
+          <option value="not_relevant" <?= $v('ferry_pmr_special_needs_notified_at_booking')==='not_relevant'?'selected':'' ?>>Ikke relevant / behovet var ikke kendt</option>
+        </select>
+        <div class="small muted mt4">Bruges som soft evidence for Art. 11(2). Det styrer ikke remedies alene.</div>
+      </div>
+      <div class="mt8" data-show-if="ferry_pmr_boarding_refused:yes">
+        <div>Hvad sagde transportoeren var begrundelsen?</div>
+        <select name="ferry_pmr_refusal_basis">
+          <option value="safety_requirements" <?= $v('ferry_pmr_refusal_basis')==='safety_requirements'?'selected':'' ?>>Sikkerhedskrav</option>
+          <option value="port_or_ship_infrastructure" <?= $v('ferry_pmr_refusal_basis')==='port_or_ship_infrastructure'?'selected':'' ?>>Havnens eller skibets indretning</option>
+          <option value="other_or_unknown" <?= $v('ferry_pmr_refusal_basis')==='other_or_unknown'?'selected':'' ?>>Andet / ved ikke</option>
+        </select>
+      </div>
+      <div class="mt8" data-show-if="ferry_pmr_boarding_refused:yes">
+        <div>Fik du en klar begrundelse skriftligt eller mundtligt?</div>
+        <label><input type="radio" name="ferry_pmr_reason_given" value="yes" <?= $v('ferry_pmr_reason_given')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="ferry_pmr_reason_given" value="no" <?= $v('ferry_pmr_reason_given')==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+      <div class="small muted mt8" data-show-if="pmr_user:yes">PMR-assistance, ledsager, servicehund, 48-timers varsel og leveret assistance registreres bagefter i backend-supporttrinnet.</div>
+    </div>
+
     <?php elseif (!$isBus && !$isAir): ?>
     <div class="mt8">
       <div class="small">Var der meddelt afbrydelse/forsinkelse foer dit koeb?</div>
@@ -259,27 +472,116 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
 
         <div class="mt8">
           <div>Haendelse</div>
-          <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
-          <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+          <input type="hidden" id="ferryIncidentMainHidden" name="incident_main" value="<?= h($v('incident_main')) ?>" />
+          <label><input type="radio" name="ferry_incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
+          <label class="ml8"><input type="radio" name="ferry_incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
         </div>
 
-        <div class="mt8" data-show-if="incident_main:delay,cancellation">
-          <div>Fik du information om aflysningen eller forsinkelsen senest 30 min efter planlagt afgangstid?</div>
-          <label><input type="radio" name="ferry_art16_notice_within_30min" value="yes" <?= $v('ferry_art16_notice_within_30min')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="no" <?= $v('ferry_art16_notice_within_30min')==='no'?'checked':'' ?> /> Nej</label>
-          <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="unknown" <?= $v('ferry_art16_notice_within_30min')==='unknown'?'checked':'' ?> /> Ved ikke</label>
+        <div class="mt8" data-show-if="ferry_incident_main:delay">
+          <div>Var færgens afgang fra havneterminalen forventet eller faktisk forsinket mere end 90 minutter?</div>
+          <label><input type="radio" name="ferry_departure_disruption_90" value="yes" <?= $ferryDisruption90Value==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="ferry_departure_disruption_90" value="no" <?= $ferryDisruption90Value==='no'?'checked':'' ?> /> Nej / ved ikke</label>
         </div>
 
-        <div class="mt8" data-show-if="incident_main:delay">
-          <div>Forventet afgangsforsinkelse mindst 90 minutter?</div>
-          <label><input type="radio" name="expected_departure_delay_90" value="yes" <?= $v('expected_departure_delay_90')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="expected_departure_delay_90" value="no" <?= $v('expected_departure_delay_90')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+        <div class="mt8" data-show-if="ferry_incident_main:cancellation">
+          <div>Er afgangen aflyst af transportøren?</div>
+          <label><input type="radio" name="ferry_cancellation_confirmed" value="yes" <?= $ferryCancellationConfirmedValue==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="ferry_cancellation_confirmed" value="no" <?= $ferryCancellationConfirmedValue==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+          <div class="small muted mt4">Aflysning åbner Art. 17/18-sporet uafhængigt af 90-minuttersforsinkelse. Art. 19 afhænger stadig af faktisk ankomstforsinkelse og undtagelser.</div>
         </div>
 
-        <div class="mt8" data-show-if="incident_main:delay">
-          <div>Var afgangen faktisk mindst 90 minutter forsinket?</div>
-          <label><input type="radio" name="actual_departure_delay_90" value="yes" <?= $v('actual_departure_delay_90')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="actual_departure_delay_90" value="no" <?= $v('actual_departure_delay_90')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+        <input type="hidden" name="expected_departure_delay_90" value="<?= h($ferrySystemExpected90) ?>" />
+        <input type="hidden" name="actual_departure_delay_90" value="<?= h($ferrySystemActual90) ?>" />
+        <input type="hidden" name="scheduled_journey_duration_minutes" value="<?= h($ferrySystemDuration) ?>" />
+        <input type="hidden" name="delay_minutes_departure" value="<?= h($ferrySystemDepartureDelay) ?>" />
+        <input type="hidden" name="arrival_delay_minutes" value="<?= h($ferrySystemArrivalDelay) ?>" />
+
+        <div class="card mt12" style="border-color:#bae6fd;background:#f0f9ff;" data-show-if="ferry_incident_main:delay,cancellation">
+          <div class="widget-title">
+            <span class="step-badge" aria-hidden="true">D</span>
+            <span>Systemet har fundet</span>
+          </div>
+          <p class="small muted mt8">Ferry bruger API/OCR/afgangsvalg som standard. Ret kun hvis data mangler eller er forkert.</p>
+          <div class="small mt8" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px;">
+            <div><strong><?= h($v('incident_main') === 'cancellation' ? 'Planlagt afgang' : 'Planlagt sejltid') ?></strong><br><span data-ferry-system-duration><?= h($v('incident_main') === 'cancellation' ? 'Aflysning valgt' : ($ferrySystemDuration !== '' ? ($ferrySystemDuration . ' min') : 'Afventer')) ?></span></div>
+            <div><strong>Afgangsforsinkelse</strong><br><span data-ferry-system-departure-delay><?= h($ferrySystemDepartureDelay !== '' ? ($ferrySystemDepartureDelay . ' min') : 'Afventer') ?></span></div>
+            <div><strong>Ankomstforsinkelse</strong><br><span data-ferry-system-arrival-delay><?= h($ferrySystemArrivalDelay !== '' ? ($ferrySystemArrivalDelay . ' min') : 'Afventer') ?></span></div>
+            <div><strong>Confidence</strong><br><?= h($ferrySuggestionConfidence !== '' ? $ferrySuggestionConfidence : 'Afventer') ?></div>
+          </div>
+          <div class="mt8" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="button" id="ferryConfirmOperationalData">Bekraeft</button>
+            <button type="button" class="button" id="ferryEditOperationalData" style="background:#eef2ff;color:#1e3a8a;">Ret oplysninger</button>
+          </div>
+          <input type="hidden" name="ferry_operational_data_confirmed" value="<?= h($v('ferry_operational_data_confirmed')) ?>" />
+        </div>
+
+        <div id="ferryOperationalCorrectionPanel" class="card mt12 hidden" style="border-color:#cbd5e1;background:#fff;">
+          <div class="widget-title">
+            <span class="step-badge" aria-hidden="true">R</span>
+            <span>Ret systemdata / backend confirmation</span>
+          </div>
+          <p class="small muted mt8">Disse felter er normalt udfyldt af API/OCR. De bruges til rettighedsflags, men skal ikke tastes af passageren som standard.</p>
+
+          <div class="mt8">
+            <div>Fik du information om aflysningen eller forsinkelsen senest 30 min efter planlagt afgangstid?</div>
+            <label><input type="radio" name="ferry_art16_notice_within_30min" value="yes" <?= $v('ferry_art16_notice_within_30min')==='yes'?'checked':'' ?> /> Ja</label>
+            <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="no" <?= $v('ferry_art16_notice_within_30min')==='no'?'checked':'' ?> /> Nej</label>
+            <label class="ml8"><input type="radio" name="ferry_art16_notice_within_30min" value="unknown" <?= $v('ferry_art16_notice_within_30min')==='unknown'?'checked':'' ?> /> Ved ikke</label>
+            <div class="small muted mt4">Art. 16 er et informations-/claim-strength spor. Det aabner ikke Art. 17/18/19 alene.</div>
+          </div>
+
+          <div class="mt8">
+            <div>Forventet afgangsforsinkelse mindst 90 minutter?</div>
+            <label><input type="radio" name="expected_departure_delay_90_override" value="yes" <?= $v('expected_departure_delay_90_override')==='yes'?'checked':'' ?> /> Ja</label>
+            <label class="ml8"><input type="radio" name="expected_departure_delay_90_override" value="no" <?= $v('expected_departure_delay_90_override')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+          </div>
+
+          <div class="mt8">
+            <div>Var afgangen faktisk mindst 90 minutter forsinket?</div>
+            <label><input type="radio" name="actual_departure_delay_90_override" value="yes" <?= $v('actual_departure_delay_90_override')==='yes'?'checked':'' ?> /> Ja</label>
+            <label class="ml8"><input type="radio" name="actual_departure_delay_90_override" value="no" <?= $v('actual_departure_delay_90_override')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+          </div>
+
+        <div class="mt8" data-show-if="ferry_incident_main:delay,cancellation">
+          <label for="ferryScheduledDurationMinutes">Planlagt sejltid i minutter</label>
+          <input
+            id="ferryScheduledDurationMinutes"
+            type="number"
+            name="scheduled_journey_duration_minutes"
+            min="1"
+            step="1"
+            value="<?= h($ferrySystemDuration) ?>"
+            placeholder="fx 115"
+          />
+          <div class="small muted mt4">Bruges til Art. 19-threshold: 60/120/180/360 minutter afhængigt af planlagt sejltid.</div>
+        </div>
+
+        <div class="mt8" data-show-if="ferry_incident_main:delay">
+          <label for="ferryDepartureDelayMinutes">Afgangsforsinkelse i minutter</label>
+          <input
+            id="ferryDepartureDelayMinutes"
+            type="number"
+            name="delay_minutes_departure"
+            min="0"
+            step="1"
+            value="<?= h($ferrySystemDepartureDelay) ?>"
+            placeholder="fx 90"
+          />
+        </div>
+
+        <div class="mt8" data-show-if="ferry_incident_main:delay">
+          <label for="ferryArrivalDelayMinutes">Ankomstforsinkelse i minutter</label>
+          <input
+            id="ferryArrivalDelayMinutes"
+            type="number"
+            name="arrival_delay_minutes"
+            min="0"
+            step="1"
+            value="<?= h($ferrySystemArrivalDelay) ?>"
+            placeholder="fx 120"
+          />
+          <div class="small muted mt4">Dette er det centrale felt for Art. 19-kompensation.</div>
+        </div>
         </div>
       </div>
 
@@ -361,7 +663,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
             <label class="ml8"><input type="radio" name="delay_departure_band" value="120_plus" <?= $v('delay_departure_band')==='120_plus'?'checked':'' ?> /> 120+ min</label>
           </div>
 
-          <div id="busDelayTimerCard" class="bus-live-shell">
+          <div id="busDelayTimerCard" class="bus-live-shell <?= $isSplitCompletedView ? 'hidden' : '' ?>">
             <div class="small"><strong>Live forsinkelses-hjaelper</strong></div>
             <div class="small muted mt4">Timeren kan koere ved igangvaerende busforsinkelse og synkroniserer automatisk til 90- og 120-minutters-taersklerne.</div>
 
@@ -385,6 +687,9 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
 
             <div id="busDelayTimerStatus" class="small muted mt8"></div>
           </div>
+          <?php if ($isSplitCompletedView): ?>
+            <div class="small muted mt8">Live-timeren er skjult i den afsluttede bus-variant. Brug kun den juridiske forsinkelses-kategori ovenfor.</div>
+          <?php endif; ?>
         </div>
 
         <div class="mt12" id="busPlannedDurationCard">
@@ -478,6 +783,30 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         <strong>Air-flow i TRIN 5:</strong> afstandskategori <strong><?= h($airDistanceBandLabel) ?></strong><?= $airFlightDistanceKm !== '' ? (' (' . h($airFlightDistanceKm) . ' km)') : '' ?>. Art. 6-delay-threshold er <strong><?= h($airDelayThresholdLabel) ?></strong>.
       </div>
 
+      <?php if ($airOpsAvailable): ?>
+      <div class="card mt12" style="border-color:#dbeafe;background:#f8fbff;">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">O</span>
+          <span>Operationelle flight-data</span>
+        </div>
+        <p class="small muted mt8">Brug dette som forslag fra <?= h($airOpsSource !== '' ? $airOpsSource : 'ops-kilden') ?>. Det hjaelper med status og plausibilitet, men er ikke alene juridisk facit.</p>
+        <div class="small mt8" style="background:#fff; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <?php if ($airOpsStatus !== ''): ?><div><strong>Status:</strong> <?= h($airOpsStatus) ?></div><?php endif; ?>
+          <?php if ($airOpsDelayDisplay !== null): ?><div><strong>Estimeret ankomstafvigelse:</strong> <?= h($airOpsDelayDisplay) ?></div><?php endif; ?>
+          <?php if ($airOpsConfidence !== '' || $airOpsScore > 0): ?><div><strong>Confidence:</strong> <?= h($airOpsConfidence !== '' ? $airOpsConfidence : 'ukendt') ?><?= $airOpsScore > 0 ? (' · score ' . h((string)$airOpsScore)) : '' ?></div><?php endif; ?>
+          <?php if (trim((string)($airOpsEvidence['summary'] ?? '')) !== ''): ?><div class="muted mt4"><?= h((string)$airOpsEvidence['summary']) ?></div><?php endif; ?>
+        </div>
+        <div class="mt8" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <?php if ($airOpsCancelled): ?>
+            <button type="button" class="button" id="airOpsSuggestCancellation">Brug som aflysningsforslag</button>
+          <?php endif; ?>
+          <?php if ($airOpsCanSuggestDelay): ?>
+            <button type="button" class="button" id="airOpsSuggestDelay">Brug som delay-forslag</button>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <div class="mt8">
         <div>Haendelsestype</div>
         <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Lang forsinkelse</label>
@@ -485,7 +814,6 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
         <label class="ml8"><input type="radio" name="incident_main" value="denied_boarding" <?= $v('incident_main')==='denied_boarding'?'checked':'' ?> /> Boardingafvisning</label>
       </div>
 
-      <?php if (!$isAirShortOngoingView): ?>
       <div id="airCancellationNoticeCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">C</span>
@@ -498,36 +826,51 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <label><input type="radio" name="cancellation_notice_band" value="14_plus_days" <?= $airCancellationNoticeBand==='14_plus_days'?'checked':'' ?> /> Mindst 14 dage foer</label>
           <label class="ml8"><input type="radio" name="cancellation_notice_band" value="7_to_13_days" <?= $airCancellationNoticeBand==='7_to_13_days'?'checked':'' ?> /> Mellem 14 og 7 dage foer</label>
           <label class="ml8"><input type="radio" name="cancellation_notice_band" value="under_7_days" <?= $airCancellationNoticeBand==='under_7_days'?'checked':'' ?> /> Under 7 dage foer</label>
+          <label class="ml8"><input type="radio" name="cancellation_notice_band" value="airport_on_day_of_departure" <?= $airCancellationNoticeBand==='airport_on_day_of_departure'?'checked':'' ?> /> I lufthavnen / ved afgang</label>
           <label class="ml8"><input type="radio" name="cancellation_notice_band" value="unknown" <?= $airCancellationNoticeBand==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
+        <?php if ($isAirShortCompletedView): ?>
+        <div class="small muted mt8">For afsluttede flyvninger afklarer vi allerede her, om flyselskabet tilb&oslash;d en alternativ flyvning. De mere detaljerede Article 5-vinduer og eventuel Article 7(2)-reduktion registreres i sagen bagefter.</div>
+        <?php endif; ?>
       </div>
-      <?php else: ?>
-      <input type="hidden" name="cancellation_notice_band" value="" />
-      <input type="hidden" name="reroute_offered" value="" />
-      <input type="hidden" name="reroute_departure_band" value="" />
-      <input type="hidden" name="reroute_arrival_band" value="" />
-      <?php endif; ?>
 
       <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="incident_main:delay">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">D</span>
-          <span>Forventet afgangsforsinkelse</span>
+          <span><?= $isCompleted ? 'Meldt forsinkelse ved afgang' : 'Meldt forsinkelse ved afgang' ?></span>
         </div>
-        <p class="small muted mt8">Vaelg den juridiske delay-kategori efter afstandsbucket i Art. 6. Ved 5+ timer kan refund blive relevant i et senere trin.</p>
+        <p class="small muted mt8">
+          <?= $isCompleted
+              ? 'Brug den forsinkelse, flyselskabet meldte ud undervejs. Den bruges til Article 6-assistance og Article 8-refusion ved 5+ timer.'
+              : 'Brug den forsinkelse, flyselskabet lige nu har meldt ud. Den bruges til Article 6-assistance og Article 8-refusion ved 5+ timer.' ?>
+        </p>
 
         <div class="mt8">
-          <?php foreach ($airDelayBandOptions as $bandValue => $bandLabel): ?>
-            <label class="<?= $bandValue !== 'under_threshold' ? 'ml8' : '' ?>"><input type="radio" name="delay_departure_band" value="<?= h($bandValue) ?>" <?= $airDelayBandValue===$bandValue?'checked':'' ?> /> <?= h($bandLabel) ?></label>
+          <?php foreach ($airExpectedDelayOptions as $bandValue => $bandLabel): ?>
+            <label class="<?= $bandValue !== 'under_threshold' ? 'ml8' : '' ?>"><input type="radio" name="air_expected_delay_bucket" value="<?= h($bandValue) ?>" <?= $airExpectedDelayBucket===$bandValue?'checked':'' ?> /> <?= h($bandLabel) ?></label>
           <?php endforeach; ?>
         </div>
       </div>
 
-      <div class="mt8" data-show-if="incident_main:delay">
-        <label>Forsinkelse ved endelig ankomst (minutter, bruges til kompensation)
-          <input type="number" name="arrival_delay_minutes" min="0" step="1" value="<?= h($v('arrival_delay_minutes')) ?>" placeholder="185" />
-        </label>
+      <?php if ($isCompleted): ?>
+      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="incident_main:delay">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">A</span>
+          <span>Faktisk forsinkelse ved endelig ankomst</span>
+        </div>
+        <p class="small muted mt8">Bruges til kompensationsvurderingen. Den meldte forsinkelse ovenfor bruges stadig til assistance og eventuel 5+ timers refusion.</p>
+        <div class="mt8">
+          <?php foreach ($airActualArrivalOptions as $bucketValue => $bucketLabel): ?>
+            <label class="<?= $bucketValue !== 'under_3h' ? 'ml8' : '' ?>"><input type="radio" name="air_actual_arrival_delay_bucket" value="<?= h($bucketValue) ?>" <?= $airActualArrivalBucket===$bucketValue?'checked':'' ?> /> <?= h($bucketLabel) ?></label>
+          <?php endforeach; ?>
+        </div>
       </div>
+      <?php else: ?>
+      <input type="hidden" name="air_actual_arrival_delay_bucket" value="" />
+      <?php endif; ?>
+      <input type="hidden" name="delay_departure_band" value="<?= h($airDelayBandValue) ?>" />
       <input type="hidden" name="delay_minutes_departure" value="" />
+      <input type="hidden" name="arrival_delay_minutes" value="<?= h($v('arrival_delay_minutes')) ?>" />
 
       <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;" data-show-if="incident_main:denied_boarding">
         <div class="widget-title">
@@ -535,6 +878,11 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <span>Boardingafvisning</span>
         </div>
         <p class="small muted mt8">Artikel 4 skelner mellem frivilligt afkald mod en aftalt modydelse og boardingafvisning mod din vilje. Frivillige kan stadig have ret til Art. 8 og 9, men ikke automatisk Art. 7-kompensation.</p>
+        <?php if ($isAirShortView && $isOngoing): ?>
+        <div class="small muted mt8">Her afklarer vi kun, om boardingafvisningen var frivillig eller ufrivillig. Refusion, ombooking, egen loesning og udgiftstyper samles i de naeste trin og kan uddybes i sagen bagefter.</div>
+        <?php elseif ($isAirShortView && $isCompleted): ?>
+        <div class="small muted mt8">Frontflowet holder sig her til frivillig eller ufrivillig boardingafvisning. De mere detaljerede Article 8- og udgiftsspoergsmaal registreres i sagen bagefter.</div>
+        <?php endif; ?>
         <div class="mt8">Gav du frivilligt afkald på din reservation mod en aftalt modydelse?</div>
         <label><input type="radio" name="voluntary_denied_boarding" value="yes" <?= $v('voluntary_denied_boarding')==='yes'?'checked':'' ?> /> Ja, frivilligt</label>
         <label class="ml8"><input type="radio" name="voluntary_denied_boarding" value="no" <?= $v('voluntary_denied_boarding')==='no'?'checked':'' ?> /> Nej, jeg blev afvist mod min vilje</label>
@@ -577,43 +925,111 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       <?php else: ?>
       <input type="hidden" name="protected_connection_missed" value="no" />
       <input type="hidden" name="connection_protection_basis" value="" />
-      <input type="hidden" name="reroute_arrival_delay_minutes" value="" />
+      <input type="hidden" name="reroute_arrival_delay_minutes" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" />
+      <input type="hidden" name="reroute_used_or_accepted" value="<?= h($airRerouteUsedOrAccepted) ?>" />
       <?php endif; ?>
 
-      <?php if (!$isAirShortOngoingView): ?>
+      <?php if ($showAirCancellationWindows): ?>
       <div id="airCancellationRerouteCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
         <div class="widget-title">
           <span class="step-badge" aria-hidden="true">R</span>
           <span>Ombooking og undtagelse fra kompensation</span>
         </div>
-        <p id="airCancellationRerouteHelp" class="small muted mt8">Kun relevant hvis du fik besked om aflysningen mindre end 14 dage foer og faktisk blev tilbudt ombooking.</p>
+        <p id="airCancellationRerouteHelp" class="small muted mt8"><?= $isAirShortOngoingView
+            ? 'For igangvaerende flight afklarer vi her foerst, om flyselskabet tilbloed en alternativ flyvning. De mere detaljerede Article 5- og 7(2)-spoergsmaal flyttes til sagen bagefter.'
+            : ($isAirShortCompletedView
+                ? 'For afsluttet flight afklarer vi her, om flyselskabet tilbloed en alternativ flyvning. De mere detaljerede Article 5- og 7(2)-spoergsmaal flyttes til sagen bagefter.'
+                : 'Kun relevant hvis du fik besked om aflysningen mindre end 14 dage foer. Registrer foerst om der blev tilbudt ombooking og derefter, om den holdt de juridiske tidsvinduer.') ?></p>
 
         <div class="mt8">
-          <div>Tilboed operatoeren ombooking?</div>
+          <div>Tilboed flyselskabet en alternativ flyvning?</div>
           <label><input type="radio" name="reroute_offered" value="yes" <?= $v('reroute_offered')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="reroute_offered" value="no" <?= $v('reroute_offered')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+          <label class="ml8"><input type="radio" name="reroute_offered" value="no" <?= $v('reroute_offered')==='no'?'checked':'' ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="reroute_offered" value="unknown" <?= $v('reroute_offered')==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
+        <div id="airCancellationSelfArrangeNote" class="small muted mt8 hidden">Hvis flyselskabet ikke tilbloed en alternativ flyvning, eller hvis tilbuddet ikke bliver brugt, registreres egen loesning og eventuelle udgifter i de naeste trin eller i sagen bagefter.</div>
 
-        <div class="mt8">
+        <?php if ($showAirCancellationDetailQuestions): ?>
+        <div id="airCancellationDetailQuestions">
+        <div id="airCancellationRerouteWindows" class="mt8" data-show-if="reroute_offered:yes">
           <div id="airCancellationDepartureQuestion">Kunne du afrejse hoejst 2 timer foer det planlagte afgangstidspunkt?</div>
           <label><input type="radio" name="reroute_departure_band" value="within_window" <?= $airRerouteDepartureBand==='within_window'?'checked':'' ?> /> Ja</label>
           <label class="ml8"><input type="radio" name="reroute_departure_band" value="outside_window" <?= $airRerouteDepartureBand==='outside_window'?'checked':'' ?> /> Nej</label>
           <label class="ml8"><input type="radio" name="reroute_departure_band" value="unknown" <?= $airRerouteDepartureBand==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
 
-        <div class="mt8">
+        <div class="mt8" data-show-if="reroute_offered:yes">
           <div id="airCancellationArrivalQuestion">Kunne du ankomme senest 4 timer efter det planlagte ankomsttidspunkt?</div>
           <label><input type="radio" name="reroute_arrival_band" value="within_window" <?= $airRerouteArrivalBand==='within_window'?'checked':'' ?> /> Ja</label>
           <label class="ml8"><input type="radio" name="reroute_arrival_band" value="outside_window" <?= $airRerouteArrivalBand==='outside_window'?'checked':'' ?> /> Nej</label>
           <label class="ml8"><input type="radio" name="reroute_arrival_band" value="unknown" <?= $airRerouteArrivalBand==='unknown'?'checked':'' ?> /> Ved ikke</label>
         </div>
+        </div>
+        <?php else: ?>
+        <input type="hidden" name="reroute_departure_band" value="<?= h($airRerouteDepartureBand) ?>" />
+        <input type="hidden" name="reroute_arrival_band" value="<?= h($airRerouteArrivalBand) ?>" />
+        <?php endif; ?>
       </div>
+      <?php if ($showAirCancellationDetailQuestions): ?>
+      <div id="airCancellationReductionCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">7</span>
+          <span>Eventuel 50% reduktion</span>
+        </div>
+        <p class="small muted mt8"><?= $isCompleted ? 'Kun relevant hvis kompensation stadig bestaar efter Art. 5, og du faktisk brugte den alternative flyvning. Bruges til at vurdere en mulig 50% reduktion efter Art. 7(2).' : 'Kun relevant hvis der findes en konkret alternativ flyvning, som du forventer at bruge. Bruges kun som foreloebig vurdering af mulig 50% reduktion efter Art. 7(2).' ?></p>
+        <div class="mt8">
+          <div><?= $isCompleted ? 'Brugte eller accepterede du den alternative flyvning?' : 'Forventer du at bruge den alternative flyvning?' ?></div>
+          <label><input type="radio" name="reroute_used_or_accepted" value="yes" <?= $airRerouteUsedOrAccepted==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="reroute_used_or_accepted" value="no" <?= $airRerouteUsedOrAccepted==='no'?'checked':'' ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="reroute_used_or_accepted" value="unknown" <?= $airRerouteUsedOrAccepted==='unknown'?'checked':'' ?> /> Ved ikke</label>
+        </div>
+        <div class="mt8" data-show-if="reroute_used_or_accepted:yes">
+          <div><?= $isCompleted ? 'Hvor mange minutter senere ankom du til den endelige destination?' : 'Hvor mange minutter senere forventes du at ankomme til den endelige destination?' ?></div>
+          <input type="number" name="reroute_arrival_delay_minutes" min="0" step="1" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" placeholder="95" />
+          <div class="small muted mt4">Dette bruges kun til Art. 7(2)-reduktion og ikke til Article 5-gaten ovenfor.</div>
+        </div>
+      </div>
+      <div id="airCancellationReductionNotRelevantCard" class="card mt12 hidden" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="small muted">50% reduktion er ikke relevant her, fordi kompensation ikke staar tilbage efter Article 5-vurderingen.</div>
+      </div>
+      <?php else: ?>
+      <input type="hidden" name="reroute_used_or_accepted" value="<?= h($airRerouteUsedOrAccepted) ?>" />
+      <input type="hidden" name="reroute_arrival_delay_minutes" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" />
+      <?php endif; ?>
+      <?php else: ?>
+      <input type="hidden" name="reroute_offered" value="<?= h($v('reroute_offered')) ?>" />
+      <input type="hidden" name="reroute_departure_band" value="<?= h($airRerouteDepartureBand) ?>" />
+      <input type="hidden" name="reroute_arrival_band" value="<?= h($airRerouteArrivalBand) ?>" />
+      <input type="hidden" name="reroute_used_or_accepted" value="<?= h($airRerouteUsedOrAccepted) ?>" />
+      <input type="hidden" name="reroute_arrival_delay_minutes" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" />
       <?php endif; ?>
 
-      <div class="mt8" data-show-if="protected_connection_missed:yes">
-        <label>Forsinkelse ved ankomst efter ombooking (minutter, valgfri)
-          <input type="number" name="reroute_arrival_delay_minutes" min="0" step="1" value="<?= h($v('reroute_arrival_delay_minutes')) ?>" placeholder="95" />
-        </label>
+      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">P</span>
+          <span>Artikel 11: PMR</span>
+        </div>
+        <p class="small muted mt8">Bevaegelseshaemmede personer og personer med saerlige behov har foersteprioritet ved transport og artikel 9-care saa hurtigt som muligt.</p>
+        <div class="mt8">
+          <div>Har passageren behov for saerlig assistance / PMR?</div>
+          <label><input type="radio" name="pmr_user" value="yes" <?= $v('pmr_user')==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="pmr_user" value="no" <?= $v('pmr_user')==='no'?'checked':'' ?> /> Nej</label>
+        </div>
+        <div class="small muted mt8" data-show-if="pmr_user:yes">PMR-sporet bruges her som prioritet/accelerator for assistance. Det paavirker ikke i sig selv kompensation, refusion eller downgrade.</div>
+      </div>
+
+      <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb;">
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">U</span>
+          <span>Artikel 11: Uledsaget barn</span>
+        </div>
+        <p class="small muted mt8">Uledsagede boern har efter artikel 11 ogsaa foersteprioritet ved transport og artikel 9-care saa hurtigt som muligt.</p>
+        <div class="mt8">
+          <div>Var der tale om et uledsaget barn?</div>
+          <label><input type="radio" name="unaccompanied_minor" value="yes" <?= $v('unaccompanied_minor')==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="unaccompanied_minor" value="no" <?= $v('unaccompanied_minor')==='no'?'checked':'' ?> /> Nej</label>
+        </div>
+        <div class="small muted mt8" data-show-if="unaccompanied_minor:yes">Uledsaget barn har efter artikel 11 ogsaa ret til artikel 9-care saa hurtigt som muligt. Det paavirker ikke i sig selv kompensation, refusion eller downgrade.</div>
       </div>
 
       <?php if (!$isAirShortOngoingView): ?>
@@ -627,21 +1043,60 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           </span>
           <span>Force majeure</span>
         </div>
-        <p class="small muted">Bruges i air-flowet til at vurdere om kompensation kan bortfalde pga. extraordinary circumstances. Care og hotel behandles i et senere trin.</p>
+        <p class="small muted">
+          <?= $isAirShortView && $isCompleted
+              ? 'Hvis flyselskabet har oplyst en saerlig grund, registrerer vi den her tidligt, fordi den kan paavirke kompensationen. Care og hotel behandles i et senere trin.'
+              : 'Bruges i air-flowet til at vurdere om kompensation kan bortfalde pga. extraordinary circumstances. Care og hotel behandles i et senere trin.' ?>
+        </p>
 
         <div class="mt8">
-          <div>Paaberaaber flyselskabet extraordinary circumstances?</div>
-          <label><input type="radio" name="extraordinary_circumstances" value="yes" <?= $v('extraordinary_circumstances')==='yes'?'checked':'' ?> /> Ja</label>
-          <label class="ml8"><input type="radio" name="extraordinary_circumstances" value="no" <?= $v('extraordinary_circumstances')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+          <div><?= $isAirShortView && $isCompleted ? 'Har flyselskabet oplyst en saerlig grund til aflysningen eller forsinkelsen?' : 'Paaberaaber flyselskabet extraordinary circumstances?' ?></div>
+          <label><input type="radio" name="operatorExceptionalCircumstances" value="yes" <?= $exc0==='yes'?'checked':'' ?> /> Ja</label>
+          <label class="ml8"><input type="radio" name="operatorExceptionalCircumstances" value="no" <?= $exc0==='no'?'checked':'' ?> /> Nej</label>
+          <label class="ml8"><input type="radio" name="operatorExceptionalCircumstances" value="unknown" <?= ($exc0===''||$exc0==='unknown')?'checked':'' ?> /> Ved ikke</label>
+        </div>
+        <div class="mt8" data-show-if="operatorExceptionalCircumstances:yes">
+          <div><?= $isAirShortView && $isCompleted ? 'Hvilken grund oplyste flyselskabet?' : 'Hvis ja: vaelg type' ?></div>
+          <select name="operatorExceptionalType">
+            <option value="">- Vaelg grund -</option>
+            <option value="weather" <?= $excType0==='weather'?'selected':'' ?>>Vejr</option>
+            <option value="air_traffic_control" <?= $excType0==='air_traffic_control'?'selected':'' ?>>ATC / luftrum</option>
+            <option value="security" <?= $excType0==='security'?'selected':'' ?>>Sikkerhed</option>
+            <option value="external_strike" <?= $excType0==='external_strike'?'selected':'' ?>>Ekstern strejke</option>
+            <option value="own_staff_strike" <?= $excType0==='own_staff_strike'?'selected':'' ?>>Egen personalestrejke</option>
+            <option value="technical_issue" <?= $excType0==='technical_issue'?'selected':'' ?>>Teknisk fejl</option>
+            <option value="crew_shortage" <?= $excType0==='crew_shortage'?'selected':'' ?>>Crew / bemanding</option>
+            <option value="other" <?= $excType0==='other'?'selected':'' ?>>Andet</option>
+          </select>
         </div>
       </div>
       <?php else: ?>
-      <input type="hidden" name="extraordinary_circumstances" value="" />
+      <input type="hidden" name="operatorExceptionalCircumstances" value="" />
+      <input type="hidden" name="operatorExceptionalType" value="" />
       <?php endif; ?>
+      <input type="hidden" name="extraordinary_circumstances" value="" />
 
       <input type="hidden" name="meal_offered" value="" />
       <input type="hidden" name="hotel_required" value="" />
       <input type="hidden" name="hotel_offered" value="" />
+
+      <?php if (false && $isAirShortView && $isCompleted): ?>
+        <div class="card mt12" style="border-color:#dbeafe;background:#f8fbff;">
+          <div class="widget-title">
+            <span class="step-badge" aria-hidden="true">+</span>
+            <span>Sagsbackend bagefter</span>
+          </div>
+          <p class="small muted mt8">Frontflowet holdes kort. Marker her, hvis vi bagefter skal åbne ekstraudgifter og dokumentupload i dit kontrolpanel.</p>
+
+          <input type="hidden" name="air_incident_expenses_incurred" value="" />
+          <input type="hidden" name="air_backend_needs_documents" value="no" />
+        </div>
+      <?php endif; ?>
+
+      <?php if ($isAirShortView && $isCompleted): ?>
+        <input type="hidden" name="air_incident_expenses_incurred" value="" />
+        <input type="hidden" name="air_backend_needs_documents" value="no" />
+      <?php endif; ?>
 
       <?php if ($isAirShortView): ?>
         <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Dette air-spor er gjort lettere i frontflowet. Mere teknisk kontraktanalyse og dokumentkontrol kan flyttes til sagen bagefter.</div>
@@ -655,6 +1110,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
               '14_plus_days' => '14+ dage',
               '7_to_13_days' => '7-13 dage',
               'under_7_days' => 'Under 7 dage',
+              'airport_on_day_of_departure' => 'I lufthavnen / ved afgang',
               'unknown' => 'Ved ikke',
               default => 'Ikke angivet',
           }) ?></div>
@@ -668,24 +1124,51 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     <?php else: ?>
       <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art.18/20)</strong>
       <p class="small muted">Vaelg den haendelse, der ramte dit tog. Bruges til at aktivere standard vurdering af Art. 18/20.<?= $incidentHint !== '' ? (' ' . h($incidentHint)) : '' ?></p>
+      <?php if ($railSeedIncidentType !== 'unknown' || $railSeedTransferCount > 0): ?>
+        <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <strong>Systemet har fundet</strong>:
+          <?= h(match ($railSeedIncidentType) {
+              'delay' => 'mulig forsinkelse',
+              'cancellation' => 'mulig aflysning',
+              'partial_cancellation' => 'mulig delvis aflysning',
+              'replacement_transport' => 'mulig erstatningstransport',
+              default => 'ingen sikker haendelse endnu',
+          }) ?>
+          <?php if ($railSeedArrivalDelay !== null): ?>
+            <?= h(' · seedet ankomstforsinkelse: ' . $railSeedArrivalDelay . ' min') ?>
+          <?php endif; ?>
+          <?php if ($railSeedTransferCount > 0): ?>
+            <?= h(' · ' . $railSeedTransferCount . ' skift i rejsen') ?>
+          <?php endif; ?>
+          <?php if ($railSeedMissedConnectionSuspected): ?>
+            <?= h(' · mulig mistet forbindelse') ?>
+          <?php endif; ?>
+          .
+        </div>
+      <?php endif; ?>
+      <?php if ($railProblemAnchorSummary !== ''): ?>
+        <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+          <strong>Problemsted fra TRIN 3:</strong> <?= h($railProblemAnchorSummary) ?>.
+        </div>
+      <?php endif; ?>
 
       <div class="mt8">
         <div>Haendelsestype (vaelg en)</div>
-        <label><input type="radio" name="incident_main" value="delay" <?= $v('incident_main')==='delay'?'checked':'' ?> /> Forsinkelse</label>
-        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $v('incident_main')==='cancellation'?'checked':'' ?> /> Aflysning</label>
+        <label><input type="radio" name="incident_main" value="delay" <?= $railIncidentMainValue==='delay'?'checked':'' ?> /> Forsinkelse</label>
+        <label class="ml8"><input type="radio" name="incident_main" value="cancellation" <?= $railIncidentMainValue==='cancellation'?'checked':'' ?> /> Aflysning</label>
       </div>
 
       <div class="mt4" data-show-if="incident_main:delay">
-        <div>Har du modtaget besked om &ge;60 minutters forsinkelse?</div>
-        <label><input type="radio" name="expected_delay_60" value="yes" <?= $v('expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="ml8"><input type="radio" name="expected_delay_60" value="no" <?= $v('expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+        <div><?= h($railExpectedDelayPrompt) ?></div>
+        <label><input type="radio" name="expected_delay_60" value="yes" <?= $railExpectedDelay60Value==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="expected_delay_60" value="no" <?= $railExpectedDelay60Value==='no'?'checked':'' ?> /> Nej / ved ikke</label>
       </div>
 
       <div class="mt8" data-show-if="incident_main:delay">
-        <div>Er du allerede 60 minutter forsinket?</div>
-        <label><input type="radio" name="delay_already_60" value="yes" <?= $v('delay_already_60')==='yes'?'checked':'' ?> /> Ja</label>
-        <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= $v('delay_already_60')==='no'?'checked':'' ?> /> Nej</label>
-        <div class="small muted mt4">Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.</div>
+        <div><?= h($railActualDelayPrompt) ?></div>
+        <label><input type="radio" name="delay_already_60" value="yes" <?= $railDelayAlready60Value==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="delay_already_60" value="no" <?= $railDelayAlready60Value==='no'?'checked':'' ?> /> <?= h($railActualDelayNoLabel) ?></label>
+        <div class="small muted mt4"><?= h($railActualDelayNote) ?></div>
       </div>
     <?php endif; ?>
   </div>
@@ -694,7 +1177,16 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   <!-- Mistet forbindelse -->
   <div class="card mt12">
     <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
-    <p class="small muted">Vælg den konkrete leg i TRIN 3.5. Her bruger vi kun den valgte forbindelse som reference.</p>
+    <p class="small muted">Hvis problemet opstod ved et skift, hentes fokuspunktet fra TRIN 3. Her bekræfter du kun, om den valgte forbindelse faktisk blev misset.</p>
+    <?php if ($railSeedMissedConnectionSuspected): ?>
+      <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Systemet har fundet en mulig mistet forbindelse pga. valgt afgang og dens forsinkelse. Bekræft nedenfor, om forbindelsen faktisk blev misset.</div>
+    <?php endif; ?>
+
+    <?php if ($railTransferStationsSummary !== ''): ?>
+      <div class="small muted mt8">Skift i den valgte rejse: <strong><?= h($railTransferStationsSummary) ?></strong></div>
+    <?php endif; ?>
+
+    <div class="small muted mt8">Hvis problemet opstod ved et skift, kommer fokuspunktet nu fra TRIN 3 og bruges kun som reference her.</div>
 
     <input type="hidden" name="incident_missed" value="<?= $missedConnectionChosen ? 'yes' : 'no' ?>" />
 
@@ -705,14 +1197,19 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <?= h($missedConnectionPick !== '' ? $missedConnectionPick : $missedConnectionStation) ?>
         </strong>
       </div>
-      <div id="missed60Wrap" class="mt8">
-        <div>Betyder den valgte forbindelse, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?</div>
+      <div class="mt8">
+        <div><?= h($railMissedConnectionPrompt) ?></div>
+        <label><input type="radio" name="incident_missed" value="yes" <?= $railIncidentMissedValue==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="incident_missed" value="no" <?= $railIncidentMissedValue==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+      <div id="missed60Wrap" class="mt8" data-show-if="incident_missed:yes">
+        <div><?= h($railMissedConnectionDelayPrompt) ?></div>
         <label><input type="radio" name="missed_expected_delay_60" value="yes" <?= $v('missed_expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
         <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= $v('missed_expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
         <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig være relevante afhængigt af land.</div>
       </div>
     <?php else: ?>
-      <div class="small muted mt8">Ingen forbindelse valgt endnu. Gå tilbage til TRIN 3.5 for at vælge den ramte leg.</div>
+      <div class="small muted mt8">Ingen forbindelse valgt endnu. Gå tilbage til TRIN 3, hvis problemet opstod ved et skift, og vælg fokuspunktet der.</div>
     <?php endif; ?>
     </div>
   </div>
@@ -819,12 +1316,13 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   </div>
   <?php endif; ?>
   <div class="mt12" style="display:flex; gap:8px; align-items:center;">
-    <?= $this->Html->link('<- Tilbage', ['action' => 'journey'], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
+    <?= $this->Html->link('<- Tilbage', ['action' => $incidentPrevAction], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
     <?= $this->Form->button('Naeste trin ->', ['class' => 'button', 'id' => 'incidentSubmitBtn', 'form' => 'incidentStepForm']) ?>
   </div>
 
   </fieldset>
   <?= $this->Form->end() ?>
+  <?= $this->element('flow_autosave', ['step' => 'incident', 'formSelector' => '#incidentStepForm']) ?>
 
   <div class="mt12">
     <button type="button" class="button" id="loadHooksBtn" style="background:#eee;color:#333;">
@@ -871,14 +1369,27 @@ function getVal(name) {
   if (inp && inp.type !== 'radio' && inp.type !== 'checkbox') { return inp.value || ''; }
   return '';
 }
+function clearRadioGroup(name) {
+  document.querySelectorAll('input[name="' + name + '"]').forEach(function(el) {
+    el.checked = false;
+  });
+}
 document.addEventListener('change', function(e) {
   if (!e.target || !e.target.name) return;
+  if (__incidentIsFerry && ['ferry_departure_disruption_90', 'ferry_cancellation_confirmed', 'ferry_incident_main'].includes(e.target.name)) {
+    clearRadioGroup('expected_departure_delay_90_override');
+    clearRadioGroup('actual_departure_delay_90_override');
+    setFirstNamedValue('ferry_operational_data_confirmed', '');
+  }
   updateReveal();
   if (__incidentIsFerry) {
+    syncFerryOperationalCorrections();
     updateFerryResolverStatus();
+    updateFerryLiveEstimatePreview();
   }
   if (__incidentIsAir) {
     updateAirCancellationState();
+    updateAirLiveEstimatePreview();
   }
   if (__incidentIsBus) {
     updateBusIncidentState();
@@ -886,15 +1397,28 @@ document.addEventListener('change', function(e) {
   }
   if (__incidentIsRail) {
     updateStep4State();
+    updateRailLiveEstimatePreview();
+  }
+});
+document.addEventListener('input', function(e) {
+  if (!e.target || !e.target.name) return;
+  if (__incidentIsFerry && ['scheduled_journey_duration_minutes', 'delay_minutes_departure', 'arrival_delay_minutes'].includes(e.target.name)) {
+    syncFerryOperationalCorrections();
+    updateFerryLiveEstimatePreview();
+  }
+  if (__incidentIsRail && ['national_delay_minutes'].includes(e.target.name)) {
+    updateRailLiveEstimatePreview();
   }
 });
 document.addEventListener('DOMContentLoaded', function(){
   updateReveal();
   if (__incidentIsFerry) {
     updateFerryResolverStatus();
+    updateFerryLiveEstimatePreview();
   }
   if (__incidentIsAir) {
     updateAirCancellationState();
+    updateAirLiveEstimatePreview();
   }
   if (__incidentIsBus) {
     updateBusIncidentState();
@@ -903,6 +1427,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   if (__incidentIsRail) {
     updateStep4State();
+    updateRailLiveEstimatePreview();
   }
 
   var panel = document.getElementById('hooksPanel');
@@ -940,6 +1465,63 @@ document.addEventListener('DOMContentLoaded', function(){
       loadHooksPanel();
     }
   }
+
+  var opsSuggestCancellation = document.getElementById('airOpsSuggestCancellation');
+  if (opsSuggestCancellation) {
+    opsSuggestCancellation.addEventListener('click', function(){
+      setRadioValue('incident_main', 'cancellation');
+      updateReveal();
+      updateAirCancellationState();
+      updateAirLiveEstimatePreview();
+    });
+  }
+
+  var opsSuggestDelay = document.getElementById('airOpsSuggestDelay');
+  if (opsSuggestDelay) {
+    opsSuggestDelay.addEventListener('click', function(){
+      setRadioValue('incident_main', 'delay');
+      <?php if ($airOpsDelayMinutes !== null): ?>
+      setInputValue('arrival_delay_minutes', <?= json_encode((string)$airOpsDelayMinutes) ?>);
+      setRadioValue('air_actual_arrival_delay_bucket', airActualArrivalBucketFromMinutes(<?= json_encode((int)$airOpsDelayMinutes) ?>));
+      <?php endif; ?>
+      <?php if ($airOpsSuggestedDelayBand !== ''): ?>
+      setRadioValue('air_expected_delay_bucket', airExpectedDelayBucketFromLegacyBand(<?= json_encode($airOpsSuggestedDelayBand) ?>));
+      <?php endif; ?>
+      updateReveal();
+      updateAirCancellationState();
+      updateAirLiveEstimatePreview();
+    });
+  }
+
+  var ferryEditOperationalData = document.getElementById('ferryEditOperationalData');
+  var ferryCorrectionPanel = document.getElementById('ferryOperationalCorrectionPanel');
+  if (ferryEditOperationalData && ferryCorrectionPanel) {
+    ferryEditOperationalData.addEventListener('click', function() {
+      ferryCorrectionPanel.classList.remove('hidden');
+      ferryCorrectionPanel.hidden = false;
+      updateReveal();
+      syncFerryOperationalCorrections();
+      updateFerryLiveEstimatePreview();
+    });
+  }
+
+  var ferryConfirmOperationalData = document.getElementById('ferryConfirmOperationalData');
+  if (ferryConfirmOperationalData) {
+    ferryConfirmOperationalData.addEventListener('click', function() {
+      setFirstNamedValue('ferry_operational_data_confirmed', 'yes');
+      syncFerryOperationalCorrections();
+      updateFerryResolverStatus();
+      updateFerryLiveEstimatePreview();
+      ferryConfirmOperationalData.textContent = 'Bekraeftet';
+    });
+  }
+
+  var incidentStepForm = document.getElementById('incidentStepForm');
+  if (incidentStepForm && __incidentIsFerry) {
+    incidentStepForm.addEventListener('submit', function() {
+      syncFerryOperationalCorrections();
+    });
+  }
 });
 
 function getRadioValue(name){
@@ -959,6 +1541,149 @@ function setBlockVisible(el, show) {
   el.hidden = !show;
 }
 
+function formatAirEstimateAmount(value) {
+  var numeric = parseFloat(value);
+  if (!isFinite(numeric)) return 'Afventer';
+  return numeric.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' EUR';
+}
+
+function updateAirLiveEstimatePreview() {
+  var root = document.getElementById('airLiveEstimate');
+  var amountEl = document.getElementById('airLiveEstimateAmount');
+  var statusEl = document.getElementById('airLiveEstimateStatus');
+  var summaryEl = document.getElementById('airLiveEstimateSummary');
+  var careEl = document.getElementById('airLiveEstimateCareValue');
+  var remedyEl = document.getElementById('airLiveEstimateRemedyValue');
+  if (!root || !amountEl || !statusEl || !summaryEl) return;
+
+  var hasKnownDistance = root.dataset.hasKnownDistance === '1';
+  var travelState = String(root.dataset.travelState || '').toLowerCase();
+  var passengerCount = parseInt(root.dataset.passengerCount || '1', 10);
+  var potentialTotal = parseFloat(root.dataset.potentialTotal || '0');
+  var incidentMain = getFerryIncidentMain();
+  var expectedDelay = getRadioValue('air_expected_delay_bucket');
+  var actualArrival = getRadioValue('air_actual_arrival_delay_bucket');
+  var notice = getRadioValue('cancellation_notice_band');
+  var reroute = getRadioValue('reroute_offered');
+  var depWindow = getRadioValue('reroute_departure_band');
+  var arrWindow = getRadioValue('reroute_arrival_band');
+  var voluntaryDenied = getRadioValue('voluntary_denied_boarding');
+  var extraordinary = getRadioValue('extraordinary_circumstances');
+  var pmrUser = getRadioValue('pmr_user');
+  var unaccompaniedMinor = getRadioValue('unaccompanied_minor');
+  var peopleSuffix = passengerCount > 1 ? (' for ' + passengerCount + ' passagerer') : ' pr. sag';
+  var state = 'preview';
+  var careActive = false;
+  var remedyActive = false;
+
+  if (incidentMain === 'delay') {
+    careActive = expectedDelay === 'threshold_to_under_5h' || expectedDelay === 'five_plus' || expectedDelay === 'next_day' || pmrUser === 'yes' || unaccompaniedMinor === 'yes';
+    remedyActive = expectedDelay === 'five_plus' || expectedDelay === 'next_day';
+  } else if (incidentMain === 'cancellation') {
+    careActive = true;
+    remedyActive = true;
+  } else if (incidentMain === 'denied_boarding') {
+    careActive = voluntaryDenied !== 'yes' || pmrUser === 'yes' || unaccompaniedMinor === 'yes';
+    remedyActive = true;
+  } else if (pmrUser === 'yes' || unaccompaniedMinor === 'yes') {
+    careActive = true;
+  }
+
+  if (careEl) {
+    careEl.textContent = careActive ? 'Aktiv' : 'Ikke aktiv endnu';
+  }
+  if (remedyEl) {
+    remedyEl.textContent = remedyActive ? 'Aktiv' : 'Ikke aktiv endnu';
+  }
+
+  if (extraordinary === 'yes') {
+    state = 'uncertain';
+  } else if (incidentMain === 'delay') {
+    if (travelState === 'completed') {
+      if (actualArrival === 'under_3h') {
+        state = 'not_eligible';
+      } else if (actualArrival === 'three_to_four' || actualArrival === 'four_plus' || actualArrival === 'never_arrived') {
+        state = 'eligible';
+      } else if (actualArrival === 'unknown') {
+        state = 'uncertain';
+      }
+    } else {
+      if (expectedDelay === 'under_threshold') {
+        state = 'inactive';
+      } else if (expectedDelay === 'threshold_to_under_5h' || expectedDelay === 'five_plus' || expectedDelay === 'next_day') {
+        state = 'preview';
+      } else if (expectedDelay === 'unknown') {
+        state = 'uncertain';
+      }
+    }
+  } else if (incidentMain === 'cancellation') {
+    if (notice === '14_plus_days') {
+      state = 'not_eligible';
+    } else if (notice === '7_to_13_days' || notice === 'under_7_days' || notice === 'airport_on_day_of_departure') {
+      if (reroute === 'no') {
+        state = 'eligible';
+      } else if (reroute === 'yes') {
+        if (depWindow === 'within_window' && arrWindow === 'within_window') {
+          state = 'not_eligible';
+        } else if (
+          depWindow !== ''
+          && arrWindow !== ''
+          && depWindow !== 'unknown'
+          && arrWindow !== 'unknown'
+        ) {
+          state = 'eligible';
+        } else {
+          state = 'uncertain';
+        }
+      } else {
+        state = 'uncertain';
+      }
+    } else if (notice === 'unknown') {
+      state = 'uncertain';
+    }
+  } else if (incidentMain === 'denied_boarding') {
+    if (voluntaryDenied === 'yes') {
+      state = 'not_eligible';
+    } else if (voluntaryDenied === 'no') {
+      state = 'eligible';
+    }
+  }
+
+  if (state === 'eligible' && hasKnownDistance) {
+    amountEl.textContent = formatAirEstimateAmount(potentialTotal);
+    statusEl.textContent = 'Kompensation mulig';
+    summaryEl.textContent = 'Foreloebigt kompensationsestimat' + peopleSuffix;
+    return;
+  }
+
+  if (state === 'not_eligible') {
+    amountEl.textContent = formatAirEstimateAmount(0);
+    statusEl.textContent = 'Ingen kompensation';
+    summaryEl.textContent = 'Kompensationsretten er foreloebigt afvist ud fra de nuvaerende svar.';
+    return;
+  }
+
+  if (state === 'inactive') {
+    amountEl.textContent = formatAirEstimateAmount(0);
+    statusEl.textContent = 'Ikke aktiveret endnu';
+    summaryEl.textContent = 'Den meldte forsinkelse ligger under den aktuelle threshold. Kompensationssporet er derfor ikke aktiveret endnu.';
+    return;
+  }
+
+  if (state === 'uncertain') {
+    amountEl.textContent = hasKnownDistance ? formatAirEstimateAmount(potentialTotal) : 'Afventer';
+    statusEl.textContent = 'Kompensation usikker';
+    summaryEl.textContent = 'Kompensationsretten er foreloebigt usikker og kraever flere svar om varsel, ombooking eller extraordinary circumstances.';
+    return;
+  }
+
+  amountEl.textContent = hasKnownDistance ? formatAirEstimateAmount(potentialTotal) : 'Afventer';
+  statusEl.textContent = hasKnownDistance ? 'Foreloebigt kompensationsniveau' : 'Afventer flere svar';
+  summaryEl.textContent = hasKnownDistance
+    ? ('Foreloebigt beloeb ud fra distancekategori' + (passengerCount > 1 ? ' for ' + passengerCount + ' passagerer' : '') + '. Det endelige krav afhaenger af haendelsen og de oevrige svar.')
+    : 'Kompensationsbeloebet bliver vist, saa snart distancekategori eller gate er klare.';
+}
+
 function updateFerryResolverStatus() {
   var status = document.getElementById('ferryResolverStatus');
   if (!status) return;
@@ -970,12 +1695,29 @@ function updateFerryResolverStatus() {
   var departureFromTerminal = status.dataset.departureFromTerminal === '1';
   var seasonTicketInput = document.querySelector('input[name="season_ticket"]');
   var seasonTicket = seasonTicketInput ? seasonTicketInput.value === 'yes' : false;
-  var incidentMain = getRadioValue('incident_main');
-  var expectedDelay90 = getRadioValue('expected_departure_delay_90') === 'yes';
-  var actualDelay90 = getRadioValue('actual_departure_delay_90') === 'yes';
+  var incidentMain = getFerryIncidentMain();
+  var cancellationConfirmed = getRadioValue('ferry_cancellation_confirmed');
+  var expectedDelayAnswer = getVal('expected_departure_delay_90');
+  var actualDelayAnswer = getVal('actual_departure_delay_90');
+  var combined90Answer = getRadioValue('ferry_departure_disruption_90');
+  var expectedDelay90 = expectedDelayAnswer === 'yes';
+  var actualDelay90 = actualDelayAnswer === 'yes';
   var informedBeforePurchase = getRadioValue('informed_before_purchase') === 'yes';
   var openTicketWithoutDepartureTime = getRadioValue('open_ticket_without_departure_time') === 'yes';
-  var hasDepartureDisruption = incidentMain === 'cancellation' || (incidentMain === 'delay' && (expectedDelay90 || actualDelay90));
+  var hasDepartureDisruption = false;
+  if (incidentMain === 'cancellation') {
+    hasDepartureDisruption = cancellationConfirmed === 'yes';
+  } else if (incidentMain === 'delay') {
+    if (combined90Answer === 'yes') {
+      hasDepartureDisruption = true;
+    } else if (combined90Answer === 'no') {
+      hasDepartureDisruption = false;
+    } else if (expectedDelayAnswer === 'yes' || actualDelayAnswer === 'yes') {
+      hasDepartureDisruption = true;
+    } else if (expectedDelayAnswer === 'no' && actualDelayAnswer === 'no') {
+      hasDepartureDisruption = false;
+    }
+  }
   var art17Active = regulationApplies && hasDepartureDisruption && departureFromTerminal && !openTicketWithoutDepartureTime && !informedBeforePurchase;
   var art18Active = regulationApplies && art18Supported && hasDepartureDisruption && (!openTicketWithoutDepartureTime || seasonTicket);
 
@@ -987,24 +1729,335 @@ function updateFerryResolverStatus() {
   }
 }
 
+function ferryLiveIntValue(name) {
+  var raw = getVal(name);
+  if (raw === '') return null;
+  var num = parseInt(raw, 10);
+  return isNaN(num) ? null : Math.max(0, num);
+}
+
+function ferryThresholdForDuration(minutes) {
+  if (minutes === null || minutes <= 0) return null;
+  if (minutes <= 240) return 60;
+  if (minutes < 480) return 120;
+  if (minutes < 1440) return 180;
+  return 360;
+}
+
+function ferrySetLiveText(selector, value) {
+  var el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+
+function setFirstNamedValue(name, value) {
+  var inputs = document.querySelectorAll('input[name="' + name + '"]');
+  if (!inputs.length) return;
+  inputs[0].value = value == null ? '' : String(value);
+}
+
+function getFerryIncidentMain() {
+  return getRadioValue('ferry_incident_main') || getVal('incident_main');
+}
+
+function ferryCorrectionInputValue(id) {
+  var el = document.getElementById(id);
+  return el ? (el.value || '') : '';
+}
+
+function syncFerryOperationalCorrections() {
+  setFirstNamedValue('incident_main', getFerryIncidentMain());
+
+  var combined90 = getRadioValue('ferry_departure_disruption_90');
+  var incidentMain = getFerryIncidentMain();
+  var cancellationConfirmed = getRadioValue('ferry_cancellation_confirmed');
+  if (incidentMain === 'cancellation') {
+    if (cancellationConfirmed === 'yes') {
+      setFirstNamedValue('expected_departure_delay_90', 'yes');
+      setFirstNamedValue('actual_departure_delay_90', '');
+    } else if (cancellationConfirmed === 'no') {
+      setFirstNamedValue('expected_departure_delay_90', 'no');
+      setFirstNamedValue('actual_departure_delay_90', 'no');
+    } else {
+      setFirstNamedValue('expected_departure_delay_90', '');
+      setFirstNamedValue('actual_departure_delay_90', '');
+    }
+  } else if (combined90 === 'yes') {
+    setFirstNamedValue('expected_departure_delay_90', 'yes');
+  } else if (combined90 === 'no') {
+    setFirstNamedValue('expected_departure_delay_90', 'no');
+    setFirstNamedValue('actual_departure_delay_90', 'no');
+  }
+
+  var expectedOverride = getRadioValue('expected_departure_delay_90_override');
+  if (expectedOverride === 'yes' || expectedOverride === 'no') {
+    setFirstNamedValue('expected_departure_delay_90', expectedOverride);
+  }
+  var actualOverride = getRadioValue('actual_departure_delay_90_override');
+  if (actualOverride === 'yes' || actualOverride === 'no') {
+    setFirstNamedValue('actual_departure_delay_90', actualOverride);
+  }
+
+  ['scheduled_journey_duration_minutes', 'delay_minutes_departure', 'arrival_delay_minutes'].forEach(function(name) {
+    var id = name === 'scheduled_journey_duration_minutes'
+      ? 'ferryScheduledDurationMinutes'
+      : (name === 'delay_minutes_departure' ? 'ferryDepartureDelayMinutes' : 'ferryArrivalDelayMinutes');
+    var value = ferryCorrectionInputValue(id);
+    if (value !== '') {
+      setFirstNamedValue(name, value);
+    }
+  });
+
+  var systemDurationText = getFerryIncidentMain() === 'cancellation'
+    ? 'Aflysning valgt'
+    : (ferryLiveIntValue('scheduled_journey_duration_minutes') !== null ? ferryLiveIntValue('scheduled_journey_duration_minutes') + ' min' : 'Afventer');
+  ferrySetLiveText('[data-ferry-system-duration]', systemDurationText);
+  ferrySetLiveText('[data-ferry-system-departure-delay]', ferryLiveIntValue('delay_minutes_departure') !== null ? ferryLiveIntValue('delay_minutes_departure') + ' min' : 'Afventer');
+  ferrySetLiveText('[data-ferry-system-arrival-delay]', ferryLiveIntValue('arrival_delay_minutes') !== null ? ferryLiveIntValue('arrival_delay_minutes') + ' min' : 'Afventer');
+}
+
+function updateFerryLiveEstimatePreview() {
+  var panel = document.getElementById('ferryLiveEstimate');
+  if (!panel) return;
+
+  var incidentMain = getFerryIncidentMain();
+  var cancellationConfirmed = getRadioValue('ferry_cancellation_confirmed');
+  var expectedDelayAnswer = getVal('expected_departure_delay_90');
+  var actualDelayAnswer = getVal('actual_departure_delay_90');
+  var combined90Answer = getRadioValue('ferry_departure_disruption_90');
+  var expectedDelay90 = getVal('expected_departure_delay_90') === 'yes';
+  var actualDelay90 = getVal('actual_departure_delay_90') === 'yes';
+  var informedBeforePurchase = getRadioValue('informed_before_purchase') === 'yes';
+  var openTicketWithoutDepartureTime = getRadioValue('open_ticket_without_departure_time') === 'yes';
+  var seasonTicketInput = document.querySelector('input[name="season_ticket"]');
+  var seasonTicket = seasonTicketInput ? seasonTicketInput.value === 'yes' : false;
+  var weatherSafety = getRadioValue('weather_safety') === 'yes';
+  var extraordinary = getRadioValue('extraordinary_circumstances') === 'yes';
+  var pmrUser = getRadioValue('pmr_user') === 'yes';
+  var pmrBoardingRefused = getRadioValue('ferry_pmr_boarding_refused') === 'yes';
+  var status = document.getElementById('ferryResolverStatus');
+  var regulationApplies = !status || status.dataset.regulationApplies === '1';
+  var art18Supported = !status || status.dataset.art18Supported !== '0';
+  var departureFromTerminal = !status || status.dataset.departureFromTerminal === '1';
+  var duration = ferryLiveIntValue('scheduled_journey_duration_minutes');
+  var departureDelay = ferryLiveIntValue('delay_minutes_departure');
+  var arrivalDelay = ferryLiveIntValue('arrival_delay_minutes');
+  var threshold = ferryThresholdForDuration(duration);
+  var ticketPrice = parseFloat(panel.dataset.ticketPrice || '0');
+  var currency = panel.dataset.currency || 'EUR';
+  var hasDepartureDisruption = false;
+  if (incidentMain === 'cancellation') {
+    hasDepartureDisruption = cancellationConfirmed === 'yes';
+  } else if (incidentMain === 'delay') {
+    if (combined90Answer === 'yes') {
+      hasDepartureDisruption = true;
+    } else if (combined90Answer === 'no') {
+      hasDepartureDisruption = false;
+    } else if (expectedDelayAnswer === 'yes' || actualDelayAnswer === 'yes') {
+      hasDepartureDisruption = true;
+    } else if (expectedDelayAnswer === 'no' && actualDelayAnswer === 'no') {
+      hasDepartureDisruption = false;
+    } else {
+      hasDepartureDisruption = departureDelay !== null && departureDelay >= 90;
+    }
+  }
+  var openTicketBlocksTimedRights = openTicketWithoutDepartureTime && !seasonTicket;
+  var art17Active = regulationApplies && hasDepartureDisruption && departureFromTerminal && !openTicketWithoutDepartureTime && !informedBeforePurchase;
+  var art18Active = regulationApplies && art18Supported && hasDepartureDisruption && !openTicketBlocksTimedRights;
+  var art19Active = regulationApplies && threshold !== null && arrivalDelay !== null && arrivalDelay >= threshold && !informedBeforePurchase && !openTicketBlocksTimedRights && !weatherSafety && !extraordinary;
+  var pmrRemedyActive = regulationApplies && pmrUser && pmrBoardingRefused;
+  var bandPct = art19Active ? (arrivalDelay >= threshold * 2 ? 50 : 25) : 0;
+
+  ferrySetLiveText('[data-ferry-live-duration]', duration !== null ? (Math.floor(duration / 60) + 't ' + (duration % 60) + 'm') : 'Afventer');
+  ferrySetLiveText('[data-ferry-live-threshold]', threshold !== null ? (threshold + ' min') : 'Afventer');
+  ferrySetLiveText('[data-ferry-live-arrival-delay]', arrivalDelay !== null ? ((arrivalDelay > 0 ? '+' : '') + arrivalDelay + ' min') : 'Afventer');
+  ferrySetLiveText('[data-ferry-live-departure-delay]', departureDelay !== null ? ((departureDelay > 0 ? '+' : '') + departureDelay + ' min') : (actualDelay90 ? '+90 min' : 'Afventer'));
+  ferrySetLiveText('[data-ferry-live-art17]', art17Active ? (weatherSafety ? 'Refreshments aktiv' : 'Refreshments + hotel') : 'Ikke aktiv endnu');
+  ferrySetLiveText('[data-ferry-live-art18]', art18Active ? 'Aktiv' : 'Ikke aktiv endnu');
+  ferrySetLiveText('[data-ferry-live-pmr]', pmrRemedyActive ? 'Aktiv ved nægtet indskibning' : 'Ikke aktiv');
+  ferrySetLiveText('[data-ferry-live-art19]', bandPct > 0 ? (bandPct + '%') : 'Ikke aktiv endnu');
+  ferrySetLiveText('[data-ferry-live-status]', art19Active ? ('Art. 19 aktiv · ' + bandPct + '%') : (threshold !== null && arrivalDelay !== null ? 'Under kompensationstærskel' : 'Afventer forsinkelse/sejltid'));
+
+  if (bandPct > 0 && ticketPrice > 0) {
+    ferrySetLiveText('[data-ferry-live-amount]', (ticketPrice * bandPct / 100).toFixed(2) + ' ' + currency);
+  } else if (bandPct > 0) {
+    ferrySetLiveText('[data-ferry-live-amount]', bandPct + '% af billetpris');
+  } else {
+    ferrySetLiveText('[data-ferry-live-amount]', 'Afventer');
+  }
+}
+
+function updateRailLiveEstimatePreview() {
+  var panel = document.getElementById('railLiveEstimate');
+  if (!panel) return;
+
+  var seedArt18 = panel.dataset.seedArt18 === '1';
+  var seedArt19 = panel.dataset.seedArt19 === '1';
+  var seedArt20 = panel.dataset.seedArt20 === '1';
+  var seedArrivalDelay = panel.dataset.seedArrivalDelay === '' ? null : parseInt(panel.dataset.seedArrivalDelay, 10);
+  var seedDepartureDelay = panel.dataset.seedDepartureDelay === '' ? null : parseInt(panel.dataset.seedDepartureDelay, 10);
+  var seedIncidentType = String(panel.dataset.seedIncidentType || 'unknown');
+
+  var main = getRadioValue('incident_main');
+  var expected60 = getRadioValue('expected_delay_60');
+  var already60 = getRadioValue('delay_already_60');
+  var missed = getVal('incident_missed') === 'yes';
+  var missed60 = getRadioValue('missed_expected_delay_60');
+  var extraordinary = getRadioValue('operatorExceptionalCircumstances') === 'yes';
+  var stranding = getRadioValue('rail_stranding_context') || getVal('rail_stranding_context') || 'no';
+
+  var incidentLabel = 'Afventer';
+  if (main === 'delay') incidentLabel = 'Forsinkelse';
+  if (main === 'cancellation') incidentLabel = 'Aflysning';
+  if (missed && missed60 === 'yes') incidentLabel = 'Mistet forbindelse';
+  if (incidentLabel === 'Afventer') {
+    if (seedIncidentType === 'delay') incidentLabel = 'Forsinkelse';
+    else if (seedIncidentType === 'cancellation') incidentLabel = 'Aflysning';
+    else if (seedIncidentType === 'missed_connection') incidentLabel = 'Mistet forbindelse';
+    else if (seedIncidentType === 'partial_cancellation') incidentLabel = 'Delvis aflysning';
+    else if (seedIncidentType === 'replacement_transport') incidentLabel = 'Erstatningstransport';
+  }
+
+  var art18Active = false;
+  var art20Active = false;
+  var art19Active = false;
+  var userHasMainConfirmation = false;
+
+  if (main === 'cancellation') {
+    art18Active = true;
+    art20Active = true;
+    userHasMainConfirmation = true;
+  } else if (main === 'delay') {
+    if (expected60 === 'yes' || already60 === 'yes') {
+      art18Active = true;
+      art20Active = true;
+      userHasMainConfirmation = true;
+    } else if (expected60 === 'no' && already60 === 'no') {
+      art18Active = false;
+      art20Active = false;
+      userHasMainConfirmation = true;
+    }
+  }
+
+  if (missed && missed60 === 'yes') {
+    art18Active = true;
+    art20Active = true;
+    art19Active = true;
+  }
+
+  if (already60 === 'yes') {
+    art19Active = true;
+  }
+
+  if (!userHasMainConfirmation && !art18Active && seedArt18) {
+    art18Active = true;
+  }
+  if (!userHasMainConfirmation && !art20Active && seedArt20) {
+    art20Active = true;
+  }
+  if (!art19Active && seedArt19) {
+    art19Active = true;
+  }
+
+  var arrivalDelay = seedArrivalDelay;
+  if (already60 === 'yes' && (arrivalDelay === null || arrivalDelay < 60)) {
+    arrivalDelay = 60;
+  }
+  if (missed && missed60 === 'yes' && (arrivalDelay === null || arrivalDelay < 60)) {
+    arrivalDelay = 60;
+  }
+
+  var art19Label = 'Ikke aktiv endnu';
+  var statusText = 'Afventer rail-bekræftelse';
+  if (art19Active && extraordinary) {
+    art19Label = 'Blokeret af force majeure';
+    statusText = 'Art. 19 blokeret';
+  } else if (art19Active) {
+    art19Label = (arrivalDelay !== null && arrivalDelay >= 120) ? '50%' : '25%';
+    statusText = 'Art. 19 mulig';
+  } else if (art18Active || art20Active) {
+    statusText = 'Art. 18/20 aktive';
+  }
+
+  ferrySetLiveText('[data-rail-live-status]', statusText);
+  ferrySetLiveText('[data-rail-live-incident]', incidentLabel);
+  ferrySetLiveText('[data-rail-live-art18]', art18Active ? 'Aktiv' : 'Ikke aktiv endnu');
+  ferrySetLiveText('[data-rail-live-art19]', art19Label);
+  ferrySetLiveText('[data-rail-live-art20]', art20Active ? 'Aktiv' : 'Ikke aktiv endnu');
+  ferrySetLiveText('[data-rail-live-arrival-delay]', arrivalDelay !== null ? ((arrivalDelay > 0 ? '+' : '') + arrivalDelay + ' min') : 'Afventer');
+  ferrySetLiveText('[data-rail-live-departure-delay]', seedDepartureDelay !== null ? ((seedDepartureDelay > 0 ? '+' : '') + seedDepartureDelay + ' min') : 'Afventer');
+
+  var strandingLabel = 'Ikke strandet';
+  if (stranding === 'station') strandingLabel = 'Strandet på station';
+  if (stranding === 'track') strandingLabel = 'Strandet i tog / på spor';
+  ferrySetLiveText('[data-rail-live-stranding]', strandingLabel);
+
+  var summary = '';
+  if (art19Active && extraordinary) {
+    summary = 'Rail-panelet viser, at kompensation foreløbigt blokeres af force majeure, selv om delay-seed eller brugerbekræftelse ellers ville aktivere Art. 19.';
+  } else if (art19Active) {
+    summary = 'Foreløbig rail-vurdering peger på kompensation ved ankomstforsinkelse på mindst 60 minutter. Brugeren skal stadig bekræfte det endelige faktum.';
+  } else if (art18Active || art20Active) {
+    summary = 'Rail-panelet peger på refund/ombooking eller assistance, men endelig rettighed afhænger stadig af de konkrete brugerbekræftelser.';
+  } else {
+    summary = 'Rail-panelet afventer stadig rail-spørgsmålene om 60+ minutters forsinkelse, aflysning eller mistet forbindelse.';
+  }
+  ferrySetLiveText('[data-rail-live-note]', summary);
+}
+
 function updateAirCancellationState() {
   var main = getRadioValue('incident_main');
   var reroute = getRadioValue('reroute_offered');
   var notice = getRadioValue('cancellation_notice_band');
+  var isAirShortView = <?= json_encode($isAirShortView) ?>;
+  var isCompletedJourney = <?= json_encode($isCompleted) ?>;
   var isCancellation = main === 'cancellation';
+  var showRerouteCard = isCancellation && (notice === '7_to_13_days' || notice === 'under_7_days' || notice === 'airport_on_day_of_departure');
+  var rerouteUsed = getRadioValue('reroute_used_or_accepted');
+  var depWindow = getRadioValue('reroute_departure_band');
+  var arrWindow = getRadioValue('reroute_arrival_band');
+  var ownsArt5DetailQuestions = !!document.getElementById('airCancellationDetailQuestions');
+  var ownsReductionCard = !!document.getElementById('airCancellationReductionCard');
+  var frontendOwnsCancellationDetails = ownsArt5DetailQuestions || ownsReductionCard;
+  var showReductionCard = showRerouteCard && reroute === 'yes';
+  var reductionRelevant = true;
+
+  if (notice === '14_plus_days') {
+    reductionRelevant = false;
+  } else if (reroute === 'yes' && ownsArt5DetailQuestions) {
+    if (depWindow === 'within_window' && arrWindow === 'within_window') {
+      reductionRelevant = false;
+    } else if (
+      depWindow === ''
+      || arrWindow === ''
+      || depWindow === 'unknown'
+      || arrWindow === 'unknown'
+    ) {
+      reductionRelevant = false;
+    }
+  }
 
   setBlockVisible(document.getElementById('airCancellationNoticeCard'), isCancellation);
   setBlockVisible(document.getElementById('airCancellationNotice14Card'), isCancellation && notice === '14_plus_days');
-  setBlockVisible(document.getElementById('airCancellationRerouteCard'), isCancellation && reroute === 'yes' && (notice === '7_to_13_days' || notice === 'under_7_days'));
+  setBlockVisible(document.getElementById('airCancellationRerouteCard'), showRerouteCard);
+  setBlockVisible(document.getElementById('airCancellationSelfArrangeNote'), showRerouteCard && reroute === 'no');
+  setBlockVisible(document.getElementById('airCancellationRerouteWindows'), ownsArt5DetailQuestions && showRerouteCard && reroute === 'yes');
+  setBlockVisible(document.getElementById('airCancellationReductionCard'), ownsReductionCard && showReductionCard && reductionRelevant);
+  setBlockVisible(document.getElementById('airCancellationReductionNotRelevantCard'), ownsReductionCard && showReductionCard && !reductionRelevant);
 
   var depQuestion = document.getElementById('airCancellationDepartureQuestion');
   var arrQuestion = document.getElementById('airCancellationArrivalQuestion');
   var help = document.getElementById('airCancellationRerouteHelp');
 
-  if (notice === 'under_7_days') {
+  if (isAirShortView) {
+    if (help) help.textContent = isCompletedJourney
+      ? 'For afsluttet flight afklarer vi her, om flyselskabet tilbloed en alternativ flyvning. De mere detaljerede Article 5- og 7(2)-spoergsmaal flyttes til sagen bagefter.'
+      : 'For igangvaerende flight afklarer vi her foerst, om flyselskabet tilbloed en alternativ flyvning. De mere detaljerede Article 5- og 7(2)-spoergsmaal flyttes til sagen bagefter.';
+  } else if (notice === 'under_7_days' || notice === 'airport_on_day_of_departure') {
     if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 1 time foer det planlagte afgangstidspunkt?';
     if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 2 timer efter det planlagte ankomsttidspunkt?';
-    if (help) help.textContent = 'Ved under 7 dages varsel bortfalder kompensation kun, hvis ombookningen holdt sig inden for 1 time foer afgang og 2 timer efter planlagt ankomst.';
+    if (help) help.textContent = notice === 'airport_on_day_of_departure'
+      ? 'Hvis aflysningen foerst blev oplyst i lufthavnen eller ved afgang, behandles den som under 7 dage: 1 time foer afgang og 2 timer efter planlagt ankomst.'
+      : 'Ved under 7 dages varsel bortfalder kompensation kun, hvis ombookningen holdt sig inden for 1 time foer afgang og 2 timer efter planlagt ankomst.';
   } else if (notice === '7_to_13_days') {
     if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 2 timer foer det planlagte afgangstidspunkt?';
     if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 4 timer efter det planlagte ankomsttidspunkt?';
@@ -1012,7 +2065,16 @@ function updateAirCancellationState() {
   } else {
     if (depQuestion) depQuestion.textContent = 'Kunne du afrejse hoejst 2 timer foer det planlagte afgangstidspunkt?';
     if (arrQuestion) arrQuestion.textContent = 'Kunne du ankomme senest 4 timer efter det planlagte ankomsttidspunkt?';
-    if (help) help.textContent = 'Kun relevant hvis du fik besked om aflysningen mindre end 14 dage foer og faktisk blev tilbudt ombooking.';
+    if (help) help.textContent = 'Kun relevant hvis du fik besked om aflysningen mindre end 14 dage foer. Registrer foerst om der blev tilbudt ombooking og derefter, om den holdt de juridiske tidsvinduer.';
+  }
+  if (!frontendOwnsCancellationDetails) {
+    return;
+  }
+  if (!showReductionCard || !reductionRelevant) {
+    clearRadios('reroute_used_or_accepted');
+    clearFields(['reroute_arrival_delay_minutes']);
+  } else if (rerouteUsed !== 'yes') {
+    clearFields(['reroute_arrival_delay_minutes']);
   }
 }
 
@@ -1051,6 +2113,27 @@ function setRadioValue(name, value) {
   if (!target.checked) {
     target.checked = true;
   }
+}
+
+function setInputValue(name, value) {
+  var target = document.querySelector('input[name="' + name + '"]');
+  if (!target) return;
+  target.value = value;
+}
+
+function airExpectedDelayBucketFromLegacyBand(band) {
+  if (band === 'five_plus') return 'five_plus';
+  if (band === 'threshold_to_under_5h') return 'threshold_to_under_5h';
+  if (band === 'under_threshold') return 'under_threshold';
+  return '';
+}
+
+function airActualArrivalBucketFromMinutes(mins) {
+  mins = parseInt(mins, 10);
+  if (isNaN(mins)) return '';
+  if (mins >= 240) return 'four_plus';
+  if (mins >= 180) return 'three_to_four';
+  return 'under_3h';
 }
 
 function getBusDelayLiveMinutes() {

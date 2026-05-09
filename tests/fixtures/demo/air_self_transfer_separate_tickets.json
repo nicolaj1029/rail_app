@@ -5,6 +5,11 @@
     "label": "Air self-transfer keeps affected carrier as claim channel",
     "transport_mode": "air",
     "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      }
+    },
     "contract_meta": {
       "contract_topology": "separate_contracts",
       "seller_type": "operator",
@@ -27,6 +32,7 @@
     },
     "incident_meta": {
       "transport_mode": "air",
+      "travel_state": "completed",
       "incident_type": "missed_connection",
       "arrival_delay_minutes": 240,
       "protected_connection_missed": false

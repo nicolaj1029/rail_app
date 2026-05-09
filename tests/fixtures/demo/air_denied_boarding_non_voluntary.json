@@ -5,6 +5,11 @@
     "label": "Non-voluntary denied boarding creates compensation candidate",
     "transport_mode": "air",
     "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      }
+    },
     "contract_meta": {
       "contract_topology": "single_mode_single_contract",
       "seller_type": "operator",
@@ -27,6 +32,7 @@
     },
     "incident_meta": {
       "transport_mode": "air",
+      "travel_state": "completed",
       "incident_type": "denied_boarding",
       "boarding_denied": true,
       "voluntary_denied_boarding": false

@@ -5,6 +5,11 @@
     "label": "Air cancellation from EU departure triggers care and reroute/refund",
     "transport_mode": "air",
     "journey": [],
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      }
+    },
     "contract_meta": {
       "contract_topology": "single_mode_single_contract",
       "seller_type": "operator",
@@ -27,7 +32,11 @@
     },
     "incident_meta": {
       "transport_mode": "air",
+      "travel_state": "completed",
       "incident_type": "cancellation",
+      "cancellation_notice_band": "under_7_days",
+      "reroute_offered": false,
+      "remedy_choice": "refund_return",
       "arrival_delay_minutes": 240,
       "reroute_arrival_delay_minutes": 240,
       "extraordinary_circumstances": false

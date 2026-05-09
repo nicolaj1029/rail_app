@@ -14,6 +14,17 @@ $formatRemedyChoice = static function (?string $value): string {
         default => $normalized,
     };
 };
+$isAirCase = static function ($case): bool {
+    $snapshot = json_decode((string)($case->flow_snapshot ?? ''), true);
+    if (!is_array($snapshot)) {
+        return false;
+    }
+
+    $form = (array)($snapshot['form'] ?? []);
+    $mode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ''))));
+
+    return $mode === 'air';
+};
 ?>
 <h2>Sager</h2>
 <form method="get" class="mb8">
@@ -31,9 +42,9 @@ $formatRemedyChoice = static function (?string $value): string {
       <th>Passager</th>
       <th>Operatør</th>
       <th>Delay (EU)</th>
-      <th>Art.18</th>
-      <th>Art.20</th>
-      <th>Art.19</th>
+      <th>Afhjaelpning</th>
+      <th>Assistance</th>
+      <th>Kompensation</th>
       <th>EU-only</th>
       <th>FM</th>
       <th></th>
@@ -54,7 +65,14 @@ $formatRemedyChoice = static function (?string $value): string {
         <td><?= $c->comp_amount !== null ? (h(number_format((float)$c->comp_amount, 2, ',', '.')) . ' ' . h((string)$c->currency) . ($c->comp_band?(' ('.h((string)$c->comp_band).'%)'):'') ) : '-' ?></td>
         <td><?= $c->eu_only ? '✔' : '✖' ?></td>
         <td><?= $c->extraordinary ? '⚠' : '' ?></td>
-        <td><a href="<?= $this->Url->build(['action' => 'view', $c->id]) ?>">Vis</a></td>
+        <td>
+          <a href="<?= $this->Url->build(['action' => 'view', $c->id]) ?>">Vis</a>
+          · <a href="<?= $this->Url->build(['action' => 'passenger', $c->id]) ?>">Klientsag</a>
+          <?php if ($isAirCase($c)): ?>
+            · <a href="<?= $this->Url->build(['action' => 'airTravelForm', $c->id]) ?>" target="_blank" rel="noopener">air_travel_form.pdf</a>
+            · <a href="<?= $this->Url->build(['action' => 'airStatementForm', $c->id]) ?>" target="_blank" rel="noopener">staevning-flysag.pdf</a>
+          <?php endif; ?>
+        </td>
       </tr>
     <?php endforeach; ?>
   </tbody>

@@ -68,7 +68,7 @@ php bin/cake.php transport_nodes_import `
   --profile air_ourairports
 ```
 
-`air_ourairports` filtrerer automatisk til `medium_airport` og `large_airport` og kræver en brugbar IATA-kode.
+`air_ourairports` filtrerer automatisk til `small_airport`, `medium_airport` og `large_airport`, kræver en brugbar IATA-kode og afleder claim-/frontend-flags for civil passagerrelevans.
 
 ### Ports / UN LOCODE-derived CSV
 

@@ -1,0 +1,51 @@
+{
+  "fixture": {
+    "id": "air_delay_completed_3_to_3h59",
+    "version": 2,
+    "label": "Air completed delay between 3h and 3h59 triggers compensation",
+    "tags": ["air", "delay", "completed"],
+    "transport_mode": "air",
+    "journey": [],
+    "wizard": { "step1_start": { "travel_state": "completed" } },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "SAS",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "air",
+      "incident_segment_operator": "SAS",
+      "same_pnr": true,
+      "rights_module": "air",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "intra_eu_over_1500",
+      "air_delay_threshold_hours": 3
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "delay",
+      "delay_departure_band": "threshold_to_under_5h",
+      "delay_minutes_departure": 180,
+      "arrival_delay_minutes": 200,
+      "extraordinary_circumstances": false
+    },
+    "expected": {
+      "transport_mode": "air",
+      "air_scope.regulation_applies": true,
+      "air_rights.gate_air_care": true,
+      "air_rights.gate_air_compensation": true,
+      "air_rights.article7_eligibility_status": "eligible",
+      "air_rights.article7_base_amount_eur": 400.0,
+      "air_rights.article7_final_amount_eur": 400.0
+    }
+  }
+}

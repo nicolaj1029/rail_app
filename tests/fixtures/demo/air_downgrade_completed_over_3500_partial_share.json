@@ -1,0 +1,71 @@
+{
+  "fixture": {
+    "id": "air_downgrade_completed_over_3500_partial_share",
+    "version": 2,
+    "label": "Air downgrade applies 75 percent rate to the selected share of a whole ticket",
+    "tags": ["air", "downgrade", "completed", "article10", "multi-leg"],
+    "transport_mode": "air",
+    "journey": {
+      "ticketPrice": {
+        "amount": 800.0,
+        "currency": "EUR",
+        "value": "800.00 EUR"
+      },
+      "segments": [
+        {
+          "from": "CPH",
+          "to": "JFK"
+        },
+        {
+          "from": "JFK",
+          "to": "MIA"
+        }
+      ]
+    },
+    "meta": {
+      "air_distance_band": "other_over_3500"
+    },
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      },
+      "step9_downgrade": {
+        "downgrade_occurred": "yes",
+        "air_downgrade_booked_class": "business",
+        "air_downgrade_flown_class": "economy",
+        "downgrade_segment_share": 0.5,
+        "leg_class_purchased": ["business", "business"],
+        "leg_class_delivered": ["economy", "business"],
+        "leg_downgraded": ["1", ""]
+      }
+    },
+    "contract_meta": {
+      "rights_module": "air",
+      "same_pnr": true,
+      "single_transaction": true,
+      "shared_booking_reference": true
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": false,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "other_over_3500"
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "delay",
+      "arrival_delay_minutes": 240
+    },
+    "expected": {
+      "transport_mode": "air",
+      "claim.breakdown.art18.downgrade_annexii": 300,
+      "claim.breakdown.art18.downgrade_annexii_rate": 0.75,
+      "claim.breakdown.art18.downgrade_annexii_share": 0.5,
+      "claim.breakdown.art18.downgrade_annexii_basis": "air_article_10",
+      "claim.totals.gross_claim": 300,
+      "claim.totals.currency": "EUR"
+    }
+  }
+}

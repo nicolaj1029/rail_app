@@ -1,0 +1,67 @@
+{
+  "fixture": {
+    "id": "air_downgrade_completed_intra_eu_over_1500_inferred_rate",
+    "version": 2,
+    "label": "Air downgrade infers 50 percent rate from intra-EU distance band and cabin mismatch",
+    "tags": ["air", "downgrade", "completed", "article10"],
+    "transport_mode": "air",
+    "journey": {
+      "ticketPrice": {
+        "amount": 400.0,
+        "currency": "EUR",
+        "value": "400.00 EUR"
+      },
+      "segments": [
+        {
+          "from": "CPH",
+          "to": "ATH"
+        }
+      ]
+    },
+    "meta": {
+      "air_distance_band": "intra_eu_over_1500"
+    },
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      },
+      "step9_downgrade": {
+        "downgrade_occurred": "yes",
+        "air_downgrade_booked_class": "business",
+        "air_downgrade_flown_class": "economy",
+        "downgrade_segment_share": 1,
+        "leg_class_purchased": ["business"],
+        "leg_class_delivered": ["economy"],
+        "leg_downgraded": ["1"]
+      }
+    },
+    "contract_meta": {
+      "rights_module": "air",
+      "same_pnr": true,
+      "single_transaction": true,
+      "shared_booking_reference": true
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "intra_eu_over_1500"
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "delay",
+      "arrival_delay_minutes": 240
+    },
+    "expected": {
+      "transport_mode": "air",
+      "claim.breakdown.art18.downgrade_annexii": 200,
+      "claim.breakdown.art18.downgrade_annexii_rate": 0.5,
+      "claim.breakdown.art18.downgrade_annexii_share": 1,
+      "claim.breakdown.art18.downgrade_annexii_basis": "air_article_10",
+      "claim.totals.gross_claim": 200,
+      "claim.totals.currency": "EUR"
+    }
+  }
+}

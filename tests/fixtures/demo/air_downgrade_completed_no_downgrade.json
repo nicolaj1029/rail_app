@@ -1,0 +1,62 @@
+{
+  "fixture": {
+    "id": "air_downgrade_completed_no_downgrade",
+    "version": 2,
+    "label": "Air claim keeps downgrade amount at zero when no downgrade occurred",
+    "tags": ["air", "downgrade", "completed", "article10"],
+    "transport_mode": "air",
+    "journey": {
+      "ticketPrice": {
+        "amount": 200.0,
+        "currency": "EUR",
+        "value": "200.00 EUR"
+      },
+      "segments": [
+        {
+          "from": "CPH",
+          "to": "ARN"
+        }
+      ]
+    },
+    "meta": {
+      "air_distance_band": "up_to_1500"
+    },
+    "wizard": {
+      "step1_start": {
+        "travel_state": "completed"
+      },
+      "step9_downgrade": {
+        "downgrade_occurred": "no",
+        "leg_class_purchased": ["economy"],
+        "leg_class_delivered": ["economy"],
+        "leg_downgraded": [""]
+      }
+    },
+    "contract_meta": {
+      "rights_module": "air",
+      "same_pnr": true,
+      "single_transaction": true,
+      "shared_booking_reference": true
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "up_to_1500"
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "delay",
+      "arrival_delay_minutes": 240
+    },
+    "expected": {
+      "transport_mode": "air",
+      "claim.breakdown.art18.downgrade_annexii": 0,
+      "claim.breakdown.art18.downgrade_annexii_rate": 0,
+      "claim.totals.gross_claim": 0,
+      "claim.totals.currency": "EUR"
+    }
+  }
+}

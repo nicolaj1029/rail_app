@@ -32,21 +32,6 @@ $routerCandidates = (array)($routerCandidates ?? ($meta['initial_incident_candid
 $pmrCompanion = strtolower((string)($form['pmr_companion'] ?? ($meta['pmr_companion'] ?? 'no')));
 $pmrServiceDog = strtolower((string)($form['pmr_service_dog'] ?? ($meta['pmr_service_dog'] ?? 'no')));
 $unaccompaniedMinor = strtolower((string)($form['unaccompanied_minor'] ?? ($meta['unaccompanied_minor'] ?? 'no')));
-$ferryPmrCompanion = strtolower((string)($form['ferry_pmr_companion'] ?? ($meta['ferry_pmr_companion'] ?? 'no')));
-$ferryPmrServiceDog = strtolower((string)($form['ferry_pmr_service_dog'] ?? ($meta['ferry_pmr_service_dog'] ?? 'no')));
-$ferryPmrNotice48h = strtolower((string)($form['ferry_pmr_notice_48h'] ?? ($meta['ferry_pmr_notice_48h'] ?? 'no')));
-$ferryPmrMetCheckinTime = strtolower((string)($form['ferry_pmr_met_checkin_time'] ?? ($meta['ferry_pmr_met_checkin_time'] ?? 'no')));
-$ferryPmrAssistanceDelivered = strtolower((string)($form['ferry_pmr_assistance_delivered'] ?? ($meta['ferry_pmr_assistance_delivered'] ?? 'unknown')));
-if (!in_array($ferryPmrAssistanceDelivered, ['full', 'partial', 'none', 'unknown'], true)) {
-  $ferryPmrAssistanceDelivered = 'unknown';
-}
-$ferryPmrBoardingRefused = strtolower((string)($form['ferry_pmr_boarding_refused'] ?? ($meta['ferry_pmr_boarding_refused'] ?? 'no')));
-$ferryPmrRefusalBasis = strtolower((string)($form['ferry_pmr_refusal_basis'] ?? ($meta['ferry_pmr_refusal_basis'] ?? 'other_or_unknown')));
-if (!in_array($ferryPmrRefusalBasis, ['safety_requirements', 'port_or_ship_infrastructure', 'other_or_unknown'], true)) {
-  $ferryPmrRefusalBasis = 'other_or_unknown';
-}
-$ferryPmrReasonGiven = strtolower((string)($form['ferry_pmr_reason_given'] ?? ($meta['ferry_pmr_reason_given'] ?? 'no')));
-$ferryPmrAlternativeTransportOffered = strtolower((string)($form['ferry_pmr_alternative_transport_offered'] ?? ($meta['ferry_pmr_alternative_transport_offered'] ?? 'no')));
 $busPmrCompanion = strtolower((string)($form['bus_pmr_companion'] ?? ($meta['bus_pmr_companion'] ?? 'no')));
 $busPmrNotice36h = strtolower((string)($form['bus_pmr_notice_36h'] ?? ($meta['bus_pmr_notice_36h'] ?? 'no')));
 $busPmrMetTerminalTime = strtolower((string)($form['bus_pmr_met_terminal_time'] ?? ($meta['bus_pmr_met_terminal_time'] ?? 'no')));
@@ -68,6 +53,12 @@ if (!in_array($initialIncidentMode, ['rail', 'ferry', 'bus', 'air', 'unknown'], 
 }
 $initialIncidentContractKey = (string)($form['initial_incident_contract_key'] ?? ($meta['initial_incident_contract_key'] ?? ''));
 $initialIncidentSegmentKey = (string)($form['initial_incident_segment_key'] ?? ($meta['initial_incident_segment_key'] ?? ''));
+$entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
+$journeyBackAction = $gatingMode === 'rail'
+  ? 'railstranding'
+  : (($entryVariant === 'ferry_split' && $transportMode === 'ferry')
+      ? 'ferryDepartureSelect'
+      : ((($transportMode !== 'air') && $needsRouter) ? 'station' : 'entitlements'));
 
 $v = fn(string $k): string => (string)($form[$k] ?? '');
 $isPreview = !empty($flowPreview);
@@ -88,11 +79,11 @@ $isPreview = !empty($flowPreview);
 </style>
 
 <?php if ($isFerry && $isOngoing): ?>
-  <h1>TRIN 4 - PMR / handicap (faerge, igangvaerende rejse)</h1>
+  <h1>TRIN 4 - Ferry gating (igangvaerende rejse)</h1>
 <?php elseif ($isFerry && $isCompleted): ?>
-  <h1>TRIN 4 - PMR / handicap (faerge, afsluttet rejse)</h1>
+  <h1>TRIN 4 - Ferry gating (afsluttet rejse)</h1>
 <?php elseif ($isFerry): ?>
-  <h1>TRIN 4 - PMR / handicap (faerge)</h1>
+  <h1>TRIN 4 - Ferry gating</h1>
 <?php elseif ($isBus): ?>
   <h1>TRIN 4 - PMR / handicap (bus)</h1>
 <?php elseif ($isAir): ?>
@@ -222,92 +213,15 @@ $isPreview = !empty($flowPreview);
 
 <?php if ($isFerry): ?>
 <div class="card mt12">
-  <strong>PMR-status</strong>
+  <strong>Ferry gating</strong>
   <p class="small muted">
-    Bruges kun til faergerejsens PMR-spor. Almindelig ferry-gating i TRIN 5 forbliver uafhaengig.
+    Ferry split-flowet bruger TRIN 4 som et kort mellemtrin. Selve haendelsen, PMR-boarding refusal og live-gating for Art. 17/18/19 afklares i TRIN 5.
   </p>
+  <div class="small muted mt8">PMR-spoeret er flyttet til TRIN 5, saa incident og PMR-boarding refusal afklares samlet som i air-flowet.</div>
+  <div class="small muted mt8">Den assistance-orienterede PMR-dokumentation registreres i backend-supporttrinnet bagefter, ikke her i split-flowet.</div>
   <?php if ($pmrAutoDetected): ?>
-    <div class="small muted mt4">Auto-note: Billet/OCR ser ud til at naevne handicap/PMR. Valget er stadig sat til "Nej" som udgangspunkt - ret hvis det er forkert.</div>
+    <div class="small muted mt8">Auto-note: Billet/OCR ser ud til at naevne handicap/PMR. Bekraeft eller ret det i TRIN 5.</div>
   <?php endif; ?>
-
-  <div class="mt8">
-    <div>1. Har du et handicap eller nedsat mobilitet, som kraevede assistance?</div>
-    <label><input type="radio" name="pmr_user" value="yes" <?= $v('pmr_user') === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="pmr_user" value="no" <?= $v('pmr_user') === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="pmr_user:yes">
-    <div>2. Rejste du med ledsager?</div>
-    <label><input type="radio" name="ferry_pmr_companion" value="yes" <?= $ferryPmrCompanion === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_companion" value="no" <?= $ferryPmrCompanion === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="pmr_user:yes">
-    <div>3. Havde du godkendt servicehund med?</div>
-    <label><input type="radio" name="ferry_pmr_service_dog" value="yes" <?= $ferryPmrServiceDog === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_service_dog" value="no" <?= $ferryPmrServiceDog === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-</div>
-
-<div class="card mt12" data-show-if="pmr_user:yes">
-  <strong>Forhaandsbesked og assistance</strong>
-  <p class="small muted">
-    Bruges til at vurdere assistance i havn og om bord efter ferry-PMR-reglerne.
-  </p>
-
-  <div class="mt8" data-show-if="pmr_user:yes">
-    <div>1. Gav du besked mindst 48 timer foer rejsen om behovet for assistance?</div>
-    <label><input type="radio" name="ferry_pmr_notice_48h" value="yes" <?= $ferryPmrNotice48h === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_notice_48h" value="no" <?= $ferryPmrNotice48h === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="pmr_user:yes">
-    <div>2. Moedte du paa det oplyste tidspunkt for assistance / check-in?</div>
-    <label><input type="radio" name="ferry_pmr_met_checkin_time" value="yes" <?= $ferryPmrMetCheckinTime === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_met_checkin_time" value="no" <?= $ferryPmrMetCheckinTime === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="pmr_user:yes">
-    <div>3. Hvordan blev assistancen leveret?</div>
-    <label><input type="radio" name="ferry_pmr_assistance_delivered" value="full" <?= $ferryPmrAssistanceDelivered === 'full' ? 'checked' : '' ?> /> Fuldt leveret</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_assistance_delivered" value="partial" <?= $ferryPmrAssistanceDelivered === 'partial' ? 'checked' : '' ?> /> Delvist leveret</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_assistance_delivered" value="none" <?= $ferryPmrAssistanceDelivered === 'none' ? 'checked' : '' ?> /> Ikke leveret</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_assistance_delivered" value="unknown" <?= $ferryPmrAssistanceDelivered === 'unknown' ? 'checked' : '' ?> /> Ved ikke</label>
-  </div>
-</div>
-
-<div class="card mt12" data-show-if="pmr_user:yes">
-  <strong>Naegtet reservation / boarding</strong>
-  <p class="small muted">
-    Bruges kun til ferry-PMR-sporet om naegtet reservation eller indskibning.
-  </p>
-
-  <div class="mt8" data-show-if="pmr_user:yes">
-    <div>1. Blev du naegtet reservation eller boarding paa grund af handicap / nedsat mobilitet?</div>
-    <label><input type="radio" name="ferry_pmr_boarding_refused" value="yes" <?= $ferryPmrBoardingRefused === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_boarding_refused" value="no" <?= $ferryPmrBoardingRefused === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="ferry_pmr_boarding_refused:yes">
-    <div>2. Hvad sagde transportoeren var begrundelsen?</div>
-    <select name="ferry_pmr_refusal_basis">
-      <option value="safety_requirements" <?= $ferryPmrRefusalBasis === 'safety_requirements' ? 'selected' : '' ?>>Sikkerhedskrav</option>
-      <option value="port_or_ship_infrastructure" <?= $ferryPmrRefusalBasis === 'port_or_ship_infrastructure' ? 'selected' : '' ?>>Havnens eller skibets indretning</option>
-      <option value="other_or_unknown" <?= $ferryPmrRefusalBasis === 'other_or_unknown' ? 'selected' : '' ?>>Andet / ved ikke</option>
-    </select>
-  </div>
-
-  <div class="mt4" data-show-if="ferry_pmr_boarding_refused:yes">
-    <div>3. Fik du en klar begrundelse skriftligt eller mundtligt?</div>
-    <label><input type="radio" name="ferry_pmr_reason_given" value="yes" <?= $ferryPmrReasonGiven === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_reason_given" value="no" <?= $ferryPmrReasonGiven === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
-
-  <div class="mt4" data-show-if="ferry_pmr_boarding_refused:yes">
-    <div>4. Tilboed transportoeren alternativ befordring eller anden loesning?</div>
-    <label><input type="radio" name="ferry_pmr_alternative_transport_offered" value="yes" <?= $ferryPmrAlternativeTransportOffered === 'yes' ? 'checked' : '' ?> /> Ja</label>
-    <label class="ml8"><input type="radio" name="ferry_pmr_alternative_transport_offered" value="no" <?= $ferryPmrAlternativeTransportOffered === 'no' ? 'checked' : '' ?> /> Nej</label>
-  </div>
 </div>
 <?php endif; ?>
 
@@ -496,12 +410,13 @@ $isPreview = !empty($flowPreview);
 <?php endif; ?>
 
 <div class="mt12" style="display:flex; gap:8px; align-items:center;">
-  <?= $this->Html->link('<- Tilbage', ['action' => $gatingMode === 'rail' ? 'railstranding' : (($transportMode !== 'air' && $needsRouter) ? 'station' : 'entitlements')], ['class' => 'button', 'style' => 'background:#eee; color:#333;', 'escape' => false]) ?>
+  <?= $this->Html->link('<- Tilbage', ['action' => $journeyBackAction], ['class' => 'button', 'style' => 'background:#eee; color:#333;', 'escape' => false]) ?>
   <?= $this->Form->button('Naeste trin ->', ['class' => 'button']) ?>
 </div>
 
 </fieldset>
 <?= $this->Form->end() ?>
+<?= $this->element('flow_autosave', ['step' => 'journey']) ?>
 
 <div id="hooksPanel" class="card mt12">
   <div class="small muted">Indlaeser hooks...</div>
@@ -589,18 +504,6 @@ function resetModeSpecificPmrFields() {
   var pmr = document.querySelector('input[name="pmr_user"]:checked');
   var pmrValue = pmr ? pmr.value : '';
   if (pmrValue === 'yes') return;
-
-  if (document.querySelector('input[name="ferry_pmr_companion"]')) {
-    setRadioChoice('ferry_pmr_companion', 'no');
-    setRadioChoice('ferry_pmr_service_dog', 'no');
-    setRadioChoice('ferry_pmr_notice_48h', 'no');
-    setRadioChoice('ferry_pmr_met_checkin_time', 'no');
-    setRadioChoice('ferry_pmr_assistance_delivered', 'unknown');
-    setRadioChoice('ferry_pmr_boarding_refused', 'no');
-    setSelectChoice('ferry_pmr_refusal_basis', 'other_or_unknown');
-    setRadioChoice('ferry_pmr_reason_given', 'no');
-    setRadioChoice('ferry_pmr_alternative_transport_offered', 'no');
-  }
 
   if (document.querySelector('input[name="bus_pmr_companion"]')) {
     setRadioChoice('bus_pmr_companion', 'no');

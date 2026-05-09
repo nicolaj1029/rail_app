@@ -7,6 +7,7 @@ use Cake\Datasource\EntityInterface;
 use Cake\Http\Session;
 use Cake\ORM\Table;
 use Cake\ORM\TableRegistry;
+use Cake\Utility\Text;
 use Throwable;
 
 final class AdminDeskService
@@ -162,6 +163,77 @@ final class AdminDeskService
             'search' => $search,
             'available_filters' => $this->availableInboxFilters(),
         ];
+    }
+
+    public function ensureSessionCase(Session $session): ?string
+    {
+        $flow = $this->readLiveFlow($session);
+        $form = (array)($flow['form'] ?? []);
+        $flags = (array)($flow['flags'] ?? []);
+        $meta = (array)($flow['meta'] ?? []);
+        $journey = (array)($flow['journey'] ?? []);
+        $compute = (array)($flow['compute'] ?? []);
+
+        $transportMode = $this->detectTransportMode($form, $flags);
+        $hasMeaningfulState =
+            $transportMode !== '' ||
+            trim((string)($form['operator'] ?? '')) !== '' ||
+            trim((string)($form['dep_station'] ?? '')) !== '' ||
+            trim((string)($form['arr_station'] ?? '')) !== '';
+
+        if (!$hasMeaningfulState) {
+            return null;
+        }
+
+        $ref = trim((string)($meta['air_case_ref'] ?? ''));
+        try {
+            $case = null;
+            if ($ref !== '') {
+                $case = $this->cases->find()->where(['ref' => $ref])->first();
+            }
+            if ($case === null) {
+                $case = $this->cases->newEmptyEntity();
+                $ref = $ref !== '' ? $ref : Text::uuid();
+                $case->set('ref', $ref);
+            }
+
+            $delayWhole = isset($form['delayAtFinalMinutes']) ? (int)$form['delayAtFinalMinutes'] : 0;
+            $delayEu = isset($compute['delayMinEU']) ? (int)$compute['delayMinEU'] : null;
+            $euOnly = (bool)($compute['euOnly'] ?? true);
+            $delay = ($euOnly && $delayEu !== null && $delayEu >= 0) ? $delayEu : $delayWhole;
+            $currency = (string)($journey['ticketPrice']['currency'] ?? ($form['price_currency'] ?? 'EUR'));
+            $operator = (string)($form['operator'] ?? ($journey['operator']['value'] ?? ''));
+            $travelDate = !empty($form['dep_date']) ? $form['dep_date'] : null;
+            $snapshot = json_encode($flow, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+            $case->set([
+                'status' => (string)($case->get('status') ?: 'open'),
+                'travel_date' => $travelDate,
+                'passenger_name' => (string)($form['passenger_name'] ?? ($form['firstName'] ?? '')),
+                'operator' => $operator,
+                'country' => (string)($journey['country']['value'] ?? ($form['operator_country'] ?? '')),
+                'delay_min_eu' => $delay ?: null,
+                'remedy_choice' => (string)($form['remedyChoice'] ?? ''),
+                'art20_expenses_total' => null,
+                'comp_band' => (string)($form['compensationBand'] ?? ''),
+                'comp_amount' => isset($meta['claim']['compensation_amount']) ? (float)$meta['claim']['compensation_amount'] : null,
+                'currency' => $currency,
+                'eu_only' => $euOnly,
+                'extraordinary' => (bool)($form['operatorExceptionalCircumstances'] ?? ($form['extraordinary_circumstances'] ?? false)),
+                'flow_snapshot' => $snapshot ?: null,
+            ]);
+
+            $saved = $this->cases->save($case);
+            if (!$saved) {
+                return null;
+            }
+
+            $session->write('flow.meta.air_case_ref', $ref);
+
+            return $ref;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -345,7 +417,7 @@ final class AdminDeskService
             ];
             $playbooks[] = [
                 'title' => 'Eskalering',
-                'text' => 'Hvis policy, season-pass eller artikelvurdering er uklar, skift status til Juridisk review og overlad sagen til jurist.',
+                'text' => 'Hvis policy, billetgrundlag eller retsvurdering er uklar, skift status til Juridisk review og overlad sagen til jurist.',
             ];
             if ($ticketMode === '' || $ticketMode === 'ticketless') {
                 $playbooks[] = [
@@ -446,7 +518,21 @@ final class AdminDeskService
 
         $preview = (array)($payload['preview'] ?? []);
         $opsStatus = $this->statusFromPreview($preview);
-        $riskPanel = $this->buildRiskPanel($this->readLiveFlow($session));
+        $liveFlow = $this->readLiveFlow($session);
+        $liveMeta = (array)($liveFlow['meta'] ?? []);
+        $liveForm = (array)($liveFlow['form'] ?? []);
+        $liveFlags = (array)($liveFlow['flags'] ?? []);
+        $riskPanel = $this->buildRiskPanel($liveFlow);
+        $ticketReview = $this->ticketReviewFromSnapshot($liveFlow);
+        $opsReview = $this->operationalReviewFromFlow($liveFlow);
+        $transportMode = $this->detectTransportMode($liveForm, $liveFlags);
+        $nextAction = $this->nextActionFromPayload($payload);
+        if (!empty($ticketReview['requires_attention'])) {
+            $nextAction = 'Aabn cockpit og kontroller billetafvigelse';
+        }
+        if (!empty($opsReview['requires_attention'])) {
+            $nextAction = 'Aabn cockpit og kontroller operationelle flight-data';
+        }
 
         return [
             'source' => 'session',
@@ -458,8 +544,14 @@ final class AdminDeskService
             'updated_at' => date('c'),
             'delay_minutes' => $summary['delay_minutes'] ?? null,
             'ticket_mode' => (string)($summary['ticket_mode'] ?? ''),
-            'next_action' => $this->nextActionFromPayload($payload),
+            'next_action' => $nextAction,
             'risk' => $riskPanel,
+            'ticket_review' => $ticketReview,
+            'ops_review' => $opsReview,
+            'meta' => [
+                'ref' => (string)($liveMeta['air_case_ref'] ?? ''),
+                'transport_mode' => $transportMode,
+            ],
         ];
     }
 
@@ -473,9 +565,22 @@ final class AdminDeskService
         $updated = $case->get('modified') ?: $case->get('created');
         $opsStatus = $this->normalizeOpsStatus((string)$case->get('status'));
         $riskPanel = $this->storedRiskPanel($case);
+        $snapshot = json_decode((string)$case->get('flow_snapshot'), true);
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+        $snapshotForm = (array)($snapshot['form'] ?? []);
+        $snapshotFlags = (array)($snapshot['flags'] ?? []);
+        $transportMode = $this->detectTransportMode($snapshotForm, $snapshotFlags);
+        $ticketReview = $this->ticketReviewFromSnapshot($snapshot);
+        $opsReview = $this->operationalReviewFromFlow($snapshot);
         $nextAction = $opsStatus === 'ready_to_submit' ? 'Tjek samtykke og indsendelse' : 'Aabn cockpit';
         if (!empty($riskPanel['fraud_review_required'])) {
             $nextAction = 'Aabn cockpit og kontroller risk review';
+        }
+        if (!empty($ticketReview['requires_attention'])) {
+            $nextAction = 'Aabn cockpit og kontroller billetafvigelse';
+        }
+        if (!empty($opsReview['requires_attention'])) {
+            $nextAction = 'Aabn cockpit og kontroller operationelle flight-data';
         }
 
         return [
@@ -491,13 +596,35 @@ final class AdminDeskService
             'delay_minutes' => $case->get('delay_min_eu'),
             'ticket_mode' => '',
             'risk' => $riskPanel,
+            'ticket_review' => $ticketReview,
+            'ops_review' => $opsReview,
             'next_action' => $nextAction,
             'meta' => [
                 'ref' => (string)$case->get('ref'),
                 'travel_date' => $travelDate ? (string)$travelDate : '',
                 'country' => (string)$case->get('country'),
+                'transport_mode' => $transportMode,
             ],
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $flags
+     */
+    private function detectTransportMode(array $form, array $flags): string
+    {
+        $mode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ($flags['transport_mode'] ?? '')))));
+        if ($mode !== '') {
+            return $mode;
+        }
+
+        $incidentMain = strtolower(trim((string)($form['incident_main'] ?? '')));
+        if ($incidentMain !== '' && isset($form['delay_departure_band'])) {
+            return 'air';
+        }
+
+        return '';
     }
 
     /**
@@ -565,8 +692,23 @@ final class AdminDeskService
         $summary = (array)($payload['summary'] ?? []);
         $preview = (array)($payload['preview'] ?? []);
         $question = (array)($payload['question'] ?? []);
-        $riskPanel = $this->buildRiskPanel($this->readLiveFlow($session));
+        $liveFlow = $this->readLiveFlow($session);
+        $riskPanel = $this->buildRiskPanel($liveFlow);
+        $ticketReview = $this->ticketReviewFromSnapshot($liveFlow);
+        $opsReview = $this->operationalReviewFromFlow($liveFlow);
         $blockers = (array)($preview['blockers'] ?? []);
+        if (!empty($ticketReview['requires_attention'])) {
+            $blockers[] = [
+                'title' => 'Billetafvigelse',
+                'text' => (string)($ticketReview['summary'] ?? 'Uploadet billet afviger fra de oplysninger, passageren tastede i frontflowet.'),
+            ];
+        }
+        if (!empty($opsReview['requires_attention'])) {
+            $blockers[] = [
+                'title' => 'Operationelle flight-data',
+                'text' => (string)($opsReview['summary'] ?? 'AeroDataBox-data kraever manuel kontrol.'),
+            ];
+        }
         if (!empty($riskPanel['fraud_review_required'])) {
             $blockers[] = [
                 'title' => 'Fraud review',
@@ -583,6 +725,8 @@ final class AdminDeskService
             'item' => $item,
             'source' => 'session',
             'live' => true,
+            'ticket_review' => $ticketReview,
+            'ops_review' => $opsReview,
             'summary_rows' => [
                 'Operatør' => (string)($summary['operator'] ?? '-'),
                 'Land' => (string)($summary['operator_country'] ?? '-'),
@@ -615,7 +759,13 @@ final class AdminDeskService
     private function buildStoredCaseCockpit(string $id): ?array
     {
         try {
-            $case = $this->cases->find()->where(['id' => $id])->first();
+            $case = null;
+            if ($id !== '' && ctype_digit($id)) {
+                $case = $this->cases->find()->where(['id' => (int)$id])->first();
+            }
+            if ($case === null && $id !== '') {
+                $case = $this->cases->find()->where(['ref' => $id])->first();
+            }
         } catch (Throwable) {
             return null;
         }
@@ -629,6 +779,20 @@ final class AdminDeskService
         $summary = $this->summaryFromFlowSnapshot($snapshot);
         $riskPanel = $this->storedRiskPanel($case, $snapshot, true);
         $blockers = $this->blockersFromSnapshot($snapshot);
+        $ticketReview = $this->ticketReviewFromSnapshot($snapshot);
+        $opsReview = $this->operationalReviewFromFlow($snapshot);
+        if (!empty($ticketReview['requires_attention'])) {
+            $blockers[] = [
+                'title' => 'Billetafvigelse',
+                'text' => (string)($ticketReview['summary'] ?? 'Uploadet billet afviger fra de oplysninger, passageren tastede i frontflowet.'),
+            ];
+        }
+        if (!empty($opsReview['requires_attention'])) {
+            $blockers[] = [
+                'title' => 'Operationelle flight-data',
+                'text' => (string)($opsReview['summary'] ?? 'AeroDataBox-data afviger eller kraever manuel kontrol.'),
+            ];
+        }
         if (!empty($riskPanel['fraud_review_required'])) {
             $blockers[] = [
                 'title' => 'Fraud review',
@@ -647,6 +811,7 @@ final class AdminDeskService
             'item' => $item,
             'source' => 'case',
             'live' => false,
+            'ops_review' => $opsReview,
             'summary_rows' => [
                 'Reference' => (string)$case->get('ref'),
                 'Passager' => (string)$case->get('passenger_name'),
@@ -1106,6 +1271,99 @@ final class AdminDeskService
     }
 
     /**
+     * @param array<string,mixed> $snapshot
+     * @return array<string,mixed>
+     */
+    private function ticketReviewFromSnapshot(array $snapshot): array
+    {
+        $analysis = (array)($snapshot['meta']['air_backend_ticket_analysis'] ?? []);
+        if ($analysis === []) {
+            return [
+                'available' => false,
+                'requires_attention' => false,
+                'summary' => '',
+                'label' => '',
+                'badge_class' => '',
+            ];
+        }
+
+        $requiresAttention = (string)($analysis['needs_manual_review'] ?? 'yes') === 'yes';
+        foreach ((array)($analysis['match_checks'] ?? []) as $check) {
+            if (is_array($check) && (string)($check['status'] ?? '') === 'mismatch') {
+                $requiresAttention = true;
+                break;
+            }
+        }
+
+        return [
+            'available' => true,
+            'requires_attention' => $requiresAttention,
+            'summary' => (string)($analysis['summary'] ?? ''),
+            'label' => $requiresAttention ? 'Billetafvigelse' : 'Billet OK',
+            'badge_class' => $requiresAttention ? 'desk-risk-high' : 'desk-risk-low',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $flow
+     * @return array<string,mixed>
+     */
+    private function operationalReviewFromFlow(array $flow): array
+    {
+        $analysis = (array)($flow['meta']['air_operational_evidence'] ?? []);
+        if ($analysis === []) {
+            return [
+                'available' => false,
+                'requires_attention' => false,
+                'summary' => '',
+                'label' => '',
+                'badge_class' => '',
+            ];
+        }
+
+        $requiresAttention = (string)($analysis['needs_manual_review'] ?? 'yes') === 'yes';
+        foreach ((array)($analysis['match_checks'] ?? []) as $check) {
+            if (is_array($check) && (string)($check['status'] ?? '') === 'mismatch') {
+                $requiresAttention = true;
+                break;
+            }
+        }
+        $confidence = strtolower(trim((string)($analysis['confidence'] ?? 'low')));
+        $badgeClass = $requiresAttention
+            ? 'desk-risk-high'
+            : ($confidence === 'high' ? 'desk-risk-low' : 'desk-risk-medium');
+        $label = $requiresAttention ? 'Ops afvigelse' : 'Ops data';
+        $summary = trim((string)($analysis['summary'] ?? ''));
+        if ($summary === '') {
+            $summary = 'Operationelle flight-data er gemt som support-data, ikke som juridisk facit.';
+        }
+
+        return [
+            'available' => true,
+            'requires_attention' => $requiresAttention,
+            'summary' => $summary,
+            'label' => $label,
+            'badge_class' => $badgeClass,
+            'confidence' => $confidence,
+            'source' => (string)($analysis['source'] ?? ''),
+            'evidence_score' => (int)($analysis['evidence_score'] ?? 0),
+            'status' => (string)($analysis['status'] ?? ''),
+            'cancelled' => (string)($analysis['cancelled'] ?? 'no'),
+            'delay_minutes_estimated' => $analysis['delay_minutes_estimated'] ?? null,
+            'scheduled_departure_local' => (string)($analysis['scheduled_departure_local'] ?? ''),
+            'scheduled_arrival_local' => (string)($analysis['scheduled_arrival_local'] ?? ''),
+            'estimated_departure_local' => (string)($analysis['estimated_departure_local'] ?? ''),
+            'estimated_arrival_local' => (string)($analysis['estimated_arrival_local'] ?? ''),
+            'actual_departure_local' => (string)($analysis['actual_departure_local'] ?? ''),
+            'actual_arrival_local' => (string)($analysis['actual_arrival_local'] ?? ''),
+            'match_checks' => array_values(array_filter(
+                (array)($analysis['match_checks'] ?? []),
+                static fn (mixed $check): bool => is_array($check)
+            )),
+        ];
+    }
+
+    /**
      * @return list<array<string,string>>
      */
     private function actionsFromCase(EntityInterface $case): array
@@ -1115,10 +1373,10 @@ final class AdminDeskService
             $actions[] = ['title' => 'Juridisk check', 'text' => 'Sagen er beregnet med EU-only aktivt. Kontrollér om det stadig er korrekt.'];
         }
         if ((bool)$case->get('extraordinary')) {
-            $actions[] = ['title' => 'Extraordinary circumstances', 'text' => 'Force majeure/extraordinary er markeret og bør vurderes af jurist.'];
+            $actions[] = ['title' => 'Extraordinary review', 'text' => 'Force majeure/extraordinary er markeret og bør vurderes af jurist.'];
         }
         if ((float)($case->get('art20_expenses_total') ?? 0) > 0) {
-            $actions[] = ['title' => 'Udgifter dokumentation', 'text' => 'Der er registreret Art. 20-udgifter. Kontrollér kvitteringer og dokumentation.'];
+            $actions[] = ['title' => 'Udgifter dokumentation', 'text' => 'Der er registreret assistance- eller udgiftsposter. Kontrollér kvitteringer og dokumentation.'];
         }
         if ($actions === []) {
             $actions[] = ['title' => 'Snapshot klar', 'text' => 'Sagen kan behandles ud fra gemt snapshot og statuspanelet nedenfor.'];

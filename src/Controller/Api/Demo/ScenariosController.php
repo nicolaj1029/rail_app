@@ -28,6 +28,7 @@ class ScenariosController extends AppController
         $withEval = (string)$this->request->getQuery('withEval') === '1'
             || (string)$this->request->getQuery('eval') === '1';
         $id = (string)$this->request->getQuery('id') ?: null;
+        $transport = (string)($this->request->getQuery('transport') ?? $this->request->getQuery('mode') ?? '');
         $compact = (string)$this->request->getQuery('compact') === '1';
         // Include the full wizard payload (step 1..N) in the output. Useful for admin/debug/operator handoff.
         $withWizard = (string)$this->request->getQuery('withWizard') === '1'
@@ -46,6 +47,12 @@ class ScenariosController extends AppController
 
         $repo = new FixtureRepository();
         $fixtures = $repo->getAll($id);
+        if (trim($transport) !== '') {
+            $transportMode = $this->normalizeTransportMode($transport);
+            $fixtures = array_values(array_filter($fixtures, function (array $fixture) use ($transportMode): bool {
+                return $this->normalizeTransportMode((string)($fixture['transport_mode'] ?? 'rail')) === $transportMode;
+            }));
+        }
         $runner = new ScenarioRunner();
 
         $out = [];
@@ -60,10 +67,12 @@ class ScenariosController extends AppController
                 'scope_meta' => $fx['scope_meta'] ?? null,
                 'incident_meta' => $fx['incident_meta'] ?? null,
                 'expected' => $fx['expected'] ?? null,
+                'expected_compensation' => $this->buildExpectedCompensationSummary($fx),
             ];
             if ($withEval) {
                 $eval = $runner->evaluateFixture($fx);
                 $actual = $eval['actual'];
+                $row['actual_compensation'] = $this->buildActualCompensationSummary($actual, $fx);
                 $origin = $withProvenance ? $this->buildWizardFieldOrigin($fx) : null;
                 if ($compact) {
                     $row['wizard_compact'] = $this->buildWizardCompact($fx);
@@ -372,10 +381,18 @@ class ScenariosController extends AppController
                 '_mode_fields' => (array)($step8['_mode_fields'] ?? []),
             ],
             'step9_downgrade' => $this->pick($step9, [
+                '_mode',
+                '_mode_fields',
                 'downgrade_ticket_file',
                 'downgrade_occurred',
                 'downgrade_comp_basis',
                 'downgrade_segment_share',
+                'downgrade_segment_share_basis',
+                'downgrade_segment_share_conf',
+                'air_downgrade_ticket_price_known',
+                'air_downgrade_ticket_price_basis',
+                'air_downgrade_ticket_price',
+                'air_downgrade_ticket_price_currency',
                 'air_downgrade_booked_class',
                 'air_downgrade_flown_class',
                 'air_downgrade_refund_percent',
@@ -385,7 +402,10 @@ class ScenariosController extends AppController
                 'leg_reservation_delivered',
                 // Useful for QA/scenarios; otherwise it will be recomputed client-side only.
                 'leg_downgraded',
-            ]),
+            ]) + [
+                '_mode' => (string)($step9['_mode'] ?? $transportMode),
+                '_mode_fields' => (array)($step9['_mode_fields'] ?? []),
+            ],
             'step10_compensation' => $this->pick($step10, [
                 '_mode',
                 '_mode_fields',
@@ -757,6 +777,26 @@ class ScenariosController extends AppController
         // Downgrade (step 9)
         if (!empty($s9) && array_key_exists('downgrade_occurred', $s9)) {
             $lines[] = 'Nedgradering: ' . (string)($s9['downgrade_occurred'] ?? '');
+            if ($transportMode === 'air' && !empty($s9['air_downgrade_ticket_price_known'])) {
+                $lines[] = 'Billetpris kendt: ' . (string)$s9['air_downgrade_ticket_price_known'];
+            }
+            if ($transportMode === 'air' && !empty($s9['air_downgrade_ticket_price_basis'])) {
+                $lines[] = 'Prisgrundlag: ' . (string)$s9['air_downgrade_ticket_price_basis'];
+            }
+            if ($transportMode === 'air' && array_key_exists('air_downgrade_ticket_price', $s9) && $s9['air_downgrade_ticket_price'] !== null && $s9['air_downgrade_ticket_price'] !== '') {
+                $lines[] = 'Billetpris for relevant flyvning/billet: '
+                    . (string)$s9['air_downgrade_ticket_price']
+                    . ' '
+                    . (string)($s9['air_downgrade_ticket_price_currency'] ?? '');
+            }
+            if ($transportMode === 'air' && array_key_exists('downgrade_segment_share', $s9) && $s9['downgrade_segment_share'] !== null && $s9['downgrade_segment_share'] !== '') {
+                $shareBasis = (string)($s9['downgrade_segment_share_basis'] ?? '');
+                $shareConf = (string)($s9['downgrade_segment_share_conf'] ?? '');
+                $lines[] = 'Andel af billet anvendt for downgradede leg(s): '
+                    . (string)$s9['downgrade_segment_share']
+                    . ($shareBasis !== '' ? ' [' . $shareBasis . ']' : '')
+                    . ($shareConf !== '' ? ' (conf: ' . $shareConf . ')' : '');
+            }
             if ($transportMode === 'air' && !empty($s9['air_downgrade_booked_class'])) {
                 $lines[] = 'Koebt kabineklasse: ' . (string)$s9['air_downgrade_booked_class'];
             }
@@ -765,6 +805,12 @@ class ScenariosController extends AppController
             }
             if ($transportMode === 'air' && !empty($s9['air_downgrade_refund_percent'])) {
                 $lines[] = 'Artikel 10-refusionsprocent: ' . (string)$s9['air_downgrade_refund_percent'] . '%';
+            }
+            if ($transportMode === 'air' && !empty($s9['leg_downgraded']) && is_array($s9['leg_downgraded'])) {
+                $selectedLegs = array_values(array_filter(array_map(static fn($value) => trim((string)$value), $s9['leg_downgraded'])));
+                if ($selectedLegs !== []) {
+                    $lines[] = 'Markerede downgradede leg(s): ' . implode(', ', $selectedLegs);
+                }
             }
         }
 
@@ -1146,6 +1192,11 @@ class ScenariosController extends AppController
     {
         $out = [];
 
+        $compensation = $this->buildActualCompensationSummary($actual, []);
+        if ($compensation !== []) {
+            $out['compensation'] = $compensation;
+        }
+
         // Profile + exemptions (hooks panel mirrors these)
         $out['profile'] = $this->pick((array)($actual['profile'] ?? []), [
             'scope',
@@ -1243,6 +1294,68 @@ class ScenariosController extends AppController
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<string,mixed> $fixture
+     * @return array<string,mixed>
+     */
+    private function buildExpectedCompensationSummary(array $fixture): array
+    {
+        $expected = (array)($fixture['expected'] ?? []);
+        $transportMode = $this->normalizeTransportMode((string)($fixture['transport_mode'] ?? 'rail'));
+
+        if ($transportMode === 'air') {
+            return $this->pick($expected, [
+                'air_rights.gate_air_compensation',
+                'air_rights.article7_eligibility_status',
+                'air_rights.article7_reduction_status',
+                'air_rights.article7_base_amount_eur',
+                'air_rights.article7_final_amount_eur',
+                'air_rights.compensation_block_reason',
+            ]);
+        }
+
+        return $this->pick($expected, [
+            'compensation',
+            'compensation_amount',
+            'compensation_band',
+            'art19_compensation_25',
+            'art19_compensation_50',
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $actual
+     * @param array<string,mixed> $fixture
+     * @return array<string,mixed>
+     */
+    private function buildActualCompensationSummary(array $actual, array $fixture): array
+    {
+        $transportMode = $this->normalizeTransportMode((string)($fixture['transport_mode'] ?? ''));
+        if ($transportMode === 'air' || isset($actual['air_rights'])) {
+            $airRights = (array)($actual['air_rights'] ?? []);
+            return $this->pick($airRights, [
+                'gate_air_compensation',
+                'article7_eligibility_status',
+                'article7_reduction_status',
+                'article7_base_amount_eur',
+                'article7_final_amount_eur',
+                'compensation_block_reason',
+            ]);
+        }
+
+        $claim = (array)($actual['claim'] ?? []);
+        $breakdown = (array)($claim['breakdown'] ?? []);
+        $totals = (array)($claim['totals'] ?? []);
+        $flags = (array)($claim['flags'] ?? []);
+
+        return array_filter([
+            'compensation' => $breakdown['compensation'] ?? null,
+            'compensation_amount' => $totals['compensation_amount'] ?? null,
+            'compensation_band' => $breakdown['compensation_band'] ?? null,
+            'flags' => $flags !== [] ? $flags : null,
+        ], static fn($value) => $value !== null);
     }
 
     /**

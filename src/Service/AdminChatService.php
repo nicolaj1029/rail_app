@@ -1126,6 +1126,7 @@ final class AdminChatService
     {
         $form = (array)($flow['form'] ?? []);
         $flags = (array)($flow['flags'] ?? []);
+        $transportMode = strtolower((string)($form['transport_mode'] ?? 'rail'));
         $items = [];
         $questionOrder = [
             'travel_state' => 10,

@@ -115,6 +115,46 @@
     </div>
   </div>
 
+  <h2>Air regressions (verified)</h2>
+  <p>Disse air-cases er verificeret og kan bruges direkte til QA af <code>completed</code> og <code>ongoing</code>. Brug kompakt output til hurtig aflæsning.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Alle air-scenarier</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?transport=air&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">/api/demo/v2/scenarios?transport=air&amp;withEval=1&amp;compact=1</a>
+      <div class="note">Lister kun air-fixtures. God til hurtig regression efter flow- eller evaluatorændringer.</div>
+    </div>
+    <div class="card">
+      <h3>Run all air</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/run-scenarios?transport=air', ['fullBase' => true])) ?>" target="_blank">/api/demo/v2/run-scenarios?transport=air</a>
+      <div class="note">Batch-kør kun air-cases og få pass/fail pr. fixture.</div>
+    </div>
+    <div class="card">
+      <h3>Cancellation (completed)</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=air_cancellation_eu_departure&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">air_cancellation_eu_departure</a>
+      <div class="note">Completed cancellation med varsel, Article 5-vurdering og aktiv compensation-candidate.</div>
+    </div>
+    <div class="card">
+      <h3>Denied boarding (completed)</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=air_denied_boarding_non_voluntary&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">air_denied_boarding_non_voluntary</a>
+      <div class="note">Completed denied boarding mod passagerens vilje.</div>
+    </div>
+    <div class="card">
+      <h3>Self-transfer (completed)</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=air_self_transfer_separate_tickets&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">air_self_transfer_separate_tickets</a>
+      <div class="note">Completed separate tickets / self-transfer.</div>
+    </div>
+    <div class="card">
+      <h3>Protected connection (completed)</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=air_protected_connection_same_booking&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">air_protected_connection_same_booking</a>
+      <div class="note">Completed same-booking protected connection.</div>
+    </div>
+    <div class="card">
+      <h3>Delay 5+ (ongoing)</h3>
+      <a href="<?= h($this->Url->build('/api/demo/v2/scenarios?id=air_delay_ongoing_five_plus&withEval=1&compact=1', ['fullBase' => true])) ?>" target="_blank">air_delay_ongoing_five_plus</a>
+      <div class="note">Ongoing delay hvor Article 9-care og 5+ timers refund-gate er aktiv, mens completed compensation endnu ikke er det.</div>
+    </div>
+  </div>
+
   <h2>Specifik evaluering (Art. 12)</h2>
   <p>Direkte links til udvalgte Art.12 regressions‑fixtures. Brug <code>&compact=1</code> for kort output. Alle kører fuld pipeline.</p>
   <div class="cards">
@@ -281,6 +321,7 @@
     <li><code>/api/demo/v2/dump-session</code>: Ekstraherer din aktuelle flow-session til en fixture, som kan gemmes og bruges til regressionstests.</li>
     <li><code>/api/demo/v2/fixtures</code>: Oversigt over tilgængelige fixtures (testcases) i projektet.</li>
     <li><code>/api/demo/v2/scenarios?withEval=1</code>: Evaluerer fixtures mod den fulde pipeline og viser output samt evt. diff mod <code>expected</code>.</li>
+    <li><code>/api/demo/v2/scenarios?transport=air&withEval=1&compact=1</code>: Filtrerer til air-fixtures og er den hurtigste regression-visning for air.</li>
     <li><code>/api/demo/v2/scenarios?withEval=1&operatorText=1</code>: Tilføjer <code>operator_case_text</code>, som kan bruges direkte som fritekst til jernbaneoperatør (EU-formularens ekstra felt) og i admin til QA.</li>
     <li><code>/api/demo/v2/scenarios?withEval=1&withWizard=1</code>: Tilføjer hele wizard-input (alle trin) i scenario-output, så admin/operator kan se "hvad brugeren svarede" sammen med beregningen.</li>
     <li><code>/api/demo/v2/scenarios?withEval=1&explain=1</code>: Tilføjer <code>explain</code>-blokke (fx Art. 18) med kort konklusion/notes, så output kan læses som en sagsopsummering.</li>

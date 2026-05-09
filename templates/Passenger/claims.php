@@ -16,6 +16,8 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
   .backend-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
 </style>
 
+<?= $this->element('passenger_sidebar', compact('passengerNav')) ?>
+
 <div class="passenger-page" id="passenger-claims-root"
      data-cases-api="<?= h($casesApi) ?>"
      data-chat-url="<?= h($this->Url->build('/passenger/chat', ['fullBase' => true])) ?>"
@@ -39,7 +41,9 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
 
     <div class="card">
       <h2>Claims handlinger</h2>
-      <a class="cta" href="<?= h($claimLinks['compensation']) ?>">Åbn resultat</a>
+      <a class="cta" href="<?= h($claimLinks['case']) ?>">Fortsæt i sagsbackend</a>
+      <br>
+      <a class="cta secondary" href="<?= h($claimLinks['compensation']) ?>">Åbn resultat</a>
       <br>
       <a class="cta secondary" href="<?= h($claimLinks['applicant']) ?>">Ansøger & udbetaling</a>
       <br>
@@ -62,6 +66,8 @@ $casesApi = $this->Url->build('/api/shadow/cases', ['fullBase' => true]);
     </div>
     <div id="real-claims-list" class="backend-list"><div class="muted">Ingen claims hentet endnu.</div></div>
   </div>
+</div>
+</div>
 </div>
 
 <script>

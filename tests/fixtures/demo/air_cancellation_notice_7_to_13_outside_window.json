@@ -1,0 +1,53 @@
+{
+  "fixture": {
+    "id": "air_cancellation_notice_7_to_13_outside_window",
+    "version": 2,
+    "label": "Air cancellation 7-13 days with reroute outside window keeps compensation",
+    "tags": ["air", "cancellation", "completed"],
+    "transport_mode": "air",
+    "journey": [],
+    "wizard": { "step1_start": { "travel_state": "completed" } },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "SAS",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "air",
+      "incident_segment_operator": "SAS",
+      "same_pnr": true,
+      "rights_module": "air",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "intra_eu_over_1500"
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "cancellation",
+      "cancellation_notice_band": "7_to_13_days",
+      "remedy_choice": "reroute_soonest",
+      "reroute_offered": true,
+      "reroute_departure_band": "outside_window",
+      "reroute_arrival_band": "within_window",
+      "arrival_delay_minutes": 240,
+      "extraordinary_circumstances": false
+    },
+    "expected": {
+      "transport_mode": "air",
+      "air_rights.gate_air_care": true,
+      "air_rights.gate_air_reroute_refund": true,
+      "air_rights.gate_air_compensation": true,
+      "air_rights.article7_eligibility_status": "eligible",
+      "air_rights.article7_reduction_status": "unknown",
+      "air_rights.article7_final_amount_eur": 400.0
+    }
+  }
+}

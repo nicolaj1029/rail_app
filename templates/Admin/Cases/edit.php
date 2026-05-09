@@ -5,6 +5,30 @@ $remedyOptions = [
     'reroute_soonest' => 'Videre rejse hurtigst muligt',
     'reroute_later' => 'Videre rejse senere (efter eget valg)',
 ];
+$snapshot = json_decode((string)($case->flow_snapshot ?? ''), true);
+$form = is_array($snapshot) ? (array)($snapshot['form'] ?? []) : [];
+$transportMode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ''))));
+$articleModeLabel = match ($transportMode) {
+    'air' => 'Air: Art. 7 / 8 / 9',
+    'rail' => 'Rail: Art. 18 / 19 / 20',
+    'bus' => 'Bus: transportspecifikt regelsaet',
+    'ferry' => 'Ferry: Art. 17 / 18 / 19 + PMR',
+    default => 'Transportuafhaengigt admin-resume',
+};
+$fieldLabels = match ($transportMode) {
+    'ferry' => [
+        'remedy' => 'Art. 18 refund/ombooking / PMR Art. 8(3)',
+        'expenses' => 'Art. 17 assistanceudgifter',
+        'compBand' => 'Art. 19 band (25/50)',
+        'compAmount' => 'Art. 19 kompensationsbeloeb',
+    ],
+    default => [
+        'remedy' => 'Afhjaelpning',
+        'expenses' => 'Assistanceudgifter',
+        'compBand' => 'Band (25/50)',
+        'compAmount' => 'Kompensationsbeloeb',
+    ],
+};
 ?>
 <h2>Rediger sag <?= h((string)$case->ref) ?></h2>
 <?= $this->Form->create($case) ?>
@@ -15,12 +39,13 @@ $remedyOptions = [
   <?= $this->Form->control('due_at', ['type'=>'datetime', 'label'=>'Tidsfrist']) ?>
 </fieldset>
 <fieldset>
-  <legend>Forsinkelse & kompensation</legend>
+  <legend>Rettigheder og beloeb</legend>
+  <p><small><?= h($articleModeLabel) ?></small></p>
   <?= $this->Form->control('delay_min_eu', ['label'=>'Forsinkelse (min)']) ?>
-  <?= $this->Form->control('remedy_choice', ['label'=>'Art.18 valg', 'options' => $remedyOptions, 'empty' => '-']) ?>
-  <?= $this->Form->control('art20_expenses_total', ['label'=>'Art.20 udgifter']) ?>
-  <?= $this->Form->control('comp_band', ['label'=>'Band (25/50)']) ?>
-  <?= $this->Form->control('comp_amount', ['label'=>'Kompensationsbeløb']) ?>
+  <?= $this->Form->control('remedy_choice', ['label'=>$fieldLabels['remedy'], 'options' => $remedyOptions, 'empty' => '-']) ?>
+  <?= $this->Form->control('art20_expenses_total', ['label'=>$fieldLabels['expenses']]) ?>
+  <?= $this->Form->control('comp_band', ['label'=>$fieldLabels['compBand']]) ?>
+  <?= $this->Form->control('comp_amount', ['label'=>$fieldLabels['compAmount']]) ?>
   <?= $this->Form->control('currency', ['label'=>'Valuta']) ?>
 </fieldset>
 <fieldset>

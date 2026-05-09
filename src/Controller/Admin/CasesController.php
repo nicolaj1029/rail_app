@@ -4,14 +4,17 @@ namespace App\Controller\Admin;
 use App\Controller\AppController;
 use App\Service\CaseRiskService;
 use Cake\Datasource\Exception\RecordNotFoundException;
+use Cake\ORM\Table;
 use Cake\Utility\Text;
 
 class CasesController extends AppController
 {
+    protected Table $Cases;
+
     public function initialize(): void
     {
         parent::initialize();
-        $this->loadModel('Cases');
+        $this->Cases = $this->fetchTable('Cases');
     }
 
     public function index()
@@ -25,7 +28,7 @@ class CasesController extends AppController
                 'operator LIKE' => '%' . $q . '%',
             ]]);
         }
-        $query->orderDesc('Cases.created');
+        $query->orderByDesc('Cases.created');
         $cases = $query->limit(200)->all();
         $this->set(compact('cases','q'));
     }
@@ -49,6 +52,60 @@ class CasesController extends AppController
             $this->Flash->error('Kunne ikke gemme');
         }
         $this->set(compact('case'));
+    }
+
+    public function passenger($id = null)
+    {
+        $case = $this->Cases->get($id);
+        $ref = trim((string)$case->get('ref'));
+        if ($ref === '') {
+            $this->Flash->error('Sagen har ingen reference til passenger-backend.');
+            return $this->redirect(['action' => 'view', $id]);
+        }
+
+        return $this->redirect('/passenger/case?ref=' . rawurlencode($ref) . '&admin=1');
+    }
+
+    public function airTravelForm($id = null)
+    {
+        $case = $this->Cases->get($id);
+        $snapshot = json_decode((string)$case->get('flow_snapshot'), true);
+        if (!is_array($snapshot) || $snapshot === []) {
+            $this->Flash->error('Sagen mangler et brugbart flow-snapshot til PDF-generering.');
+            return $this->redirect(['action' => 'view', $id]);
+        }
+
+        $form = (array)($snapshot['form'] ?? []);
+        $transportMode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ''))));
+        if ($transportMode !== 'air') {
+            $this->Flash->error('air_travel_form.pdf er kun koblet til air-sager.');
+            return $this->redirect(['action' => 'view', $id]);
+        }
+
+        $this->request->getSession()->write('flow', $snapshot);
+
+        return $this->redirect('/reimbursement/official?template=Form_air_travel/air_travel_form.pdf');
+    }
+
+    public function airStatementForm($id = null)
+    {
+        $case = $this->Cases->get($id);
+        $snapshot = json_decode((string)$case->get('flow_snapshot'), true);
+        if (!is_array($snapshot) || $snapshot === []) {
+            $this->Flash->error('Sagen mangler et brugbart flow-snapshot til PDF-generering.');
+            return $this->redirect(['action' => 'view', $id]);
+        }
+
+        $form = (array)($snapshot['form'] ?? []);
+        $transportMode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ''))));
+        if ($transportMode !== 'air') {
+        $this->Flash->error('staevning-flysag.pdf er kun koblet til air-sager.');
+            return $this->redirect(['action' => 'view', $id]);
+        }
+
+        $this->request->getSession()->write('flow', $snapshot);
+
+        return $this->redirect('/reimbursement/official?template=Staevning_template_air_DK/staevning-flysag-uncompressed.pdf');
     }
 
     public function createFromSession()

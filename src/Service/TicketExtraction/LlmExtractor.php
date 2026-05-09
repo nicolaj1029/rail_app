@@ -179,12 +179,15 @@ final class LlmExtractor implements ExtractorInterface
             'arr_time' => 'HH:MM 24h or null',
             'train_no' => 'string|null',
             'ticket_no' => 'string|null',
+            'booking_reference' => 'string|null',
             'price' => 'string|null',
             'operator' => 'string|null',
             'operator_country' => 'string|null',
             'operator_product' => 'string|null',
             'marketing_carrier' => 'string|null',
             'operating_carrier' => 'string|null',
+            'vessel_name' => 'string|null',
+            'service_code' => 'string|null',
             'notes' => 'array of strings with uncertainties or OCR ambiguities (optional)',
         ];
 
@@ -200,6 +203,7 @@ Rules:
 - For air documents, do not collapse carrier fields: keep marketing_carrier, operating_carrier, and operator separate when the ticket explicitly distinguishes them.
 - Use the exact carrier/brand names printed on the ticket when present. Prefer the marketed carrier for operator; prefer the actual operating carrier for operating_carrier.
 - If the air ticket only names one carrier, populate both operator and operating_carrier with that name when no better split is visible.
+- For ferry documents, capture vessel_name, service_code and booking_reference when they are visible on the ticket or booking confirmation.
 - If unknown, put null.
 - Do not add comments or extra keys. Output JSON only.
 
@@ -262,7 +266,24 @@ EOT;
      */
     private function normalizeFields(array $parsed): array
     {
-        $keys = ['dep_station','arr_station','dep_date','dep_time','arr_time','train_no','ticket_no','price','operator','operator_country','operator_product','marketing_carrier','operating_carrier'];
+        $keys = [
+            'dep_station',
+            'arr_station',
+            'dep_date',
+            'dep_time',
+            'arr_time',
+            'train_no',
+            'ticket_no',
+            'booking_reference',
+            'price',
+            'operator',
+            'operator_country',
+            'operator_product',
+            'marketing_carrier',
+            'operating_carrier',
+            'vessel_name',
+            'service_code',
+        ];
         $out = [];
         foreach ($keys as $k) {
             $v = $parsed[$k] ?? null;
@@ -284,12 +305,23 @@ EOT;
      */
     private function confidenceFromFields(array $fields): float
     {
-        $core = ['dep_station','arr_station','dep_date','dep_time','arr_time','train_no'];
+        $core = ['dep_station', 'arr_station', 'dep_date', 'dep_time', 'arr_time'];
         $score = 0; $max = count($core);
         foreach ($core as $k) {
             $v = $fields[$k] ?? null;
             if (is_string($v) && $v !== '') { $score++; }
         }
+        $serviceMarker = (string)($fields['train_no'] ?? '');
+        if ($serviceMarker === '') {
+            $serviceMarker = (string)($fields['service_code'] ?? '');
+        }
+        if ($serviceMarker === '') {
+            $serviceMarker = (string)($fields['vessel_name'] ?? '');
+        }
+        if ($serviceMarker !== '') {
+            $score++;
+        }
+        $max++;
         return $max > 0 ? $score / $max : 0.0;
     }
 

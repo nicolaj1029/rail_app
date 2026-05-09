@@ -1,0 +1,46 @@
+{
+  "fixture": {
+    "id": "air_denied_boarding_voluntary_completed",
+    "version": 2,
+    "label": "Voluntary denied boarding removes Article 7 compensation but keeps Article 8",
+    "tags": ["air", "denied_boarding", "completed"],
+    "transport_mode": "air",
+    "journey": [],
+    "wizard": { "step1_start": { "travel_state": "completed" } },
+    "contract_meta": {
+      "contract_topology": "single_mode_single_contract",
+      "seller_type": "operator",
+      "seller_name": "SAS",
+      "shared_booking_reference": true,
+      "single_transaction": true,
+      "contract_structure_disclosure": "bundled",
+      "separate_contract_notice": "no",
+      "incident_segment_mode": "air",
+      "incident_segment_operator": "SAS",
+      "same_pnr": true,
+      "rights_module": "air",
+      "manual_review_required": false
+    },
+    "scope_meta": {
+      "transport_mode": "air",
+      "departure_airport_in_eu": true,
+      "arrival_airport_in_eu": true,
+      "operating_carrier_is_eu": true,
+      "air_distance_band": "intra_eu_over_1500"
+    },
+    "incident_meta": {
+      "transport_mode": "air",
+      "travel_state": "completed",
+      "incident_type": "denied_boarding",
+      "boarding_denied": true,
+      "voluntary_denied_boarding": true
+    },
+    "expected": {
+      "transport_mode": "air",
+      "air_rights.gate_air_reroute_refund": true,
+      "air_rights.gate_air_care": false,
+      "air_rights.gate_air_compensation": false,
+      "air_rights.compensation_block_reason": "voluntary_denied_boarding"
+    }
+  }
+}
