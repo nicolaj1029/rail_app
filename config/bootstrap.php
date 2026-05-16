@@ -67,7 +67,7 @@ require CAKE . 'functions.php';
 */
 // Allow tests/CI to opt-out of .env loading to avoid duplicate env definitions
 $skipDotenv = (getenv('APP_SKIP_DOTENV') === '1') || (getenv('CI') === 'true') || defined('APP_SKIP_DOTENV');
-if (!$skipDotenv && file_exists(CONFIG . '.env')) {
+if (!$skipDotenv && file_exists(CONFIG . '.env') && class_exists(\josegonzalez\Dotenv\Loader::class)) {
     $dotenv = new \josegonzalez\Dotenv\Loader([CONFIG . '.env']);
     // Avoid LogicException when keys already exist (e.g., repeated loads)
     $dotenv->parse()

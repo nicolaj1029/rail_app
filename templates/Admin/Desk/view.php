@@ -412,11 +412,11 @@ $formatDeskLabel = static function (string $key) use ($legalLabels): string {
 
         <?php if (!empty($opsReview['available'])): ?>
           <section class="desk-card">
-            <h2 class="desk-title">Operationelle flight-data</h2>
+            <h2 class="desk-title"><?= h((string)($opsReview['title'] ?? 'Operationelle transportdata')) ?></h2>
             <div class="desk-toolbar">
               <span class="desk-badge <?= h((string)($opsReview['badge_class'] ?? 'desk-risk-medium')) ?>"><?= h((string)($opsReview['label'] ?? 'Ops data')) ?></span>
-              <?php if (trim((string)($opsReview['source'] ?? '')) !== ''): ?>
-                <span class="desk-badge"><?= h(strtoupper((string)$opsReview['source'])) ?></span>
+              <?php if (trim((string)($opsReview['source_label'] ?? ($opsReview['source'] ?? ''))) !== ''): ?>
+                <span class="desk-badge"><?= h((string)($opsReview['source_label'] ?? strtoupper((string)$opsReview['source']))) ?></span>
               <?php endif; ?>
               <?php if (trim((string)($opsReview['confidence'] ?? '')) !== ''): ?>
                 <span class="desk-badge">Confidence <?= h((string)$opsReview['confidence']) ?></span>
@@ -427,23 +427,23 @@ $formatDeskLabel = static function (string $key) use ($legalLabels): string {
             <div class="desk-muted" style="margin-top:12px;"><?= h((string)($opsReview['summary'] ?? '')) ?></div>
 
             <dl class="desk-kv" style="margin-top:12px;">
-              <dt>Status</dt>
+              <dt><?= h((string)($opsReview['status_label'] ?? 'Status')) ?></dt>
               <dd><?= h((string)($opsReview['status'] ?? '') !== '' ? (string)$opsReview['status'] : '-') ?></dd>
-              <dt>Cancellation</dt>
+              <dt><?= h((string)($opsReview['cancelled_label'] ?? 'Aflyst')) ?></dt>
               <dd><?= ((string)($opsReview['cancelled'] ?? 'no') === 'yes') ? 'ja' : 'nej' ?></dd>
-              <dt>Est. ankomstafvigelse</dt>
+              <dt><?= h((string)($opsReview['delay_label'] ?? 'Est. ankomstafvigelse')) ?></dt>
               <dd>
                 <?php $opsDelay = $opsReview['delay_minutes_estimated'] ?? null; ?>
                 <?= ($opsDelay === null || $opsDelay === '') ? '-' : h((string)$opsDelay . ' min') ?>
               </dd>
-              <dt>Planlagt</dt>
+              <dt><?= h((string)($opsReview['planned_label'] ?? 'Planlagt')) ?></dt>
               <dd>
                 <?= h((string)($opsReview['scheduled_departure_local'] ?? '') !== '' ? (string)$opsReview['scheduled_departure_local'] : '-') ?>
                 <?php if (trim((string)($opsReview['scheduled_arrival_local'] ?? '')) !== ''): ?>
                   → <?= h((string)$opsReview['scheduled_arrival_local']) ?>
                 <?php endif; ?>
               </dd>
-              <dt>Observeret</dt>
+              <dt><?= h((string)($opsReview['observed_label'] ?? 'Observeret')) ?></dt>
               <dd>
                 <?php
                   $observedDeparture = trim((string)($opsReview['actual_departure_local'] ?? '')) !== ''
@@ -474,8 +474,8 @@ $formatDeskLabel = static function (string $key) use ($legalLabels): string {
             </div>
 
             <div class="desk-note">
-              <strong>Ops-regel</strong><br>
-              AeroDataBox bruges her som drifts- og plausibilitetsstøtte. Dataene er ikke alene juridisk facit.
+              <strong><?= h((string)($opsReview['support_note_title'] ?? 'Ops-regel')) ?></strong><br>
+              <?= h((string)($opsReview['support_note'] ?? 'Operationelle transportdata bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.')) ?>
             </div>
           </section>
         <?php endif; ?>

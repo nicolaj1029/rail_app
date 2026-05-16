@@ -148,6 +148,11 @@ $hintText = function (string $key) use ($priceHints): string {
     return "Typisk interval: {$min}–{$max} {$h['currency']}";
 
 };
+$railAssistHintParts = array_values(array_filter([
+    ($ht = $hintText('meals')) !== '' ? 'Maaltider / forfriskninger: ' . $ht : '',
+    ($ht = $hintText('hotelPerNight')) !== '' ? 'Hotel / overnatning: ' . $ht : '',
+    ($ht = $hintText('taxi')) !== '' ? 'Lokal transport / taxi: ' . $ht : '',
+]));
 
 $capFx = [
     'EUR' => 1.0,
@@ -233,13 +238,14 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 
 <h1><?= h($assistTitle) ?></h1>
+<?php if ($isRail): ?>
+<?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+<?php endif; ?>
 <?php if ($isAirShortView): ?>
 <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
 <?= $this->element('air_downgrade_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
 <?php elseif ($isFerry): ?>
 <?= $this->element('ferry_live_estimate', compact('form', 'flags', 'meta', 'journey', 'ferryRights', 'ferryScope')) ?>
-<?php elseif ($isRail && $entryVariant === 'rail_split'): ?>
-<?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
 <?php endif; ?>
 <?php if ($isModeSplitView): ?>
 <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
@@ -308,6 +314,13 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
 <?php if ($assistHint !== ''): ?>
   <p class="small muted"><?= h($assistHint) ?></p>
+<?php endif; ?>
+<?php if ($isRail && $railAssistHintParts !== []): ?>
+  <div class="card mt8" style="border-color:#d0d7de;background:#f8f9fb;">
+    <strong>Vejledende rail-niveauer (ikke faste juridiske caps)</strong>
+    <div class="small muted mt4">Rail-assistance bygger paa noedvendige og rimelige udgifter, ikke paa et fast lovbeloeb. Brug niveauerne som praktiske pejlemaerker; endelig dokumentation og vurdering sker i backend-sagen.</div>
+    <div class="small muted mt4"><?= h(implode(' | ', $railAssistHintParts)) ?></div>
+  </div>
 <?php endif; ?>
 
 <?php if ($isFerry): ?>
@@ -453,6 +466,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
       <strong>Frontend registrerer ikke udgifter her</strong>
       <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv betalte maaltider eller forfriskninger, registreres beloeb, valuta og kvitteringer i backend-sagen under assistance.' : 'Hvis passageren selv betalte maaltider eller forfriskninger under togforloebet, registreres beloeb, valuta og kvitteringer i backend-sagen under assistance.') ?></div>
+      <?php if ($isRail && ($ht = $hintText('meals'))): ?><div class="muted mt4"><?= h($ht) ?></div><?php endif; ?>
     </div>
     <?php else: ?>
     <div class="grid-3">
@@ -598,6 +612,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
       <strong>Transport til/fra hotel registreres i backend</strong>
       <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv betalte lokal transport mellem havneterminal og hotel, registreres beloeb, valuta og kvittering i backend-sagen.' : 'Hvis passageren selv betalte lokal transport mellem station og hotel, registreres beloeb, valuta og kvittering i backend-sagen.') ?></div>
+      <?php if ($isRail && ($ht = $hintText('taxi'))): ?><div class="muted mt4"><?= h($ht) ?></div><?php endif; ?>
     </div>
     <?php else: ?>
 
@@ -649,22 +664,9 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
 
   <?php if (!$isFerry && !$isAir && !$isBus): ?>
   <div class="mt4" data-show-if="hotel_offered:no">
-
-    <label>Var overnatning nødvendig selvom hotel ikke blev tilbudt?
-
-      <select name="overnight_needed">
-
-        <option value="">Vælg</option>
-
-        <?php foreach (['yes'=>'Ja','no'=>'Nej'] as $val => $label): ?>
-
-          <option value="<?= $val ?>" <?= $v('overnight_needed')===$val?'selected':'' ?>><?= $label ?></option>
-
-        <?php endforeach; ?>
-
-      </select>
-
-    </label>
+    <div>Var overnatning nødvendig selvom hotel ikke blev tilbudt?</div>
+    <label><input type="radio" name="overnight_needed" value="yes" <?= $v('overnight_needed')==='yes'?'checked':'' ?> /> Ja</label>
+    <label class="ml8"><input type="radio" name="overnight_needed" value="no" <?= $v('overnight_needed')==='no'?'checked':'' ?> /> Nej</label>
 
   </div>
   <?php endif; ?>
@@ -695,6 +697,7 @@ $ferryHotelTransportAmountEur = $toEur($form['hotel_transport_self_paid_amount']
     <div class="small mt4" style="background:#eef7ff; padding:8px; border-radius:6px;">
       <strong>Hoteludgifter registreres i backend</strong>
       <div class="muted mt4"><?= h($isFerry ? 'Hvis passageren selv maatte finde hotel eller indkvartering, registreres antal naetter, beloeb, valuta og kvitteringer i backend-sagen under assistance.' : 'Hvis passageren selv maatte finde hotel eller anden overnatning under togforloebet, registreres antal naetter, beloeb, valuta og kvitteringer i backend-sagen under assistance.') ?></div>
+      <?php if ($isRail && ($ht = $hintText('hotelPerNight'))): ?><div class="muted mt4"><?= h($ht) ?></div><?php endif; ?>
     </div>
     <?php else: ?>
     <div class="grid-3">

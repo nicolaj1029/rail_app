@@ -16,6 +16,8 @@ final class StationSearchService
     /** @var array<int,array<string,mixed>>|null */
     private static ?array $cacheRows = null;
     private static ?int $cacheMtime = null;
+    /** @var array<string,array<int,string>>|null */
+    private static ?array $cacheAliasMap = null;
 
     public function __construct(?string $path = null)
     {
@@ -59,20 +61,16 @@ final class StationSearchService
                 continue;
             }
 
-            $score = 0;
-            if ($na === $qa) {
-                $score = 100;
-            } elseif (str_starts_with($na, $qa)) {
-                $score = 92;
-            } elseif (strpos($na, $qa) !== false) {
-                $score = 80;
-            } else {
-                // Loose word match: all query words appear in any order.
-                if (!empty($qWords)) {
-                    $hits = 0;
-                    foreach ($qWords as $w) { if (strpos($na, $w) !== false) { $hits++; } }
-                    if ($hits === count($qWords)) {
-                        $score = 65 + min(10, $hits * 2);
+            $score = $this->scoreNeedleAgainstCandidate($qa, $qWords, $na, false);
+            if ($score <= 0 && !empty($row['__av']) && is_array($row['__av'])) {
+                foreach ($row['__av'] as $alias) {
+                    if (!is_string($alias) || $alias === '') { continue; }
+                    $aliasScore = $this->scoreNeedleAgainstCandidate($qa, $qWords, $alias, true);
+                    if ($aliasScore > $score) {
+                        $score = $aliasScore;
+                    }
+                    if ($score >= 97) {
+                        break;
                     }
                 }
             }
@@ -325,6 +323,7 @@ final class StationSearchService
             'source' => isset($row['source']) ? (string)$row['source'] : null,
             '__na' => $na,
             '__f' => substr($na, 0, 1),
+            '__av' => $this->stationAliasMap()[$na] ?? [],
         ];
     }
 
@@ -369,5 +368,92 @@ final class StationSearchService
         $t = preg_replace('/[^a-z0-9\s]/', ' ', $t) ?? $t;
         $t = preg_replace('/\s+/', ' ', $t) ?? $t;
         return trim((string)$t);
+    }
+
+    /**
+     * @param array<int,string> $qWords
+     */
+    private function scoreNeedleAgainstCandidate(string $needle, array $qWords, string $candidate, bool $isAlias): int
+    {
+        if ($candidate === '') {
+            return 0;
+        }
+
+        if ($candidate === $needle) {
+            return $isAlias ? 97 : 100;
+        }
+        if (str_starts_with($candidate, $needle)) {
+            return $isAlias ? 89 : 92;
+        }
+        if (strpos($candidate, $needle) !== false) {
+            return $isAlias ? 76 : 80;
+        }
+
+        if (empty($qWords)) {
+            return 0;
+        }
+
+        $hits = 0;
+        foreach ($qWords as $word) {
+            if (strpos($candidate, $word) !== false) {
+                $hits++;
+            }
+        }
+        if ($hits === count($qWords)) {
+            return ($isAlias ? 61 : 65) + min(10, $hits * 2);
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return array<string,array<int,string>>
+     */
+    private function stationAliasMap(): array
+    {
+        if (self::$cacheAliasMap !== null) {
+            return self::$cacheAliasMap;
+        }
+
+        $path = defined('CONFIG') ? CONFIG . 'rail' . DIRECTORY_SEPARATOR . 'station_aliases.php' : '';
+        if ($path === '' || !is_file($path)) {
+            self::$cacheAliasMap = [];
+            return self::$cacheAliasMap;
+        }
+
+        $raw = include $path;
+        if (!is_array($raw)) {
+            self::$cacheAliasMap = [];
+            return self::$cacheAliasMap;
+        }
+
+        $map = [];
+        foreach ($raw as $canonical => $aliases) {
+            $canonicalKey = $this->ascii($this->norm((string)$canonical));
+            if ($canonicalKey === '') {
+                continue;
+            }
+
+            $all = [(string)$canonical];
+            if (is_array($aliases)) {
+                foreach ($aliases as $alias) {
+                    $all[] = (string)$alias;
+                }
+            }
+
+            $variants = [];
+            foreach ($all as $variant) {
+                $variantKey = $this->ascii($this->norm($variant));
+                if ($variantKey === '') {
+                    continue;
+                }
+                $variants[$variantKey] = $variantKey;
+            }
+
+            $map[$canonicalKey] = array_values($variants);
+        }
+
+        self::$cacheAliasMap = $map;
+        return self::$cacheAliasMap;
     }
 }

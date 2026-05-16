@@ -1533,6 +1533,19 @@ class FlowController extends AppController
         $form = (array)$sess->read('flow.form') ?: [];
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
+        $currentMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($form['gating_mode'] ?? ($meta['gating_mode'] ?? '')))));
+        $entitlementsWarnings = [];
+        $railEntitlementPreview = null;
+        if ($currentMode === 'rail') {
+            $entitlementsWarnings = array_merge(
+                $this->railEntitlementsValidationErrors($form, $meta),
+                $this->railTicketPriceValidationErrors($form, $meta)
+            );
+            $railEntitlementPreview = $this->railExemptionPreview($form, $meta);
+            if (!empty($railEntitlementPreview['journey']) && is_array($railEntitlementPreview['journey'])) {
+                $journey = array_replace_recursive($journey, (array)$railEntitlementPreview['journey']);
+            }
+        }
         $this->syncFlowIdentity($flags, $form, $meta);
         $sess->write('flow.flags', $flags);
         $sess->write('flow.form', $form);
@@ -1895,6 +1908,13 @@ class FlowController extends AppController
             $followOnMissed = array_key_exists('follow_on_missed_connection', $data)
                 ? $this->truthy($data['follow_on_missed_connection'] ?? false)
                 : $this->truthy($data['incident_missed'] ?? false);
+            $missedConnectionStationChoice = trim((string)($data['missed_connection_station'] ?? ($form['missed_connection_station'] ?? '')));
+            if ($followOnMissed && $missedConnectionStationChoice !== '') {
+                $form['missed_connection_station'] = $missedConnectionStationChoice;
+                if (trim((string)($data['missed_connection_pick'] ?? ($form['missed_connection_pick'] ?? ''))) === '') {
+                    $form['missed_connection_pick'] = 'Ved skift i ' . $missedConnectionStationChoice;
+                }
+            }
             if (array_key_exists('follow_on_missed_connection', $data) || array_key_exists('incident_missed', $data)) {
                 $incident['missed'] = $followOnMissed ? 'yes' : '';
                 $incident['missed_source'] = !empty($incident['missed']) ? 'incident_form' : '';
@@ -1966,6 +1986,20 @@ class FlowController extends AppController
             $meta['art18_expected_delay_60'] = $form['art18_expected_delay_60'];
             $meta['art20_expected_delay_60'] = $form['art20_expected_delay_60'];
 
+            if ($incidentMode === 'rail') {
+                $railArt18Gate = $main === 'cancellation' || $euGate;
+                $railArt20Gate = $main === 'cancellation' || $euGate;
+                $railArt19Gate = $main === 'delay' && $euGate;
+                $flags['gate_art18'] = $railArt18Gate ? '1' : '';
+                $flags['gate_art20'] = $railArt20Gate ? '1' : '';
+                $flags['gate_art19'] = $railArt19Gate ? '1' : '';
+                if (isset($meta['rail_incident_seed']) && is_array($meta['rail_incident_seed'])) {
+                    $meta['rail_incident_seed']['gate_art18'] = $railArt18Gate;
+                    $meta['rail_incident_seed']['gate_art20'] = $railArt20Gate;
+                    $meta['rail_incident_seed']['gate_art19'] = $railArt19Gate;
+                }
+            }
+
             // Keep delay-specific questions only when delay is the selected main incident.
             if ($main !== 'delay') {
                 unset($form['expected_delay_60'], $form['delay_already_60']);
@@ -2027,6 +2061,11 @@ class FlowController extends AppController
             }
         } catch (\Throwable $e) { /* ignore */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        if ($currentMode === 'rail' && is_array($railEntitlementPreview)) {
+            $profile = !empty($railEntitlementPreview['scope_clear'])
+                ? (array)($railEntitlementPreview['profile'] ?? $profile)
+                : $this->railNeutralExemptionProfile();
+        }
         $nationalPolicy = null;
         try {
             $countryCtx = (string)($journey['country']['value'] ?? ($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? '')));
@@ -2408,7 +2447,7 @@ class FlowController extends AppController
 
         $sess->write('flow.journey', $journey);
         $sess->write('flow.meta', $meta);
-        $this->set(compact('journey','meta','compute','incident','form','flags','profile','nationalPolicy','art12','art9','art6','pmr','pmrBikeGate','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings','multimodal','routerConfig','routerType','routerCandidates','incidentPrevAction'));
+        $this->set(compact('journey','meta','compute','incident','form','flags','profile','nationalPolicy','art12','art9','art6','pmr','pmrBikeGate','refund','refusion','art20','euOnlySuggested','euOnlyReason','formDecision','serviceWarnings','entitlementsWarnings','multimodal','routerConfig','routerType','routerCandidates','incidentPrevAction'));
         return null;
     }
 
@@ -2419,6 +2458,7 @@ class FlowController extends AppController
         $meta = (array)$session->read('flow.meta') ?: [];
         $compute = (array)$session->read('flow.compute') ?: [];
         $form = (array)$session->read('flow.form') ?: [];
+        $this->normalizeRailTicketPriceInputMode($form, $meta);
         $incident = (array)$session->read('flow.incident') ?: [];
         $flags = (array)$session->read('flow.flags') ?: [];
 
@@ -2748,6 +2788,71 @@ class FlowController extends AppController
         return false;
     }
 
+    /**
+     * @param array<string,mixed> $meta
+     * @return array<int,array<string,mixed>>
+     */
+    private function railStoredDepartureCandidates(array $meta): array
+    {
+        $items = $meta['rail_departure_candidates'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        return array_values(array_filter($items, static fn(mixed $item): bool => is_array($item)));
+    }
+
+    /**
+     * @param array<string,mixed> $meta
+     * @param array<int,array<string,mixed>> $candidates
+     */
+    private function railPersistDepartureCandidates(array &$meta, string $signature, array $candidates): void
+    {
+        if ($signature === '' || $candidates === []) {
+            unset($meta['rail_departure_candidates'], $meta['rail_departure_candidates_signature']);
+            return;
+        }
+
+        $meta['rail_departure_candidates'] = array_values($candidates);
+        $meta['rail_departure_candidates_signature'] = $signature;
+    }
+
+    /**
+     * Clear state derived from the concrete rail departure choice.
+     *
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $flags
+     */
+    private function clearRailDepartureSelectionState(array &$form, array &$meta, array &$flags): void
+    {
+        unset(
+            $meta['rail_selected_departure'],
+            $meta['rail_selected_departure_id'],
+            $meta['rail_operational_evidence'],
+            $meta['rail_incident_seed'],
+            $meta['incident_seed'],
+            $meta['rail_connection_seed'],
+            $meta['rail_contract_structure_seed'],
+            $meta['rail_problem_anchor'],
+            $meta['contract_options']
+        );
+
+        unset(
+            $form['selected_rail_departure_id'],
+            $form['contract_model'],
+            $form['problem_contract_id'],
+            $form['seller_channel'],
+            $form['same_transaction'],
+            $form['through_ticket_disclosure'],
+            $form['separate_contract_notice'],
+            $form['rail_problem_anchor_choice']
+        );
+
+        $flags['step27_done'] = '';
+        $flags['step35_done'] = '';
+    }
+
     private function railIsoDatePart(?string $value): string
     {
         $value = trim((string)$value);
@@ -2826,6 +2931,7 @@ class FlowController extends AppController
             'mode' => 'rail',
             'operator_name' => (string)($departure['operator_name'] ?? ''),
             'operator_code' => (string)($departure['operator_code'] ?? ''),
+            'operator_country' => (string)($departure['operator_country'] ?? ''),
             'operator' => (string)($departure['operator_name'] ?? ($departure['operator_code'] ?? '')),
             'operator_product' => (string)($departure['product'] ?? ''),
             'train_number' => (string)($departure['train_number'] ?? ''),
@@ -2898,6 +3004,778 @@ class FlowController extends AppController
         return '';
     }
 
+    /**
+     * @param array<string,mixed> $departure
+     * @return array<int,string>
+     */
+    private function railDepartureOperatorNames(array $departure): array
+    {
+        $raw = (array)($departure['raw'] ?? []);
+        $names = [];
+        foreach ((array)($raw['operator_names'] ?? []) as $name) {
+            $name = trim((string)$name);
+            if ($name === '') {
+                continue;
+            }
+            $names[strtolower($name)] = $name;
+        }
+        if ($names === []) {
+            $fallback = trim((string)($departure['operator_name'] ?? ''));
+            if ($fallback !== '') {
+                foreach (preg_split('/\s*[,;\/]\s*/', $fallback) ?: [] as $name) {
+                    $name = trim((string)$name);
+                    if ($name === '') {
+                        continue;
+                    }
+                    $names[strtolower($name)] = $name;
+                }
+            }
+        }
+
+        return array_values($names);
+    }
+
+    /**
+     * AI fallback may infer likely operators from the generated corridor path, but
+     * these hints must not count as legally reliable Art. 12 operator facts.
+     *
+     * @param array<string,mixed> $departure
+     * @return array<int,string>
+     */
+    private function railFallbackOperatorHints(array $departure): array
+    {
+        $raw = (array)($departure['raw'] ?? []);
+        $source = strtolower(trim((string)($departure['source'] ?? '')));
+        $providerHint = strtolower(trim((string)($raw['provider_hint'] ?? '')));
+        if ($source !== 'ai_fallback' && $providerHint !== 'ai_fallback') {
+            return [];
+        }
+
+        $existing = array_values(array_filter(array_map(
+            static fn($value): string => trim((string)$value),
+            (array)($raw['operator_hints'] ?? [])
+        )));
+        if ($existing !== []) {
+            return array_values(array_unique($existing));
+        }
+
+        $countries = [];
+        foreach ((array)($raw['generated_path'] ?? []) as $stationName) {
+            $country = $this->railFallbackCountryByStationName((string)$stationName);
+            if ($country !== '') {
+                $countries[$country] = true;
+            }
+        }
+        foreach ([
+            strtoupper(trim((string)($raw['generated_from_country'] ?? ''))),
+            strtoupper(trim((string)($raw['generated_to_country'] ?? ''))),
+        ] as $country) {
+            if ($country !== '') {
+                $countries[$country] = true;
+            }
+        }
+
+        $hints = [];
+        $seen = [];
+        foreach (array_keys($countries) as $country) {
+            $operator = $this->railFallbackPrimaryOperatorForCountry($country);
+            if ($operator === '') {
+                continue;
+            }
+            $key = strtolower($operator);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $hints[] = $operator;
+        }
+
+        return array_slice($hints, 0, 5);
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     * @return array<string,mixed>
+     */
+    private function railDecorateFallbackOperatorHints(array $departure): array
+    {
+        $hints = $this->railFallbackOperatorHints($departure);
+        if ($hints === []) {
+            return $departure;
+        }
+
+        if (!isset($departure['raw']) || !is_array($departure['raw'])) {
+            $departure['raw'] = [];
+        }
+        $departure['raw']['operator_hints'] = $hints;
+        $departure['raw']['operator_hint_confidence'] = 'low';
+
+        return $departure;
+    }
+
+    private function railFallbackPrimaryOperatorForCountry(string $country): string
+    {
+        return match (strtoupper(trim($country))) {
+            'AT' => 'OBB',
+            'BE' => 'SNCB/NMBS',
+            'CH' => 'SBB',
+            'CZ' => 'CD',
+            'DE' => 'Deutsche Bahn',
+            'DK' => 'DSB',
+            'ES' => 'Renfe',
+            'FR' => 'SNCF Voyageurs',
+            'HR' => 'Hrvatske zeljeznice',
+            'HU' => 'MAV-START',
+            'IT' => 'Trenitalia',
+            'LU' => 'CFL',
+            'NL' => 'NS',
+            'NO' => 'Vy',
+            'PL' => 'PKP Intercity',
+            'PT' => 'CP',
+            'SE' => 'SJ',
+            'SI' => 'Slovenske zeleznice',
+            'SK' => 'ZSSK',
+            default => '',
+        };
+    }
+
+    private function railFallbackCountryByStationName(string $stationName): string
+    {
+        $key = $this->railFallbackStationKey($stationName);
+        if ($key === '') {
+            return '';
+        }
+
+        static $stationCountries = [
+            'aarhus h' => 'DK',
+            'aalborg' => 'DK',
+            'amsterdam centraal' => 'NL',
+            'barcelona sants' => 'ES',
+            'berlin hbf' => 'DE',
+            'bratislava hl st' => 'SK',
+            'brno hl n' => 'CZ',
+            'bruxelles midi' => 'BE',
+            'budapest kelenfold' => 'HU',
+            'budapest keleti' => 'HU',
+            'copenhagen h' => 'DK',
+            'frankfurt main hbf' => 'DE',
+            'geneve' => 'CH',
+            'goteborg c' => 'SE',
+            'hamburg hbf' => 'DE',
+            'koln hbf' => 'DE',
+            'kobenhavn h' => 'DK',
+            'lisboa oriente' => 'PT',
+            'ljubljana' => 'SI',
+            'lyon part dieu' => 'FR',
+            'malmo c' => 'SE',
+            'madrid puerta de atocha' => 'ES',
+            'marseille saint charles' => 'FR',
+            'milano centrale' => 'IT',
+            'munchen hbf' => 'DE',
+            'napoli centrale' => 'IT',
+            'odense' => 'DK',
+            'oslo s' => 'NO',
+            'paris gare de lyon' => 'FR',
+            'paris gare du nord' => 'FR',
+            'porto campanha' => 'PT',
+            'praha hl n' => 'CZ',
+            'riga' => 'LV',
+            'roma termini' => 'IT',
+            'sevilla santa justa' => 'ES',
+            'stockholm c' => 'SE',
+            'tallinn' => 'EE',
+            'valencia joaquin sorolla' => 'ES',
+            'vilnius' => 'LT',
+            'warszawa centralna' => 'PL',
+            'wien hbf' => 'AT',
+            'zagreb glavni kolodvor' => 'HR',
+            'zurich hb' => 'CH',
+        ];
+
+        return $stationCountries[$key] ?? '';
+    }
+
+    private function railFallbackStationKey(string $value): string
+    {
+        $value = mb_strtolower(trim($value), 'UTF-8');
+        if ($value === '') {
+            return '';
+        }
+        try {
+            $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+            if (is_string($ascii) && $ascii !== '') {
+                $value = $ascii;
+            }
+        } catch (\Throwable $e) {
+        }
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     * @param array<string,mixed> $meta
+     * @return array<string,mixed>
+     */
+    private function railResolveArt12State(array $departure, array $meta, string $sellerChannel, string $sameTransaction, string $disclosure, string $separateNotice): array
+    {
+        $operatorNames = $this->railDepartureOperatorNames($departure);
+        $operatorCount = count($operatorNames);
+        $hasConnections = $this->railTransferCount($departure) > 0;
+        $autoContractModel = $this->railAutoContractModel($meta, $departure);
+        $effectiveContractModel = $autoContractModel !== '' ? $autoContractModel : ($hasConnections ? '' : 'through');
+        $autoLabel = '';
+        $autoReason = '';
+        $needsFollowup = false;
+        $autoStop = false;
+
+        if (!$hasConnections) {
+            $effectiveContractModel = 'through';
+            $autoLabel = 'Direkte rail-rejse';
+            $autoReason = 'Ingen skift i den valgte rail-rejse taler for gennemgaaende billet.';
+            $autoStop = true;
+        } elseif ($sameTransaction === 'no') {
+            $effectiveContractModel = 'separate';
+            $autoLabel = 'Separate kontrakter';
+            $autoReason = 'Billetterne blev ikke koebt i samme transaktion.';
+        } elseif ($sameTransaction === 'yes' && $operatorCount === 1) {
+            $effectiveContractModel = 'through';
+            $autoLabel = 'Gennemgaaende billet';
+            $autoReason = 'Den valgte rail-rejse viser kun en operatoer. Det taler for gennemgaaende billet.';
+            $autoStop = true;
+        } elseif ($sameTransaction === 'yes' && $operatorCount > 1) {
+            $autoLabel = 'Kraver Art. 12-afklaring';
+            $autoReason = 'Flere operatoerer i rail-rejsen betyder, at kontraktstrukturen skal afklares manuelt.';
+            $needsFollowup = true;
+            if ($disclosure !== '' && $separateNotice !== '') {
+                $effectiveContractModel = ($disclosure === 'yes' && $separateNotice === 'yes') ? 'separate' : 'through';
+                $autoLabel = $effectiveContractModel === 'separate' ? 'Separate kontrakter' : 'Gennemgaaende billet';
+                $autoReason = $effectiveContractModel === 'separate'
+                    ? 'Du blev oplyst om separat kontraktstruktur, og det staar paa billet/booking.'
+                    : 'Selv med flere operatoerer peger dine Art. 12-svar ikke paa separate kontrakter.';
+            }
+        } elseif ($hasConnections) {
+            $needsFollowup = true;
+            $autoLabel = 'Kraver Art. 12-afklaring';
+            $autoReason = 'Rail-rejsen har skift, og kontraktstrukturen skal afklares.';
+        }
+
+        $liableBasis = 'manual_review';
+        if ($effectiveContractModel === 'through') {
+            $liableBasis = $sellerChannel === 'operator' ? 'stk3' : (($sellerChannel === 'retailer') ? 'stk4' : 'manual_review');
+        } elseif ($effectiveContractModel === 'separate') {
+            $liableBasis = 'individual';
+        }
+
+        return [
+            'operator_names' => $operatorNames,
+            'operator_count' => $operatorCount,
+            'auto_contract_model' => $autoContractModel,
+            'effective_contract_model' => $effectiveContractModel,
+            'auto_label' => $autoLabel,
+            'auto_reason' => $autoReason,
+            'needs_followup' => $needsFollowup,
+            'auto_stop' => $autoStop,
+            'liable_basis' => $liableBasis,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @return array<int,string>
+     */
+    private function railEntitlementsValidationErrors(array $form, array $meta = []): array
+    {
+        $transportMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+        $ticketMode = strtolower(trim((string)($form['ticket_upload_mode'] ?? 'ticket')));
+        if ($transportMode !== 'rail' || !in_array($ticketMode, ['ticketless', 'seasonpass'], true)) {
+            return [];
+        }
+
+        $errors = [];
+        $scopeChoice = '';
+        $depStation = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
+        $arrStation = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
+        $depDate = trim((string)($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')));
+
+        if ($scopeChoice === '__unused__') {
+            $errors[] = 'Vælg scope for togflowet i TRIN 2.';
+        }
+        if ($depStation === '') {
+            $errors[] = 'Angiv afgangsstation for tog i TRIN 2.';
+        }
+        if ($arrStation === '') {
+            $errors[] = 'Angiv destinationsstation for tog i TRIN 2.';
+        }
+        if ($depDate === '') {
+            $errors[] = 'Angiv planlagt afgangsdato for tog i TRIN 2.';
+        }
+        if ($errors === []) {
+            $preview = $this->railExemptionPreview($form, $meta);
+            if (!empty($preview['blocked_message'])) {
+                $errors[] = (string)$preview['blocked_message'];
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @return array<int,string>
+     */
+    private function railTicketPriceValidationErrors(array $form, array $meta = []): array
+    {
+        $transportMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+        if ($transportMode !== 'rail') {
+            return [];
+        }
+
+        $ticketMode = strtolower(trim((string)($form['ticket_upload_mode'] ?? 'ticket')));
+        if ($ticketMode === 'seasonpass') {
+            return [];
+        }
+
+        $priceMode = strtolower(trim((string)($form['rail_price_input_mode'] ?? '')));
+        $priceKnown = strtolower(trim((string)($form['price_known'] ?? '')));
+        $rawPrice = trim((string)($form['price'] ?? ($meta['_auto']['price']['value'] ?? '')));
+        if (!in_array($priceMode, ['exact', 'estimate', 'unknown'], true)) {
+            $priceMode = $priceKnown === 'no'
+                ? 'unknown'
+                : (($priceKnown === 'yes' || $rawPrice !== '') ? 'exact' : 'unknown');
+        }
+        if ($priceMode === 'unknown') {
+            $priceKnown = 'no';
+        } elseif (in_array($priceMode, ['exact', 'estimate'], true)) {
+            $priceKnown = 'yes';
+        } elseif ($priceKnown === '' && $rawPrice !== '') {
+            $priceKnown = 'yes';
+        }
+
+        if (!in_array($priceKnown, ['yes', 'no'], true)) {
+            return ['Afklar i TRIN 2, om du kender billetprisen, har et estimat, eller vil lade backend bekraefte prisen senere.'];
+        }
+
+        if ($priceKnown === 'yes') {
+            $priceAmount = $this->normalizeMoneyAmount($rawPrice);
+            if ($priceAmount === null || $priceAmount <= 0.0) {
+                return ['Angiv billetpris eller et ca. estimat i TRIN 2, eller vaelg "Kender ikke endnu", hvis prisen maa afklares senere i backend.'];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     */
+    private function normalizeRailTicketPriceInputMode(array &$form, array $meta = []): void
+    {
+        $transportMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+        if ($transportMode !== 'rail') {
+            return;
+        }
+
+        $mode = strtolower(trim((string)($form['rail_price_input_mode'] ?? '')));
+        $legacyKnown = strtolower(trim((string)($form['price_known'] ?? '')));
+        $rawPrice = trim((string)($form['price'] ?? ($meta['_auto']['price']['value'] ?? '')));
+
+        if (!in_array($mode, ['exact', 'estimate', 'unknown'], true)) {
+            if ($legacyKnown === 'no' && $rawPrice === '') {
+                $mode = 'unknown';
+            } elseif ($legacyKnown === 'yes' || $rawPrice !== '') {
+                $mode = 'exact';
+            } else {
+                $mode = 'unknown';
+            }
+        }
+
+        $form['rail_price_input_mode'] = $mode;
+        $form['price_known'] = $mode === 'unknown' ? 'no' : 'yes';
+    }
+
+    /**
+     * Keep downstream rail state when TRIN 2 only changes economics, not route lookup inputs.
+     *
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $flags
+     */
+    private function shouldPreserveRailEntitlementsDownstreamState(array $form, array $meta, array $flags): bool
+    {
+        if (!$this->isRailSplitEntry($flags, $form, $meta)) {
+            return false;
+        }
+
+        $service = new RailDepartureSearchService();
+        $currentLookupSignature = $service->buildLookupSignatureFromForm($form, $meta);
+        if ($currentLookupSignature === '') {
+            return false;
+        }
+
+        $previousLookupSignature = trim((string)($meta['rail_departure_candidates_signature'] ?? ''));
+        if ($previousLookupSignature === '' && !empty($meta['rail_selected_departure'])) {
+            $previousLookupSignature = $currentLookupSignature;
+        }
+
+        return $previousLookupSignature !== '' && $previousLookupSignature === $currentLookupSignature;
+    }
+
+    /**
+     * @return array{scope:string,articles:array<string,bool>,articles_sub:array<string,bool>,notes:array<int,string>,ui_banners:array<int,string>,blocked:bool}
+     */
+    private function railNeutralExemptionProfile(): array
+    {
+        return [
+            'scope' => '',
+            'articles' => [
+                'art8' => true,
+                'art12' => true,
+                'art17' => true,
+                'art18' => true,
+                'art18_1' => true,
+                'art18_2' => true,
+                'art18_3' => true,
+                'art19' => true,
+                'art20_2' => true,
+                'art20_2a' => true,
+                'art20_2b' => true,
+                'art20_2c' => true,
+                'art20_3' => true,
+                'art29' => true,
+                'art30_1' => true,
+                'art30_2' => true,
+                'art10' => true,
+                'art9' => true,
+            ],
+            'articles_sub' => [
+                'art9_1' => true,
+                'art9_2' => true,
+                'art9_3' => true,
+            ],
+            'notes' => [],
+            'ui_banners' => [],
+            'blocked' => false,
+        ];
+    }
+
+    private function railNormalizedCountryCode(?string $value): string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+
+        try {
+            $value = (new \App\Service\CountryNormalizer())->toIso2($value);
+        } catch (\Throwable $e) {
+            $value = strtoupper($value);
+        }
+
+        return preg_match('/^[A-Z]{2}$/', $value) === 1 ? $value : '';
+    }
+
+    private function railStationLookupCountry(array $form, array $meta, string $prefix): string
+    {
+        $candidates = [
+            $form[$prefix . '_station_lookup_country'] ?? '',
+            $form[$prefix . '_station_country'] ?? '',
+            $meta['_auto'][$prefix . '_station_country']['value'] ?? '',
+            $meta['_auto'][$prefix . '_station_lookup_country']['value'] ?? '',
+        ];
+        foreach ($candidates as $candidate) {
+            $normalized = $this->railNormalizedCountryCode((string)$candidate);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        $lookupCode = trim((string)($form[$prefix . '_station_lookup_code'] ?? ''));
+        if ($lookupCode !== '') {
+            $fromCode = $this->railCountryFromStationCode($lookupCode);
+            if ($fromCode !== '') {
+                return $fromCode;
+            }
+        }
+
+        return '';
+    }
+
+    private function railJourneyScopeFromChoice(?string $value): string
+    {
+        return match (strtolower(trim((string)$value))) {
+            'regional' => 'regional',
+            'long_distance' => 'long_domestic',
+            default => '',
+        };
+    }
+
+    private function railIsEuCountry(string $code): bool
+    {
+        static $eu = [
+            'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+        ];
+
+        return in_array(strtoupper(trim($code)), $eu, true);
+    }
+
+    private function railProductScopeHint(?string $value): string
+    {
+        $value = strtoupper(trim((string)$value));
+        if ($value === '') {
+            return '';
+        }
+
+        foreach (['S-TOG', 'STOG', 'S-BAHN', 'PENDELTAG', 'CERCANIAS', 'RODALIES', 'SUBURBAN'] as $token) {
+            if (str_contains($value, $token)) {
+                return 'suburban';
+            }
+        }
+        foreach (['ICE', 'IC', 'EC', 'ECE', 'RJ', 'RJX', 'TGV', 'AVE', 'FRECCIA', 'EUROCITY', 'INTERCITY', 'THALYS', 'OUIGO', 'SNABBT'] as $token) {
+            if (str_contains($value, $token)) {
+                return 'long_domestic';
+            }
+        }
+        foreach (['RE', 'RB', 'TER', 'REGIONAL', 'SPRINTER', 'OS '] as $token) {
+            if (str_contains($value, $token)) {
+                return 'regional';
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @return array{country:string,source:string}
+     */
+    private function railDepartureOperatorCountry(array $departure, array $form = [], array $meta = []): array
+    {
+        $raw = (array)($departure['raw'] ?? []);
+        $providerCandidates = [
+            $departure['operator_country'] ?? '',
+            $departure['country'] ?? '',
+            $raw['operator_country'] ?? '',
+            $raw['country'] ?? '',
+            $raw['operator']['country'] ?? '',
+            $raw['operator']['country_code'] ?? '',
+        ];
+        foreach ($providerCandidates as $candidate) {
+            $normalized = $this->railNormalizedCountryCode((string)$candidate);
+            if ($normalized !== '') {
+                return ['country' => $normalized, 'source' => 'rail_provider'];
+            }
+        }
+
+        try {
+            $catalog = new \App\Service\OperatorCatalog();
+            $operatorTexts = array_values(array_filter([
+                trim((string)($departure['operator_name'] ?? '')),
+                trim((string)($departure['operator_code'] ?? '')),
+                trim((string)($form['operator'] ?? '')),
+                trim((string)($meta['_auto']['operator']['value'] ?? '')),
+                trim((string)($form['incident_segment_operator'] ?? '')),
+            ], static fn(string $value): bool => $value !== ''));
+            foreach ($operatorTexts as $text) {
+                $match = $catalog->findOperator($text, 'rail');
+                if (!empty($match['country'])) {
+                    $normalized = $this->railNormalizedCountryCode((string)$match['country']);
+                    if ($normalized !== '') {
+                        return ['country' => $normalized, 'source' => 'rail_operator_catalog'];
+                    }
+                }
+            }
+
+            $productTexts = array_values(array_filter([
+                trim((string)($departure['product'] ?? '')),
+                trim((string)($departure['service_name'] ?? '')),
+                trim((string)($departure['line_name'] ?? '')),
+                trim((string)($form['operator_product'] ?? '')),
+                trim((string)($meta['_auto']['operator_product']['value'] ?? '')),
+            ], static fn(string $value): bool => $value !== ''));
+            foreach ($productTexts as $product) {
+                $match = $catalog->findOperatorByProduct($product, 'rail');
+                if (!empty($match['country'])) {
+                    $normalized = $this->railNormalizedCountryCode((string)$match['country']);
+                    if ($normalized !== '') {
+                        return ['country' => $normalized, 'source' => 'rail_operator_catalog'];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore catalog lookup failures and fall through to empty.
+        }
+
+        return ['country' => '', 'source' => ''];
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $departure
+     * @return array<string,mixed>
+     */
+    private function buildRailPreviewJourney(array $form, array $meta, array $departure = []): array
+    {
+        $depStation = trim((string)($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')));
+        $arrStation = trim((string)($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')));
+        $depCode = trim((string)($departure['origin_station_code'] ?? ($form['dep_station_lookup_code'] ?? '')));
+        $arrCode = trim((string)($departure['destination_station_code'] ?? ($form['arr_station_lookup_code'] ?? '')));
+        $depCountry = $this->railStationLookupCountry($form, $meta, 'dep');
+        $arrCountry = $this->railStationLookupCountry($form, $meta, 'arr');
+        if ($depCountry === '' && $depCode !== '') {
+            $depCountry = $this->railCountryFromStationCode($depCode);
+        }
+        if ($arrCountry === '' && $arrCode !== '') {
+            $arrCountry = $this->railCountryFromStationCode($arrCode);
+        }
+        $operatorCountry = $this->railNormalizedCountryCode((string)($form['operator_country'] ?? ($meta['_auto']['operator_country']['value'] ?? '')));
+        $product = trim((string)($departure['product'] ?? ($form['operator_product'] ?? ($meta['_auto']['operator_product']['value'] ?? ''))));
+
+        $journey = [
+            'segments' => [],
+        ];
+
+        if ($departure !== []) {
+            $stops = $this->railContractStopsFromDeparture($departure);
+            if (count($stops) > 1) {
+                for ($idx = 0; $idx < count($stops) - 1; $idx++) {
+                    $journey['segments'][] = $this->buildRailContractSegmentFromStops($stops[$idx], $stops[$idx + 1], $departure, $idx);
+                }
+            } else {
+                $journey['segments'][] = $this->buildRailJourneySegment($departure);
+            }
+        }
+
+        if (empty($journey['segments'])) {
+            $journey['segments'][] = [
+                'mode' => 'rail',
+                'from_name' => $depStation,
+                'from_code' => $depCode,
+                'from' => $depStation,
+                'to_name' => $arrStation,
+                'to_code' => $arrCode,
+                'to' => $arrStation,
+                'country' => $depCountry !== '' ? $depCountry : $operatorCountry,
+                'operator_product' => $product,
+                'operator' => (string)($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')),
+                'product' => $product,
+            ];
+        }
+
+        if ($depCountry !== '' && !empty($journey['segments'][0]) && empty($journey['segments'][0]['country'])) {
+            $journey['segments'][0]['country'] = $depCountry;
+        }
+        if ($arrCountry !== '' && !empty($journey['segments'])) {
+            $lastIdx = count($journey['segments']) - 1;
+            $journey['segments'][$lastIdx]['to_country'] = $arrCountry;
+        }
+        if ($depCountry !== '') {
+            $journey['country']['value'] = $depCountry;
+        } elseif ($operatorCountry !== '') {
+            $journey['country']['value'] = $operatorCountry;
+        }
+
+        $scope = $this->railJourneyScopeFromChoice((string)($form['scope_choice'] ?? ''));
+        $scopeClear = $scope !== '';
+        if ($depCountry !== '' && $arrCountry !== '' && $depCountry !== $arrCountry) {
+            $scope = ($this->railIsEuCountry($depCountry) && $this->railIsEuCountry($arrCountry)) ? 'intl_inside_eu' : 'intl_beyond_eu';
+            $scopeClear = true;
+        } elseif ($scope === '') {
+            $productScope = $this->railProductScopeHint($product);
+            if ($productScope !== '') {
+                $scope = $productScope;
+                $scopeClear = true;
+            }
+        }
+        if ($scope !== '') {
+            $journey['scope'] = $scope;
+        }
+
+        $previewMeta = $meta;
+        if ($depStation !== '') {
+            $previewMeta['_auto']['dep_station'] = ['value' => $depStation, 'source' => 'rail_preview'];
+        }
+        if ($arrStation !== '') {
+            $previewMeta['_auto']['arr_station'] = ['value' => $arrStation, 'source' => 'rail_preview'];
+        }
+        if ($product !== '') {
+            $previewMeta['_auto']['operator_product'] = ['value' => $product, 'source' => 'rail_preview'];
+        }
+        if ($operatorCountry !== '') {
+            $previewMeta['_auto']['operator_country'] = ['value' => $operatorCountry, 'source' => 'rail_preview'];
+        }
+
+        try {
+            $inferRes = (new \App\Service\JourneyScopeInferer())->apply($journey, $previewMeta);
+            $journey = (array)($inferRes['journey'] ?? $journey);
+        } catch (\Throwable $e) {
+            // Ignore scope inferer failures in preview mode.
+        }
+
+        if ($scope === '') {
+            if (!empty($journey['is_suburban'])) {
+                $journey['scope'] = 'suburban';
+                $scopeClear = true;
+            } elseif (!empty($journey['is_international_beyond_eu'])) {
+                $journey['scope'] = 'intl_beyond_eu';
+                $scopeClear = true;
+            } elseif (!empty($journey['is_international_inside_eu'])) {
+                $journey['scope'] = 'intl_inside_eu';
+                $scopeClear = true;
+            } elseif (!empty($journey['is_long_domestic'])) {
+                $journey['scope'] = 'long_domestic';
+                $scopeClear = true;
+            }
+        }
+
+        $journey['_rail_scope_clear'] = $scopeClear;
+
+        return $journey;
+    }
+
+    /**
+     * @return array{journey:array<string,mixed>,profile:array<string,mixed>,scope_clear:bool,blocked:bool,blocked_message:string}
+     */
+    private function railExemptionPreview(array $form, array $meta, array $departure = []): array
+    {
+        $journey = $this->buildRailPreviewJourney($form, $meta, $departure);
+        $scopeClear = !empty($journey['_rail_scope_clear']);
+        unset($journey['_rail_scope_clear']);
+
+        $profile = $scopeClear
+            ? (new \App\Service\ExemptionProfileBuilder())->build($journey)
+            : $this->railNeutralExemptionProfile();
+
+        $blocked = $scopeClear && !empty($profile['blocked']);
+        $blockedMessage = $blocked ? $this->railBlockedScopeMessage((string)($profile['scope'] ?? '')) : '';
+
+        return [
+            'journey' => $journey,
+            'profile' => $profile,
+            'scope_clear' => $scopeClear,
+            'blocked' => $blocked,
+            'blocked_message' => $blockedMessage,
+        ];
+    }
+
+    private function railBlockedScopeMessage(string $scope): string
+    {
+        return match (strtolower(trim($scope))) {
+            'regional', 'suburban' => 'Vi kan desvaerre ikke tage sagen grundet en undtagelse for regionale afgange som foerst ophaeves i 2028.',
+            'long_domestic' => 'Vi kan desvaerre ikke tage sagen grundet en undtagelse for lange regionale afgange som foerst ophaeves i 2028.',
+            'intl_beyond_eu' => 'Vi kan desvaerre ikke tage sagen grundet en undtagelse for afgange hvor en del af rejsen udfoeres udenfor EU som foerst ophaeves i 2028.',
+            default => 'Vi kan desvaerre ikke tage sagen grundet en national undtagelse for denne rejse. Foelg den nationale procedure, hvor relevant.',
+        };
+    }
+
     private function railContractConfidence(array $meta, array $departure = []): string
     {
         $multimodal = (array)($meta['_multimodal'] ?? []);
@@ -2948,6 +3826,225 @@ class FlowController extends AppController
                 'key' => $key,
                 'label' => implode(' · ', array_filter($labelParts, static fn($value) => trim((string)$value) !== '')),
                 'segments' => [$segment],
+                'stops' => [[
+                    'name' => $from,
+                    'code' => trim((string)($segment['from_code'] ?? '')),
+                ], [
+                    'name' => $to,
+                    'code' => trim((string)($segment['to_code'] ?? '')),
+                ]],
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $segments
+     * @return array<int,array{name:string,code:string}>
+     */
+    private function railContractStopsFromSegments(array $segments): array
+    {
+        $stops = [];
+        $seen = [];
+        $addStop = function (string $name, string $code = '') use (&$stops, &$seen): void {
+            $name = trim($name);
+            $code = trim($code);
+            if ($name === '') {
+                return;
+            }
+            $key = mb_strtolower($name, 'UTF-8');
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $stops[] = [
+                'name' => $name,
+                'code' => $code,
+            ];
+        };
+
+        foreach ($segments as $segment) {
+            if (!is_array($segment)) {
+                continue;
+            }
+            $addStop(
+                (string)($segment['from_name'] ?? $segment['from'] ?? ''),
+                (string)($segment['from_code'] ?? '')
+            );
+            $addStop(
+                (string)($segment['to_name'] ?? $segment['to'] ?? ''),
+                (string)($segment['to_code'] ?? '')
+            );
+        }
+
+        return $stops;
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     * @return array<int,array{name:string,code:string}>
+     */
+    private function railContractStopsFromDeparture(array $departure): array
+    {
+        $stops = [];
+        $seen = [];
+        $addStop = function (string $name, string $code = '') use (&$stops, &$seen): void {
+            $name = trim($name);
+            $code = trim($code);
+            if ($name === '') {
+                return;
+            }
+            $key = mb_strtolower($name, 'UTF-8');
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $stops[] = [
+                'name' => $name,
+                'code' => $code,
+            ];
+        };
+
+        $addStop(
+            (string)($departure['origin_station_name'] ?? ''),
+            (string)($departure['origin_station_code'] ?? '')
+        );
+
+        $raw = (array)($departure['raw'] ?? []);
+        $generatedPath = array_values(array_filter(array_map(
+            static fn($value): string => trim((string)$value),
+            (array)($raw['generated_path'] ?? [])
+        ), static fn(string $value): bool => $value !== ''));
+        if (!empty($generatedPath)) {
+            foreach ($generatedPath as $stationName) {
+                $addStop($stationName, $this->railStationCodeByName($departure, $stationName));
+            }
+        } else {
+            foreach ($this->railTransferStations($departure) as $station) {
+                $addStop((string)($station['name'] ?? ''), (string)($station['code'] ?? ''));
+            }
+        }
+
+        $addStop(
+            (string)($departure['destination_station_name'] ?? ''),
+            (string)($departure['destination_station_code'] ?? '')
+        );
+
+        return $stops;
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     */
+    private function railStationCodeByName(array $departure, string $stationName): string
+    {
+        $stationName = trim($stationName);
+        if ($stationName === '') {
+            return '';
+        }
+
+        foreach ((array)($departure['calling_points'] ?? []) as $point) {
+            if (!is_array($point)) {
+                continue;
+            }
+            if (trim((string)($point['station_name'] ?? '')) !== $stationName) {
+                continue;
+            }
+
+            return trim((string)($point['station_code'] ?? ''));
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array{name:string,code:string} $fromStop
+     * @param array{name:string,code:string} $toStop
+     * @param array<string,mixed> $departure
+     * @param int $idx
+     * @return array<string,mixed>
+     */
+    private function buildRailContractSegmentFromStops(array $fromStop, array $toStop, array $departure, int $idx): array
+    {
+        $fromName = trim((string)($fromStop['name'] ?? ''));
+        $toName = trim((string)($toStop['name'] ?? ''));
+        $fromCode = trim((string)($fromStop['code'] ?? ''));
+        $toCode = trim((string)($toStop['code'] ?? ''));
+
+        return [
+            'mode' => 'rail',
+            'operator_name' => (string)($departure['operator_name'] ?? ''),
+            'operator_code' => (string)($departure['operator_code'] ?? ''),
+            'operator' => (string)($departure['operator_name'] ?? ($departure['operator_code'] ?? '')),
+            'operator_product' => (string)($departure['product'] ?? ''),
+            'train_number' => (string)($departure['train_number'] ?? ''),
+            'trainNo' => (string)($departure['train_number'] ?? ''),
+            'service_name' => (string)($departure['service_name'] ?? ''),
+            'line_name' => (string)($departure['line_name'] ?? ''),
+            'product' => (string)($departure['product'] ?? ''),
+            'from_name' => $fromName,
+            'from_code' => $fromCode,
+            'from' => $fromName,
+            'to_name' => $toName,
+            'to_code' => $toCode,
+            'to' => $toName,
+            'planned_departure_at' => $idx === 0 ? (string)($departure['planned_departure_at'] ?? '') : '',
+            'planned_arrival_at' => '',
+            'estimated_departure_at' => $idx === 0 ? (string)($departure['estimated_departure_at'] ?? '') : '',
+            'estimated_arrival_at' => '',
+            'actual_departure_at' => '',
+            'actual_arrival_at' => '',
+            'schedDep' => $idx === 0 ? $this->railIsoTimePart((string)($departure['planned_departure_at'] ?? '')) : '',
+            'schedArr' => '',
+            'depDate' => $idx === 0 ? $this->railIsoDatePart((string)($departure['planned_departure_at'] ?? '')) : '',
+            'arrDate' => '',
+            'arrival_delay_minutes_seed' => $departure['arrival_delay_minutes'] ?? null,
+            'departure_delay_minutes_seed' => $departure['departure_delay_minutes'] ?? null,
+            'status_seed' => (string)($departure['status'] ?? ''),
+            'platform_planned' => '',
+            'platform_actual' => '',
+            'source' => (string)($departure['source'] ?? ''),
+            'country' => $this->railCountryFromStationCode($fromCode),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $departure
+     * @return array<string,array<string,mixed>>
+     */
+    private function railContractOptionsFromDeparture(array $departure): array
+    {
+        if ($this->railTransferCount($departure) <= 0) {
+            return [];
+        }
+
+        $stops = $this->railContractStopsFromDeparture($departure);
+        if (count($stops) <= 1) {
+            return [];
+        }
+
+        $options = [];
+        $trainNo = trim((string)($departure['train_number'] ?? ''));
+        $operator = trim((string)($departure['operator_name'] ?? ($departure['operator_code'] ?? '')));
+        for ($idx = 0; $idx < count($stops) - 1; $idx++) {
+            $fromStop = $stops[$idx];
+            $toStop = $stops[$idx + 1];
+            $labelParts = ['Kontrakt ' . (string)($idx + 1)];
+            if ($trainNo !== '') {
+                $labelParts[] = $trainNo;
+            }
+            $labelParts[] = trim(((string)$fromStop['name']) . ' -> ' . ((string)$toStop['name']), ' ->');
+            if ($operator !== '') {
+                $labelParts[] = $operator;
+            }
+            $key = 'DEP:' . (string)$idx;
+            $options[$key] = [
+                'key' => $key,
+                'label' => implode(' · ', array_filter($labelParts, static fn($value) => trim((string)$value) !== '')),
+                'segments' => [$this->buildRailContractSegmentFromStops($fromStop, $toStop, $departure, $idx)],
+                'stops' => [$fromStop, $toStop],
+                'provisional' => true,
             ];
         }
 
@@ -2994,12 +4091,46 @@ class FlowController extends AppController
      * @param array<string,mixed> $departure
      * @return array<string,mixed>
      */
-    private function buildRailProblemAnchor(array $departure, string $choice, string $contractId = ''): array
+    private function buildRailProblemAnchor(array $departure, string $choice, string $contractId = '', array $contractOptions = []): array
     {
         $choice = trim($choice);
         $originName = trim((string)($departure['origin_station_name'] ?? ''));
         $originCode = trim((string)($departure['origin_station_code'] ?? ''));
         $transferStations = $this->railTransferStations($departure);
+        if ($contractId !== '' && isset($contractOptions[$contractId]) && is_array($contractOptions[$contractId])) {
+            $contractOption = (array)$contractOptions[$contractId];
+            $contractStops = [];
+            if (!empty($contractOption['stops']) && is_array($contractOption['stops'])) {
+                foreach ((array)$contractOption['stops'] as $stop) {
+                    if (!is_array($stop)) {
+                        continue;
+                    }
+                    $contractStops[] = [
+                        'name' => trim((string)($stop['name'] ?? '')),
+                        'code' => trim((string)($stop['code'] ?? '')),
+                    ];
+                }
+            }
+            if (empty($contractStops) && !empty($contractOption['segments']) && is_array($contractOption['segments'])) {
+                $contractStops = $this->railContractStopsFromSegments((array)$contractOption['segments']);
+            }
+            if (!empty($contractStops)) {
+                $originName = (string)($contractStops[0]['name'] ?? $originName);
+                $originCode = (string)($contractStops[0]['code'] ?? $originCode);
+                $transferStations = [];
+                foreach (array_slice($contractStops, 1, -1) as $idx => $stop) {
+                    $name = trim((string)($stop['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+                    $transferStations[] = [
+                        'index' => (int)$idx,
+                        'name' => $name,
+                        'code' => trim((string)($stop['code'] ?? '')),
+                    ];
+                }
+            }
+        }
         $anchor = [
             'choice' => $choice !== '' ? $choice : 'unknown',
             'type' => 'unknown',
@@ -3076,19 +4207,54 @@ class FlowController extends AppController
             }
         }
         $railContractWarning = '';
-        $departureCandidates = (new RailDepartureSearchService())->searchFromForm($form, $meta);
+        $railExemptionWarning = '';
+        $departureSearchService = new RailDepartureSearchService();
+        $departureLookupSignature = $departureSearchService->buildLookupSignatureFromForm($form, $meta);
+        $storedDepartureLookupSignature = trim((string)($meta['rail_departure_candidates_signature'] ?? ''));
+        $storedDepartureCandidates = $this->railStoredDepartureCandidates($meta);
+        if ($storedDepartureCandidates === [] && $storedDepartureLookupSignature !== '' && $storedDepartureLookupSignature === $departureLookupSignature && $selectedDeparture !== []) {
+            $storedDepartureCandidates = [$selectedDeparture];
+            $this->railPersistDepartureCandidates($meta, $departureLookupSignature, $storedDepartureCandidates);
+        }
+        if ($storedDepartureLookupSignature !== '' && $storedDepartureLookupSignature === $departureLookupSignature && $storedDepartureCandidates !== []) {
+            $departureCandidates = $storedDepartureCandidates;
+        } else {
+            $departureCandidates = $departureSearchService->searchFromForm($form, $meta);
+            $this->railPersistDepartureCandidates($meta, $departureLookupSignature, $departureCandidates);
+        }
+
+        $departureCandidates = array_values(array_map(
+            fn(array $candidate): array => $this->railDecorateFallbackOperatorHints((array)$candidate),
+            $departureCandidates
+        ));
+        if ($selectedDeparture !== []) {
+            $selectedDeparture = $this->railDecorateFallbackOperatorHints($selectedDeparture);
+        }
 
         if ($selectedDeparture !== [] && !$this->railDepartureCandidatesContainId($departureCandidates, (string)($selectedDeparture['id'] ?? ''))) {
             $departureCandidates[] = $selectedDeparture;
+            $this->railPersistDepartureCandidates($meta, $departureLookupSignature, $departureCandidates);
         }
 
         if ($this->request->is('post')) {
             $selectedId = trim((string)($this->request->getData('selected_rail_departure_id') ?? ''));
             $manualTrainNumber = trim((string)($this->request->getData('manual_rail_train_number') ?? ''));
             $manualOperatorName = trim((string)($this->request->getData('manual_rail_operator_name') ?? ''));
-            $throughTicketDisclosure = strtolower(trim((string)($this->request->getData('through_ticket_disclosure') ?? '')));
-            if (!in_array($throughTicketDisclosure, ['yes', 'no', 'unknown'], true)) {
+            $sellerChannel = strtolower(trim((string)($this->request->getData('seller_channel') ?? ($form['seller_channel'] ?? ''))));
+            if (!in_array($sellerChannel, ['operator', 'retailer'], true)) {
+                $sellerChannel = '';
+            }
+            $sameTransaction = strtolower(trim((string)($this->request->getData('same_transaction') ?? ($form['same_transaction'] ?? ''))));
+            if (!in_array($sameTransaction, ['yes', 'no'], true)) {
+                $sameTransaction = '';
+            }
+            $throughTicketDisclosure = strtolower(trim((string)($this->request->getData('through_ticket_disclosure') ?? ($form['through_ticket_disclosure'] ?? ''))));
+            if (!in_array($throughTicketDisclosure, ['yes', 'no'], true)) {
                 $throughTicketDisclosure = '';
+            }
+            $separateContractNotice = strtolower(trim((string)($this->request->getData('separate_contract_notice') ?? ($form['separate_contract_notice'] ?? ''))));
+            if (!in_array($separateContractNotice, ['yes', 'no'], true)) {
+                $separateContractNotice = '';
             }
             $problemContractId = trim((string)($this->request->getData('problem_contract_id') ?? ($form['problem_contract_id'] ?? '')));
             $problemAnchorChoice = trim((string)($this->request->getData('rail_problem_anchor_choice') ?? ($form['rail_problem_anchor_choice'] ?? '')));
@@ -3189,26 +4355,45 @@ class FlowController extends AppController
                 ];
             }
 
+            $railOperatorCountry = $this->railDepartureOperatorCountry($chosen, $form, $meta);
+            if ($railOperatorCountry['country'] !== '') {
+                $chosen['operator_country'] = $railOperatorCountry['country'];
+                $form['operator_country'] = $railOperatorCountry['country'];
+                $form['operator_country_assumed'] = '1';
+                $meta['_auto']['operator_country'] = [
+                    'value' => $railOperatorCountry['country'],
+                    'source' => $railOperatorCountry['source'] !== '' ? $railOperatorCountry['source'] : 'rail_selected_departure',
+                ];
+            }
+
             $segment = $this->buildRailJourneySegment($chosen);
             $classifier = (new RailIncidentClassifier())->classify($chosen, [
                 'missed_connection' => in_array(strtolower(trim((string)($form['missed_connection_due_to_delay'] ?? ''))), ['yes', 'ja', '1', 'true'], true),
             ]);
-            $autoContractModel = $this->railAutoContractModel($meta, $chosen);
-            $contractConfidence = $this->railContractConfidence($meta, $chosen);
-            $requiresManualArt12 = !empty($classifier['has_connections']) && ($contractConfidence === 'low' || $autoContractModel === '');
-            $effectiveContractModel = $autoContractModel;
-            if ($throughTicketDisclosure === 'yes') {
-                $effectiveContractModel = 'through';
-            } elseif ($throughTicketDisclosure === 'no') {
-                $effectiveContractModel = 'separate';
+            if (empty($contractOptions)) {
+                $contractOptions = $this->railContractOptionsFromDeparture($chosen);
+                if (!empty($contractOptions)) {
+                    $meta['contract_options'] = $contractOptions;
+                }
             }
+            $contractConfidence = $this->railContractConfidence($meta, $chosen);
+            $art12State = $this->railResolveArt12State($chosen, $meta, $sellerChannel, $sameTransaction, $throughTicketDisclosure, $separateContractNotice);
+            $autoContractModel = (string)($art12State['auto_contract_model'] ?? '');
+            $requiresManualArt12 = !empty($classifier['has_connections']) && !empty($art12State['needs_followup']);
+            $effectiveContractModel = (string)($art12State['effective_contract_model'] ?? '');
             if ($effectiveContractModel === 'separate' && $problemContractId === '' && count($contractOptions) === 1) {
                 $problemContractId = (string)array_key_first($contractOptions);
             }
-            if ($requiresManualArt12 && $throughTicketDisclosure === '') {
-                $railContractWarning = 'Art. 12 er usikker for denne forbindelse. Tryk Rediger og besvar kontraktspørgsmålet, før du går videre.';
+            if (!empty($classifier['has_connections']) && $sellerChannel === '') {
+                $railContractWarning = 'Angiv, hvem billetten blev koebt hos: jernbaneoperatoer eller rejsebureau / billetudsteder.';
+            } elseif (!empty($classifier['has_connections']) && $sameTransaction === '') {
+                $railContractWarning = 'Angiv om billetterne blev koebt i samme transaktion.';
+            } elseif ($requiresManualArt12 && $throughTicketDisclosure === '') {
+                $railContractWarning = 'Angiv om du var tydeligt informeret om, hvorvidt billet(ter)ne var gennemgaaende eller saerskilte.';
+            } elseif ($requiresManualArt12 && $separateContractNotice === '') {
+                $railContractWarning = 'Angiv om billet eller booking siger, at delene er saerskilte kontrakter.';
             } elseif ($effectiveContractModel === 'separate' && !empty($contractOptions) && $problemContractId === '') {
-                $railContractWarning = 'Vælg den kontrakt, der skabte problemet, så trin 3, 4 og 5 fokuserer på den rigtige del af rejsen.';
+                $railContractWarning = 'Vaelg den kontrakt, der skabte problemet, saa trin 3, 4 og 5 fokuserer paa den rigtige del af rejsen.';
             }
             $incidentSeed = [
                 'mode' => 'rail',
@@ -3231,14 +4416,32 @@ class FlowController extends AppController
                 'transfer_count' => (int)($classifier['transfer_count'] ?? 0),
                 'has_connections' => !empty($classifier['has_connections']),
             ];
+            $railScopePreview = $this->railExemptionPreview($form, $meta, $chosen);
+            if (!empty($railScopePreview['journey']) && is_array($railScopePreview['journey'])) {
+                $journey = array_replace_recursive($journey, (array)$railScopePreview['journey']);
+            }
+            if (!empty($railScopePreview['blocked_message'])) {
+                $railExemptionWarning = (string)$railScopePreview['blocked_message'];
+            }
             $meta['rail_contract_structure_seed'] = [
                 'auto_contract_model' => $autoContractModel,
                 'effective_contract_model' => $effectiveContractModel,
                 'confidence' => $contractConfidence,
                 'requires_manual_answer' => $requiresManualArt12,
+                'auto_stop' => !empty($art12State['auto_stop']),
+                'needs_followup' => !empty($art12State['needs_followup']),
+                'auto_label' => (string)($art12State['auto_label'] ?? ''),
+                'auto_reason' => (string)($art12State['auto_reason'] ?? ''),
+                'liable_basis' => (string)($art12State['liable_basis'] ?? 'manual_review'),
+                'operator_names' => array_values((array)($art12State['operator_names'] ?? [])),
+                'operator_count' => (int)($art12State['operator_count'] ?? 0),
+                'seller_channel' => $sellerChannel,
+                'same_transaction' => $sameTransaction,
+                'through_ticket_disclosure' => $throughTicketDisclosure,
+                'separate_contract_notice' => $separateContractNotice,
                 'problem_contract_id' => $problemContractId,
             ];
-            $problemAnchor = $this->buildRailProblemAnchor($chosen, $problemAnchorChoice, $problemContractId);
+            $problemAnchor = $this->buildRailProblemAnchor($chosen, $problemAnchorChoice, $problemContractId, $contractOptions);
             $meta['rail_problem_anchor'] = $problemAnchor;
 
             $meta['rail_selected_departure'] = $chosen;
@@ -3252,6 +4455,8 @@ class FlowController extends AppController
                 'departure_delay_minutes_seed' => $chosen['departure_delay_minutes'] ?? null,
                 'disruption_reason_public' => (string)($chosen['disruption_reason_public'] ?? ''),
                 'remarks' => (array)($chosen['remarks'] ?? []),
+                'operator_names' => array_values((array)($art12State['operator_names'] ?? [])),
+                'operator_count' => (int)($art12State['operator_count'] ?? 0),
                 'raw' => (array)($chosen['raw'] ?? []),
             ];
             $meta['rail_incident_seed'] = $incidentSeed;
@@ -3313,20 +4518,42 @@ class FlowController extends AppController
             }
 
             if (!empty($classifier['has_connections'])) {
+                $form['seller_channel'] = $sellerChannel;
+                $form['same_transaction'] = $sameTransaction;
                 $form['through_ticket_disclosure'] = $throughTicketDisclosure;
+                $form['separate_contract_notice'] = $separateContractNotice;
                 $form['rail_problem_anchor_choice'] = (string)($problemAnchor['choice'] ?? 'unknown');
-                if ($throughTicketDisclosure === 'yes') {
-                    $meta['through_ticket_disclosure'] = 'Ja';
-                } elseif ($throughTicketDisclosure === 'no') {
-                    $meta['through_ticket_disclosure'] = 'Nej';
-                } elseif ($throughTicketDisclosure === 'unknown') {
-                    $meta['through_ticket_disclosure'] = 'Ved ikke';
-                } else {
-                    unset($meta['through_ticket_disclosure']);
+                $meta['through_ticket_disclosure'] = $throughTicketDisclosure === 'yes' ? 'Ja' : ($throughTicketDisclosure === 'no' ? 'Nej' : '');
+                $meta['separate_contract_notice'] = $separateContractNotice === 'yes' ? 'Ja' : ($separateContractNotice === 'no' ? 'Nej' : '');
+                if ($sameTransaction !== '') {
+                    if ($sellerChannel === 'operator') {
+                        $form['single_txn_operator'] = $sameTransaction;
+                        unset($form['single_txn_retailer']);
+                        $meta['single_txn_operator'] = $sameTransaction;
+                        unset($meta['single_txn_retailer']);
+                    } elseif ($sellerChannel === 'retailer') {
+                        $form['single_txn_retailer'] = $sameTransaction;
+                        unset($form['single_txn_operator']);
+                        $meta['single_txn_retailer'] = $sameTransaction;
+                        unset($meta['single_txn_operator']);
+                    }
                 }
             } else {
-                unset($form['through_ticket_disclosure'], $meta['through_ticket_disclosure']);
-                unset($form['rail_problem_anchor_choice']);
+                unset(
+                    $form['seller_channel'],
+                    $form['same_transaction'],
+                    $form['through_ticket_disclosure'],
+                    $form['separate_contract_notice'],
+                    $form['single_txn_operator'],
+                    $form['single_txn_retailer'],
+                    $form['rail_problem_anchor_choice']
+                );
+                unset(
+                    $meta['through_ticket_disclosure'],
+                    $meta['separate_contract_notice'],
+                    $meta['single_txn_operator'],
+                    $meta['single_txn_retailer']
+                );
             }
 
             if (($problemAnchor['type'] ?? '') !== 'transfer') {
@@ -3365,12 +4592,20 @@ class FlowController extends AppController
                 $meta['_segments_auto'] = (array)$meta['_segments_all'];
             }
 
+            if ($railExemptionWarning !== '') {
+                $selectedDeparture = $chosen;
+                $session->write('flow.form', $form);
+                $session->write('flow.meta', $meta);
+                $session->write('flow.journey', $journey);
+                $this->set(compact('journey', 'meta', 'compute', 'form', 'incident', 'flags', 'departureCandidates', 'selectedDeparture', 'depStation', 'arrStation', 'depDate', 'contractOptions', 'railContractWarning', 'railExemptionWarning'));
+                return null;
+            }
             if ($railContractWarning !== '') {
                 $selectedDeparture = $chosen;
                 $session->write('flow.form', $form);
                 $session->write('flow.meta', $meta);
                 $session->write('flow.journey', $journey);
-                $this->set(compact('journey', 'meta', 'compute', 'form', 'incident', 'flags', 'departureCandidates', 'selectedDeparture', 'depStation', 'arrStation', 'depDate', 'contractOptions', 'railContractWarning'));
+                $this->set(compact('journey', 'meta', 'compute', 'form', 'incident', 'flags', 'departureCandidates', 'selectedDeparture', 'depStation', 'arrStation', 'depDate', 'contractOptions', 'railContractWarning', 'railExemptionWarning'));
                 return null;
             }
 
@@ -3384,6 +4619,7 @@ class FlowController extends AppController
             $flags['gate_art20'] = !empty($classifier['gate_art20']) ? '1' : '';
             $flags['step27_done'] = '1';
             $flags['step35_done'] = '';
+            $this->railPersistDepartureCandidates($meta, $departureLookupSignature, $departureCandidates);
 
             $session->write('flow.form', $form);
             $session->write('flow.meta', $meta);
@@ -3393,7 +4629,24 @@ class FlowController extends AppController
             return $this->redirect(['action' => 'railstranding']);
         }
 
-        $this->set(compact('journey', 'meta', 'compute', 'form', 'incident', 'flags', 'departureCandidates', 'selectedDeparture', 'depStation', 'arrStation', 'depDate', 'contractOptions', 'railContractWarning'));
+        if ($selectedDeparture !== []) {
+            $railScopePreview = $this->railExemptionPreview($form, $meta, $selectedDeparture);
+            if (!empty($railScopePreview['journey']) && is_array($railScopePreview['journey'])) {
+                $journey = array_replace_recursive($journey, (array)$railScopePreview['journey']);
+            }
+            if (!empty($railScopePreview['blocked_message'])) {
+                $railExemptionWarning = (string)$railScopePreview['blocked_message'];
+            }
+        }
+
+        if (empty($contractOptions) && !empty($selectedDeparture) && $this->railTransferCount($selectedDeparture) > 0) {
+            $contractOptions = $this->railContractOptionsFromDeparture($selectedDeparture);
+            if (!empty($contractOptions)) {
+                $meta['contract_options'] = $contractOptions;
+            }
+        }
+
+        $this->set(compact('journey', 'meta', 'compute', 'form', 'incident', 'flags', 'departureCandidates', 'selectedDeparture', 'depStation', 'arrStation', 'depDate', 'contractOptions', 'railContractWarning', 'railExemptionWarning'));
         return null;
     }
 
@@ -3637,6 +4890,27 @@ class FlowController extends AppController
             if (($form['rail_stranding_context'] ?? 'no') === 'station' && trim((string)($form['stranded_current_station'] ?? '')) === '' && $suggestedStation !== '') {
                 $form['stranded_current_station'] = $suggestedStation;
             }
+            if (!isset($form['rail_station_still_there']) && strtolower((string)($form['rail_stranding_context'] ?? 'no')) === 'station') {
+                $whereEnded = strtolower(trim((string)($form['rail_station_where_ended'] ?? '')));
+                $form['rail_station_still_there'] = $whereEnded === '' || $whereEnded === 'same_station' ? 'yes' : 'no';
+            }
+            if (!isset($form['rail_station_where_ended']) && strtolower((string)($form['rail_stranding_context'] ?? 'no')) === 'station') {
+                $whereEnded = strtolower(trim((string)($form['a20_where_ended'] ?? '')));
+                $arrivalStation = trim((string)($form['a20_arrival_station'] ?? ''));
+                $currentStation = trim((string)($form['stranded_current_station'] ?? ''));
+                if ($whereEnded === 'final_destination') {
+                    $form['rail_station_where_ended'] = 'final_destination';
+                } elseif ($whereEnded === 'other_departure_point') {
+                    $form['rail_station_where_ended'] = 'return_to_departure';
+                } elseif ($whereEnded === 'nearest_station') {
+                    if ($arrivalStation !== '' && $arrivalStation !== $currentStation) {
+                        $form['rail_station_where_ended'] = 'other_station';
+                        $form['rail_station_end_station'] = $arrivalStation;
+                    } else {
+                        $form['rail_station_where_ended'] = 'same_station';
+                    }
+                }
+            }
             $sess->write('flow.form', $form);
         }
 
@@ -3662,6 +4936,60 @@ class FlowController extends AppController
                 } elseif ($stationChoice !== 'other') {
                     unset($form['stranded_current_station_other']);
                 }
+                $expensesSignal = strtolower(trim((string)($this->request->getData('rail_station_expenses_signal') ?? ($form['rail_station_expenses_signal'] ?? ''))));
+                if (!in_array($expensesSignal, ['yes', 'no', 'unknown'], true)) {
+                    $expensesSignal = '';
+                }
+                if ($expensesSignal !== '') {
+                    $form['rail_station_expenses_signal'] = $expensesSignal;
+                } else {
+                    unset($form['rail_station_expenses_signal']);
+                }
+                $expenseTypesRaw = $this->request->getData('rail_station_expense_types');
+                $expenseTypes = is_array($expenseTypesRaw)
+                    ? array_values(array_unique(array_values(array_filter(array_map(
+                        static fn($value): string => strtolower(trim((string)$value)),
+                        $expenseTypesRaw
+                    ), static fn(string $value): bool => in_array($value, ['meals', 'hotel', 'train', 'bus', 'taxi', 'rideshare', 'local_transport', 'other'], true)))))
+                    : [];
+                if ($expensesSignal === 'yes' && $expenseTypes !== []) {
+                    $form['rail_station_expense_types'] = $expenseTypes;
+                } else {
+                    unset($form['rail_station_expense_types']);
+                }
+
+                $stationStillThere = strtolower(trim((string)($this->request->getData('rail_station_still_there') ?? ($form['rail_station_still_there'] ?? 'yes'))));
+                if (!in_array($stationStillThere, ['yes', 'no'], true)) {
+                    $stationStillThere = 'yes';
+                }
+                $form['rail_station_still_there'] = $stationStillThere;
+
+                if (strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? '')) === 'ongoing' && $stationStillThere === 'yes') {
+                    $stationOutcome = 'same_station';
+                } else {
+                    $stationOutcome = strtolower(trim((string)($this->request->getData('rail_station_where_ended') ?? ($form['rail_station_where_ended'] ?? ''))));
+                    if (!in_array($stationOutcome, ['same_station', 'other_station', 'return_to_departure', 'final_destination', 'unknown'], true)) {
+                        $stationOutcome = '';
+                    }
+                }
+                if ($stationOutcome !== '') {
+                    $form['rail_station_where_ended'] = $stationOutcome;
+                } else {
+                    unset($form['rail_station_where_ended']);
+                }
+                $stationOutcomeChoice = trim((string)($this->request->getData('rail_station_end_station') ?? ($form['rail_station_end_station'] ?? '')));
+                $stationOutcomeOther = trim((string)($this->request->getData('rail_station_end_station_other') ?? ($form['rail_station_end_station_other'] ?? '')));
+                $resolvedOutcomeStation = $stationOutcomeChoice === 'other' ? $stationOutcomeOther : $stationOutcomeChoice;
+                if ($stationOutcome === 'other_station' && $stationOutcomeChoice !== '') {
+                    $form['rail_station_end_station'] = $stationOutcomeChoice;
+                    if ($stationOutcomeChoice === 'other' && $stationOutcomeOther !== '') {
+                        $form['rail_station_end_station_other'] = $stationOutcomeOther;
+                    } elseif ($stationOutcomeChoice !== 'other') {
+                        unset($form['rail_station_end_station_other']);
+                    }
+                } else {
+                    unset($form['rail_station_end_station'], $form['rail_station_end_station_other']);
+                }
                 $form['is_stranded_trin5'] = 'no';
                 $form['a20_station_stranded'] = 'yes';
                 $form['is_stranded'] = 'yes';
@@ -3669,9 +4997,55 @@ class FlowController extends AppController
                 if ($resolvedStation !== '' && trim((string)($form['handoff_station'] ?? '')) === '') {
                     $form['handoff_station'] = $resolvedStation;
                 }
+                if ($stationOutcome === 'same_station' && $resolvedStation !== '') {
+                    $form['a20_where_ended'] = 'nearest_station';
+                    $form['a20_arrival_station'] = $resolvedStation;
+                    unset($form['a20_arrival_station_other']);
+                    $form['handoff_station'] = $resolvedStation;
+                    $form['a20_where_ended_assumed'] = '1';
+                } elseif ($stationOutcome === 'other_station' && $resolvedOutcomeStation !== '') {
+                    $form['a20_where_ended'] = 'nearest_station';
+                    $form['a20_arrival_station'] = $stationOutcomeChoice !== '' ? $stationOutcomeChoice : $resolvedOutcomeStation;
+                    if ($stationOutcomeChoice === 'other' && $stationOutcomeOther !== '') {
+                        $form['a20_arrival_station_other'] = $stationOutcomeOther;
+                    } else {
+                        unset($form['a20_arrival_station_other']);
+                    }
+                    $form['handoff_station'] = $resolvedOutcomeStation;
+                    $form['a20_where_ended_assumed'] = '1';
+                } elseif ($stationOutcome === 'return_to_departure') {
+                    $departureStation = trim((string)($form['dep_station'] ?? ''));
+                    $form['a20_where_ended'] = 'other_departure_point';
+                    if ($departureStation !== '') {
+                        $form['a20_arrival_station'] = $departureStation;
+                        unset($form['a20_arrival_station_other']);
+                        $form['handoff_station'] = $departureStation;
+                    }
+                    $form['a20_where_ended_assumed'] = '1';
+                } elseif ($stationOutcome === 'final_destination') {
+                    $form['a20_where_ended'] = 'final_destination';
+                    unset($form['a20_arrival_station'], $form['a20_arrival_station_other']);
+                    $form['a20_where_ended_assumed'] = '1';
+                } else {
+                    unset(
+                        $form['a20_where_ended'],
+                        $form['a20_arrival_station'],
+                        $form['a20_arrival_station_other'],
+                        $form['a20_where_ended_assumed']
+                    );
+                }
+                $meta['rail_station_endpoint_seeded'] = '1';
+                $currentAnchorStation = $resolvedStation;
+                if ($stationOutcome === 'other_station' && $resolvedOutcomeStation !== '') {
+                    $currentAnchorStation = $resolvedOutcomeStation;
+                } elseif ($stationOutcome === 'return_to_departure') {
+                    $currentAnchorStation = trim((string)($form['dep_station'] ?? $resolvedStation));
+                } elseif ($stationOutcome === 'final_destination') {
+                    $currentAnchorStation = trim((string)($form['arr_station'] ?? $resolvedStation));
+                }
                 $meta['rail_current_location_anchor'] = [
                     'type' => 'station',
-                    'station_name' => $resolvedStation,
+                    'station_name' => $currentAnchorStation,
                     'station_code' => '',
                 ];
             } else {
@@ -3682,8 +5056,23 @@ class FlowController extends AppController
                     $form['stranded_location'],
                     $form['stranded_current_station'],
                     $form['stranded_current_station_other'],
-                    $form['handoff_station']
+                    $form['rail_station_still_there'],
+                    $form['handoff_station'],
+                    $form['rail_station_expenses_signal'],
+                    $form['rail_station_expense_types'],
+                    $form['rail_station_where_ended'],
+                    $form['rail_station_end_station'],
+                    $form['rail_station_end_station_other']
                 );
+                if ((string)($meta['rail_station_endpoint_seeded'] ?? '') === '1') {
+                    unset(
+                        $form['a20_where_ended'],
+                        $form['a20_arrival_station'],
+                        $form['a20_arrival_station_other'],
+                        $form['a20_where_ended_assumed']
+                    );
+                }
+                unset($meta['rail_station_endpoint_seeded']);
                 $meta['rail_current_location_anchor'] = [
                     'type' => 'unknown',
                     'station_name' => '',
@@ -3697,7 +5086,20 @@ class FlowController extends AppController
             return $this->redirect(['action' => 'journey']);
         }
 
-        $this->set(compact('journey','meta','compute','incident','form','flags'));
+        $priceHints = null;
+        try {
+            $ctxHints = $this->buildPriceContextForHints($form, $journey, $meta);
+            $fxRates = $this->loadFxRatesForHints();
+            $fxFetcher = function (string $cur) use ($fxRates): ?float {
+                $c = strtoupper(trim($cur));
+                return isset($fxRates[$c]) && is_numeric($fxRates[$c]) ? (float)$fxRates[$c] : null;
+            };
+            $priceHints = (new PriceHintsService())->build($ctxHints, $fxFetcher);
+            $meta['price_hints'] = $priceHints;
+            $sess->write('flow.meta', $meta);
+        } catch (\Throwable $e) { /* ignore hints errors */ }
+
+        $this->set(compact('journey','meta','compute','incident','form','flags','priceHints'));
         return null;
     }
 
@@ -3717,6 +5119,15 @@ class FlowController extends AppController
         $incident = (array)$sess->read('flow.incident') ?: [];
         $flags = (array)$sess->read('flow.flags') ?: [];
         $contractOptions = (array)($meta['contract_options'] ?? []);
+        if (empty($contractOptions)) {
+            $railSelectedDeparture = (array)($meta['rail_selected_departure'] ?? []);
+            if (!empty($railSelectedDeparture) && $this->railTransferCount($railSelectedDeparture) > 0) {
+                $contractOptions = $this->railContractOptionsFromDeparture($railSelectedDeparture);
+                if (!empty($contractOptions)) {
+                    $meta['contract_options'] = $contractOptions;
+                }
+            }
+        }
         $contractWarning = '';
 
         $needsRouter = ((string)($flags['needs_initial_incident_router'] ?? '')) === '1';
@@ -4356,6 +5767,17 @@ class FlowController extends AppController
         $isAirShortFlow = $this->isAirShortEntry($flags, $form, $meta);
         $skipAirShortHeavyEntitlements = $isAirShortFlow && !$this->request->is('post') && !$isAjaxHooks;
         $currentMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+        $entitlementsWarnings = array_merge(
+            $this->railEntitlementsValidationErrors($form, $meta),
+            $this->railTicketPriceValidationErrors($form, $meta)
+        );
+        $railEntitlementPreview = null;
+        if ($currentMode === 'rail') {
+            $railEntitlementPreview = $this->railExemptionPreview($form, $meta);
+            if (!empty($railEntitlementPreview['journey']) && is_array($railEntitlementPreview['journey'])) {
+                $journey = array_replace_recursive($journey, (array)$railEntitlementPreview['journey']);
+            }
+        }
         $applyFerryDirectContractDefaults = function () use (&$journey, &$meta, &$form): void {
             $form['seller_channel'] = 'operator';
             $form['journey_structure'] = 'single_segment';
@@ -4448,7 +5870,7 @@ class FlowController extends AppController
                 'dep_terminal_lookup_node_type','dep_terminal_lookup_parent','dep_terminal_lookup_source','dep_terminal_lookup_lat','dep_terminal_lookup_lon',
                 'arr_terminal_lookup_id','arr_terminal_lookup_code','arr_terminal_lookup_mode','arr_terminal_lookup_country','arr_terminal_lookup_in_eu',
                 'arr_terminal_lookup_node_type','arr_terminal_lookup_parent','arr_terminal_lookup_source','arr_terminal_lookup_lat','arr_terminal_lookup_lon',
-                'train_no','ticket_no','price','price_currency','price_known','scope_choice',
+                'train_no','ticket_no','price','price_currency','price_known','rail_price_input_mode','scope_choice',
                 'trip_type','affected_leg','outbound_fare_amount','return_fare_amount','return_dep_date','return_dep_time','return_dep_station','return_arr_station',
                 'service_type','departure_from_terminal','departure_port_in_eu','arrival_port_in_eu','carrier_is_eu',
                 'air_route_type','air_stopover_airports','air_affected_leg_key',
@@ -4480,6 +5902,7 @@ class FlowController extends AppController
             } elseif (!$isTicketless && !$uploadModeHasAnalysis) {
                 unset($form['transport_mode'], $form['transport_mode_source'], $meta['transport_mode'], $meta['transport_mode_source']);
             }
+            $this->normalizeRailTicketPriceInputMode($form, $meta);
 
             // Clear-all action from UI: remove current and multi tickets and wipe 3.2 fields + identifiers
             if ($this->truthy($this->request->getData('clear_all'))) {
@@ -4507,7 +5930,7 @@ class FlowController extends AppController
                         'operator','operator_country','operator_product',
                         'dep_date','dep_time','dep_station','arr_station','arr_time',
                         'dep_terminal','arr_terminal',
-                        'train_no','ticket_no','price','price_currency','price_known','scope_choice',
+                        'train_no','ticket_no','price','price_currency','price_known','rail_price_input_mode','scope_choice',
                         'dep_terminal_lookup_id','dep_terminal_lookup_code','dep_terminal_lookup_mode','dep_terminal_lookup_country','dep_terminal_lookup_in_eu',
                         'dep_terminal_lookup_node_type','dep_terminal_lookup_parent','dep_terminal_lookup_source','dep_terminal_lookup_lat','dep_terminal_lookup_lon',
                         'arr_terminal_lookup_id','arr_terminal_lookup_code','arr_terminal_lookup_mode','arr_terminal_lookup_country','arr_terminal_lookup_in_eu',
@@ -4557,7 +5980,7 @@ class FlowController extends AppController
                             'operator','operator_country','operator_product',
                             'dep_date','dep_time','dep_station','arr_station','arr_time',
                             'dep_terminal','arr_terminal',
-                            'train_no','ticket_no','price','price_currency','price_known','scope_choice',
+                            'train_no','ticket_no','price','price_currency','price_known','rail_price_input_mode','scope_choice',
                             'dep_terminal_lookup_id','dep_terminal_lookup_code','dep_terminal_lookup_mode','dep_terminal_lookup_country','dep_terminal_lookup_in_eu',
                             'dep_terminal_lookup_node_type','dep_terminal_lookup_parent','dep_terminal_lookup_source','dep_terminal_lookup_lat','dep_terminal_lookup_lon',
                             'arr_terminal_lookup_id','arr_terminal_lookup_code','arr_terminal_lookup_mode','arr_terminal_lookup_country','arr_terminal_lookup_in_eu',
@@ -4962,7 +6385,7 @@ class FlowController extends AppController
                 'dep_terminal_lookup_node_type','dep_terminal_lookup_parent','dep_terminal_lookup_source','dep_terminal_lookup_lat','dep_terminal_lookup_lon',
                 'arr_terminal_lookup_id','arr_terminal_lookup_code','arr_terminal_lookup_mode','arr_terminal_lookup_country','arr_terminal_lookup_in_eu',
                 'arr_terminal_lookup_node_type','arr_terminal_lookup_parent','arr_terminal_lookup_source','arr_terminal_lookup_lat','arr_terminal_lookup_lon',
-                'train_no','ticket_no','price','price_currency','price_known','scope_choice','ticket_upload_mode',
+                'train_no','ticket_no','price','price_currency','price_known','rail_price_input_mode','scope_choice','ticket_upload_mode',
                 'trip_type','affected_leg','outbound_fare_amount','return_fare_amount','return_dep_date','return_dep_time','return_dep_station','return_arr_station',
                 'incident_segment_mode','incident_segment_operator','journey_structure','original_contract_mode',
                 'service_type','bus_regular_service','boarding_in_eu','alighting_in_eu','scheduled_distance_km',
@@ -6400,15 +7823,35 @@ class FlowController extends AppController
                 $session->write('flow.form', $form);
                 $session->write('flow.meta', $meta);
                 $flags = (array)$session->read('flow.flags') ?: [];
-                $flags['step2_done'] = '1';
-                if ($resolvedTransportMode !== '') {
-                    $flags['transport_mode'] = $resolvedTransportMode;
-                } else {
-                    unset($flags['transport_mode']);
-                }
-                $ticketModeNow = (string)($form['ticket_upload_mode'] ?? 'ticket');
-                $flags['gate_season_pass'] = ($ticketModeNow === 'seasonpass') ? '1' : '';
                 $defaultMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
+                $entitlementsWarnings = array_merge(
+                    $this->railEntitlementsValidationErrors($form, $meta),
+                    $this->railTicketPriceValidationErrors($form, $meta)
+                );
+                if ($defaultMode === 'rail') {
+                    $railContinuePreview = $this->railExemptionPreview($form, $meta);
+                    if (!empty($railContinuePreview['journey']) && is_array($railContinuePreview['journey'])) {
+                        $journey = array_replace_recursive($journey, (array)$railContinuePreview['journey']);
+                    }
+                }
+                if ($defaultMode === 'rail' && $entitlementsWarnings !== []) {
+                    $flags['step2_done'] = '';
+                    $session->write('flow.form', $form);
+                    $session->write('flow.meta', $meta);
+                    $session->write('flow.journey', $journey);
+                    $session->write('flow.flags', $flags);
+                    return $this->redirect(['action' => 'entitlements']);
+                } else {
+                    $flags['step2_done'] = '1';
+                    if ($resolvedTransportMode !== '') {
+                        $flags['transport_mode'] = $resolvedTransportMode;
+                    } else {
+                        unset($flags['transport_mode']);
+                    }
+                    $ticketModeNow = (string)($form['ticket_upload_mode'] ?? 'ticket');
+                    $flags['gate_season_pass'] = ($ticketModeNow === 'seasonpass') ? '1' : '';
+                $preserveRailDownstreamState = $defaultMode === 'rail'
+                    && $this->shouldPreserveRailEntitlementsDownstreamState($form, $meta, $flags);
                 $needsRouter = $this->needsInitialIncidentRouter($multimodal, $form, $meta);
                 if ($this->isFerrySplitEntry($flags, $form, $meta) && $defaultMode === 'ferry') {
                     $needsRouter = false;
@@ -6420,8 +7863,10 @@ class FlowController extends AppController
                 if ($needsRouter) {
                     $form['initial_incident_mode'] = (string)($form['initial_incident_mode'] ?? $defaultMode);
                     $form['gating_mode'] = (string)($form['gating_mode'] ?? $defaultMode);
-                    $flags['step3_done'] = '';
-                    $flags['step35_done'] = '';
+                    if (!$preserveRailDownstreamState) {
+                        $flags['step3_done'] = '';
+                        $flags['step35_done'] = '';
+                    }
                 } else {
                     $form['initial_incident_mode'] = $defaultMode;
                     $form['gating_mode'] = $defaultMode;
@@ -6430,8 +7875,10 @@ class FlowController extends AppController
                     $meta['initial_incident_mode'] = $defaultMode;
                     $meta['gating_mode'] = $defaultMode;
                     $journey['gating_mode'] = $defaultMode;
-                    $flags['step3_done'] = '';
-                    $flags['step35_done'] = '';
+                    if (!$preserveRailDownstreamState) {
+                        $flags['step3_done'] = '';
+                        $flags['step35_done'] = '';
+                    }
                 }
                 $session->write('flow.form', $form);
                 $session->write('flow.meta', $meta);
@@ -6476,21 +7923,29 @@ class FlowController extends AppController
                     return $this->redirect(['action' => 'ferryDepartureSelect']);
                 }
                 if ($this->isRailSplitEntry($flags, $form, $meta) && $defaultMode === 'rail') {
-                    unset(
-                        $meta['rail_selected_departure'],
-                        $meta['rail_selected_departure_id'],
-                        $meta['rail_operational_evidence'],
-                        $meta['rail_incident_seed'],
-                        $meta['incident_seed']
-                    );
-                    $form['selected_rail_departure_id'] = '';
-                    $flags['step27_done'] = '';
+                    $railDepartureSearchService = new RailDepartureSearchService();
+                    $currentDepartureLookupSignature = $railDepartureSearchService->buildLookupSignatureFromForm($form, $meta);
+                    $previousDepartureLookupSignature = trim((string)($meta['rail_departure_candidates_signature'] ?? ''));
+                    if ($previousDepartureLookupSignature === '' && !empty($meta['rail_selected_departure'])) {
+                        $previousDepartureLookupSignature = $currentDepartureLookupSignature;
+                    }
+
+                    if ($previousDepartureLookupSignature !== '' && $previousDepartureLookupSignature !== $currentDepartureLookupSignature) {
+                        $this->clearRailDepartureSelectionState($form, $meta, $flags);
+                        unset($meta['rail_departure_candidates'], $meta['rail_departure_candidates_signature']);
+                    } elseif ($currentDepartureLookupSignature !== '') {
+                        $meta['rail_departure_candidates_signature'] = $currentDepartureLookupSignature;
+                        if ($this->railStoredDepartureCandidates($meta) === [] && !empty($meta['rail_selected_departure']) && is_array($meta['rail_selected_departure'])) {
+                            $meta['rail_departure_candidates'] = [$meta['rail_selected_departure']];
+                        }
+                    }
                     $session->write('flow.form', $form);
                     $session->write('flow.meta', $meta);
                     $session->write('flow.flags', $flags);
                     return $this->redirect(['action' => 'railDepartureSelect']);
                 }
                 return $this->redirect(['action' => $defaultMode === 'rail' ? 'railstranding' : 'journey']);
+                }
             }
         }
 
@@ -6650,6 +8105,7 @@ class FlowController extends AppController
                 } catch (\Throwable $e) { /* ignore */ }
 
                 // Optional price
+                $this->normalizeRailTicketPriceInputMode($form, $meta);
                 $pk = strtolower(trim((string)($form['price_known'] ?? '')));
                 if ($pk === 'no') {
                     unset(
@@ -6908,7 +8364,7 @@ class FlowController extends AppController
         foreach ([
             'operator_country','scope_choice','operator','operator_product',
             'dep_date','dep_time','dep_station','arr_station','arr_time',
-            'price','price_known','price_currency',
+            'price','price_known','rail_price_input_mode','price_currency',
         ] as $k) {
             if (!$hasTicketlessBasics && !empty($form[$k])) { $hasTicketlessBasics = true; }
             if (!$hasTicketlessBasics && !empty($meta['_auto'][$k]['value'])) { $hasTicketlessBasics = true; }
@@ -9214,6 +10670,18 @@ class FlowController extends AppController
             $form['transport_mode'] = $effectiveMode;
             $meta['transport_mode'] = $effectiveMode;
         }
+        if ($effectiveMode === 'rail') {
+            $clearedRailExpenseInput = false;
+            foreach (['blocked_self_paid_amount', 'blocked_self_paid_currency', 'blocked_self_paid_receipt'] as $railExpenseKey) {
+                if (array_key_exists($railExpenseKey, $form)) {
+                    unset($form[$railExpenseKey]);
+                    $clearedRailExpenseInput = true;
+                }
+            }
+            if ($clearedRailExpenseInput) {
+                $session->write('flow.form', $form);
+            }
+        }
 
         if ($this->isModeSplitCompleted($flags, $form, $meta)) {
             $flags['step6_done'] = '1';
@@ -9296,16 +10764,20 @@ class FlowController extends AppController
             }
 
             // If the user is stranded at a station, we need to know which station they are currently at.
-            try { $blockedReceipt = $this->request->getUploadedFile('blocked_self_paid_receipt'); } catch (\Throwable $e) { $blockedReceipt = null; }
-            $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
-            if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
-            if ($blockedReceipt && $blockedReceipt->getError() === \UPLOAD_ERR_OK) {
-                $name = (string)($blockedReceipt->getClientFilename() ?? ('blocked_' . bin2hex(random_bytes(4))));
-                $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name);
-                $target = $uploadDir . (uniqid('blocked_') . '_' . $safe);
-                try { $blockedReceipt->moveTo($target); $form['blocked_self_paid_receipt'] = $target; } catch (\Throwable $e) { /* ignore */ }
-            } elseif (($rawBlocked = $this->request->getData('blocked_self_paid_receipt')) && is_string($rawBlocked)) {
-                $form['blocked_self_paid_receipt'] = $rawBlocked;
+            if ($effectiveMode !== 'rail') {
+                try { $blockedReceipt = $this->request->getUploadedFile('blocked_self_paid_receipt'); } catch (\Throwable $e) { $blockedReceipt = null; }
+                $uploadDir = WWW_ROOT . 'files' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+                if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0775, true); }
+                if ($blockedReceipt && $blockedReceipt->getError() === \UPLOAD_ERR_OK) {
+                    $name = (string)($blockedReceipt->getClientFilename() ?? ('blocked_' . bin2hex(random_bytes(4))));
+                    $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name);
+                    $target = $uploadDir . (uniqid('blocked_') . '_' . $safe);
+                    try { $blockedReceipt->moveTo($target); $form['blocked_self_paid_receipt'] = $target; } catch (\Throwable $e) { /* ignore */ }
+                } elseif (($rawBlocked = $this->request->getData('blocked_self_paid_receipt')) && is_string($rawBlocked)) {
+                    $form['blocked_self_paid_receipt'] = $rawBlocked;
+                }
+            } else {
+                unset($form['blocked_self_paid_amount'], $form['blocked_self_paid_currency'], $form['blocked_self_paid_receipt']);
             }
 
             // Normalize TRIN 5 (track) branch fields to avoid stale values.
@@ -9408,10 +10880,12 @@ class FlowController extends AppController
             );
 
             // Currency defaults (TRIN 5): only default when an amount is present.
-            try {
-                $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
-                $this->applyCurrencyDefaultForAmount($form, 'blocked_self_paid_amount', 'blocked_self_paid_currency', $defaultCur);
-            } catch (\Throwable $e) { /* ignore */ }
+            if ($effectiveMode !== 'rail') {
+                try {
+                    $defaultCur = $this->deriveDefaultCurrency($form, $meta, $journey);
+                    $this->applyCurrencyDefaultForAmount($form, 'blocked_self_paid_amount', 'blocked_self_paid_currency', $defaultCur);
+                } catch (\Throwable $e) { /* ignore */ }
+            }
 
             $session->write('flow.form', $form);
             $flags['step6_done'] = '1';
@@ -9425,8 +10899,21 @@ class FlowController extends AppController
             $journey = $inferRes['journey'];
         } catch (\Throwable $e) { /* ignore for choices */ }
         $profile = (new \App\Service\ExemptionProfileBuilder())->build($journey);
+        $priceHints = null;
+        try {
+            $ctxHints = $this->buildPriceContextForHints($form, $journey, $meta);
+            $fxRates = $this->loadFxRatesForHints();
+            $fxFetcher = function (string $cur) use ($fxRates): ?float {
+                $c = strtoupper(trim($cur));
+                return isset($fxRates[$c]) && is_numeric($fxRates[$c]) ? (float)$fxRates[$c] : null;
+            };
+            $priceHints = (new PriceHintsService())->build($ctxHints, $fxFetcher);
+            $meta['price_hints'] = $priceHints;
+            $session->write('flow.meta', $meta);
+        } catch (\Throwable $e) { /* ignore hints errors */ }
+
         $maps = (array)$session->read('flow.maps') ?: [];
-        $this->set(compact('form','flags','incident','profile','meta','maps'));
+        $this->set(compact('form','flags','incident','profile','meta','maps','priceHints'));
         return null;
     }
 
@@ -10287,6 +11774,67 @@ class FlowController extends AppController
                 } else {
                     unset($form['reroute_info_within_100min']);
                 }
+            } elseif ($effectiveMode === 'rail') {
+                $railOfferProvided = (string)($form['offer_provided'] ?? '');
+                if ($railOfferProvided === 'yes') {
+                    unset(
+                        $form['self_purchased_new_ticket'],
+                        $form['self_purchase_reason'],
+                        $form['self_purchase_approved_by_operator'],
+                        $form['reroute_info_within_100min']
+                    );
+                } elseif ($railOfferProvided === 'no') {
+                    $railSelfPurchased = (string)($form['self_purchased_new_ticket'] ?? '');
+                    if ($railSelfPurchased !== 'yes') {
+                        unset(
+                            $form['self_purchase_reason'],
+                            $form['self_purchase_approved_by_operator'],
+                            $form['reroute_info_within_100min'],
+                            $form['reroute_extra_costs'],
+                            $form['reroute_extra_costs_type']
+                        );
+                    } else {
+                        $railReason = trim((string)($form['self_purchase_reason'] ?? ''));
+                        $railApproval = (string)($form['self_purchase_approved_by_operator'] ?? '');
+                        $rail100 = (string)($form['reroute_info_within_100min'] ?? '');
+                        if ($railApproval !== 'no' && $railApproval !== 'unknown') {
+                            unset($form['reroute_info_within_100min']);
+                        }
+                        if ($railReason === '' || $railApproval === '') {
+                            unset(
+                                $form['reroute_extra_costs'],
+                                $form['reroute_extra_costs_type']
+                            );
+                        } elseif (($railApproval === 'no' || $railApproval === 'unknown') && !in_array($rail100, ['yes', 'no', 'unknown'], true)) {
+                            unset(
+                                $form['reroute_extra_costs'],
+                                $form['reroute_extra_costs_type']
+                            );
+                        } elseif (($railApproval === 'no' || $railApproval === 'unknown') && $rail100 === 'yes') {
+                            $form['reroute_extra_costs'] = 'no';
+                            unset($form['reroute_extra_costs_type']);
+                        }
+                    }
+                } else {
+                    unset(
+                        $form['self_purchased_new_ticket'],
+                        $form['self_purchase_reason'],
+                        $form['self_purchase_approved_by_operator'],
+                        $form['reroute_info_within_100min'],
+                        $form['reroute_extra_costs'],
+                        $form['reroute_extra_costs_type']
+                    );
+                }
+                unset(
+                    $form['reroute_extra_costs_amount'],
+                    $form['reroute_extra_costs_currency'],
+                    $form['reroute_extra_costs_description'],
+                    $form['reroute_extra_costs_receipt'],
+                    $form['reroute_later_self_paid_amount'],
+                    $form['reroute_later_self_paid_currency'],
+                    $form['reroute_later_ticket_upload'],
+                    $form['reroute_later_ticket_file']
+                );
             }
             if ((string)($form['reroute_extra_costs'] ?? '') !== 'yes') {
                 unset(
@@ -10430,7 +11978,9 @@ class FlowController extends AppController
             if (!$a183On && !$this->isAirTransportMode($form, $meta)) {
                 $selfBuy = (string)($form['self_purchased_new_ticket'] ?? '');
                 $opApproved = (string)($form['self_purchase_approved_by_operator'] ?? 'unknown');
-                if (!($selfBuy === 'yes' && $opApproved === 'yes')) {
+                $railOfferProvided = (string)($form['offer_provided'] ?? '');
+                $allowRailStandardRerouteCosts = $effectiveMode === 'rail' && $railOfferProvided === 'yes';
+                if (!$allowRailStandardRerouteCosts && !($selfBuy === 'yes' && $opApproved === 'yes')) {
                     // Force extra costs off and clear values
                     $form['reroute_extra_costs'] = 'no';
                     $form['reroute_extra_costs_amount'] = '';
@@ -10540,6 +12090,18 @@ class FlowController extends AppController
             $ferryPmrRemedyActive = false;
             $busPmrRemedyActive = false;
         }
+        $priceHints = null;
+        try {
+            $ctxHints = $this->buildPriceContextForHints($form, $journey, $meta);
+            $fxRates = $this->loadFxRatesForHints();
+            $fxFetcher = function (string $cur) use ($fxRates): ?float {
+                $c = strtoupper(trim($cur));
+                return isset($fxRates[$c]) && is_numeric($fxRates[$c]) ? (float)$fxRates[$c] : null;
+            };
+            $priceHints = (new PriceHintsService())->build($ctxHints, $fxFetcher);
+            $meta['price_hints'] = $priceHints;
+            $session->write('flow.meta', $meta);
+        } catch (\Throwable $e) { /* ignore hints errors */ }
         $maps = (array)$session->read('flow.maps') ?: [];
 
         // Art.18(3) "100-min" helper (Level A): show the computed deadline based on planned departure.
@@ -10628,7 +12190,7 @@ class FlowController extends AppController
         } catch (\Throwable $e) { /* ignore */ }
 
         $this->set(compact(
-            'form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','art18Active','showArt18Fallback','art18Blocked','meta','maps','ferryPmrRemedyActive',
+            'form','delayAtFinal','allow_refund','allow_compensation','flags','incident','profile','art18Active','showArt18Fallback','art18Blocked','priceHints','meta','maps','ferryPmrRemedyActive',
             'art183BaseLabel','art183DeadlineLabel','art183BaseExplain','busPmrRemedyActive'
         ));
         return null;
@@ -13198,6 +14760,7 @@ class FlowController extends AppController
                 'ticket_no',
                 'price',
                 'price_known',
+                'rail_price_input_mode',
                 'price_currency',
                 'trip_type',
                 'affected_leg',

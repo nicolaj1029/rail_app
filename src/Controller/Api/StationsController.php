@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Controller\AppController;
-use App\Service\StationSearchService;
+use App\Service\Rail\RailStationLookupService;
 use Cake\Http\Exception\BadRequestException;
 
 class StationsController extends AppController
@@ -89,7 +89,7 @@ class StationsController extends AppController
         if ($limit <= 0) { $limit = 10; }
         if ($limit > 50) { $limit = 50; }
 
-        $svc = new StationSearchService();
+        $svc = new RailStationLookupService();
         $stations = $svc->search($q, $country, $limit);
 
         $this->set([

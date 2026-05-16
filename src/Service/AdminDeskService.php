@@ -531,7 +531,7 @@ final class AdminDeskService
             $nextAction = 'Aabn cockpit og kontroller billetafvigelse';
         }
         if (!empty($opsReview['requires_attention'])) {
-            $nextAction = 'Aabn cockpit og kontroller operationelle flight-data';
+            $nextAction = 'Aabn cockpit og kontroller ' . (string)($opsReview['action_label'] ?? 'operationelle transportdata');
         }
 
         return [
@@ -580,7 +580,7 @@ final class AdminDeskService
             $nextAction = 'Aabn cockpit og kontroller billetafvigelse';
         }
         if (!empty($opsReview['requires_attention'])) {
-            $nextAction = 'Aabn cockpit og kontroller operationelle flight-data';
+            $nextAction = 'Aabn cockpit og kontroller ' . (string)($opsReview['action_label'] ?? 'operationelle transportdata');
         }
 
         return [
@@ -705,8 +705,8 @@ final class AdminDeskService
         }
         if (!empty($opsReview['requires_attention'])) {
             $blockers[] = [
-                'title' => 'Operationelle flight-data',
-                'text' => (string)($opsReview['summary'] ?? 'AeroDataBox-data kraever manuel kontrol.'),
+                'title' => (string)($opsReview['title'] ?? 'Operationelle transportdata'),
+                'text' => (string)($opsReview['summary'] ?? 'Operationelle transportdata kraever manuel kontrol.'),
             ];
         }
         if (!empty($riskPanel['fraud_review_required'])) {
@@ -789,8 +789,8 @@ final class AdminDeskService
         }
         if (!empty($opsReview['requires_attention'])) {
             $blockers[] = [
-                'title' => 'Operationelle flight-data',
-                'text' => (string)($opsReview['summary'] ?? 'AeroDataBox-data afviger eller kraever manuel kontrol.'),
+                'title' => (string)($opsReview['title'] ?? 'Operationelle transportdata'),
+                'text' => (string)($opsReview['summary'] ?? 'Operationelle transportdata afviger eller kraever manuel kontrol.'),
             ];
         }
         if (!empty($riskPanel['fraud_review_required'])) {
@@ -1310,7 +1310,23 @@ final class AdminDeskService
      */
     private function operationalReviewFromFlow(array $flow): array
     {
-        $analysis = (array)($flow['meta']['air_operational_evidence'] ?? []);
+        $form = (array)($flow['form'] ?? []);
+        $flags = (array)($flow['flags'] ?? []);
+        $meta = (array)($flow['meta'] ?? []);
+        $transportMode = strtolower(trim((string)($form['transport_mode'] ?? ($form['gating_mode'] ?? ($flags['transport_mode'] ?? ($meta['transport_mode'] ?? ($meta['gating_mode'] ?? '')))))));
+        if ($transportMode === '') {
+            $transportMode = $this->detectTransportMode($form, $flags);
+        }
+
+        $analysisKey = $this->operationalEvidenceMetaKey($transportMode, $meta);
+        if ($transportMode === '' && $analysisKey !== null) {
+            $transportMode = match ($analysisKey) {
+                'rail_operational_evidence' => 'rail',
+                'ferry_operational_evidence' => 'ferry',
+                default => 'air',
+            };
+        }
+        $analysis = $analysisKey !== null ? (array)($meta[$analysisKey] ?? []) : [];
         if ($analysis === []) {
             return [
                 'available' => false,
@@ -1333,34 +1349,122 @@ final class AdminDeskService
             ? 'desk-risk-high'
             : ($confidence === 'high' ? 'desk-risk-low' : 'desk-risk-medium');
         $label = $requiresAttention ? 'Ops afvigelse' : 'Ops data';
+        $descriptor = $this->operationalReviewDescriptor($transportMode, (string)($analysis['source'] ?? ''));
         $summary = trim((string)($analysis['summary'] ?? ''));
         if ($summary === '') {
-            $summary = 'Operationelle flight-data er gemt som support-data, ikke som juridisk facit.';
+            $summary = (string)$descriptor['default_summary'];
         }
 
         return [
             'available' => true,
             'requires_attention' => $requiresAttention,
+            'title' => (string)$descriptor['title'],
+            'action_label' => (string)$descriptor['action_label'],
             'summary' => $summary,
             'label' => $label,
             'badge_class' => $badgeClass,
             'confidence' => $confidence,
             'source' => (string)($analysis['source'] ?? ''),
+            'source_label' => (string)$descriptor['source_label'],
             'evidence_score' => (int)($analysis['evidence_score'] ?? 0),
+            'transport_mode' => $transportMode,
             'status' => (string)($analysis['status'] ?? ''),
+            'status_label' => 'Ops status',
             'cancelled' => (string)($analysis['cancelled'] ?? 'no'),
+            'cancelled_label' => (string)$descriptor['cancelled_label'],
             'delay_minutes_estimated' => $analysis['delay_minutes_estimated'] ?? null,
+            'delay_label' => 'Est. ankomstafvigelse',
             'scheduled_departure_local' => (string)($analysis['scheduled_departure_local'] ?? ''),
             'scheduled_arrival_local' => (string)($analysis['scheduled_arrival_local'] ?? ''),
+            'planned_label' => 'Planlagt',
             'estimated_departure_local' => (string)($analysis['estimated_departure_local'] ?? ''),
             'estimated_arrival_local' => (string)($analysis['estimated_arrival_local'] ?? ''),
             'actual_departure_local' => (string)($analysis['actual_departure_local'] ?? ''),
             'actual_arrival_local' => (string)($analysis['actual_arrival_local'] ?? ''),
+            'observed_label' => (string)$descriptor['observed_label'],
+            'support_note_title' => 'Ops-regel',
+            'support_note' => (string)$descriptor['support_note'],
             'match_checks' => array_values(array_filter(
                 (array)($analysis['match_checks'] ?? []),
                 static fn (mixed $check): bool => is_array($check)
             )),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $meta
+     */
+    private function operationalEvidenceMetaKey(string $transportMode, array $meta): ?string
+    {
+        $preferred = match ($transportMode) {
+            'rail' => ['rail_operational_evidence', 'air_operational_evidence', 'ferry_operational_evidence'],
+            'ferry' => ['ferry_operational_evidence', 'air_operational_evidence', 'rail_operational_evidence'],
+            'air' => ['air_operational_evidence', 'rail_operational_evidence', 'ferry_operational_evidence'],
+            default => ['air_operational_evidence', 'rail_operational_evidence', 'ferry_operational_evidence'],
+        };
+
+        foreach ($preferred as $key) {
+            if (!empty($meta[$key]) && is_array($meta[$key])) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function operationalReviewDescriptor(string $transportMode, string $source): array
+    {
+        $normalizedMode = in_array($transportMode, ['air', 'rail', 'ferry'], true) ? $transportMode : '';
+        $sourceLabel = $this->formatOperationalSourceLabel($source);
+
+        $title = match ($normalizedMode) {
+            'rail' => 'Operationelle rail-data',
+            'ferry' => 'Operationelle ferry-data',
+            'air' => 'Operationelle flight-data',
+            default => 'Operationelle transportdata',
+        };
+        $defaultSummary = match ($normalizedMode) {
+            'rail' => 'Operationelle rail-data er gemt som support-data, ikke som juridisk facit.',
+            'ferry' => 'Operationelle ferry-data er gemt som support-data, ikke som juridisk facit.',
+            'air' => 'Operationelle flight-data er gemt som support-data, ikke som juridisk facit.',
+            default => 'Operationelle transportdata er gemt som support-data, ikke som juridisk facit.',
+        };
+        $fallbackSourceNote = match ($normalizedMode) {
+            'rail' => 'Rail-driftsdata bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.',
+            'ferry' => 'Faerge-driftsdata bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.',
+            'air' => 'Flight-data bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.',
+            default => 'Transportdata bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.',
+        };
+
+        return [
+            'title' => $title,
+            'action_label' => strtolower($title),
+            'default_summary' => $defaultSummary,
+            'source_label' => $sourceLabel,
+            'cancelled_label' => $normalizedMode === 'air' ? 'Cancellation' : 'Aflyst',
+            'observed_label' => $normalizedMode === 'air' ? 'Observeret' : 'Observeret / estimeret',
+            'support_note' => $sourceLabel !== ''
+                ? ($sourceLabel . ' bruges her som drifts- og plausibilitetsstoette. Dataene er ikke alene juridisk facit.')
+                : $fallbackSourceNote,
+        ];
+    }
+
+    private function formatOperationalSourceLabel(string $source): string
+    {
+        $normalized = strtolower(trim($source));
+        if ($normalized === '') {
+            return '';
+        }
+
+        return match ($normalized) {
+            'aerodatabox' => 'AeroDataBox',
+            'hafas' => 'HAFAS',
+            'marinetraffic' => 'MarineTraffic',
+            default => ucwords(str_replace(['_', '-'], ' ', $normalized)),
+        };
     }
 
     /**

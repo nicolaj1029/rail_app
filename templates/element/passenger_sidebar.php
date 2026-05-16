@@ -1,6 +1,13 @@
 <?php
 /** @var \App\View\AppView $this */
+use Cake\Core\Configure;
+
 $passengerNav = $passengerNav ?? [];
+$publicSite = (array)Configure::read('PublicSite');
+$hidePassengerNav = !empty($publicSite['enabled']) && !empty($publicSite['hidePassengerNav']);
+if ($hidePassengerNav) {
+    return;
+}
 ?>
 <style>
   .passenger-shell { display:grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 1400px; margin: 0 auto; padding: 0 16px 24px; }

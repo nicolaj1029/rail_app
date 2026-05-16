@@ -250,14 +250,17 @@ class SessionToFixtureMapper
         $auto = (array)($meta['_auto'] ?? []);
 
         $sellerChannel = strtolower(trim((string)($form['seller_channel'] ?? '')));
+        $sameTransactionDirect = $this->normalizeYesNoMachine($form['same_transaction'] ?? null);
         $singleTxnOperator = $this->normalizeYesNoMachine($form['single_txn_operator'] ?? ($meta['single_txn_operator'] ?? null));
         $singleTxnRetailer = $this->normalizeYesNoMachine($form['single_txn_retailer'] ?? ($meta['single_txn_retailer'] ?? null));
-        $throughDisclosure = $this->normalizeDisclosure($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
-        $separateNotice = $this->normalizeSeparateNotice($form['separate_contract_notice'] ?? ($meta['separate_contract_notice'] ?? null));
+        $throughDisclosureRaw = $this->normalizeYesNoMachine($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
+        $separateNoticeRaw = $this->normalizeYesNoMachine($form['separate_contract_notice'] ?? ($meta['separate_contract_notice'] ?? null));
 
         $ticketNo = (string)($journeyBasic['ticket_no'] ?? '');
         $sharedBookingReference = $ticketNo !== '';
         $singleTransaction = match (true) {
+            $sameTransactionDirect === 'yes' => true,
+            $sameTransactionDirect === 'no' => false,
             $singleTxnOperator === 'yes', $singleTxnRetailer === 'yes' => true,
             $singleTxnOperator === 'no' && $singleTxnRetailer === 'no' => false,
             default => null,
@@ -285,16 +288,47 @@ class SessionToFixtureMapper
         $originalContractMode = $this->resolveOriginalContractMode($form, $meta, $segments, $transportMode);
 
         $contractTopology = 'unknown_manual_review';
-        if ($journeyStructure === 'single_segment') {
-            $contractTopology = 'single_mode_single_contract';
-        } elseif ($separateNotice === 'yes' && $throughDisclosure === 'separate') {
-            $contractTopology = 'separate_contracts';
-        } elseif (($sharedBookingReference || $singleTransaction === true) && $separateNotice === 'no') {
-            $contractTopology = $journeyStructure === 'single_mode_connections'
-                ? 'protected_single_contract'
-                : 'single_multimodal_contract';
-        } elseif ($singleTransaction === false) {
-            $contractTopology = 'separate_contracts';
+        $contractStructureDisclosure = 'unknown';
+        $separateNotice = match ($separateNoticeRaw) {
+            'yes' => 'yes',
+            'no' => 'no',
+            default => 'unclear',
+        };
+        if ($transportMode === 'rail') {
+            $railContractModel = strtolower(trim((string)($form['contract_model'] ?? (($meta['rail_contract_structure_seed']['effective_contract_model'] ?? '') ?: ''))));
+            $railLiableBasis = strtolower(trim((string)($meta['rail_contract_structure_seed']['liable_basis'] ?? 'manual_review')));
+            $contractStructureDisclosure = match ($throughDisclosureRaw) {
+                'yes' => 'disclosed',
+                'no' => 'not_disclosed',
+                default => 'unknown',
+            };
+            if ($journeyStructure === 'single_segment') {
+                $contractTopology = 'single_mode_single_contract';
+            } elseif ($railContractModel === 'separate' || $singleTransaction === false) {
+                $contractTopology = 'separate_contracts';
+            } elseif ($railContractModel === 'through') {
+                $contractTopology = $journeyStructure === 'single_mode_connections'
+                    ? 'protected_single_contract'
+                    : 'single_multimodal_contract';
+            } elseif (($sharedBookingReference || $singleTransaction === true) && $separateNotice === 'no') {
+                $contractTopology = $journeyStructure === 'single_mode_connections'
+                    ? 'protected_single_contract'
+                    : 'single_multimodal_contract';
+            }
+        } else {
+            $throughDisclosure = $this->normalizeDisclosure($form['through_ticket_disclosure'] ?? ($meta['through_ticket_disclosure'] ?? null));
+            $contractStructureDisclosure = $throughDisclosure;
+            if ($journeyStructure === 'single_segment') {
+                $contractTopology = 'single_mode_single_contract';
+            } elseif ($separateNotice === 'yes' && $throughDisclosure === 'separate') {
+                $contractTopology = 'separate_contracts';
+            } elseif (($sharedBookingReference || $singleTransaction === true) && $separateNotice === 'no') {
+                $contractTopology = $journeyStructure === 'single_mode_connections'
+                    ? 'protected_single_contract'
+                    : 'single_multimodal_contract';
+            } elseif ($singleTransaction === false) {
+                $contractTopology = 'separate_contracts';
+            }
         }
 
         $incidentSegmentMode = strtolower(trim((string)(
@@ -315,18 +349,30 @@ class SessionToFixtureMapper
             ? $incidentSegmentMode
             : ($originalContractMode ?? $transportMode);
 
-        $primaryClaimParty = match ($contractTopology) {
-            'separate_contracts' => 'segment_operator',
-            'single_mode_single_contract', 'protected_single_contract', 'single_multimodal_contract' => 'seller',
-            default => 'manual_review',
-        };
+        if ($transportMode === 'rail') {
+            $primaryClaimParty = match ($railLiableBasis ?? 'manual_review') {
+                'stk3', 'stk4' => 'seller',
+                'individual' => 'segment_operator',
+                default => match ($contractTopology) {
+                    'separate_contracts' => 'segment_operator',
+                    'single_mode_single_contract', 'protected_single_contract', 'single_multimodal_contract' => 'seller',
+                    default => 'manual_review',
+                },
+            };
+        } else {
+            $primaryClaimParty = match ($contractTopology) {
+                'separate_contracts' => 'segment_operator',
+                'single_mode_single_contract', 'protected_single_contract', 'single_multimodal_contract' => 'seller',
+                default => 'manual_review',
+            };
+        }
 
         return [
             'seller_type' => $sellerType,
             'seller_name' => $sellerName,
             'shared_booking_reference' => $sharedBookingReference,
             'single_transaction' => $singleTransaction,
-            'contract_structure_disclosure' => $throughDisclosure,
+            'contract_structure_disclosure' => $contractStructureDisclosure,
             'separate_contract_notice' => $separateNotice,
             'original_contract_mode' => $originalContractMode,
             'journey_structure' => $journeyStructure,
@@ -760,6 +806,7 @@ class SessionToFixtureMapper
             'reroute_later_at_choice' => $f['reroute_later_at_choice'] ?? null,
             'reroute_info_within_100min' => $f['reroute_info_within_100min'] ?? null,
             'reroute_extra_costs' => $f['reroute_extra_costs'] ?? null,
+            'reroute_extra_costs_type' => $f['reroute_extra_costs_type'] ?? null,
             'reroute_extra_costs_amount' => $f['reroute_extra_costs_amount'] ?? null,
             'reroute_extra_costs_currency' => $f['reroute_extra_costs_currency'] ?? null,
             'delayAtFinalMinutes' => $f['delayAtFinalMinutes'] ?? null,
@@ -957,6 +1004,9 @@ class SessionToFixtureMapper
                 'self_arranged_solution' => $f['self_purchased_new_ticket'] ?? null,
                 'operator_confirmed_self_arranged_solution' => $f['self_purchase_approved_by_operator'] ?? null,
                 'self_arranged_reason' => $f['self_purchase_reason'] ?? null,
+                'reroute_extra_costs' => $f['reroute_extra_costs'] ?? null,
+                'reroute_extra_costs_type' => $f['reroute_extra_costs_type'] ?? null,
+                'reroute_later_outcome' => $f['reroute_later_outcome'] ?? null,
                 'return_to_origin_expense' => $f['return_to_origin_expense'] ?? null,
                 'return_to_origin_amount' => $f['return_to_origin_amount'] ?? null,
                 'return_to_origin_currency' => $f['return_to_origin_currency'] ?? null,
@@ -1025,13 +1075,16 @@ class SessionToFixtureMapper
             'ferry_self_arranged_reason' => $f['ferry_self_arranged_reason'] ?? null,
             'ferry_first_usable_solution_timing' => $f['ferry_first_usable_solution_timing'] ?? null,
             'reroute_extra_costs' => $f['reroute_extra_costs'] ?? null,
+            'rail_reroute_expense_signal' => $railValue($f, 'reroute_extra_costs'),
             'reroute_extra_costs_type' => $f['reroute_extra_costs_type'] ?? null,
+            'rail_reroute_expense_type' => $railValue($f, 'reroute_extra_costs_type'),
             'reroute_extra_costs_amount' => $f['reroute_extra_costs_amount'] ?? null,
             'reroute_extra_costs_currency' => $f['reroute_extra_costs_currency'] ?? null,
             'reroute_extra_costs_description' => $f['reroute_extra_costs_description'] ?? null,
             'reroute_extra_costs_receipt' => $f['reroute_extra_costs_receipt'] ?? null,
             'reroute_later_ticket_upload' => $f['reroute_later_ticket_upload'] ?? null,
             'reroute_later_ticket_file' => $f['reroute_later_ticket_file'] ?? null,
+            'rail_reroute_later_outcome' => $railValue($f, 'reroute_later_outcome'),
 
             // Refund + return-to-origin
             'trip_cancelled_return_to_origin' => $f['trip_cancelled_return_to_origin'] ?? null,
@@ -1539,6 +1592,7 @@ class SessionToFixtureMapper
             'price_currency' => $form['price_currency'] ?? ($auto['price_currency']['value'] ?? null),
             'price_known' => $form['price_known'] ?? null,
             'seller_channel' => $form['seller_channel'] ?? null,
+            'same_transaction' => $form['same_transaction'] ?? null,
             'original_contract_mode' => $form['original_contract_mode'] ?? null,
             'through_ticket_disclosure' => $form['through_ticket_disclosure'] ?? null,
             'separate_contract_notice' => $form['separate_contract_notice'] ?? null,

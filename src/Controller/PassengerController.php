@@ -45,6 +45,7 @@ class PassengerController extends AppController
         $requestedRef = trim((string)($this->request->getQuery('ref') ?? ''));
         [$form, $flags, $meta, $compute, $incident] = $this->loadPassengerCaseFlow($session, $requestedRef);
         $this->backfillAirRerouteUsedOrAccepted($form);
+        $this->hydratePassengerBackendExpenseSeeds($form, $meta, $flags);
         $session->write('flow.form', $form);
         $meta = $this->refreshPassengerFlowMeta($form, $flags, $meta);
         $session->write('flow.meta', $meta);
@@ -161,6 +162,16 @@ class PassengerController extends AppController
                 'assistance_hotel_transport_included',
                 'hotel_transport_self_paid_amount',
                 'hotel_transport_self_paid_currency',
+                'rail_art12_same_transaction_confirmed',
+                'rail_art12_shared_pnr_scope',
+                'rail_art12_disclosure_evidence',
+                'rail_art12_separate_notice_evidence',
+                'rail_art12_final_outcome',
+                'rail_art12_liable_basis',
+                'rail_backend_ticket_price',
+                'rail_backend_ticket_price_currency',
+                'rail_backend_ticket_price_basis',
+                'rail_backend_ticket_price_note',
             ];
             if ($isAdminCaseView) {
                 $allowedKeys = array_merge($allowedKeys, [
@@ -187,6 +198,10 @@ class PassengerController extends AppController
                     $form[$key] = is_array($posted[$key]) ? $posted[$key] : trim((string)$posted[$key]);
                 }
             }
+            if ($isRailCase) {
+                $this->normalizePassengerRailBackendTicketPriceFields($form);
+            }
+            $this->hydratePassengerBackendExpenseSeeds($form, $meta, $flags);
             if (($form['incident_main'] ?? '') !== 'delay' && in_array((string)($form['remedyChoice'] ?? ''), ['no_refund', 'no_refund_continue'], true)) {
                 unset($form['remedyChoice']);
             } elseif (($form['incident_main'] ?? '') === 'delay' && ($form['remedyChoice'] ?? '') === 'no_refund') {
@@ -311,6 +326,8 @@ class PassengerController extends AppController
                 $existingRefundItems = $this->normalizeStoredExpenseItems((array)($form['air_reroute_expense_items'] ?? []));
             }
             $existingCareItems = $this->normalizeStoredExpenseItems((array)($form['air_case_care_expense_items'] ?? []));
+            $existingRailContextStationItems = $this->normalizeStoredExpenseItems((array)($form['rail_case_context_station_expense_items'] ?? []));
+            $existingRailContextTrackItems = $this->normalizeStoredExpenseItems((array)($form['rail_case_context_track_expense_items'] ?? []));
             if ($existingRefundItems === [] && $legacyRefundItems !== []) {
                 $existingRefundItems = $legacyRefundItems;
             }
@@ -325,6 +342,7 @@ class PassengerController extends AppController
                 );
                 $form['air_case_refund_expense_items'] = $refundExpenseItems;
                 $meta['air_backend_refund_receipt_files'] = $refundReceiptFiles;
+                $meta['air_backend_refund_expense_seed_state'] = 'saved';
             } else {
                 $form['air_case_refund_expense_items'] = $existingRefundItems;
                 $meta['air_backend_refund_receipt_files'] = (array)($meta['air_backend_refund_receipt_files'] ?? []);
@@ -337,9 +355,33 @@ class PassengerController extends AppController
                 );
                 $form['air_case_care_expense_items'] = $careExpenseItems;
                 $meta['air_backend_care_receipt_files'] = $careReceiptFiles;
+                $meta['air_backend_care_expense_seed_state'] = 'saved';
             } else {
                 $form['air_case_care_expense_items'] = $existingCareItems;
                 $meta['air_backend_care_receipt_files'] = (array)($meta['air_backend_care_receipt_files'] ?? []);
+            }
+            if ($isRailCase && $stepKey === 'rail_context') {
+                [$railContextStationItems, $railContextStationReceiptFiles] = $this->normalizeCaseExpenseItems(
+                    (array)($posted['rail_case_context_station_expense_items'] ?? []),
+                    (array)($uploadedFiles['rail_case_context_station_receipts'] ?? []),
+                    $existingRailContextStationItems
+                );
+                [$railContextTrackItems, $railContextTrackReceiptFiles] = $this->normalizeCaseExpenseItems(
+                    (array)($posted['rail_case_context_track_expense_items'] ?? []),
+                    (array)($uploadedFiles['rail_case_context_track_receipts'] ?? []),
+                    $existingRailContextTrackItems
+                );
+                $form['rail_case_context_station_expense_items'] = $railContextStationItems;
+                $form['rail_case_context_track_expense_items'] = $railContextTrackItems;
+                $meta['rail_backend_context_station_receipt_files'] = $railContextStationReceiptFiles;
+                $meta['rail_backend_context_track_receipt_files'] = $railContextTrackReceiptFiles;
+                $meta['rail_backend_context_station_expense_seed_state'] = 'saved';
+                $meta['rail_backend_context_track_expense_seed_state'] = 'saved';
+            } elseif ($isRailCase) {
+                $form['rail_case_context_station_expense_items'] = $existingRailContextStationItems;
+                $form['rail_case_context_track_expense_items'] = $existingRailContextTrackItems;
+                $meta['rail_backend_context_station_receipt_files'] = (array)($meta['rail_backend_context_station_receipt_files'] ?? []);
+                $meta['rail_backend_context_track_receipt_files'] = (array)($meta['rail_backend_context_track_receipt_files'] ?? []);
             }
             unset($form['air_case_expense_items']);
             unset($meta['air_backend_receipt_files']);
@@ -348,6 +390,7 @@ class PassengerController extends AppController
                 (array)($form['air_case_care_expense_items'] ?? [])
             );
             $this->applyCaseExpenseItemsToLegacyFields($form, $allExpenseItems);
+            $this->syncPassengerCaseExpenseAliasFields($form, strtolower(trim((string)($form['transport_mode'] ?? 'air'))));
             $meta = $this->persistPassengerCase($form, $flags, $meta, $compute, $incident);
             $session->write('flow.form', $form);
             $session->write('flow.incident', $incident);
@@ -789,6 +832,7 @@ class PassengerController extends AppController
     {
         $form = (array)($snapshot['form'] ?? []);
         $flags = (array)($snapshot['flags'] ?? []);
+        $this->hydratePassengerBackendExpenseSeeds($form, $meta, $flags);
         $multimodal = (array)($meta['_multimodal'] ?? []);
         $travelState = strtolower(trim((string)($flags['travel_state'] ?? ($form['travel_state'] ?? ($meta['entry_travel_state'] ?? 'completed')))));
         if (!in_array($travelState, ['completed', 'ongoing', 'before_start'], true)) {
@@ -872,6 +916,8 @@ class PassengerController extends AppController
             $refundExpenseItems = $this->normalizeStoredExpenseItems((array)($form['air_reroute_expense_items'] ?? []));
         }
         $careExpenseItems = $this->normalizeStoredExpenseItems((array)($form['air_case_care_expense_items'] ?? []));
+        $railContextStationExpenseItems = $this->normalizeStoredExpenseItems((array)($form['rail_case_context_station_expense_items'] ?? []));
+        $railContextTrackExpenseItems = $this->normalizeStoredExpenseItems((array)($form['rail_case_context_track_expense_items'] ?? []));
         if ($refundExpenseItems === [] && $legacyRefundItems !== []) {
             $refundExpenseItems = $legacyRefundItems;
         }
@@ -892,6 +938,20 @@ class PassengerController extends AppController
                 return isset($receipt['path'], $receipt['name']) ? $receipt : null;
             }, $careExpenseItems)));
         }
+        $railContextStationReceiptFiles = (array)($meta['rail_backend_context_station_receipt_files'] ?? []);
+        if ($railContextStationReceiptFiles === []) {
+            $railContextStationReceiptFiles = array_values(array_filter(array_map(static function (array $item): ?array {
+                $receipt = (array)($item['receipt'] ?? []);
+                return isset($receipt['path'], $receipt['name']) ? $receipt : null;
+            }, $railContextStationExpenseItems)));
+        }
+        $railContextTrackReceiptFiles = (array)($meta['rail_backend_context_track_receipt_files'] ?? []);
+        if ($railContextTrackReceiptFiles === []) {
+            $railContextTrackReceiptFiles = array_values(array_filter(array_map(static function (array $item): ?array {
+                $receipt = (array)($item['receipt'] ?? []);
+                return isset($receipt['path'], $receipt['name']) ? $receipt : null;
+            }, $railContextTrackExpenseItems)));
+        }
         $remedyChoice = trim((string)($form['remedyChoice'] ?? ''));
         if ($incidentMain === 'delay' && $remedyChoice === 'no_refund') {
             $remedyChoice = 'no_refund_continue';
@@ -902,6 +962,10 @@ class PassengerController extends AppController
         $refundChosen = $remedyChoice === 'refund_return';
         $refundExpenseKinds = array_values(array_filter(array_map(static fn(array $item): string => trim((string)($item['type'] ?? '')), $refundExpenseItems)));
         $careExpenseKinds = array_values(array_filter(array_map(static fn(array $item): string => trim((string)($item['type'] ?? '')), $careExpenseItems)));
+        $railContextStationMeaningfulItems = $this->normalizeMeaningfulStoredExpenseItems($railContextStationExpenseItems);
+        $railContextTrackMeaningfulItems = $this->normalizeMeaningfulStoredExpenseItems($railContextTrackExpenseItems);
+        $hasRailContextStationExpenseData = $railContextStationMeaningfulItems !== [] || $railContextStationReceiptFiles !== [];
+        $hasRailContextTrackExpenseData = $railContextTrackMeaningfulItems !== [] || $railContextTrackReceiptFiles !== [];
         $hasRerouteData = trim((string)($form['air_article8_choice_offered'] ?? '')) !== ''
             || trim((string)($form['air_self_arranged_reroute'] ?? '')) !== ''
             || trim((string)($form['air_airline_confirmed_self_arranged_solution'] ?? '')) !== ''
@@ -918,14 +982,55 @@ class PassengerController extends AppController
             || trim((string)($form['pmr_delivered_status'] ?? '')) !== ''
             || trim((string)($form['pmr_promised_missing'] ?? '')) !== ''
             || trim((string)($form['assistance_pmr_priority_applied'] ?? '')) !== '';
-        $hasBackendSupportData = $hasCareData
-            || $careReceiptFiles !== []
-            || trim((string)($form['pmr_delivered_status'] ?? '')) !== ''
-            || trim((string)($form['assistance_pmr_priority_applied'] ?? '')) !== ''
-            || trim((string)($form['pmr_companion'] ?? '')) !== ''
-            || trim((string)($form['pmr_service_dog'] ?? '')) !== ''
-            || trim((string)($form['assistance_child_priority_applied'] ?? '')) !== ''
-            || trim((string)($form['child_delivered_status'] ?? '')) !== '';
+        $hasBikeData = trim((string)($form['bike_was_present'] ?? '')) !== ''
+            || trim((string)($form['bike_reservation_made'] ?? '')) !== ''
+            || trim((string)($form['bike_reservation_required'] ?? '')) !== ''
+            || trim((string)($form['bike_denied_boarding'] ?? '')) !== ''
+            || trim((string)($form['bike_refusal_reason_provided'] ?? '')) !== ''
+            || trim((string)($form['bike_refusal_reason_type'] ?? '')) !== '';
+        $railStationStranded = strtolower(trim((string)($form['a20_station_stranded'] ?? (((string)($form['rail_stranding_context'] ?? '')) === 'station' ? 'yes' : 'no')))) === 'yes';
+        $railStationExpensesSignal = strtolower(trim((string)($form['rail_station_expenses_signal'] ?? '')));
+        $railStationExpenseTypes = array_values(array_unique(array_filter(array_map(
+            static fn($value): string => strtolower(trim((string)$value)),
+            (array)($form['rail_station_expense_types'] ?? [])
+        ))));
+        $railTrackStranded = strtolower(trim((string)($form['is_stranded_trin5'] ?? 'no'))) === 'yes';
+        $railTrackTransportProvided = strtolower(trim((string)($form['blocked_train_alt_transport'] ?? '')));
+        $railTrackTransportTypeValue = strtolower(trim((string)($form['assistance_alt_transport_type'] ?? '')));
+        $railTrackNoTransportAction = strtolower(trim((string)($form['blocked_no_transport_action'] ?? '')));
+        $railTrackContextActive = ((string)($flags['gate_art20_2c'] ?? '') === '1')
+            || $railTrackStranded
+            || $railTrackTransportProvided !== ''
+            || $railTrackTransportTypeValue !== ''
+            || $railTrackNoTransportAction !== '';
+        $showRailContextStep = $isRailCase;
+        $railStationExpenseFollowupNeeded = $showRailContextStep
+            && $railStationStranded
+            && ($railStationExpensesSignal === 'yes' || $railStationExpenseTypes !== [])
+            && !$hasRailContextStationExpenseData;
+        $railTrackExpenseFollowupNeeded = $showRailContextStep
+            && $railTrackContextActive
+            && $railTrackNoTransportAction === 'self_arranged'
+            && !$hasRailContextTrackExpenseData;
+        $railContextNeedsBackendReview = $showRailContextStep
+            && trim((string)($form['pmr_user'] ?? '')) === 'yes'
+            && trim((string)($form['assistance_pmr_priority_applied'] ?? '')) === '';
+        if ($railStationExpenseFollowupNeeded || $railTrackExpenseFollowupNeeded) {
+            $railContextNeedsBackendReview = true;
+        }
+        $railContextStatus = $showRailContextStep
+            ? ($railContextNeedsBackendReview ? 'active_needed' : 'done')
+            : 'optional';
+        $hasBackendSupportData = $hasCareData || $careReceiptFiles !== [];
+        if (!$isRailCase) {
+            $hasBackendSupportData = $hasBackendSupportData
+                || trim((string)($form['pmr_delivered_status'] ?? '')) !== ''
+                || trim((string)($form['assistance_pmr_priority_applied'] ?? '')) !== ''
+                || trim((string)($form['pmr_companion'] ?? '')) !== ''
+                || trim((string)($form['pmr_service_dog'] ?? '')) !== ''
+                || trim((string)($form['assistance_child_priority_applied'] ?? '')) !== ''
+                || trim((string)($form['child_delivered_status'] ?? '')) !== '';
+        }
         $hasApplicant = trim((string)($form['contact_email'] ?? '')) !== ''
             || trim((string)($form['firstName'] ?? '')) !== '';
         $hasConsent = trim((string)($form['poa_accepted'] ?? '')) === '1'
@@ -1005,7 +1110,7 @@ class PassengerController extends AppController
             $gateRailAssistance = !empty($railIncidentSeed['gate_art20'])
                 || (string)($flags['gate_art20'] ?? '') === '1';
             $showRefundStep = $gateRailRemedy || $hasRerouteData || $remedyChoice !== '';
-            $showSupportStep = $gateRailAssistance || $hasCareData || trim((string)($form['pmr_user'] ?? '')) === 'yes';
+            $showSupportStep = $gateRailAssistance || $hasCareData;
         }
         $delayBandOptions = match ($airDelayThresholdHours) {
             2 => [
@@ -1179,10 +1284,11 @@ class PassengerController extends AppController
         $supportSummary = $isFerryCase
             ? 'Ferry Art. 17 assistance registreres her med tydelig opdeling mellem forplejning, hotel, hoteltransport og PMR-evidence.'
             : ($isRailCase
-                ? 'Rail Art. 20 assistance registreres her med tydelig opdeling mellem maaltider, hotel, strandingskontekst og dokumenterede egne udgifter.'
+                ? 'Rail Art. 20 assistance registreres her med tydelig opdeling mellem maaltider, hotel, lokal transport og dokumenterede egne udgifter.'
                 : ($isOngoing
                     ? 'Detaljerede care-belob, hoteludgifter og kvitteringer kan efterregistreres her efter den korte liveform.'
                     : 'Article 9-care registreres her med tydelig opdeling mellem maaltider, overnatning, hoteltransport og PMR.'));
+        $railContextSummary = 'Rail gatefakta og kontekst samles her: PMR, cykel, strandet paa station og strandet paa sporet. Konkrete strandingsudgifter og upload registreres ogsaa her, naar de knytter sig direkte til station- eller sporsituationen.';
         $compFallbackReasons = [];
         if ($refundChosen) {
             $compFallbackReasons[] = $isFerryCase
@@ -1243,6 +1349,11 @@ class PassengerController extends AppController
             $compFallbackReasons[] = 'Passageren har ikke selv maattet finde videre rejse i remedies. Derfor springes Afhjaelpning over i backend, og sagen gaar direkte videre til Assistance.';
         }
         $steps = [
+            ...($showRailContextStep ? [[
+                'key' => 'rail_context',
+                'label' => 'Rail gates og kontekst',
+                'status' => $railContextStatus,
+            ]] : []),
             [
                 'key' => 'refund',
                 'label' => 'Afhjaelpning',
@@ -1269,8 +1380,11 @@ class PassengerController extends AppController
                 'status' => $hasConsent ? 'done' : 'todo',
             ],
         ];
-        $steps = array_values(array_filter($steps, static function (array $step) use ($showRefundStep, $showSupportStep): bool {
+        $steps = array_values(array_filter($steps, static function (array $step) use ($showRailContextStep, $showRefundStep, $showSupportStep): bool {
             $key = (string)($step['key'] ?? '');
+            if ($key === 'rail_context') {
+                return $showRailContextStep;
+            }
             if ($key === 'refund') {
                 return $showRefundStep;
             }
@@ -1283,6 +1397,9 @@ class PassengerController extends AppController
 
         $allowedSteps = array_column($steps, 'key');
         $activeStep = in_array($requestedStep, $allowedSteps, true) ? $requestedStep : '';
+        if ($activeStep === '' && $showRailContextStep) {
+            $activeStep = 'rail_context';
+        }
         if ($activeStep === '') {
             foreach ($steps as $step) {
                 if ((string)$step['status'] !== 'done') {
@@ -1339,12 +1456,18 @@ class PassengerController extends AppController
             'careReceiptFiles' => $careReceiptFiles,
             'refundExpenseItems' => $refundExpenseItems,
             'careExpenseItems' => $careExpenseItems,
+            'railContextStationExpenseItems' => $railContextStationExpenseItems,
+            'railContextTrackExpenseItems' => $railContextTrackExpenseItems,
+            'railContextStationReceiptFiles' => $railContextStationReceiptFiles,
+            'railContextTrackReceiptFiles' => $railContextTrackReceiptFiles,
             'currencyOptions' => $currencyOptions,
             'compFallbackReasons' => $compFallbackReasons,
             'hasDetails' => $hasDetails,
             'supportSummary' => $supportSummary,
+            'railContextSummary' => $railContextSummary,
             'showRefundStep' => $showRefundStep,
             'showSupportStep' => $showSupportStep,
+            'showRailContextStep' => $showRailContextStep,
             'isDelayRefundContext' => $isDelayRefundContext,
             'isCancellationRefundContext' => $isCancellationRefundContext,
             'showCancellationCompensationDetails' => $showCancellationCompensationDetails,
@@ -1367,12 +1490,19 @@ class PassengerController extends AppController
             'deniedBoardingSelfArrangedFacts' => $deniedBoardingSelfArrangedFacts,
             'showDeniedBoardingCompensationDetails' => $showDeniedBoardingCompensationDetails,
             'deniedBoardingReductionRelevant' => $deniedBoardingReductionRelevant,
+            'hasPmrData' => $hasPmrData,
+            'hasBikeData' => $hasBikeData,
             'steps' => $steps,
             'activeStep' => $activeStep,
             'progressCompleted' => $progressCompleted,
             'progressTotal' => $progressTotal,
             'progressPct' => $progressPct,
             'sections' => [
+                ...($showRailContextStep ? [[
+                    'title' => 'Rail gates og kontekst',
+                    'status' => $railContextStatus === 'done' ? 'Frontend-kontekst klar' : 'Backend-opfoelgning mangler',
+                    'summary' => $railContextSummary,
+                ]] : []),
                 ...($showRefundStep ? [[
                     'title' => 'Afhjaelpning',
                     'status' => $refundStepDone ? 'Paabegyndt' : 'Mangler',
@@ -1389,7 +1519,7 @@ class PassengerController extends AppController
                                 : 'Article 8, refund scope, selvarrangeret loesning og retur til foerste afgangssted.')),
                 ]] : []),
                 ...($showSupportStep ? [[
-                    'title' => 'Assistance, handicap og udgifter',
+                    'title' => 'Assistance og udgifter',
                     'status' => $supportStatus === 'done' ? 'Delvist udfyldt' : 'Mangler',
                     'summary' => $supportSummary,
                 ]] : []),
@@ -1453,6 +1583,534 @@ class PassengerController extends AppController
         }
 
         return trim((string)($session->read('flow.meta.air_case_ref') ?? ''));
+    }
+
+    /**
+     * Mirrors rail frontend aliases into the backend case namespace and backfills
+     * the canonical rail keys when backend edits only touched the legacy air keys.
+     *
+     * @param array<string,mixed> $form
+     * @return void
+     */
+    private function syncPassengerCaseExpenseAliasFields(array &$form, string $transportMode): void
+    {
+        if ($transportMode !== 'rail') {
+            return;
+        }
+
+        if ((string)($form['air_self_arranged_reroute'] ?? '') === '' && (string)($form['self_purchased_new_ticket'] ?? '') !== '') {
+            $form['air_self_arranged_reroute'] = (string)$form['self_purchased_new_ticket'];
+        }
+        if ((string)($form['self_purchased_new_ticket'] ?? '') === '' && (string)($form['air_self_arranged_reroute'] ?? '') !== '') {
+            $form['self_purchased_new_ticket'] = (string)$form['air_self_arranged_reroute'];
+        }
+
+        if ((string)($form['air_reroute_expenses_incurred'] ?? '') === '' && (string)($form['reroute_extra_costs'] ?? '') !== '') {
+            $form['air_reroute_expenses_incurred'] = (string)$form['reroute_extra_costs'];
+        }
+        if ((string)($form['reroute_extra_costs'] ?? '') === '' && (string)($form['air_reroute_expenses_incurred'] ?? '') !== '') {
+            $form['reroute_extra_costs'] = (string)$form['air_reroute_expenses_incurred'];
+        }
+
+        $airType = trim((string)($form['air_reroute_expense_type'] ?? ''));
+        $railType = trim((string)($form['reroute_extra_costs_type'] ?? ''));
+        if ($airType === '' && $railType !== '') {
+            $form['air_reroute_expense_type'] = $this->mapPassengerRailRefundExpenseType($railType);
+        }
+        if ($railType === '' && $airType !== '') {
+            $form['reroute_extra_costs_type'] = $this->mapPassengerRefundTypeToRailAlias($airType);
+        }
+
+        foreach ([
+            'air_reroute_expense_amount' => 'reroute_extra_costs_amount',
+            'air_reroute_expense_currency' => 'reroute_extra_costs_currency',
+            'air_reroute_expense_description' => 'reroute_extra_costs_description',
+            'air_reroute_expense_receipt' => 'reroute_extra_costs_receipt',
+        ] as $airKey => $railKey) {
+            if ((string)($form[$airKey] ?? '') === '' && (string)($form[$railKey] ?? '') !== '') {
+                $form[$airKey] = (string)$form[$railKey];
+            }
+            if ((string)($form[$railKey] ?? '') === '' && (string)($form[$airKey] ?? '') !== '') {
+                $form[$railKey] = (string)$form[$airKey];
+            }
+        }
+    }
+
+    /**
+     * Seeds backend expense rows from frontend rail/air facts so uploads and
+     * amount panels can start from concrete data instead of an empty backend.
+     *
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $flags
+     * @return void
+     */
+    private function hydratePassengerBackendExpenseSeeds(array &$form, array &$meta, array $flags): void
+    {
+        $transportMode = strtolower(trim((string)($form['transport_mode'] ?? 'air')));
+        $travelState = strtolower(trim((string)($flags['travel_state'] ?? ($form['travel_state'] ?? ($meta['entry_travel_state'] ?? 'completed')))));
+        $isOngoing = $travelState === 'ongoing';
+
+        $this->syncPassengerCaseExpenseAliasFields($form, $transportMode);
+
+        $existingRefundItems = $this->normalizeMeaningfulStoredExpenseItems((array)($form['air_case_refund_expense_items'] ?? []));
+        if ($existingRefundItems !== []) {
+            if ((string)($meta['air_backend_refund_expense_seed_state'] ?? '') === '') {
+                $meta['air_backend_refund_expense_seed_state'] = 'existing';
+            }
+        } elseif ((string)($meta['air_backend_refund_expense_seed_state'] ?? '') === '') {
+            $seededRefundItems = $this->buildPassengerBackendRefundSeedItems($form, $transportMode, $isOngoing);
+            if ($seededRefundItems !== []) {
+                $form['air_case_refund_expense_items'] = $seededRefundItems;
+                $meta['air_backend_refund_expense_seed_state'] = 'seeded';
+            }
+        }
+
+        $existingCareItems = $this->normalizeMeaningfulStoredExpenseItems((array)($form['air_case_care_expense_items'] ?? []));
+        if ($existingCareItems !== []) {
+            if ((string)($meta['air_backend_care_expense_seed_state'] ?? '') === 'seeded') {
+                $existingCareItems = $this->collapsePassengerSeededCareExpenseItems($existingCareItems);
+                $form['air_case_care_expense_items'] = $existingCareItems;
+            }
+            if ((string)($meta['air_backend_care_expense_seed_state'] ?? '') === '') {
+                $meta['air_backend_care_expense_seed_state'] = 'existing';
+            }
+        } elseif ((string)($meta['air_backend_care_expense_seed_state'] ?? '') === '') {
+            $seededCareItems = $this->buildPassengerBackendCareSeedItems($form, $transportMode);
+            if ($seededCareItems !== []) {
+                $form['air_case_care_expense_items'] = $seededCareItems;
+                $meta['air_backend_care_expense_seed_state'] = 'seeded';
+            }
+        }
+
+        if ($transportMode === 'rail') {
+            $existingRailContextStationItems = $this->normalizeMeaningfulStoredExpenseItems((array)($form['rail_case_context_station_expense_items'] ?? []));
+            if ($existingRailContextStationItems !== []) {
+                if ((string)($meta['rail_backend_context_station_expense_seed_state'] ?? '') === '') {
+                    $meta['rail_backend_context_station_expense_seed_state'] = 'existing';
+                }
+            } elseif ((string)($meta['rail_backend_context_station_expense_seed_state'] ?? '') === '') {
+                $seededStationContextItems = $this->buildPassengerBackendRailContextStationExpenseSeedItems($form);
+                if ($seededStationContextItems !== []) {
+                    $form['rail_case_context_station_expense_items'] = $seededStationContextItems;
+                    $meta['rail_backend_context_station_expense_seed_state'] = 'seeded';
+                }
+            }
+
+            $existingRailContextTrackItems = $this->normalizeMeaningfulStoredExpenseItems((array)($form['rail_case_context_track_expense_items'] ?? []));
+            if ($existingRailContextTrackItems !== []) {
+                if ((string)($meta['rail_backend_context_track_expense_seed_state'] ?? '') === '') {
+                    $meta['rail_backend_context_track_expense_seed_state'] = 'existing';
+                }
+            } elseif ((string)($meta['rail_backend_context_track_expense_seed_state'] ?? '') === '') {
+                $seededTrackContextItems = $this->buildPassengerBackendRailContextTrackExpenseSeedItems($form);
+                if ($seededTrackContextItems !== []) {
+                    $form['rail_case_context_track_expense_items'] = $seededTrackContextItems;
+                    $meta['rail_backend_context_track_expense_seed_state'] = 'seeded';
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<int|string,mixed> $items
+     * @return array<int,array<string,mixed>>
+     */
+    private function normalizeMeaningfulStoredExpenseItems(array $items): array
+    {
+        $rows = $this->normalizeStoredExpenseItems($items);
+
+        return array_values(array_filter($rows, static function (array $item): bool {
+            $receipt = isset($item['receipt']) && is_array($item['receipt']) ? (array)$item['receipt'] : [];
+
+            return trim((string)($item['type'] ?? '')) !== ''
+                || trim((string)($item['amount'] ?? '')) !== ''
+                || trim((string)($item['currency'] ?? '')) !== ''
+                || trim((string)($item['description'] ?? '')) !== ''
+                || $receipt !== [];
+        }));
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildPassengerBackendRefundSeedItems(array $form, string $transportMode, bool $isOngoing): array
+    {
+        $rows = [];
+        $seen = [];
+        $append = function (array $item) use (&$rows, &$seen): void {
+            $type = trim((string)($item['type'] ?? ''));
+            $amount = trim((string)($item['amount'] ?? ''));
+            $currency = trim((string)($item['currency'] ?? ''));
+            $description = trim((string)($item['description'] ?? ''));
+            $receipt = isset($item['receipt']) && is_array($item['receipt']) ? (array)$item['receipt'] : [];
+            if ($type === '' && $amount === '' && $currency === '' && $description === '' && $receipt === []) {
+                return;
+            }
+            $normalized = [
+                'type' => $type,
+                'amount' => $amount,
+                'currency' => $currency,
+                'description' => $description,
+                'receipt' => $receipt,
+            ];
+            $key = md5(json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: serialize($normalized));
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $rows[] = $normalized;
+        };
+
+        foreach ($this->normalizeFrontendReturnExpenseSeedItems((array)($form['air_return_expense_items'] ?? [])) as $item) {
+            $append($item);
+        }
+        if ($isOngoing) {
+            foreach ($this->normalizeMeaningfulStoredExpenseItems((array)($form['air_reroute_expense_items'] ?? [])) as $item) {
+                $append($item);
+            }
+        }
+
+        $returnFlag = strtolower(trim((string)($form['return_to_origin_expense'] ?? '')));
+        $returnAmount = trim((string)($form['return_to_origin_amount'] ?? ''));
+        $returnCurrency = trim((string)($form['return_to_origin_currency'] ?? ''));
+        $returnDescription = trim((string)($form['return_to_origin_transport_type'] ?? ''));
+        if ($returnFlag === 'yes' || $returnAmount !== '' || $returnCurrency !== '' || $returnDescription !== '') {
+            $append([
+                'type' => 'return_to_origin',
+                'amount' => $returnAmount,
+                'currency' => $returnCurrency,
+                'description' => $returnDescription,
+                'receipt' => [],
+            ]);
+        }
+
+        $rerouteSignal = strtolower(trim((string)($form['air_reroute_expenses_incurred'] ?? ($form['reroute_extra_costs'] ?? ''))));
+        $rerouteType = trim((string)($form['air_reroute_expense_type'] ?? ''));
+        $rerouteAmount = trim((string)($form['air_reroute_expense_amount'] ?? ''));
+        $rerouteCurrency = trim((string)($form['air_reroute_expense_currency'] ?? ''));
+        $rerouteDescription = trim((string)($form['air_reroute_expense_description'] ?? ''));
+        if ($transportMode === 'rail') {
+            $railRerouteType = trim((string)($form['reroute_extra_costs_type'] ?? ''));
+            if ($rerouteType === '' && $railRerouteType !== '') {
+                $rerouteType = $this->mapPassengerRailRefundExpenseType($railRerouteType);
+            }
+            if ($rerouteAmount === '') {
+                $rerouteAmount = trim((string)($form['reroute_extra_costs_amount'] ?? ''));
+            }
+            if ($rerouteCurrency === '') {
+                $rerouteCurrency = trim((string)($form['reroute_extra_costs_currency'] ?? ''));
+            }
+            if ($rerouteDescription === '') {
+                $rerouteDescription = trim((string)($form['reroute_extra_costs_description'] ?? ''));
+            }
+            if ($rerouteDescription === '' && $railRerouteType !== '') {
+                $rerouteDescription = $this->describePassengerRailRefundExpenseType($railRerouteType);
+            }
+        }
+        if ($rerouteSignal === 'yes' || $rerouteType !== '' || $rerouteAmount !== '' || $rerouteCurrency !== '' || $rerouteDescription !== '') {
+            $append([
+                'type' => $rerouteType !== '' ? $rerouteType : 'other',
+                'amount' => $rerouteAmount,
+                'currency' => $rerouteCurrency,
+                'description' => $rerouteDescription,
+                'receipt' => [],
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildPassengerBackendCareSeedItems(array $form, string $transportMode): array
+    {
+        $rowsByType = [];
+
+        $mealAmount = trim((string)($form['meal_self_paid_amount'] ?? ''));
+        $mealCurrency = trim((string)($form['meal_self_paid_currency'] ?? ''));
+        $mealDescription = $mealAmount !== '' ? 'Selvbetalte maaltider fra frontend.' : '';
+        if ($mealAmount !== '' || $mealCurrency !== '' || $mealDescription !== '') {
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                'meal',
+                $mealAmount,
+                $mealCurrency,
+                $mealDescription,
+            ]);
+        }
+
+        $hotelDescription = '';
+        if (trim((string)($form['hotel_self_paid_nights'] ?? '')) !== '') {
+            $hotelDescription = 'Frontend angav ' . trim((string)$form['hotel_self_paid_nights']) . ' overnatning(er).';
+        }
+        $hotelAmount = trim((string)($form['hotel_self_paid_amount'] ?? ''));
+        $hotelCurrency = trim((string)($form['hotel_self_paid_currency'] ?? ''));
+        if ($hotelAmount !== '' || $hotelCurrency !== '' || $hotelDescription !== '') {
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                'hotel',
+                $hotelAmount,
+                $hotelCurrency,
+                $hotelDescription,
+            ]);
+        }
+
+        $hotelTransportAmount = trim((string)($form['hotel_transport_self_paid_amount'] ?? ''));
+        $hotelTransportCurrency = trim((string)($form['hotel_transport_self_paid_currency'] ?? ''));
+        $hotelTransportDescription = $hotelTransportAmount !== '' ? 'Selvbetalt lokal transport fra frontend.' : '';
+        if ($hotelTransportAmount !== '' || $hotelTransportCurrency !== '' || $hotelTransportDescription !== '') {
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                'hotel_transport',
+                $hotelTransportAmount,
+                $hotelTransportCurrency,
+                $hotelTransportDescription,
+            ]);
+        }
+
+        return array_values(array_filter($rowsByType, static function (array $item): bool {
+            return trim((string)($item['type'] ?? '')) !== ''
+                || trim((string)($item['amount'] ?? '')) !== ''
+                || trim((string)($item['currency'] ?? '')) !== ''
+                || trim((string)($item['description'] ?? '')) !== '';
+        }));
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildPassengerBackendRailContextStationExpenseSeedItems(array $form): array
+    {
+        $rowsByType = [];
+        $railExpenseTypes = array_values(array_unique(array_filter(array_map(
+            static fn($value): string => strtolower(trim((string)$value)),
+            (array)($form['rail_station_expense_types'] ?? [])
+        ))));
+
+        foreach ($railExpenseTypes as $railType) {
+            $mappedType = $this->mapPassengerRailContextExpenseType($railType, 'station');
+            if ($mappedType === '') {
+                continue;
+            }
+
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                $mappedType,
+                '',
+                '',
+                $this->describePassengerRailContextExpenseType($railType, 'station'),
+            ]);
+        }
+
+        $expenseSignal = strtolower(trim((string)($form['rail_station_expenses_signal'] ?? '')));
+        if ($rowsByType === [] && $expenseSignal === 'yes') {
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                'other',
+                '',
+                '',
+                'Frontend registrerede egne udgifter ved stationen, men typen blev ikke afklaret i frontend.',
+            ]);
+        }
+
+        return array_values(array_filter($rowsByType, static function (array $item): bool {
+            return trim((string)($item['type'] ?? '')) !== ''
+                || trim((string)($item['amount'] ?? '')) !== ''
+                || trim((string)($item['currency'] ?? '')) !== ''
+                || trim((string)($item['description'] ?? '')) !== '';
+        }));
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array<int,array<string,mixed>>
+     */
+    private function buildPassengerBackendRailContextTrackExpenseSeedItems(array $form): array
+    {
+        $rowsByType = [];
+        $isStrandedTrack = strtolower(trim((string)($form['is_stranded_trin5'] ?? 'no'))) === 'yes';
+        $noTransportAction = strtolower(trim((string)($form['blocked_no_transport_action'] ?? '')));
+        if (!$isStrandedTrack || $noTransportAction !== 'self_arranged') {
+            return [];
+        }
+
+        $transportType = strtolower(trim((string)($form['blocked_self_paid_transport_type'] ?? '')));
+        $mappedType = $this->mapPassengerRailContextExpenseType($transportType, 'track');
+        if ($mappedType === '') {
+            $mappedType = 'other_transport';
+        }
+
+        $this->mergePassengerCareSeedRow($rowsByType, [
+            $mappedType,
+            '',
+            '',
+            $this->describePassengerRailContextExpenseType($transportType, 'track'),
+        ]);
+
+        return array_values(array_filter($rowsByType, static function (array $item): bool {
+            return trim((string)($item['type'] ?? '')) !== ''
+                || trim((string)($item['amount'] ?? '')) !== ''
+                || trim((string)($item['currency'] ?? '')) !== ''
+                || trim((string)($item['description'] ?? '')) !== '';
+        }));
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $items
+     * @return array<int,array<string,mixed>>
+     */
+    private function collapsePassengerSeededCareExpenseItems(array $items): array
+    {
+        $rowsByType = [];
+        foreach ($items as $item) {
+            $this->mergePassengerCareSeedRow($rowsByType, [
+                (string)($item['type'] ?? ''),
+                (string)($item['amount'] ?? ''),
+                (string)($item['currency'] ?? ''),
+                (string)($item['description'] ?? ''),
+                isset($item['receipt']) && is_array($item['receipt']) ? (array)$item['receipt'] : [],
+            ]);
+        }
+
+        return array_values(array_filter($rowsByType, static function (array $item): bool {
+            $receipt = isset($item['receipt']) && is_array($item['receipt']) ? (array)$item['receipt'] : [];
+
+            return trim((string)($item['type'] ?? '')) !== ''
+                || trim((string)($item['amount'] ?? '')) !== ''
+                || trim((string)($item['currency'] ?? '')) !== ''
+                || trim((string)($item['description'] ?? '')) !== ''
+                || $receipt !== [];
+        }));
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $rowsByType
+     * @param array{0:string,1?:string,2?:string,3?:string,4?:array<string,mixed>} $row
+     * @return void
+     */
+    private function mergePassengerCareSeedRow(array &$rowsByType, array $row): void
+    {
+        $type = trim((string)($row[0] ?? ''));
+        $amount = trim((string)($row[1] ?? ''));
+        $currency = trim((string)($row[2] ?? ''));
+        $description = trim((string)($row[3] ?? ''));
+        $receipt = isset($row[4]) && is_array($row[4]) ? (array)$row[4] : [];
+
+        if ($type === '' && $amount === '' && $currency === '' && $description === '' && $receipt === []) {
+            return;
+        }
+
+        if (!isset($rowsByType[$type])) {
+            $rowsByType[$type] = [
+                'type' => $type,
+                'amount' => $amount,
+                'currency' => $currency,
+                'description' => $description,
+                'receipt' => $receipt,
+            ];
+
+            return;
+        }
+
+        if ($amount !== '' && trim((string)($rowsByType[$type]['amount'] ?? '')) === '') {
+            $rowsByType[$type]['amount'] = $amount;
+        }
+        if ($currency !== '' && trim((string)($rowsByType[$type]['currency'] ?? '')) === '') {
+            $rowsByType[$type]['currency'] = $currency;
+        }
+        if ($receipt !== [] && (!isset($rowsByType[$type]['receipt']) || (array)$rowsByType[$type]['receipt'] === [])) {
+            $rowsByType[$type]['receipt'] = $receipt;
+        }
+        if ($description !== '') {
+            $existingParts = array_values(array_filter(array_map(
+                static fn(string $part): string => trim($part),
+                explode('|', (string)($rowsByType[$type]['description'] ?? ''))
+            )));
+            if (!in_array($description, $existingParts, true)) {
+                $existingParts[] = $description;
+            }
+            $rowsByType[$type]['description'] = implode(' | ', $existingParts);
+        }
+    }
+
+    private function mapPassengerRailContextExpenseType(string $rawType, string $scope = 'station'): string
+    {
+        return match (strtolower(trim($rawType))) {
+            'meals' => 'meal',
+            'hotel', 'accommodation' => 'hotel',
+            'local_transport', 'transport' => 'hotel_transport',
+            'train', 'rail', 'new_ticket' => 'new_ticket',
+            'bus', 'taxi', 'rideshare', 'alt_transport', 'other_transport' => 'other_transport',
+            'higher_class', 'expensive_solution' => 'expensive_solution',
+            'other' => 'other',
+            default => $scope === 'track' ? 'other_transport' : '',
+        };
+    }
+
+    private function describePassengerRailContextExpenseType(string $rawType, string $scope = 'station'): string
+    {
+        $type = strtolower(trim($rawType));
+        if ($scope === 'track') {
+            return match ($type) {
+                'rail', 'train', 'new_ticket' => 'Frontend registrerede, at passageren fandt egen videre rejse med et andet tog fra sporet.',
+                'bus' => 'Frontend registrerede, at passageren fandt egen bus- eller erstatningstransport fra sporet.',
+                'taxi', 'rideshare' => 'Frontend registrerede, at passageren fandt egen transport som taxi / minibus fra sporet.',
+                'other' => 'Frontend registrerede, at passageren selv fandt en anden transportloesning fra sporet.',
+                default => 'Frontend registrerede, at passageren selv fandt transport fra sporet.',
+            };
+        }
+
+        return match ($type) {
+            'meals' => 'Frontend pegede paa maaltider / forfriskninger ved stationen.',
+            'hotel', 'accommodation' => 'Frontend pegede paa hotel / overnatning ved stationsstrandingen.',
+            'local_transport', 'transport' => 'Frontend pegede paa lokal transport til/fra station eller hotel.',
+            'train', 'rail', 'new_ticket' => 'Frontend pegede paa behov for ny billet / andet tog fra stationssituationen.',
+            'bus' => 'Frontend pegede paa busudgift fra stationssituationen.',
+            'taxi', 'rideshare' => 'Frontend pegede paa taxi / minibus / samkoersel fra stationssituationen.',
+            'other' => 'Frontend pegede paa andre udgifter ved stationssituationen.',
+            default => 'Frontend pegede paa en rail-relateret udgift fra stationssituationen.',
+        };
+    }
+
+    private function mapPassengerRailRefundExpenseType(string $legacyType): string
+    {
+        return match (strtolower(trim($legacyType))) {
+            'alt_transport', 'airport_transfer', 'transport', 'bus', 'taxi', 'rideshare' => 'other_transport',
+            'higher_class' => 'expensive_solution',
+            'accommodation' => 'other',
+            'new_ticket', 'other_transport', 'expensive_solution', 'other' => strtolower(trim($legacyType)),
+            default => 'other',
+        };
+    }
+
+    private function mapPassengerRefundTypeToRailAlias(string $type): string
+    {
+        return match (strtolower(trim($type))) {
+            'other_transport', 'airport_transfer' => 'alt_transport',
+            'expensive_solution' => 'higher_class',
+            default => strtolower(trim($type)),
+        };
+    }
+
+    private function describePassengerRailRefundExpenseType(string $legacyType): string
+    {
+        return match (strtolower(trim($legacyType))) {
+            'new_ticket' => 'Frontend pegede paa ny billet / andet tog.',
+            'higher_class' => 'Frontend pegede paa hoejere klasse eller dyrere rail-loesning.',
+            'alt_transport' => 'Frontend pegede paa alternativ transport som bus, taxi eller minibus.',
+            'accommodation' => 'Frontend pegede paa indkvartering i forbindelse med rail-omlaegning.',
+            default => 'Frontend pegede paa rail-relaterede merudgifter.',
+        };
+    }
+
+    private function describePassengerRailCareExpenseType(string $railType): string
+    {
+        return match (strtolower(trim($railType))) {
+            'meals' => 'Frontend pegede paa maaltider / forfriskninger ved stationen.',
+            'hotel', 'accommodation' => 'Frontend pegede paa hotel / overnatning ved strandingen.',
+            'local_transport', 'transport' => 'Frontend pegede paa lokal transport til/fra station eller hotel.',
+            default => 'Frontend pegede paa en rail-relateret assistanceudgift.',
+        };
     }
 
     /**
@@ -1562,13 +2220,24 @@ class PassengerController extends AppController
             if (!is_array($item)) {
                 continue;
             }
-            $rows[] = [
+            $normalized = [
                 'type' => trim((string)($item['type'] ?? '')),
                 'amount' => trim((string)($item['amount'] ?? '')),
                 'currency' => trim((string)($item['currency'] ?? '')),
                 'description' => trim((string)($item['description'] ?? '')),
                 'receipt' => isset($item['receipt']) && is_array($item['receipt']) ? (array)$item['receipt'] : [],
             ];
+            $receipt = (array)($normalized['receipt'] ?? []);
+            if (
+                $normalized['type'] === ''
+                && $normalized['amount'] === ''
+                && $normalized['currency'] === ''
+                && $normalized['description'] === ''
+                && $receipt === []
+            ) {
+                continue;
+            }
+            $rows[] = $normalized;
         }
         return $rows;
     }
@@ -1715,6 +2384,14 @@ class PassengerController extends AppController
             break;
         }
 
+        if (!empty($form['air_reroute_expense_type'])) {
+            $form['reroute_extra_costs'] = 'yes';
+            $form['reroute_extra_costs_type'] = $this->mapPassengerRefundTypeToRailAlias((string)$form['air_reroute_expense_type']);
+            $form['reroute_extra_costs_amount'] = (string)($form['air_reroute_expense_amount'] ?? '');
+            $form['reroute_extra_costs_currency'] = (string)($form['air_reroute_expense_currency'] ?? '');
+            $form['reroute_extra_costs_description'] = (string)($form['air_reroute_expense_description'] ?? '');
+        }
+
         if (isset($sumByType['meal'])) {
             $form['meal_self_paid_amount'] = (string)$sumByType['meal'];
             $form['meal_self_paid_currency'] = (string)($currencyByType['meal'] ?? '');
@@ -1772,7 +2449,7 @@ class PassengerController extends AppController
         [$text, $ocrLogs] = $this->extractPassengerTicketText($path);
         $text = preg_replace('/[\x{00A0}\x{2000}-\x{200B}\x{2060}\x{FEFF}]/u', ' ', (string)$text) ?? (string)$text;
         $transportMode = strtolower(trim((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? 'air'))));
-        if (!in_array($transportMode, ['air', 'ferry'], true)) {
+        if (!in_array($transportMode, ['air', 'ferry', 'rail'], true)) {
             $transportMode = 'air';
         }
 
@@ -1811,6 +2488,9 @@ class PassengerController extends AppController
         $segments = $llmSegments !== [] ? $llmSegments : array_values(array_filter($baseSegments, 'is_array'));
         if ($transportMode === 'ferry') {
             return $this->buildFerryPassengerTicketAnalysis($analysis, $form, $meta, $fields, $dates, $identifiers, $segments);
+        }
+        if ($transportMode === 'rail') {
+            return $this->buildRailPassengerTicketAnalysis($analysis, $form, $meta, $fields, $dates, $identifiers, $segments, $text);
         }
 
         $extracted = [
@@ -1945,6 +2625,93 @@ class PassengerController extends AppController
         $analysis['summary'] = $analysis['needs_manual_review'] === 'yes'
             ? 'Billet er analyseret, men der er afvigelser eller ferry-kontraktusikkerhed som kraever kontrol.'
             : 'Billet matcher i store traek den valgte faergeafgang og ferry-oplysningerne.';
+
+        return $analysis;
+    }
+
+    /**
+     * @param array<string,mixed> $analysis
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $fields
+     * @param array<int,string> $dates
+     * @param array<string,mixed> $identifiers
+     * @param array<int,array<string,mixed>> $segments
+     * @return array<string,mixed>
+     */
+    private function buildRailPassengerTicketAnalysis(
+        array $analysis,
+        array $form,
+        array $meta,
+        array $fields,
+        array $dates,
+        array $identifiers,
+        array $segments,
+        string $text
+    ): array {
+        $bookingReference = trim((string)($fields['booking_reference'] ?? ($identifiers['pnr'] ?? ($identifiers['order_no'] ?? ''))));
+        $ticketNumber = trim((string)($fields['ticket_no'] ?? ($identifiers['order_no'] ?? '')));
+        $trainNumber = trim((string)($fields['train_no'] ?? ($fields['service_code'] ?? ($fields['line'] ?? ''))));
+        $extracted = [
+            'dep_station' => (string)($fields['dep_station'] ?? ''),
+            'arr_station' => (string)($fields['arr_station'] ?? ''),
+            'dep_date' => (string)($fields['dep_date'] ?? ($dates[0] ?? '')),
+            'dep_time' => (string)($fields['dep_time'] ?? ''),
+            'arr_time' => (string)($fields['arr_time'] ?? ''),
+            'operator' => (string)($fields['operator'] ?? ''),
+            'train_number' => $trainNumber,
+            'ticket_no' => $ticketNumber,
+            'booking_reference' => $bookingReference,
+            'price' => (string)($fields['price'] ?? ''),
+        ];
+        $analysis['extracted'] = $extracted;
+        $analysis['segments'] = $segments;
+
+        $railSeed = (array)($meta['rail_contract_structure_seed'] ?? []);
+        $resolverFlow = [
+            'form' => array_filter([
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'ticket_upload_mode' => 'ticket',
+                'dep_station' => $extracted['dep_station'] !== '' ? $extracted['dep_station'] : (string)($form['dep_station'] ?? ''),
+                'arr_station' => $extracted['arr_station'] !== '' ? $extracted['arr_station'] : (string)($form['arr_station'] ?? ''),
+                'dep_date' => $extracted['dep_date'] !== '' ? $extracted['dep_date'] : (string)($form['dep_date'] ?? ''),
+                'dep_time' => $extracted['dep_time'],
+                'arr_time' => $extracted['arr_time'],
+                'operator' => $extracted['operator'] !== '' ? $extracted['operator'] : (string)($form['operator'] ?? ''),
+                'ticket_no' => $ticketNumber !== '' ? $ticketNumber : (string)($form['ticket_no'] ?? ''),
+                'booking_reference' => $bookingReference !== '' ? $bookingReference : (string)($form['booking_reference'] ?? ''),
+                'seller_channel' => (string)($form['seller_channel'] ?? ($railSeed['seller_channel'] ?? '')),
+                'same_transaction' => (string)($form['same_transaction'] ?? ($railSeed['same_transaction'] ?? '')),
+                'through_ticket_disclosure' => (string)($form['through_ticket_disclosure'] ?? ($railSeed['through_ticket_disclosure'] ?? '')),
+                'separate_contract_notice' => (string)($form['separate_contract_notice'] ?? ($railSeed['separate_contract_notice'] ?? '')),
+                'problem_contract_id' => (string)($form['problem_contract_id'] ?? ($railSeed['problem_contract_id'] ?? '')),
+            ], static fn($v): bool => $v !== ''),
+            'meta' => [
+                '_segments_auto' => $segments,
+            ],
+            'journey' => [
+                'segments' => $segments,
+                'bookingRef' => $bookingReference !== '' ? $bookingReference : $ticketNumber,
+            ],
+        ];
+        $multimodal = (new MultimodalFlowResolver())->evaluate($resolverFlow, false);
+        $contractMeta = (array)($multimodal['contract_meta'] ?? []);
+        $contractDecision = (array)($multimodal['contract_decision'] ?? []);
+        $analysis['contract_summary'] = [
+            'transport_mode' => 'rail',
+            'topology' => (string)($contractDecision['contract_label'] ?? ($contractMeta['contract_topology'] ?? '')),
+            'scope' => (string)($contractDecision['ticket_scope'] ?? ''),
+            'decision_basis' => (string)($contractDecision['basis'] ?? ''),
+            'manual_review_required' => (!empty($contractDecision['manual_review_reasons']) || !empty($contractMeta['manual_review_required'])) ? 'yes' : 'no',
+        ];
+
+        $analysis['match_checks'] = $this->buildPassengerRailTicketMatchChecks($form, $meta, $extracted);
+        $analysis['rail_art12_review'] = $this->buildPassengerRailArt12Review($text, $form, $meta, $contractMeta, $contractDecision, $railSeed);
+        $analysis['needs_manual_review'] = $this->analysisNeedsManualReview($analysis['match_checks'], $analysis['contract_summary']) ? 'yes' : 'no';
+        $analysis['summary'] = $analysis['needs_manual_review'] === 'yes'
+            ? 'Rail-billet er analyseret, men kontraktstrukturen eller uploaden kraever intern kontrol.'
+            : 'Rail-billet matcher i store traek den valgte rejse og giver en systemvurdering af Art. 12.';
 
         return $analysis;
     }
@@ -2188,6 +2955,207 @@ class PassengerController extends AppController
     }
 
     /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,string> $extracted
+     * @return array<int,array<string,string>>
+     */
+    private function buildPassengerRailTicketMatchChecks(array $form, array $meta, array $extracted): array
+    {
+        $selectedDeparture = (array)($meta['rail_selected_departure'] ?? []);
+        $opsEvidence = (array)($meta['rail_operational_evidence'] ?? []);
+        $currentRoute = [
+            'dep' => trim((string)($selectedDeparture['origin_station_name'] ?? ($form['dep_station'] ?? ''))),
+            'arr' => trim((string)($selectedDeparture['destination_station_name'] ?? ($form['arr_station'] ?? ''))),
+        ];
+        $checks = [];
+
+        $routeStatus = 'unknown';
+        if ($currentRoute['dep'] !== '' && $currentRoute['arr'] !== '' && $extracted['dep_station'] !== '' && $extracted['arr_station'] !== '') {
+            $routeStatus = ($this->normalizeCompareText($currentRoute['dep']) === $this->normalizeCompareText($extracted['dep_station'])
+                && $this->normalizeCompareText($currentRoute['arr']) === $this->normalizeCompareText($extracted['arr_station'])) ? 'match' : 'mismatch';
+        } elseif ($extracted['dep_station'] !== '' || $extracted['arr_station'] !== '') {
+            $routeStatus = 'partial';
+        }
+        $checks[] = [
+            'label' => 'Rute',
+            'status' => $routeStatus,
+            'current' => trim(implode(' -> ', array_filter([$currentRoute['dep'], $currentRoute['arr']]))),
+            'detected' => trim(implode(' -> ', array_filter([$extracted['dep_station'], $extracted['arr_station']]))),
+        ];
+
+        $currentDate = $this->extractDateFromDateTimeString((string)($selectedDeparture['planned_departure_at'] ?? ''));
+        if ($currentDate === '') {
+            $currentDate = trim((string)($form['dep_date'] ?? ''));
+        }
+        $dateStatus = 'unknown';
+        if ($currentDate !== '' && $extracted['dep_date'] !== '') {
+            $dateStatus = $this->normalizeDateForCompare($currentDate) === $this->normalizeDateForCompare($extracted['dep_date']) ? 'match' : 'mismatch';
+        } elseif ($extracted['dep_date'] !== '') {
+            $dateStatus = 'partial';
+        }
+        $checks[] = [
+            'label' => 'Dato',
+            'status' => $dateStatus,
+            'current' => $currentDate,
+            'detected' => $extracted['dep_date'],
+        ];
+
+        $currentDepartureTime = $this->extractTimeFromDateTimeString((string)($selectedDeparture['planned_departure_at'] ?? ''));
+        if ($currentDepartureTime === '') {
+            $currentDepartureTime = $this->extractTimeFromDateTimeString((string)($opsEvidence['planned_departure_at'] ?? ''));
+        }
+        if ($currentDepartureTime === '') {
+            $currentDepartureTime = trim((string)($form['dep_time'] ?? ''));
+        }
+        $departureStatus = 'unknown';
+        if ($currentDepartureTime !== '' && $extracted['dep_time'] !== '') {
+            $departureStatus = $currentDepartureTime === $extracted['dep_time'] ? 'match' : 'mismatch';
+        } elseif ($extracted['dep_time'] !== '') {
+            $departureStatus = 'partial';
+        }
+        $checks[] = [
+            'label' => 'Afgang',
+            'status' => $departureStatus,
+            'current' => $currentDepartureTime,
+            'detected' => $extracted['dep_time'],
+        ];
+
+        $currentOperator = trim((string)($selectedDeparture['operator_name'] ?? ($opsEvidence['operator_name'] ?? ($form['operator'] ?? ''))));
+        $operatorStatus = 'unknown';
+        if ($currentOperator !== '' && $extracted['operator'] !== '') {
+            $operatorStatus = $this->normalizeCompareText($currentOperator) === $this->normalizeCompareText($extracted['operator']) ? 'match' : 'mismatch';
+        } elseif ($extracted['operator'] !== '') {
+            $operatorStatus = 'partial';
+        }
+        $checks[] = [
+            'label' => 'Operator',
+            'status' => $operatorStatus,
+            'current' => $currentOperator,
+            'detected' => $extracted['operator'],
+        ];
+
+        $currentTrain = trim((string)($selectedDeparture['train_number'] ?? ($opsEvidence['train_number'] ?? ($form['train_number'] ?? ''))));
+        $trainStatus = 'unknown';
+        if ($currentTrain !== '' && $extracted['train_number'] !== '') {
+            $trainStatus = $this->normalizeCompareText($currentTrain) === $this->normalizeCompareText($extracted['train_number']) ? 'match' : 'mismatch';
+        } elseif ($extracted['train_number'] !== '') {
+            $trainStatus = 'partial';
+        }
+        $checks[] = [
+            'label' => 'Tognummer / linje',
+            'status' => $trainStatus,
+            'current' => $currentTrain,
+            'detected' => $extracted['train_number'],
+        ];
+
+        return $checks;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @param array<string,mixed> $meta
+     * @param array<string,mixed> $contractMeta
+     * @param array<string,mixed> $contractDecision
+     * @param array<string,mixed> $railSeed
+     * @return array<string,mixed>
+     */
+    private function buildPassengerRailArt12Review(
+        string $text,
+        array $form,
+        array $meta,
+        array $contractMeta,
+        array $contractDecision,
+        array $railSeed
+    ): array {
+        $sellerChannel = strtolower(trim((string)($form['seller_channel'] ?? ($railSeed['seller_channel'] ?? ''))));
+        $sharedBookingReference = $this->normalizeNullableBool($contractMeta['shared_booking_reference'] ?? null);
+        $singleTransaction = $this->normalizeNullableBool($contractMeta['single_transaction'] ?? null);
+        $bookingCohesion = strtolower(trim((string)($contractMeta['booking_cohesion'] ?? 'unknown')));
+        $scope = strtolower(trim((string)($contractDecision['ticket_scope'] ?? '')));
+        $topology = strtolower(trim((string)($contractMeta['contract_topology'] ?? 'unknown_manual_review')));
+        $confidence = strtolower(trim((string)($contractDecision['contract_topology_confidence'] ?? ($contractMeta['contract_topology_confidence'] ?? 'low'))));
+        $seedLiableBasis = strtolower(trim((string)($railSeed['liable_basis'] ?? 'manual_review')));
+        $seedOutcome = strtolower(trim((string)($railSeed['effective_contract_model'] ?? 'manual_review')));
+
+        $normalizedText = mb_strtolower($text);
+        $hasExplicitThroughDisclosure = (bool)preg_match('/gennemg(?:aaende|\x{00E5}ende)\s+billet|through\s+ticket|protected\s+connection|samlet\s+booking|single\s+contract/u', $normalizedText);
+        $hasExplicitSeparateDisclosure = (bool)preg_match('/separate\s+tickets?|separate\s+contracts?|self[- ]transfer|independent\s+segments|s(?:ae|\x{00E6})rskilte\s+kontrakter/u', $normalizedText);
+
+        $sameTransactionConfirmed = '';
+        if ($singleTransaction === true) {
+            $sameTransactionConfirmed = 'yes';
+        } elseif ($singleTransaction === false) {
+            $sameTransactionConfirmed = 'no';
+        } elseif ($sharedBookingReference === true && in_array($bookingCohesion, ['strong', 'medium'], true)) {
+            $sameTransactionConfirmed = 'yes';
+        } elseif ($sharedBookingReference === false || $topology === 'separate_contracts') {
+            $sameTransactionConfirmed = 'no';
+        }
+
+        $sharedPnrScope = $sharedBookingReference === true ? 'yes' : ($sharedBookingReference === false ? 'no' : '');
+        $disclosureEvidence = ($hasExplicitThroughDisclosure || $hasExplicitSeparateDisclosure) ? 'yes' : 'no';
+        $separateNoticeEvidence = $hasExplicitSeparateDisclosure ? 'yes' : 'no';
+
+        $finalOutcome = match ($scope) {
+            'single', 'through' => 'through',
+            'separate' => 'separate',
+            default => $seedOutcome,
+        };
+        if (!in_array($finalOutcome, ['through', 'separate'], true)) {
+            $finalOutcome = 'manual_review';
+        }
+
+        $liableBasis = $seedLiableBasis;
+        if ($finalOutcome === 'through') {
+            $liableBasis = match ($sellerChannel) {
+                'operator' => 'stk3',
+                'retailer' => 'stk4',
+                default => in_array($seedLiableBasis, ['stk3', 'stk4'], true) ? $seedLiableBasis : 'manual_review',
+            };
+        } elseif ($finalOutcome === 'separate') {
+            $liableBasis = 'individual';
+        }
+        if (!in_array($liableBasis, ['stk3', 'stk4', 'individual'], true)) {
+            $liableBasis = 'manual_review';
+        }
+
+        $notes = [];
+        if ($hasExplicitSeparateDisclosure) {
+            $notes[] = 'Uploaden indeholder markoerer for separate kontrakter eller self-transfer.';
+        } elseif ($hasExplicitThroughDisclosure) {
+            $notes[] = 'Uploaden indeholder markoerer for gennemgaaende eller beskyttet forbindelse.';
+        } else {
+            $notes[] = 'Uploaden viser ikke en tydelig kontraktoplysning i den udtrukne tekst.';
+        }
+        if ($sharedBookingReference === true) {
+            $notes[] = 'Systemet fandt samme bookingreference / PNR paa tvaers af dokumenterne.';
+        } elseif ($sharedBookingReference === false) {
+            $notes[] = 'Systemet fandt ikke en delt bookingreference / PNR paa tvaers af dokumenterne.';
+        }
+        if ($bookingCohesion !== '') {
+            $notes[] = 'Booking cohesion: ' . $bookingCohesion . '.';
+        }
+        foreach ((array)($contractDecision['manual_review_reasons'] ?? []) as $reason) {
+            $reason = trim((string)$reason);
+            if ($reason !== '') {
+                $notes[] = 'Intern kontrolgrund: ' . $reason . '.';
+            }
+        }
+
+        return [
+            'same_transaction_confirmed' => $sameTransactionConfirmed,
+            'shared_pnr_scope' => $sharedPnrScope,
+            'disclosure_evidence' => $disclosureEvidence,
+            'separate_notice_evidence' => $separateNoticeEvidence,
+            'final_outcome' => $finalOutcome,
+            'liable_basis' => $liableBasis,
+            'confidence' => $confidence !== '' ? $confidence : 'low',
+            'notes' => array_values(array_unique($notes)),
+        ];
+    }
+
+    /**
      * @param array<int,array<string,mixed>> $checks
      * @param array<string,mixed> $contractSummary
      */
@@ -2203,7 +3171,7 @@ class PassengerController extends AppController
         }
 
         $transportMode = strtolower(trim((string)($contractSummary['transport_mode'] ?? 'air')));
-        if ($transportMode === 'ferry') {
+        if (in_array($transportMode, ['ferry', 'rail'], true)) {
             $scope = trim((string)($contractSummary['scope'] ?? ($contractSummary['connection_type'] ?? '')));
             return $scope === '' || $scope === 'unknown' || $scope === 'unknown_manual_review';
         }
@@ -2298,7 +3266,34 @@ class PassengerController extends AppController
         }
 
         $analysisMode = strtolower(trim((string)($analysis['transport_mode'] ?? ($form['transport_mode'] ?? ($meta['transport_mode'] ?? 'air')))));
-        if (in_array($analysisMode, ['ferry', 'rail'], true)) {
+        if ($analysisMode === 'rail') {
+            $review = (array)($analysis['rail_art12_review'] ?? []);
+            $applied = [];
+            $mapping = [
+                'rail_art12_same_transaction_confirmed' => strtolower(trim((string)($review['same_transaction_confirmed'] ?? ''))),
+                'rail_art12_shared_pnr_scope' => strtolower(trim((string)($review['shared_pnr_scope'] ?? ''))),
+                'rail_art12_disclosure_evidence' => strtolower(trim((string)($review['disclosure_evidence'] ?? ''))),
+                'rail_art12_separate_notice_evidence' => strtolower(trim((string)($review['separate_notice_evidence'] ?? ''))),
+                'rail_art12_final_outcome' => strtolower(trim((string)($review['final_outcome'] ?? 'manual_review'))),
+                'rail_art12_liable_basis' => strtolower(trim((string)($review['liable_basis'] ?? 'manual_review'))),
+            ];
+            foreach ($mapping as $key => $value) {
+                if ($value === 'unknown') {
+                    $value = '';
+                }
+                if ((string)($form[$key] ?? '') !== $value) {
+                    $form[$key] = $value;
+                    $applied[] = $key;
+                }
+            }
+
+            $meta['air_backend_ticket_analysis']['applied_fields'] = $applied;
+            $meta['air_backend_ticket_analysis']['auto_apply_disabled'] = 'no';
+
+            return [$form, $meta];
+        }
+
+        if ($analysisMode === 'ferry') {
             $meta['air_backend_ticket_analysis']['applied_fields'] = [];
             $meta['air_backend_ticket_analysis']['auto_apply_disabled'] = 'yes';
             return [$form, $meta];
@@ -2368,6 +3363,119 @@ class PassengerController extends AppController
         return in_array($normalized, ['1', 'true', 'yes', 'ja', 'on'], true);
     }
 
+    private function normalizeNullableBool(mixed $value): ?bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        return match ($normalized) {
+            '1', 'true', 'yes', 'ja', 'on' => true,
+            '0', 'false', 'no', 'nej', 'off' => false,
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     */
+    private function normalizePassengerRailBackendTicketPriceFields(array &$form): void
+    {
+        $basis = strtolower(trim((string)($form['rail_backend_ticket_price_basis'] ?? '')));
+        $allowedBasis = ['whole_ticket', 'affected_part', 'season_pass', 'manual_review'];
+        if (!in_array($basis, $allowedBasis, true)) {
+            $basis = '';
+        }
+        $form['rail_backend_ticket_price_basis'] = $basis;
+        $form['rail_backend_ticket_price_note'] = trim((string)($form['rail_backend_ticket_price_note'] ?? ''));
+
+        $amount = $this->parsePassengerMoneyAmount($form['rail_backend_ticket_price'] ?? null);
+        if ($amount !== null && $amount > 0) {
+            $form['rail_backend_ticket_price'] = number_format($amount, 2, '.', '');
+            $currency = strtoupper(trim((string)($form['rail_backend_ticket_price_currency'] ?? '')));
+            if ($currency === '') {
+                $currency = strtoupper(trim((string)($form['price_currency'] ?? 'EUR')));
+            }
+            $form['rail_backend_ticket_price_currency'] = $currency !== '' ? $currency : 'EUR';
+            if ($form['rail_backend_ticket_price_basis'] === '') {
+                $form['rail_backend_ticket_price_basis'] = 'whole_ticket';
+            }
+            return;
+        }
+
+        if (trim((string)($form['rail_backend_ticket_price'] ?? '')) === '') {
+            $form['rail_backend_ticket_price'] = '';
+        }
+        $currency = strtoupper(trim((string)($form['rail_backend_ticket_price_currency'] ?? '')));
+        $form['rail_backend_ticket_price_currency'] = $currency;
+    }
+
+    private function parsePassengerMoneyAmount(mixed $value): ?float
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $raw = preg_replace('/[^0-9,\.\s-]/', '', $raw) ?? '';
+        $raw = preg_replace('/\s+/', '', $raw) ?? '';
+        if ($raw === '') {
+            return null;
+        }
+
+        $lastComma = strrpos($raw, ',');
+        $lastDot = strrpos($raw, '.');
+        if ($lastComma !== false && $lastDot !== false) {
+            if ($lastComma > $lastDot) {
+                $raw = str_replace('.', '', $raw);
+                $raw = str_replace(',', '.', $raw);
+            } else {
+                $raw = str_replace(',', '', $raw);
+            }
+        } elseif ($lastComma !== false) {
+            if (substr_count($raw, ',') > 1) {
+                $parts = explode(',', $raw);
+                $decimals = array_pop($parts);
+                $raw = implode('', $parts) . '.' . $decimals;
+            } else {
+                $raw = str_replace(',', '.', $raw);
+            }
+        } elseif ($lastDot !== false && substr_count($raw, '.') > 1) {
+            $parts = explode('.', $raw);
+            $decimals = array_pop($parts);
+            $raw = implode('', $parts) . '.' . $decimals;
+        }
+
+        return is_numeric($raw) ? (float)$raw : null;
+    }
+
+    /**
+     * @param array<string,mixed> $form
+     * @return array{amount:?float,currency:string,source:string}
+     */
+    private function resolvePassengerRailTicketPrice(array $form): array
+    {
+        $backendAmount = $this->parsePassengerMoneyAmount($form['rail_backend_ticket_price'] ?? null);
+        $backendCurrency = strtoupper(trim((string)($form['rail_backend_ticket_price_currency'] ?? '')));
+        if ($backendAmount !== null && $backendAmount > 0) {
+            return [
+                'amount' => $backendAmount,
+                'currency' => $backendCurrency !== '' ? $backendCurrency : strtoupper(trim((string)($form['price_currency'] ?? 'EUR'))),
+                'source' => 'backend',
+            ];
+        }
+
+        $frontendAmount = $this->parsePassengerMoneyAmount($form['price'] ?? null);
+        $frontendCurrency = strtoupper(trim((string)($form['price_currency'] ?? '')));
+
+        return [
+            'amount' => $frontendAmount,
+            'currency' => $frontendCurrency !== '' ? $frontendCurrency : 'EUR',
+            'source' => $frontendAmount !== null && $frontendAmount > 0 ? 'frontend' : 'missing',
+        ];
+    }
+
     /**
      * @param array<string,mixed> $form
      * @param array<string,mixed> $flags
@@ -2397,6 +3505,8 @@ class PassengerController extends AppController
             $expenseItems = array_merge(
                 (array)($form['air_case_refund_expense_items'] ?? []),
                 (array)($form['air_case_care_expense_items'] ?? []),
+                (array)($form['rail_case_context_station_expense_items'] ?? []),
+                (array)($form['rail_case_context_track_expense_items'] ?? []),
                 (array)($form['air_case_expense_items'] ?? [])
             );
             $expenseTotal = 0.0;
@@ -2449,6 +3559,22 @@ class PassengerController extends AppController
                 $compAmount = !empty($ferryRights['gate_art19']) && $compBand !== '' && $ticketPrice > 0
                     ? round($ticketPrice * ((float)$compBand / 100), 2)
                     : null;
+            } elseif ($isRailCase) {
+                $ticketPriceContext = $this->resolvePassengerRailTicketPrice($form);
+                $ticketPrice = (float)($ticketPriceContext['amount'] ?? 0.0);
+                $railArrivalDelay = is_numeric($meta['rail_incident_seed']['arrival_delay_minutes'] ?? null)
+                    ? (int)$meta['rail_incident_seed']['arrival_delay_minutes']
+                    : (is_numeric($form['arrival_delay_minutes'] ?? null) ? (int)$form['arrival_delay_minutes'] : null);
+                $compBand = (!empty($meta['rail_incident_seed']['gate_art19']) || (string)($flags['gate_art19'] ?? '') === '1')
+                    ? (($railArrivalDelay !== null && $railArrivalDelay >= 120) ? '50' : '25')
+                    : '';
+                $compAmount = $compBand !== '' && $ticketPrice > 0
+                    ? round($ticketPrice * ((float)$compBand / 100), 2)
+                    : null;
+                $ticketPriceCurrency = strtoupper(trim((string)($ticketPriceContext['currency'] ?? '')));
+                if ($ticketPriceCurrency !== '') {
+                    $currency = $ticketPriceCurrency;
+                }
             }
 
             $case = $cases->patchEntity($case, [
@@ -2468,6 +3594,8 @@ class PassengerController extends AppController
                 'attachments_count' => count((array)($meta['air_backend_ticket_files'] ?? []))
                     + count((array)($meta['air_backend_refund_receipt_files'] ?? []))
                     + count((array)($meta['air_backend_care_receipt_files'] ?? []))
+                    + count((array)($meta['rail_backend_context_station_receipt_files'] ?? []))
+                    + count((array)($meta['rail_backend_context_track_receipt_files'] ?? []))
                     + count((array)($meta['air_backend_receipt_files'] ?? [])),
                 'flow_snapshot' => $snapshot ?: null,
             ]);

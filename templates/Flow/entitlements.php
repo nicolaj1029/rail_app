@@ -255,6 +255,14 @@ $uploadIntroText = $isModeEntryFlow
       $uiBanners = [];
   }
   $serviceWarnings = (array)($serviceWarnings ?? []);
+  $entitlementsWarnings = (array)($entitlementsWarnings ?? []);
+  if (!empty($entitlementsWarnings)) {
+      echo '<div class="small" style="margin-top:6px;">';
+      foreach ($entitlementsWarnings as $ban) {
+          echo '<div style="background:#ffecec; border:1px solid #e0aaaa; color:#7f1d1d; padding:8px 10px; border-radius:6px; margin-top:6px;">' . h($ban) . '</div>';
+      }
+      echo '</div>';
+  }
   if (!empty($serviceWarnings)) {
       echo '<div class="small" style="margin-top:6px;">';
       foreach ($serviceWarnings as $ban) {
@@ -265,7 +273,7 @@ $uploadIntroText = $isModeEntryFlow
   if (!empty($uiBanners)) {
       echo '<div class="small" style="margin-top:6px;">';
       foreach ($uiBanners as $ban) {
-          echo '<div style="background:#fff3cd; border:1px solid #eed27c; padding:6px; border-radius:6px; margin-top:6px;">' . h($ban) . '</div>';
+          echo '<div style="background:#f8fafc; border:1px solid #dbeafe; color:#334155; padding:8px 10px; border-radius:6px; margin-top:6px;">' . h($ban) . '</div>';
       }
       echo '</div>';
   }
@@ -506,6 +514,9 @@ $uploadIntroText = $isModeEntryFlow
     $modeContractVisible = ($ticketMode === 'ticket')
       ? $modeHasAnalysis
       : $transportModeChosen;
+    if ($isRail) {
+      $modeContractVisible = false;
+    }
     if ($isAirShortEntryFlow) {
       $modeContractVisible = false;
     }
@@ -567,9 +578,7 @@ $uploadIntroText = $isModeEntryFlow
     $modeContractShowAllStyle = ($uploadAutoNeedsAnswers ? '' : 'display:none; ') . 'background:transparent; border:0; color:#555; text-decoration:underline; cursor:pointer;';
     $modeContractQuestionsStyle = ($modeStop || ($uploadAutoContract && !$uploadAutoNeedsAnswers)) ? 'display:none' : 'display:block';
     $modeContractTitle = $isRail ? 'Kontrakt og ansvar' : 'Kontrakt og ansvar (multimodal masterflow)';
-    $modeContractIntro = $isRail
-      ? 'TRIN 2 afgoer kontraktstrukturen for rail, foer flowet gaar videre til rail-specifik routing og haendelseslogik.'
-      : 'Multimodal er masterflowet i TRIN 2. Art. 12 bruges som obligatorisk kontrakt-stop for faerge, bus og fly, foer flowet gaar videre til early incident-routing og senere haendelseskaede.';
+    $modeContractIntro = 'Multimodal er masterflowet i TRIN 2. Art. 12 bruges som obligatorisk kontrakt-stop for faerge, bus og fly, foer flowet gaar videre til early incident-routing og senere haendelseskaede.';
     if (!$modeStop) {
       if ($effectiveJourneyStructure === '') {
         $modeStopMissing[] = 'rejsens struktur';
@@ -762,6 +771,9 @@ $uploadIntroText = $isModeEntryFlow
   </div>
   <?php
     $modeContractCardHtml = (string)ob_get_clean();
+    if ($isRail) {
+      $modeContractCardHtml = '';
+    }
     if ($isAirShortEntryFlow) {
       $modeContractCardHtml = '';
     }
@@ -911,19 +923,30 @@ $uploadIntroText = $isModeEntryFlow
     <?php endif; ?>
     <div class="grid-2" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
       <?php if ($isRail): ?>
-      <label>Land (ISO2)
+      <?php $sc = (string)($form['scope_choice'] ?? ''); ?>
+      <div style="display:none;">
         <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
         <input type="hidden" name="operator_country_assumed" value="<?= h($tlCountryAssumed) ?>" />
-      </label>
-      <label>Scope
-        <?php $sc = (string)($form['scope_choice'] ?? ''); ?>
-        <select name="scope_choice">
+        <select name="scope_choice" data-assumed="1">
           <option value="">VÃ¦lg...</option>
           <option value="regional" <?= $sc==='regional'?'selected':'' ?>>Regional/lokaltog</option>
           <option value="long_distance" <?= $sc==='long_distance'?'selected':'' ?>>Langdistance</option>
           <option value="international" <?= $sc==='international'?'selected':'' ?>>International</option>
         </select>
-      </label>
+      </div>
+      <div class="small muted" style="grid-column:1 / -1; background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px 10px;" data-rail-auto-summary-wrap>
+        <strong>Auto-afledt for rail:</strong>
+        <span data-rail-auto-country><?= h($tlCountry !== '' ? $tlCountry : 'Ikke afledt endnu') ?></span>
+        &middot;
+        <span data-rail-auto-scope><?=
+          h(match ($sc) {
+            'regional' => 'Regional/lokaltog',
+            'long_distance' => 'Langdistance',
+            'international' => 'International',
+            default => 'Ikke afledt endnu',
+          })
+        ?></span>
+      </div>
       <label class="ticketless-optional">OperatÃ¸r (valgfri)
         <input type="text" name="operator" list="railOperatorSuggestions" value="<?= h($form['operator'] ?? ($meta['_auto']['operator']['value'] ?? '')) ?>" placeholder="Fx DSB, DB, SJ" />
       </label>
@@ -1024,10 +1047,11 @@ $uploadIntroText = $isModeEntryFlow
       <label class="ticketless-optional">Planlagt afgangstid (valgfri)
         <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
-      <label class="ticketless-optional">Planlagt ankomsttid (valgfri)
-        <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
-      </label>
-      <?php elseif ($isBus): ?>
+        <label class="ticketless-optional">Planlagt ankomsttid (valgfri)
+          <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
+        </label>
+        <div class="small muted" style="grid-column:1 / -1;">Land og scope afledes saa vidt muligt automatisk fra stationer og produkt i TRIN 2. TRIN 3 laver stadig den endelige rail-recheck.</div>
+        <?php elseif ($isBus): ?>
       <label>Land (ISO2)
         <input type="text" name="operator_country" list="countrySuggestions" value="<?= h($tlCountry) ?>" placeholder="DK" />
         <input type="hidden" name="operator_country_assumed" value="<?= h($tlCountryAssumed) ?>" />
@@ -1359,16 +1383,35 @@ $uploadIntroText = $isModeEntryFlow
     </datalist>
 
     <?php if (!($isAir && $isAirShortEntryFlow)): ?>
-    <?php $pk = (string)($form['price_known'] ?? ((string)($form['price'] ?? '') !== '' ? 'yes' : 'no')); ?>
-    <div class="small" style="margin-top:12px;"><strong>Kender du prisen?</strong></div>
-    <div class="small" style="margin-top:6px;">
-      <label class="mr8"><input type="radio" name="price_known" value="yes" <?= $pk==='yes'?'checked':'' ?> /> Ja</label>
-      <label class="mr8"><input type="radio" name="price_known" value="no" <?= $pk==='no'?'checked':'' ?> /> Nej</label>
-    </div>
-    <div id="ticketlessPriceBlock" style="margin-top:8px; display:<?= $pk==='yes'?'block':'none' ?>;">
+    <?php
+      $pk = (string)($form['price_known'] ?? ((string)($form['price'] ?? '') !== '' ? 'yes' : 'no'));
+      $railPriceInputMode = strtolower((string)($form['rail_price_input_mode'] ?? ''));
+      if (!in_array($railPriceInputMode, ['exact', 'estimate', 'unknown'], true)) {
+        $railPriceInputMode = $pk === 'yes' ? 'exact' : 'unknown';
+      }
+      $showTicketlessPriceBlock = $isRail
+        ? in_array($railPriceInputMode, ['exact', 'estimate'], true)
+        : $pk === 'yes';
+      $cur = strtoupper((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? '')));
+    ?>
+    <?php if ($isRail): ?>
+      <div class="small" style="margin-top:12px;"><strong>Hvad kostede billetten?</strong></div>
+      <div class="small muted" style="margin-top:4px;">Angiv gerne den praecise pris. Hvis du ikke kender den endnu, kan du bruge et ca. estimat eller lade backend bekraefte prisgrundlaget senere.</div>
+      <div class="small" style="margin-top:6px;">
+        <label class="mr8"><input type="radio" name="rail_price_input_mode" value="exact" <?= $railPriceInputMode==='exact'?'checked':'' ?> /> Praecis pris</label>
+        <label class="mr8"><input type="radio" name="rail_price_input_mode" value="estimate" <?= $railPriceInputMode==='estimate'?'checked':'' ?> /> Ca. estimat</label>
+        <label class="mr8"><input type="radio" name="rail_price_input_mode" value="unknown" <?= $railPriceInputMode==='unknown'?'checked':'' ?> /> Kender ikke endnu</label>
+      </div>
+    <?php else: ?>
+      <div class="small" style="margin-top:12px;"><strong>Kender du prisen?</strong></div>
+      <div class="small" style="margin-top:6px;">
+        <label class="mr8"><input type="radio" name="price_known" value="yes" <?= $pk==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="mr8"><input type="radio" name="price_known" value="no" <?= $pk==='no'?'checked':'' ?> /> Nej</label>
+      </div>
+    <?php endif; ?>
+    <div id="ticketlessPriceBlock" style="margin-top:8px; display:<?= $showTicketlessPriceBlock ? 'block' : 'none' ?>;">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input type="text" name="price" value="<?= h((string)($form['price'] ?? ($meta['_auto']['price']['value'] ?? ''))) ?>" placeholder="Fx 399.00" style="flex:1 1 200px;" />
-        <?php $cur = strtoupper((string)($form['price_currency'] ?? ($meta['_auto']['price_currency']['value'] ?? ''))); ?>
+        <input type="text" name="price" value="<?= h((string)($form['price'] ?? ($meta['_auto']['price']['value'] ?? ''))) ?>" placeholder="<?= $isRail ? 'Fx 699.00' : 'Fx 399.00' ?>" style="flex:1 1 200px;" />
         <select name="price_currency" style="min-width:120px;">
           <option value="">Auto</option>
           <?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'] as $cc): ?>
@@ -1376,7 +1419,11 @@ $uploadIntroText = $isModeEntryFlow
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="small muted" style="margin-top:4px;">Hvis prisen er ukendt, viser vi kun kompensation i procent.</div>
+      <div class="small muted" style="margin-top:4px;"><?= $isRail ? ($railPriceInputMode === 'estimate' ? 'Rail bruger dette beloeb som et foreloebigt estimat for Art. 19 og det samlede krav. Backend kan senere bekraefte eller korrigere prisgrundlaget.' : 'Rail bruger denne pris som foreloebigt grundlag for Art. 19 og det samlede krav. Hvis prisen senere viser sig anderledes, kan backend bekraefte eller korrigere den.') : 'Hvis prisen er ukendt, viser vi kun kompensation i procent.' ?></div>
+    </div>
+    <?php if ($isRail): ?>
+      <?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+    <?php endif; ?>
     <?php endif; ?>
       <?php if ($isFerry): ?>
         <?php
@@ -2583,6 +2630,112 @@ if ($a12Applies === false && !empty($contractsView)) {
     return Math.round(earth * c);
   }
 
+  const euCountryCodes = new Set([
+    'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+    'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'
+  ]);
+
+  function isEuCountryCode(value) {
+    return euCountryCodes.has(String(value || '').trim().toUpperCase());
+  }
+
+  function railStationCountryValue(name) {
+    const lookup = String(getFieldValue(name + '_lookup_country') || '').trim().toUpperCase();
+    if (lookup !== '') return lookup;
+    return String(getFieldValue(name + '_country') || '').trim().toUpperCase();
+  }
+
+  function railScopeHintFromProduct(value) {
+    const upper = String(value || '').trim().toUpperCase();
+    if (!upper) return '';
+    for (const token of ['S-TOG', 'STOG', 'S-BAHN', 'PENDELTAG', 'CERCANIAS', 'RODALIES', 'SUBURBAN']) {
+      if (upper.includes(token)) return 'regional';
+    }
+    for (const token of ['ICE', 'IC', 'EC', 'ECE', 'RJ', 'RJX', 'TGV', 'AVE', 'FRECCIA', 'EUROCITY', 'INTERCITY', 'THALYS', 'OUIGO', 'SNABBT']) {
+      if (upper.includes(token)) return 'long_distance';
+    }
+    for (const token of ['RE', 'RB', 'TER', 'REGIONAL', 'SPRINTER', 'OS ']) {
+      if (upper.includes(token)) return 'regional';
+    }
+    return '';
+  }
+
+  function deriveRailCountryAndScope() {
+    if (!form || currentTransportMode() !== 'rail') return;
+    const card = document.getElementById('ticketlessCard');
+    if (!card) return;
+
+    const ccInput = card.querySelector('input[name="operator_country"]');
+    const ccAssumed = card.querySelector('input[name="operator_country_assumed"]');
+    const scopeSelect = card.querySelector('select[name="scope_choice"]');
+    const depCountry = railStationCountryValue('dep_station');
+    const arrCountry = railStationCountryValue('arr_station');
+    const depLat = parseMaybeNumber(getFieldValue('dep_station_lat'));
+    const depLon = parseMaybeNumber(getFieldValue('dep_station_lon'));
+    const arrLat = parseMaybeNumber(getFieldValue('arr_station_lat'));
+    const arrLon = parseMaybeNumber(getFieldValue('arr_station_lon'));
+
+    const currentCountry = ccInput ? String(ccInput.value || '').trim().toUpperCase() : '';
+    const countryIsAssumed = !currentCountry || !!(ccAssumed && String(ccAssumed.value || '').trim() === '1');
+    const inferredCountry = depCountry || arrCountry;
+    if (ccInput && inferredCountry && countryIsAssumed) {
+      ccInput.value = inferredCountry;
+      if (ccAssumed) ccAssumed.value = '1';
+    }
+
+    let inferredScope = '';
+    if (depCountry && arrCountry && depCountry !== arrCountry) {
+      inferredScope = 'international';
+    } else {
+      inferredScope = railScopeHintFromProduct(getFieldValue('operator_product'));
+      if (!inferredScope) {
+        inferredScope = railScopeHintFromProduct(getFieldValue('operator'));
+      }
+      if (!inferredScope && depLat !== null && depLon !== null && arrLat !== null && arrLon !== null) {
+        const km = Math.round(haversineMeters(depLat, depLon, arrLat, arrLon) / 1000);
+        if (km > 0) {
+          inferredScope = km >= 180 ? 'long_distance' : 'regional';
+        }
+      }
+    }
+
+    if (scopeSelect) {
+      const currentScope = String(scopeSelect.value || '').trim();
+      const scopeIsAssumed = currentScope === '' || String(scopeSelect.dataset.assumed || '') === '1';
+      if (inferredScope && scopeIsAssumed) {
+        scopeSelect.value = inferredScope;
+        scopeSelect.dataset.assumed = '1';
+      } else if (!inferredScope && String(scopeSelect.dataset.assumed || '') === '1') {
+        scopeSelect.value = '';
+      }
+    }
+
+    if (!depCountry && !arrCountry && ccInput && countryIsAssumed && !findOperatorEntry('rail', getFieldValue('operator'))) {
+      ccInput.value = '';
+      if (ccAssumed) ccAssumed.value = '1';
+    }
+
+    const summaryWrap = card.querySelector('[data-rail-auto-summary-wrap]');
+    const summaryCountry = card.querySelector('[data-rail-auto-country]');
+    const summaryScope = card.querySelector('[data-rail-auto-scope]');
+    if (summaryWrap) {
+      const countryText = ccInput && String(ccInput.value || '').trim() !== ''
+        ? String(ccInput.value || '').trim().toUpperCase()
+        : 'Ikke afledt endnu';
+      let scopeText = 'Ikke afledt endnu';
+      if (scopeSelect) {
+        const scopeVal = String(scopeSelect.value || '').trim();
+        scopeText = ({
+          regional: 'Regional/lokaltog',
+          long_distance: 'Langdistance',
+          international: 'International'
+        })[scopeVal] || 'Ikke afledt endnu';
+      }
+      if (summaryCountry) summaryCountry.textContent = countryText;
+      if (summaryScope) summaryScope.textContent = scopeText;
+    }
+  }
+
   function genericLookupMeta(name) {
     const prefixMap = {
       dep_station: 'dep_station_lookup_',
@@ -2638,6 +2791,20 @@ if ($a12Applies === false && !empty($contractsView)) {
 
   function clearDerivedScopeForNodeInput(name) {
     const mode = currentTransportMode();
+    if (mode === 'rail') {
+      const card = document.getElementById('ticketlessCard');
+      const ccInput = card ? card.querySelector('input[name="operator_country"]') : null;
+      const ccAssumed = card ? card.querySelector('input[name="operator_country_assumed"]') : null;
+      const scopeSelect = card ? card.querySelector('select[name="scope_choice"]') : null;
+      if (ccInput && ccAssumed && String(ccAssumed.value || '').trim() === '1') {
+        ccInput.value = '';
+      }
+      if (scopeSelect && String(scopeSelect.dataset.assumed || '') === '1') {
+        scopeSelect.value = '';
+      }
+      return;
+    }
+
     if (mode === 'ferry') {
       if (name === 'dep_station') {
         setFieldValue('departure_port_in_eu', '');
@@ -2707,6 +2874,11 @@ if ($a12Applies === false && !empty($contractsView)) {
     const routeDepLon = depLon !== null ? depLon : depTerminalLon;
     const routeArrLat = arrLat !== null ? arrLat : arrTerminalLat;
     const routeArrLon = arrLon !== null ? arrLon : arrTerminalLon;
+
+    if (mode === 'rail') {
+      deriveRailCountryAndScope();
+      return;
+    }
 
     if (mode === 'ferry') {
       setFieldValue('departure_port_in_eu', depInEu || '');
@@ -3006,6 +3178,21 @@ if ($a12Applies === false && !empty($contractsView)) {
 
   function deriveScopeFromOperator() {
     const mode = currentTransportMode();
+    if (mode === 'rail') {
+      const card = document.getElementById('ticketlessCard');
+      const ccInput = card ? card.querySelector('input[name="operator_country"]') : null;
+      const ccAssumed = card ? card.querySelector('input[name="operator_country_assumed"]') : null;
+      const currentCountry = ccInput ? String(ccInput.value || '').trim().toUpperCase() : '';
+      const countryIsAssumed = !currentCountry || !!(ccAssumed && String(ccAssumed.value || '').trim() === '1');
+      const entry = findOperatorEntry('rail', getFieldValue('operator')) || findOperatorEntry('rail', getFieldValue('incident_segment_operator'));
+      if (entry && entry.country_code && ccInput && countryIsAssumed && !railStationCountryValue('dep_station') && !railStationCountryValue('arr_station')) {
+        ccInput.value = String(entry.country_code).trim().toUpperCase();
+        if (ccAssumed) ccAssumed.value = '1';
+      }
+      deriveRailCountryAndScope();
+      return;
+    }
+
     if (mode === 'ferry') {
       const operator = getFieldValue('operator');
       const entry = findOperatorEntry('ferry', operator) || findOperatorEntry('ferry', getFieldValue('incident_segment_operator'));
@@ -3090,6 +3277,73 @@ if ($a12Applies === false && !empty($contractsView)) {
 	      let timer = null;
 	      let ctrl = null;
 
+        function buildUrl(country) {
+          const q = (input.value || '').trim();
+          const u = new URL(stationsSearchUrl, window.location.origin);
+          u.searchParams.set('q', q);
+          if (country) u.searchParams.set('country', country);
+          u.searchParams.set('limit', '10');
+          return u;
+        }
+
+        function pickExactStation(stations) {
+          if (!stations || !stations.length) return null;
+          const needle = normalizeLookupText(input.value || '');
+          if (!needle) return null;
+          const ranked = stations
+            .filter((st) => st && st.name)
+            .map((st) => ({
+              station: st,
+              exact: normalizeLookupText(st.name) === needle,
+              prefix: normalizeLookupText(st.name).startsWith(needle),
+              stationType: String(st.type || '').toLowerCase() === 'station',
+            }));
+          const exact = ranked.find((row) => row.exact && row.stationType) || ranked.find((row) => row.exact);
+          if (exact) return exact.station;
+          const prefix = ranked.find((row) => row.prefix && row.stationType) || ranked.find((row) => row.prefix);
+          if (prefix) return prefix.station;
+          const stationHits = ranked.filter((row) => row.stationType);
+          if (needle.length >= 5) {
+            if (stationHits.length === 1) return stationHits[0].station;
+            if (stationHits.length > 0) return stationHits[0].station;
+          }
+          if (stations.length === 1) return stations[0];
+          return null;
+        }
+
+        async function resolveExactStation() {
+          if (!shouldUseStationAutocomplete()) return;
+          const q = (input.value || '').trim();
+          if (q.length < 2) return;
+          if ((hid.osm_id && String(hid.osm_id.value || '').trim() !== '') || (hid.country && String(hid.country.value || '').trim() !== '')) {
+            return;
+          }
+          const cc = (ccInput && (ccInput.value || '')) ? String(ccInput.value).trim().toUpperCase() : '';
+          let stations = [];
+          try {
+            let res = await fetch(buildUrl(cc).toString(), { headers: { 'Accept': 'application/json' } });
+            if (res.ok) {
+              let js = await res.json();
+              stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+            }
+            if ((!stations || stations.length === 0) && cc) {
+              res = await fetch(buildUrl('').toString(), { headers: { 'Accept': 'application/json' } });
+              if (res.ok) {
+                let js = await res.json();
+                stations = js && js.data && Array.isArray(js.data.stations) ? js.data.stations : [];
+              }
+            }
+          } catch (e) {
+            return;
+          }
+          const best = pickExactStation(stations);
+          if (!best) return;
+          const nm = best && best.name ? String(best.name) : '';
+          if (nm) input.value = nm;
+          setMeta(best);
+          deriveScopeFromNodes();
+        }
+
       function hide(){
         box.style.display = 'none';
         box.innerHTML = '';
@@ -3125,11 +3379,12 @@ if ($a12Applies === false && !empty($contractsView)) {
             btn.appendChild(document.createElement('br'));
             btn.appendChild(meta);
           }
-	          btn.addEventListener('click', ()=>{
-	            if (nm) input.value = nm;
-	            setMeta(st);
-	            hide();
-	          });
+            btn.addEventListener('click', ()=>{
+              if (nm) input.value = nm;
+              setMeta(st);
+              deriveScopeFromNodes();
+              hide();
+            });
 	          box.appendChild(btn);
 	        });
 	        box.style.display = 'block';
@@ -3148,14 +3403,6 @@ if ($a12Applies === false && !empty($contractsView)) {
         // Two-phase lookup:
         // 1) Try with country filter (fast, reduces noise)
         // 2) If empty and we had a country, retry without country (international routes)
-        const buildUrl = (country) => {
-          const u = new URL(stationsSearchUrl, window.location.origin);
-          u.searchParams.set('q', q);
-          if (country) u.searchParams.set('country', country);
-          u.searchParams.set('limit', '10');
-          return u;
-        };
-
         if (ctrl) { try { ctrl.abort(); } catch(e) {} }
         ctrl = new AbortController();
         try {
@@ -3176,19 +3423,28 @@ if ($a12Applies === false && !empty($contractsView)) {
         }
       }
 
-	      input.addEventListener('input', ()=>{
+        input.addEventListener('input', ()=>{
           if (!shouldUseStationAutocomplete()) { clearMeta(); hide(); return; }
-	        clearMeta(); // user is typing; metadata no longer trusted
-	        if (timer) clearTimeout(timer);
-	        timer = setTimeout(fetchStations, 200);
-	      });
+          clearMeta(); // user is typing; metadata no longer trusted
+          deriveScopeFromNodes();
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(fetchStations, 200);
+        });
       input.addEventListener('focus', ()=>{
         if (!shouldUseStationAutocomplete()) { hide(); return; }
         if (box.innerHTML.trim() !== '') { box.style.display = 'block'; }
       });
-      input.addEventListener('blur', ()=> setTimeout(hide, 180));
+      input.addEventListener('change', ()=>{ window.setTimeout(resolveExactStation, 0); }, { passive:true });
+      input.addEventListener('blur', ()=>{
+        window.setTimeout(resolveExactStation, 0);
+        setTimeout(hide, 180);
+      });
       // Prevent blur while clicking suggestions
       box.addEventListener('mousedown', (e)=> e.preventDefault());
+
+      if (String(input.value || '').trim() !== '') {
+        window.setTimeout(resolveExactStation, 0);
+      }
     }
 
     setup('dep_station');
@@ -3650,6 +3906,10 @@ if ($a12Applies === false && !empty($contractsView)) {
     }
     function maybeAutofillCountry(){
       if (!opInput || !ccInput) return;
+      if (currentTransportMode() === 'rail') {
+        deriveRailCountryAndScope();
+        return;
+      }
       const ccNow = (ccInput.value || '').trim();
       // Only override when empty OR when it's still marked as assumed/default.
       const isAssumed = !!(ccAssumed && (ccAssumed.value || '').trim() === '1');
@@ -3681,7 +3941,8 @@ if ($a12Applies === false && !empty($contractsView)) {
       const cur = countryToCurrency && countryToCurrency[cc] ? countryToCurrency[cc] : 'EUR';
       const sel = card.querySelector('select[name=\"price_currency\"]');
       const price = card.querySelector('input[name=\"price\"]');
-      const pkYes = !!card.querySelector('input[name=\"price_known\"][value=\"yes\"]:checked');
+      const railPriceMode = ((card.querySelector('input[name=\"rail_price_input_mode\"]:checked') || {}).value || '').trim();
+      const pkYes = railPriceMode !== '' ? railPriceMode !== 'unknown' : !!card.querySelector('input[name=\"price_known\"][value=\"yes\"]:checked');
       if (!sel) return;
       if (!pkYes && !(price && (price.value||'').trim() !== '')) return;
       if ((sel.value || '').trim() === '') sel.value = cur;
@@ -3691,9 +3952,17 @@ if ($a12Applies === false && !empty($contractsView)) {
       opInput.addEventListener('change', ()=>{ maybeAutofillCountry(); updateProductSuggestions(); maybeAutofillPriceCurrency(); }, { passive:true });
       opInput.addEventListener('blur', ()=>{ maybeAutofillCountry(); updateProductSuggestions(); maybeAutofillPriceCurrency(); }, { passive:true });
     }
+    if (prodInput) {
+      prodInput.addEventListener('change', ()=>{ deriveRailCountryAndScope(); }, { passive:true });
+      prodInput.addEventListener('blur', ()=>{ deriveRailCountryAndScope(); }, { passive:true });
+    }
     if (ccInput) {
       ccInput.addEventListener('change', ()=>{ if (ccAssumed) ccAssumed.value = '0'; maybeAutofillPriceCurrency(); }, { passive:true });
       ccInput.addEventListener('blur', ()=>{ maybeAutofillPriceCurrency(); }, { passive:true });
+    }
+    const scopeSelect = card.querySelector('select[name="scope_choice"]');
+    if (scopeSelect) {
+      scopeSelect.addEventListener('change', ()=>{ scopeSelect.dataset.assumed = '0'; }, { passive:true });
     }
     ['dep_station','arr_station','dep_terminal','arr_terminal','price'].forEach((name)=>{
       const el = card.querySelector('[name="' + name + '"]');
@@ -3753,6 +4022,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       'price',
       'price_currency',
       'price_known',
+      'rail_price_input_mode',
       'trip_type',
       'return_dep_date',
       'return_dep_time',
@@ -3893,7 +4163,8 @@ if ($a12Applies === false && !empty($contractsView)) {
     }
     function updatePriceKnown(){
       if (!priceBlock) return;
-      const pk = radioVal('price_known') || 'no';
+      const railMode = radioVal('rail_price_input_mode');
+      const pk = railMode !== '' ? (railMode === 'unknown' ? 'no' : 'yes') : (radioVal('price_known') || 'no');
       const on = pk === 'yes';
       show(priceBlock, on);
       if (!on) {
@@ -4008,7 +4279,10 @@ if ($a12Applies === false && !empty($contractsView)) {
         }
         return;
       }
-      if (nm === 'price_known') updatePriceKnown();
+      if (nm === 'price_known' || nm === 'rail_price_input_mode') {
+        updatePriceKnown();
+        maybeAutofillPriceCurrency();
+      }
       if (nm === 'trip_type') updateFerryTripType();
       if (nm === 'journey_structure') updateModeContractQuestionVisibility();
       if (modeContractRefreshNames.has(nm)) scheduleModeContractRefresh();

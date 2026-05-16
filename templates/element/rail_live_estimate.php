@@ -64,6 +64,31 @@ $incidentTypeLabel = static function (?string $type): string {
     };
 };
 
+$normalizePrice = static function (string $value): float {
+    $value = trim($value);
+    if ($value === '') {
+        return 0.0;
+    }
+    $value = preg_replace('/[^0-9,.\-]/', '', $value) ?? '';
+    if ($value === '') {
+        return 0.0;
+    }
+    $lastComma = strrpos($value, ',');
+    $lastDot = strrpos($value, '.');
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastComma > $lastDot) {
+            $value = str_replace('.', '', $value);
+            $value = str_replace(',', '.', $value);
+        } else {
+            $value = str_replace(',', '', $value);
+        }
+    } elseif ($lastComma !== false) {
+        $value = str_replace(',', '.', $value);
+    }
+
+    return is_numeric($value) ? (float)$value : 0.0;
+};
+
 $product = trim((string)($selectedDeparture['product'] ?? ''));
 $trainNumber = trim((string)($selectedDeparture['train_number'] ?? ($selectedDeparture['line_name'] ?? '')));
 $serviceName = trim((string)($selectedDeparture['service_name'] ?? ''));
@@ -98,8 +123,6 @@ $seedIncidentType = strtolower(trim((string)($incidentSeed['incident_type'] ?? '
 $seedArt18 = !empty($incidentSeed['gate_art18']) || ((string)($flags['gate_art18'] ?? '') === '1');
 $seedArt19 = !empty($incidentSeed['gate_art19']) || ((string)($flags['gate_art19'] ?? '') === '1');
 $seedArt20 = !empty($incidentSeed['gate_art20']) || ((string)($flags['gate_art20'] ?? '') === '1');
-$transferCount = is_numeric($incidentSeed['transfer_count'] ?? null) ? (int)$incidentSeed['transfer_count'] : 0;
-$hasConnections = !empty($incidentSeed['has_connections']) || $transferCount > 0;
 $missedConnectionSuspected = !empty($incidentSeed['missed_connection_suspected']);
 $strandingContext = strtolower(trim((string)($form['rail_stranding_context'] ?? 'no')));
 $strandingLabel = match ($strandingContext) {
@@ -107,25 +130,73 @@ $strandingLabel = match ($strandingContext) {
     'track' => 'Strandet i tog / paa spor',
     default => 'Ikke strandet',
 };
-$source = strtoupper(trim((string)($selectedDeparture['source'] ?? ($opsEvidence['source'] ?? 'mock'))));
-$confidence = (float)($selectedDeparture['confidence'] ?? ($opsEvidence['confidence'] ?? 0.0));
 $art19BandLabel = $arrivalDelay !== null && $arrivalDelay >= 120 ? '50%' : '25%';
-
+$art19BandPct = $arrivalDelay !== null && $arrivalDelay >= 120 ? 50 : 25;
+$priceRaw = trim((string)($form['price'] ?? ($journey['ticketPrice']['value'] ?? ($meta['_auto']['price']['value'] ?? ''))));
+$ticketPriceAmount = $normalizePrice($priceRaw);
+$priceCurrency = strtoupper(trim((string)($form['price_currency'] ?? ($journey['ticketPrice']['currency'] ?? ($meta['_auto']['price_currency']['value'] ?? 'EUR')))));
+if ($priceCurrency === '') {
+    $priceCurrency = 'EUR';
+}
+$railPriceInputMode = strtolower(trim((string)($form['rail_price_input_mode'] ?? '')));
+if (!in_array($railPriceInputMode, ['exact', 'estimate', 'unknown'], true)) {
+    $railPriceInputMode = $ticketPriceAmount > 0 ? 'exact' : 'unknown';
+}
+$ticketPriceKnown = $railPriceInputMode !== 'unknown' && $ticketPriceAmount > 0;
+$ticketPriceIsEstimate = $railPriceInputMode === 'estimate';
+$extraordinary = strtolower(trim((string)($form['operatorExceptionalCircumstances'] ?? ($form['extraordinary_circumstances'] ?? '')))) === 'yes';
+$estimatedCompensationAmount = ($seedArt19 && !$extraordinary && $ticketPriceKnown)
+    ? round($ticketPriceAmount * ($art19BandPct / 100), 2)
+    : null;
 $statusText = $seedArt19
-    ? 'Art. 19 mulig | ' . $art19BandLabel
-    : (($seedArt18 || $seedArt20) ? 'Art. 18/20 seedet' : 'Afventer rail-bekraeftelse');
+    ? ($extraordinary ? 'Kompensation blokeret' : 'Foreloebigt kompensationsniveau')
+    : (($seedArt18 || $seedArt20) ? 'Omlaegning / assistance aktiv' : ($ticketPriceKnown ? 'Afventer haendelse' : 'Afventer flere svar'));
 $leadText = $isCompleted
     ? 'Resultatet bygger paa den valgte afgang og de afsluttede rail-svar.'
     : ($isOngoing
-        ? 'Brug kun panelet som UX-seed. Rail-data og driftssignaler skal stadig bekraeftes i incident-spoergsmaalene.'
-        : 'Panelet viser rail-seed fra valgt afgang. Brugeren skal stadig bekraefte haendelsen, foer juridisk output laases.');
+        ? 'Udfyld kun det, der er relevant nu. Rail-estimatet opdateres loebende.'
+        : 'Panelet opdateres, naar afgang, haendelse og billetpris er kendt.');
+$amountText = $extraordinary && $seedArt19
+    ? 'Blokeret'
+    : ($estimatedCompensationAmount !== null
+        ? number_format($estimatedCompensationAmount, 2, '.', ',') . ' ' . $priceCurrency
+        : ($seedArt19 ? ($art19BandLabel . ' af billetpris') : 'Afventer'));
+$amountSummary = $extraordinary && $seedArt19
+    ? 'Kompensationssporet er foreloebigt blokeret af force majeure.'
+    : ($estimatedCompensationAmount !== null
+        ? ('Foreloebigt Art. 19-estimat ud fra billetpris og ankomstforsinkelse.' . ($ticketPriceIsEstimate ? ' Beloebet bygger paa et ca. estimat fra TRIN 2.' : ''))
+        : ($seedArt19
+            ? 'Kompensationen ser mulig ud, men billetpris mangler endnu. Registrer prisen i TRIN 2 eller bekraeft den senere i backend.'
+            : (($seedArt18 || $seedArt20)
+                ? 'Kompensationen afventer stadig 60+ minutter, men assistance eller omlaegning / refund kan allerede vaere relevante.'
+                : ($ticketPriceKnown
+                    ? 'Billetpris er registreret. Kompensationen beregnes, naar haendelsen er afklaret i TRIN 5.'
+                    : 'Rail-panelet afventer stadig rail-spoergsmaalene om 60+ minutters forsinkelse, aflysning eller mistet forbindelse.'))));
+$thresholdLabel = match (true) {
+    $seedIncidentType === 'cancellation' => 'Ikke relevant ved aflysning',
+    $seedArt19 || ($arrivalDelay !== null && $arrivalDelay >= 60) => 'Aktiveret',
+    $arrivalDelay !== null => 'Under 60 min',
+    default => 'Afventer',
+};
+$opsStatus = trim((string)($opsEvidence['status'] ?? ($selectedDeparture['status'] ?? '')));
+$opsSource = strtoupper(trim((string)($opsEvidence['source'] ?? ($selectedDeparture['source'] ?? ''))));
+$opsScore = isset($opsEvidence['evidence_score']) ? (int)$opsEvidence['evidence_score'] : null;
+$opsConfidence = isset($selectedDeparture['confidence']) || isset($opsEvidence['confidence'])
+    ? number_format((float)($selectedDeparture['confidence'] ?? $opsEvidence['confidence']), 2, '.', '')
+    : '';
+$opsLabel = $opsStatus !== '' ? $statusLabel($opsStatus) : ($opsSource !== '' ? 'Ops data klar' : 'Ingen ops data');
+$opsDetailParts = array_filter([
+    $opsSource !== '' ? $opsSource : null,
+    $opsScore !== null && $opsScore > 0 ? ('score ' . $opsScore) : null,
+    $opsConfidence !== '' ? ('confidence ' . $opsConfidence) : null,
+]);
 ?>
 
 <style>
   .rail-live-estimate { margin-top:10px; padding:12px; border:1px solid #c7d2fe; border-radius:8px; background:#f8faff; }
   .rail-live-estimate-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
   .rail-live-estimate-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; border:1px solid #c7d2fe; background:#eef2ff; color:#3730a3; font-size:12px; font-weight:700; }
-  .rail-live-estimate-title { font-size:28px; font-weight:800; line-height:1; color:#0f172a; margin-top:10px; }
+  .rail-live-estimate-amount { font-size:28px; font-weight:800; line-height:1; color:#0f172a; }
   .rail-live-estimate-sub { color:#475569; font-size:12px; }
   .rail-live-estimate-grid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px; }
   .rail-live-estimate-cell { padding:8px; border-radius:6px; background:#fff; border:1px solid #e2e8f0; }
@@ -142,6 +213,10 @@ $leadText = $isCompleted
   data-seed-arrival-delay="<?= $arrivalDelay !== null ? h((string)$arrivalDelay) : '' ?>"
   data-seed-departure-delay="<?= $departureDelay !== null ? h((string)$departureDelay) : '' ?>"
   data-seed-incident-type="<?= h($seedIncidentType) ?>"
+  data-ticket-price="<?= h(number_format($ticketPriceAmount, 2, '.', '')) ?>"
+  data-currency="<?= h($priceCurrency) ?>"
+  data-price-known="<?= $ticketPriceKnown ? '1' : '0' ?>"
+  data-price-estimate="<?= $ticketPriceIsEstimate ? '1' : '0' ?>"
 >
   <div class="rail-live-estimate-head">
     <div>
@@ -151,61 +226,43 @@ $leadText = $isCompleted
     <div class="rail-live-estimate-status" data-rail-live-status><?= h($statusText) ?></div>
   </div>
 
-  <div class="rail-live-estimate-title" data-rail-live-headline><?= h($serviceLabel) ?></div>
-  <div class="rail-live-estimate-sub">
-    <?= h($routeLabel) ?><?= $operatorName !== '' ? (' | ' . h($operatorName)) : '' ?>
+  <div style="margin-top:10px;">
+    <div class="rail-live-estimate-amount" data-rail-live-amount><?= h($amountText) ?></div>
+    <div class="rail-live-estimate-sub" data-rail-live-note data-rail-live-summary>
+      <?= h($amountSummary) ?>
+      <?php if ($missedConnectionSuspected): ?>
+        <?= h(' Systemet har samtidig fundet en mulig misset forbindelse, som brugeren skal gennemgaa i incident.') ?>
+      <?php endif; ?>
+    </div>
   </div>
-  <div class="rail-live-estimate-sub" data-rail-live-note style="margin-top:4px;">
-    <?= h($seedArt19
-        ? 'Foreloebig rail-vurdering peger paa kompensation ved ankomstforsinkelse paa mindst 60 minutter. Brugeren skal stadig bekraefte det endelige faktum.'
-        : (($seedArt18 || $seedArt20)
-            ? 'Rail-panelet peger paa refund/ombooking eller assistance, men endelig rettighed afhaenger stadig af de konkrete brugerbekraeftelser.'
-            : 'Rail-panelet afventer stadig rail-spoergsmaalene om 60+ minutters forsinkelse, aflysning eller mistet forbindelse.')) ?>
-    <?php if ($missedConnectionSuspected): ?>
-      <?= h(' Systemet har samtidig fundet en mulig misset forbindelse, som brugeren skal gennemgaa i incident.') ?>
-    <?php endif; ?>
-  </div>
+
+  <div class="rail-live-estimate-sub" style="margin-top:8px;"><?= h($routeLabel) ?></div>
+  <div class="rail-live-estimate-sub" style="margin-top:4px;"><?= h($serviceLabel) ?><?= $operatorName !== '' ? (' | ' . h($operatorName)) : '' ?></div>
 
   <div class="rail-live-estimate-grid">
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Haendelse seed</div>
+      <div class="rail-live-estimate-label">Haendelse</div>
       <div class="rail-live-estimate-value" data-rail-live-incident><?= h($incidentTypeLabel($seedIncidentType)) ?></div>
     </div>
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Planlagt</div>
-      <div class="rail-live-estimate-value"><?= h($fmtTimeRange($plannedDepartureAt, $plannedArrivalAt)) ?></div>
+      <div class="rail-live-estimate-label">Kompensation</div>
+      <div class="rail-live-estimate-value" data-rail-live-art19><?= h($extraordinary && $seedArt19 ? 'Blokeret af force majeure' : ($seedArt19 ? ($art19BandLabel . ' af billetpris') : 'Ikke aktiv endnu')) ?></div>
     </div>
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Forventet</div>
-      <div class="rail-live-estimate-value"><?= h(($estimatedDepartureAt !== '' || $estimatedArrivalAt !== '') ? $fmtTimeRange($estimatedDepartureAt, $estimatedArrivalAt) : 'Afventer') ?></div>
+      <div class="rail-live-estimate-label">60 min threshold</div>
+      <div class="rail-live-estimate-value" data-rail-live-threshold><?= h($thresholdLabel) ?></div>
     </div>
     <div class="rail-live-estimate-cell">
       <div class="rail-live-estimate-label">Ankomstforsinkelse</div>
       <div class="rail-live-estimate-value" data-rail-live-arrival-delay><?= h($arrivalDelay !== null ? (($arrivalDelay > 0 ? '+' : '') . $arrivalDelay . ' min') : 'Afventer') ?></div>
     </div>
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Afgangsforsinkelse</div>
-      <div class="rail-live-estimate-value" data-rail-live-departure-delay><?= h($departureDelay !== null ? (($departureDelay > 0 ? '+' : '') . $departureDelay . ' min') : 'Afventer') ?></div>
-    </div>
-    <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Status</div>
-      <div class="rail-live-estimate-value"><?= h($statusLabel((string)($selectedDeparture['status'] ?? ($opsEvidence['status'] ?? 'unknown')))) ?></div>
-    </div>
-    <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Art. 18</div>
+      <div class="rail-live-estimate-label">Omlaegning / refund</div>
       <div class="rail-live-estimate-value" data-rail-live-art18><?= h($seedArt18 ? 'Aktiv' : 'Ikke aktiv endnu') ?></div>
     </div>
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Art. 19</div>
-      <div class="rail-live-estimate-value" data-rail-live-art19><?= h($seedArt19 ? $art19BandLabel : 'Ikke aktiv endnu') ?></div>
-    </div>
-    <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Art. 20</div>
+      <div class="rail-live-estimate-label">Assistance</div>
       <div class="rail-live-estimate-value" data-rail-live-art20><?= h($seedArt20 ? 'Aktiv' : 'Ikke aktiv endnu') ?></div>
-    </div>
-    <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Forbindelser</div>
-      <div class="rail-live-estimate-value"><?= h($hasConnections ? ($transferCount . ' skift') : 'Direkte tog') ?></div>
     </div>
     <div class="rail-live-estimate-cell">
       <div class="rail-live-estimate-label">Stranding</div>
@@ -216,9 +273,19 @@ $leadText = $isCompleted
       <div class="rail-live-estimate-value"><?= h($operatorName !== '' ? $operatorName : 'Ikke valgt endnu') ?></div>
     </div>
     <div class="rail-live-estimate-cell">
-      <div class="rail-live-estimate-label">Kilde</div>
-      <div class="rail-live-estimate-value"><?= h($source !== '' ? $source : 'Mock') ?></div>
-      <div class="rail-live-estimate-sub" style="margin-top:4px;"><?= h($confidence > 0 ? ('confidence ' . number_format($confidence, 2, '.', '')) : 'confidence ukendt') ?></div>
+      <div class="rail-live-estimate-label">Ops status</div>
+      <div class="rail-live-estimate-value"><?= h($opsLabel) ?></div>
+      <?php if ($opsDetailParts !== []): ?>
+        <div class="rail-live-estimate-sub" style="margin-top:4px;"><?= h(implode(' | ', $opsDetailParts)) ?></div>
+      <?php endif; ?>
+    </div>
+    <div class="rail-live-estimate-cell">
+      <div class="rail-live-estimate-label">Planlagt</div>
+      <div class="rail-live-estimate-value"><?= h($fmtTimeRange($plannedDepartureAt, $plannedArrivalAt)) ?></div>
+    </div>
+    <div class="rail-live-estimate-cell">
+      <div class="rail-live-estimate-label">Forventet</div>
+      <div class="rail-live-estimate-value"><?= h(($estimatedDepartureAt !== '' || $estimatedArrivalAt !== '') ? $fmtTimeRange($estimatedDepartureAt, $estimatedArrivalAt) : 'Afventer') ?></div>
     </div>
   </div>
 </div>

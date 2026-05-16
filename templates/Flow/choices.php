@@ -12,7 +12,37 @@ $isBeforeStart = ($travelState === 'before_start');
 $isFutureLike = ($isOngoing || $isBeforeStart);
 $multimodal = (array)($meta['_multimodal'] ?? []);
 $transportMode = strtolower((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? ($multimodal['transport_mode'] ?? 'rail'))));
+$isRail = ($transportMode === 'rail');
 $isFerry = ($transportMode === 'ferry');
+$priceHints = $priceHints ?? ($meta['price_hints'] ?? $form['price_hints'] ?? []);
+$hintText = function (string $key) use ($priceHints): string {
+    if (!is_array($priceHints)) {
+        return '';
+    }
+    $h = $priceHints[$key] ?? null;
+    if (!is_array($h) || !isset($h['min'], $h['max'], $h['currency'])) {
+        return '';
+    }
+    $min = number_format((float)$h['min'], 0, ',', '.');
+    $max = number_format((float)$h['max'], 0, ',', '.');
+
+    return "Typisk interval: {$min}-{$max} {$h['currency']}";
+};
+$railTaxiHint = $hintText('taxi');
+$railAltTransportHint = $hintText('altTransport');
+$railChoiceHintParts = array_values(array_filter([
+    $railTaxiHint !== '' ? 'Taxi / minibus: ' . $railTaxiHint : '',
+    $railAltTransportHint !== '' ? 'Alternativ videre transport: ' . $railAltTransportHint : '',
+]));
+$railCapsFallbackText = $railChoiceHintParts !== []
+    ? implode(' | ', $railChoiceHintParts)
+    : 'Hold dig til noedvendige og rimelige loesninger. Backend vurderer senere beloebet op mod rail-niveauer og dokumentation.';
+$blockedSelfPaidTypeValue = strtolower(trim((string)($form['blocked_self_paid_transport_type'] ?? '')));
+$railSpecificChoiceHint = match ($blockedSelfPaidTypeValue) {
+    'taxi', 'rideshare' => $railTaxiHint,
+    'rail', 'bus' => $railAltTransportHint,
+    default => '',
+};
 $maps = $maps ?? [];
 $mapsOptIn = !empty($form['maps_opt_in_trin5']);
 $mapsTrin5 = (is_array($maps) && isset($maps['trin5']) && is_array($maps['trin5'])) ? $maps['trin5'] : null;
@@ -155,6 +185,7 @@ try {
     if ($isStrandedTrin5 !== 'yes' && $isStrandedTrin5 !== 'no') { $isStrandedTrin5 = 'no'; }
 ?>
 <?= $this->element('flow_locked_notice') ?>
+<?= $this->element('rail_live_estimate', ['form' => $form, 'flags' => $flags, 'meta' => $meta, 'journey' => $journey ?? [], 'incident' => $incident]) ?>
 <?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'choices'], 'type' => 'file', 'novalidate' => true]) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 
@@ -162,6 +193,13 @@ try {
     <div id="art20Wrapper" class="card mt12 <?= ($art20Disabled && !$isPreview) ? 'hidden' : '' ?>" data-art="20" data-art20-disabled="<?= $art20Disabled ? '1' : '0' ?>">
         <div class="card-title"><span class="icon">&#128652;</span><span><?= h($transportCardTitle) ?></span></div>
         <p class="small muted"><?= h($transportHint) ?></p>
+        <?php if ($isRail): ?>
+        <div class="small mt8" style="background:#eef7ff; padding:8px; border-radius:6px;">
+            <strong>Vejledende rail-niveauer (ikke faste juridiske caps)</strong>
+            <div class="muted mt4">Hvis du selv maa finde akut videre transport fra banen, saa hold dig til noedvendige og rimelige loesninger. Dokumentation og endelig vurdering sker senere i backend-sagen.</div>
+            <div class="muted mt4"><?= h($railCapsFallbackText) ?></div>
+        </div>
+        <?php endif; ?>
 
         <div class="mt8">
             <div><?= h($strandedQuestion) ?></div>
@@ -276,6 +314,9 @@ try {
                             <option value="taxi" <?= $tt==='taxi'?'selected':'' ?>>Taxi</option>
                             <option value="other" <?= $tt==='other'?'selected':'' ?>>Andet</option>
                         </select>
+                        <?php if ($isRail): ?>
+                        <div class="small muted mt4"><?= h($railCapsFallbackText) ?></div>
+                        <?php endif; ?>
                     </label>
                 </div>
             </div>
@@ -291,7 +332,8 @@ try {
             </div>
 
             <div class="mt4" data-show-if="blocked_no_transport_action:self_arranged" data-art="20(2c)">
-            <div class="small muted">Angiv egne udgifter hvis du selv ordnede transport.</div>
+            <div class="small muted"><?= $isRail ? 'Registrer kun transporttypen her. Beloeb, valuta og dokumentation indtastes senere i backend-sagen.' : 'Angiv egne udgifter hvis du selv ordnede transport.' ?></div>
+            <?php if ($isRail): ?><div class="small muted mt4">Vejledende rail-niveauer: <?= h($railCapsFallbackText) ?></div><?php endif; ?>
             <?php if ($isFerry): ?><div class="small muted mt4">Brug kun denne blok til lokal/noedtransport fra det strandede sted. Ny hovedbillet eller egentlig ombooking hører til i TRIN 7.</div><?php endif; ?>
             <div class="grid-2 mt4">
                 <label><?= h($altTransportTypeLabel) ?>
@@ -307,7 +349,13 @@ try {
                         <option value="rideshare" <?= $bst==='rideshare'?'selected':'' ?>>Samkoersel/rideshare</option>
                         <option value="other" <?= $bst==='other'?'selected':'' ?>>Andet</option>
                     </select>
+                    <?php if ($isRail && $railSpecificChoiceHint !== ''): ?>
+                    <div class="small muted mt4"><?= h((in_array($blockedSelfPaidTypeValue, ['taxi', 'rideshare'], true) ? 'Typisk niveau for taxi/minibus: ' : 'Typisk niveau for alternativ videre transport: ') . $railSpecificChoiceHint) ?></div>
+                    <?php elseif ($isRail): ?>
+                    <div class="small muted mt4"><?= h($railCapsFallbackText) ?></div>
+                    <?php endif; ?>
                 </label>
+                <?php if (!$isRail): ?>
                 <label>Beloeb
                     <input type="number" step="0.01" name="blocked_self_paid_amount" value="<?= h($v('blocked_self_paid_amount')) ?>" />
                 </label>
@@ -326,8 +374,9 @@ try {
                 <label class="small">Kvittering
                     <input type="file" name="blocked_self_paid_receipt" accept=".pdf,.jpg,.jpeg,.png" />
                 </label>
+                <?php endif; ?>
             </div>
-            <?php if ($f = $v('blocked_self_paid_receipt')): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
+            <?php if (!$isRail && ($f = $v('blocked_self_paid_receipt'))): ?><div class="small muted mt4">Uploadet: <?= h(basename($f)) ?></div><?php endif; ?>
         </div>
         </div>
 

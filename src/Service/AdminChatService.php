@@ -536,6 +536,9 @@ final class AdminChatService
 
             case 'refund_requested':
             case 'return_to_origin_expense':
+            case 'offer_provided':
+            case 'self_purchased_new_ticket':
+            case 'self_purchase_approved_by_operator':
             case 'reroute_same_conditions_soonest':
             case 'reroute_later_at_choice':
             case 'reroute_info_within_100min':
@@ -544,6 +547,22 @@ final class AdminChatService
                 $value = $this->parseTriChoice($input);
                 if ($value === null) {
                     return ['ok' => false, 'message' => 'Brug ja, nej eller ved ikke.'];
+                }
+                $form[$key] = $value;
+                break;
+
+            case 'self_purchase_reason':
+                $value = $this->parseChoice($input, ['no_offer', 'unusable_solution', 'urgent_need', 'missed_connection', 'other']);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug no_offer, unusable_solution, urgent_need, missed_connection eller other.'];
+                }
+                $form[$key] = $value;
+                break;
+
+            case 'reroute_extra_costs_type':
+                $value = $this->parseChoice($input, ['new_ticket', 'bus', 'taxi', 'rideshare', 'accommodation', 'other']);
+                if ($value === null) {
+                    return ['ok' => false, 'message' => 'Brug new_ticket, bus, taxi, rideshare, accommodation eller other.'];
                 }
                 $form[$key] = $value;
                 break;
@@ -747,9 +766,9 @@ final class AdminChatService
         if (in_array('through_ticket_disclosure', $art12Missing, true) && ($form['through_ticket_disclosure'] ?? '') === '') {
             $questions[] = $askTri(
                 'through_ticket_disclosure',
-                'Blev kontraktstrukturen tydeligt oplyst foer koeb?',
+                'Var passageren tydeligt informeret om, hvorvidt billetten/billetterne var gennemgaaende eller saerskilte?',
                 'Artikel 12 through ticket disclosure',
-                '/flow/entitlements'
+                '/flow/rail-departure-select'
             );
         }
 
@@ -833,8 +852,99 @@ final class AdminChatService
             );
         }
 
-            if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
-                $transportMode = strtolower((string)($form['transport_mode'] ?? 'rail'));
+        if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
+            $transportMode = strtolower((string)($form['transport_mode'] ?? 'rail'));
+            if ($transportMode === 'rail') {
+                if (($form['offer_provided'] ?? '') === '') {
+                    $questions[] = $askTri(
+                        'offer_provided',
+                        'Tilboed operatoeren en brugbar omlaegning?',
+                        'Artikel 18 2 rail omlaegning offered',
+                        '/flow/remedies'
+                    );
+                }
+                if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
+                    $questions[] = [
+                        'key' => 'reroute_later_outcome',
+                        'prompt' => 'Hvad skete der med den senere omlaegning? Vae lg operator_offered, self_bought eller no_solution.',
+                        'choices' => [
+                            ['value' => 'operator_offered', 'label' => 'operator_offered'],
+                            ['value' => 'self_bought', 'label' => 'self_bought'],
+                            ['value' => 'no_solution', 'label' => 'no_solution'],
+                        ],
+                        'citation_query' => 'Artikel 18 later reroute outcome',
+                        'flow_path' => '/flow/remedies',
+                    ];
+                }
+
+                $offerProvided = (string)($form['offer_provided'] ?? '');
+                if ($offerProvided === 'no' && ($form['self_purchased_new_ticket'] ?? '') === '') {
+                    $questions[] = $askTri(
+                        'self_purchased_new_ticket',
+                        'Maatte passageren selv finde en anden videre rejse?',
+                        'Artikel 18 3 rail self arranged',
+                        '/flow/remedies'
+                    );
+                }
+                if ($offerProvided === 'no' && ($form['self_purchased_new_ticket'] ?? '') === 'yes') {
+                    if (($form['self_purchase_reason'] ?? '') === '') {
+                        $questions[] = [
+                            'key' => 'self_purchase_reason',
+                            'prompt' => 'Hvorfor maatte passageren selv finde en loesning? Brug no_offer, unusable_solution, urgent_need, missed_connection eller other.',
+                            'choices' => [
+                                ['value' => 'no_offer', 'label' => 'no_offer'],
+                                ['value' => 'unusable_solution', 'label' => 'unusable_solution'],
+                                ['value' => 'urgent_need', 'label' => 'urgent_need'],
+                                ['value' => 'missed_connection', 'label' => 'missed_connection'],
+                                ['value' => 'other', 'label' => 'other'],
+                            ],
+                            'citation_query' => 'Artikel 18 3 rail self arranged reason',
+                            'flow_path' => '/flow/remedies',
+                        ];
+                    }
+                    if (($form['self_purchase_approved_by_operator'] ?? '') === '') {
+                        $questions[] = $askTri(
+                            'self_purchase_approved_by_operator',
+                            'Var passagerens egen loesning godkendt af operatoeren?',
+                            'Artikel 18 3 operator approval',
+                            '/flow/remedies'
+                        );
+                    }
+                    if (($form['reroute_info_within_100min'] ?? '') === '') {
+                        $questions[] = $askTri(
+                            'reroute_info_within_100min',
+                            'Kom der brugbar omlaegningsinformation inden 100 minutter?',
+                            'Artikel 18 3 100 minutes',
+                            '/flow/remedies'
+                        );
+                    }
+                }
+                if (in_array($offerProvided, ['yes', 'no'], true) && (($offerProvided === 'yes') || (($form['self_purchased_new_ticket'] ?? '') === 'yes'))) {
+                    if (($form['reroute_extra_costs'] ?? '') === '') {
+                        $questions[] = $askTri(
+                            'reroute_extra_costs',
+                            'Havde passageren alligevel noedvendige udgifter i forbindelse med omlaegningen eller egen videre rejse?',
+                            'Artikel 18 rail reroute expenses',
+                            '/flow/remedies'
+                        );
+                    } elseif (($form['reroute_extra_costs'] ?? '') === 'yes' && ($form['reroute_extra_costs_type'] ?? '') === '') {
+                        $questions[] = [
+                            'key' => 'reroute_extra_costs_type',
+                            'prompt' => 'Hvilken rail-udgiftstype passer bedst? Brug new_ticket, bus, taxi, rideshare, accommodation eller other.',
+                            'choices' => [
+                                ['value' => 'new_ticket', 'label' => 'new_ticket'],
+                                ['value' => 'bus', 'label' => 'bus'],
+                                ['value' => 'taxi', 'label' => 'taxi'],
+                                ['value' => 'rideshare', 'label' => 'rideshare'],
+                                ['value' => 'accommodation', 'label' => 'accommodation'],
+                                ['value' => 'other', 'label' => 'other'],
+                            ],
+                            'citation_query' => 'Artikel 18 rail reroute expense type',
+                            'flow_path' => '/flow/remedies',
+                        ];
+                    }
+                }
+            } else {
                 $rerouteMap = [
                     'reroute_same_conditions_soonest' => ['Blev omlaegning paa sammenlignelige vilkaar tilbudt snarest muligt?', 'Artikel 18 1 b omlaegning', '/flow/remedies'],
                     'reroute_later_at_choice' => ['Blev omlaegning paa et senere tidspunkt efter passagerens valg tilbudt?', 'Artikel 18 1 c later at choice', '/flow/remedies'],
@@ -845,39 +955,40 @@ final class AdminChatService
                 } else {
                     $rerouteMap['reroute_info_within_100min'] = ['Kom der brugbar omlaegningsinformation inden 100 minutter?', 'Artikel 18 3 100 minutes', '/flow/remedies'];
                 }
-            foreach ($rerouteMap as $key => [$prompt, $query, $path]) {
-                if (($form[$key] ?? '') === '') {
-                    $questions[] = $askTri($key, $prompt, $query, $path);
+                foreach ($rerouteMap as $key => [$prompt, $query, $path]) {
+                    if (($form[$key] ?? '') === '') {
+                        $questions[] = $askTri($key, $prompt, $query, $path);
+                    }
                 }
-            }
-            if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
-                $questions[] = [
-                    'key' => 'reroute_later_outcome',
-                    'prompt' => 'Hvad skete der med den senere omlaegning? Vae lg operator_offered, self_bought eller no_solution.',
-                    'choices' => [
-                        ['value' => 'operator_offered', 'label' => 'operator_offered'],
-                        ['value' => 'self_bought', 'label' => 'self_bought'],
-                        ['value' => 'no_solution', 'label' => 'no_solution'],
-                    ],
-                    'citation_query' => 'Artikel 18 later reroute outcome',
-                    'flow_path' => '/flow/remedies',
-                ];
-            }
-            if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === 'self_bought' && trim((string)($form['reroute_later_self_paid_amount'] ?? '')) === '') {
-                $questions[] = $askAmount(
-                    'reroute_later_self_paid_amount',
-                    'Hvor meget betalte passageren selv for den senere omlaegning?',
-                    'Artikel 18 later reroute self bought amount',
-                    '/flow/remedies'
-                );
-            }
-            if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
-                $questions[] = $askAmount(
-                    'reroute_extra_costs_amount',
-                    'Hvor store var de ekstra omlaegningsomkostninger?',
-                    'Artikel 18 2 reroute extra costs amount',
-                    '/flow/remedies'
-                );
+                if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
+                    $questions[] = [
+                        'key' => 'reroute_later_outcome',
+                        'prompt' => 'Hvad skete der med den senere omlaegning? Vae lg operator_offered, self_bought eller no_solution.',
+                        'choices' => [
+                            ['value' => 'operator_offered', 'label' => 'operator_offered'],
+                            ['value' => 'self_bought', 'label' => 'self_bought'],
+                            ['value' => 'no_solution', 'label' => 'no_solution'],
+                        ],
+                        'citation_query' => 'Artikel 18 later reroute outcome',
+                        'flow_path' => '/flow/remedies',
+                    ];
+                }
+                if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === 'self_bought' && trim((string)($form['reroute_later_self_paid_amount'] ?? '')) === '') {
+                    $questions[] = $askAmount(
+                        'reroute_later_self_paid_amount',
+                        'Hvor meget betalte passageren selv for den senere omlaegning?',
+                        'Artikel 18 later reroute self bought amount',
+                        '/flow/remedies'
+                    );
+                }
+                if (($form['reroute_extra_costs'] ?? '') === 'yes' && trim((string)($form['reroute_extra_costs_amount'] ?? '')) === '') {
+                    $questions[] = $askAmount(
+                        'reroute_extra_costs_amount',
+                        'Hvor store var de ekstra omlaegningsomkostninger?',
+                        'Artikel 18 2 reroute extra costs amount',
+                        '/flow/remedies'
+                    );
+                }
             }
         }
 
@@ -1150,6 +1261,10 @@ final class AdminChatService
             'hotel_self_paid_amount' => 190,
             'a20_3_self_paid_amount' => 200,
             'remedy_choice' => 210,
+            'offer_provided' => 220,
+            'self_purchased_new_ticket' => 230,
+            'self_purchase_reason' => 240,
+            'self_purchase_approved_by_operator' => 250,
             'refund_requested' => 220,
             'return_to_origin_expense' => 230,
             'return_to_origin_amount' => 240,
@@ -1158,6 +1273,7 @@ final class AdminChatService
             'air_article8_choice_offered' => 265,
             'reroute_info_within_100min' => 270,
             'reroute_extra_costs' => 280,
+            'reroute_extra_costs_type' => 285,
             'reroute_later_outcome' => 290,
             'reroute_later_self_paid_amount' => 300,
             'reroute_extra_costs_amount' => 310,
@@ -1200,8 +1316,8 @@ final class AdminChatService
         }
 
         $art12Labels = [
-            'separate_contract_notice' => ['Afklar separate kontrakter', 'Notits om separate kontrakter mangler.', '/flow/entitlements'],
-            'through_ticket_disclosure' => ['Afklar kontraktoplysning', 'Disclosure om kontraktstruktur mangler.', '/flow/entitlements'],
+            'separate_contract_notice' => ['Afklar separate kontrakter', 'Notits om separate kontrakter mangler.', '/flow/rail-departure-select'],
+            'through_ticket_disclosure' => ['Afklar kontraktoplysning', 'Oplysning om gennemgaaende eller saerskilte billetter mangler.', '/flow/rail-departure-select'],
         ];
         foreach ((array)(Hash::get($actual, 'art12.missing') ?? []) as $key) {
             if (!isset($art12Labels[$key])) {
@@ -1251,6 +1367,38 @@ final class AdminChatService
                 $add('return_to_origin_amount', 'Angiv returbeløb', 'Retur til udgangspunkt mangler beløb.', '/flow/remedies', 'art18', 'important_before_export');
             }
             if (in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true)) {
+                if ($transportMode === 'rail') {
+                    $offerProvided = (string)($form['offer_provided'] ?? '');
+                    if ($offerProvided === '') {
+                        $add('offer_provided', 'Afklar tilbudt omlaegning', 'Det er uklart om jernbanevirksomheden tilboed en brugbar omlaegning.', '/flow/remedies', 'art18', 'important_before_export');
+                    }
+                    if ($remedyChoice === 'reroute_later' && ($form['reroute_later_outcome'] ?? '') === '') {
+                        $add('reroute_later_outcome', 'Afklar senere udfald', 'Det er uklart hvad der skete ved senere omlaegning.', '/flow/remedies', 'art18', 'important_before_export');
+                    }
+                    if ($offerProvided === 'no') {
+                        if (($form['self_purchased_new_ticket'] ?? '') === '') {
+                            $add('self_purchased_new_ticket', 'Afklar egen videre rejse', 'Det er uklart om passageren selv maatte finde en anden videre rejse.', '/flow/remedies', 'art18', 'important_before_export');
+                        }
+                        if (($form['self_purchased_new_ticket'] ?? '') === 'yes') {
+                            if (($form['self_purchase_reason'] ?? '') === '') {
+                                $add('self_purchase_reason', 'Afklar egen loesning', 'Det er uklart hvorfor passageren selv maatte finde en loesning.', '/flow/remedies', 'art18', 'important_before_export');
+                            }
+                            if (($form['self_purchase_approved_by_operator'] ?? '') === '') {
+                                $add('self_purchase_approved_by_operator', 'Afklar operatoergodkendelse', 'Det er uklart om passagerens egen loesning var godkendt af operatoeren.', '/flow/remedies', 'art18', 'important_before_export');
+                            }
+                            if (($form['reroute_info_within_100min'] ?? '') === '') {
+                                $add('reroute_info_within_100min', 'Afklar 100-minuttersregel', 'Det er uklart om brugbar information kom inden 100 minutter.', '/flow/remedies', 'art18', 'important_before_export');
+                            }
+                        }
+                    }
+                    if (in_array($offerProvided, ['yes', 'no'], true) && ($offerProvided === 'yes' || ($form['self_purchased_new_ticket'] ?? '') === 'yes')) {
+                        if (($form['reroute_extra_costs'] ?? '') === '') {
+                            $add('reroute_extra_costs', 'Afklar ekstra omlaegningsomkostninger', 'Det er uklart om omlaegningen eller den egen videre rejse gav noedvendige udgifter.', '/flow/remedies', 'art18', 'important_before_export');
+                        } elseif (($form['reroute_extra_costs'] ?? '') === 'yes' && ($form['reroute_extra_costs_type'] ?? '') === '') {
+                            $add('reroute_extra_costs_type', 'Afklar udgiftstype', 'Det er uklart hvilken type rail-udgift der opstod i forbindelse med omlaegningen.', '/flow/remedies', 'art18', 'important_before_export');
+                        }
+                    }
+                } else {
                 $rerouteTri = [
                     'reroute_same_conditions_soonest' => ['Afklar omlægning snarest', 'Det er uklart om sammenlignelig omlægning blev tilbudt snarest muligt.'],
                     'reroute_later_at_choice' => ['Afklar senere omlægning', 'Det er uklart om senere omlægning efter passagerens valg blev tilbudt.'],
@@ -1276,6 +1424,7 @@ final class AdminChatService
                     $add('reroute_extra_costs_amount', 'Angiv ekstra omlægningsbeløb', 'Ekstra omlægningsomkostninger mangler beløb.', '/flow/remedies', 'art18', 'important_before_export');
                 }
             }
+        }
         }
 
         if (($summary['gross_claim'] ?? null) === null && (($summary['partial'] ?? false) === false)) {
@@ -1689,6 +1838,10 @@ final class AdminChatService
             'refund_requested' => 'Refusionsvalg gemt.',
             'return_to_origin_expense' => 'Tilbage-til-udgangspunkt udgift gemt.',
             'return_to_origin_amount' => 'Tilbage-til-udgangspunkt beloeb gemt: ' . (string)($flow['form']['return_to_origin_amount'] ?? '') . ' ' . (string)($flow['form']['return_to_origin_currency'] ?? ''),
+            'offer_provided' => 'Rail-omlaegningstilbud gemt.',
+            'self_purchased_new_ticket' => 'Egen videre rejse gemt.',
+            'self_purchase_reason' => 'Aarsag til egen loesning gemt.',
+            'self_purchase_approved_by_operator' => 'Operatoergodkendelse gemt.',
             'reroute_same_conditions_soonest' => 'Omlaegning snarest-oplysning gemt.',
             'reroute_later_at_choice' => 'Omlaegning senere-oplysning gemt.',
             'reroute_later_outcome' => 'Senere omlaegningsudfald gemt.',
@@ -1696,6 +1849,7 @@ final class AdminChatService
             'reroute_info_within_100min' => '100-minutters-oplysning gemt.',
             'air_article8_choice_offered' => 'Article 8-valg gemt.',
             'reroute_extra_costs' => 'Ekstra omlaegningsomkostninger gemt.',
+            'reroute_extra_costs_type' => 'Rail-udgiftstype gemt.',
             'reroute_extra_costs_amount' => 'Ekstra omlaegningsbeloeb gemt: ' . (string)($flow['form']['reroute_extra_costs_amount'] ?? '') . ' ' . (string)($flow['form']['reroute_extra_costs_currency'] ?? ''),
             default => 'Svar gemt.',
         };

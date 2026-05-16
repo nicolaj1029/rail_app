@@ -191,6 +191,22 @@ function mapJourney(journey, criteria) {
 
   const line = first.line || {};
   const operator = line.operator || {};
+  const operatorNames = Array.from(
+    new Map(
+      railLegs
+        .map((railLeg) => String(railLeg?.line?.operator?.name || "").trim())
+        .filter(Boolean)
+        .map((value) => [value.toLowerCase(), value])
+    ).values()
+  );
+  const operatorCodes = Array.from(
+    new Map(
+      railLegs
+        .map((railLeg) => String(railLeg?.line?.operator?.id || "").trim())
+        .filter(Boolean)
+        .map((value) => [value.toLowerCase(), value])
+    ).values()
+  );
   const remarks = []
     .concat(Array.isArray(journey.remarks) ? journey.remarks : [])
     .map((remark) => String(remark?.text || remark?.summary || "").trim())
@@ -241,6 +257,8 @@ function mapJourney(journey, criteria) {
       leg_count: legs.length,
       rail_leg_count: railLegs.length,
       transfer_count: Math.max(0, railLegs.length - 1),
+      operator_names: operatorNames,
+      operator_codes: operatorCodes,
       transfer_station_names: transferStationNames,
       has_connections: railLegs.length > 1,
       has_replacement: hasReplacement
@@ -249,8 +267,14 @@ function mapJourney(journey, criteria) {
 }
 
 export async function searchJourneys(criteria = {}) {
-  const from = await resolveLocationId(String(criteria.from_station || ""));
-  const to = await resolveLocationId(String(criteria.to_station || ""));
+  const fromStationId = String(criteria.from_station_id || "").trim();
+  const toStationId = String(criteria.to_station_id || "").trim();
+  const from = fromStationId
+    ? { id: fromStationId, name: canonicalizeStationName(String(criteria.from_station || "")) }
+    : await resolveLocationId(String(criteria.from_station || ""));
+  const to = toStationId
+    ? { id: toStationId, name: canonicalizeStationName(String(criteria.to_station || "")) }
+    : await resolveLocationId(String(criteria.to_station || ""));
   const date = String(criteria.date || "").trim();
   const time = String(criteria.time || "").trim() || "00:00";
   if (!from.id || !to.id || !date) {

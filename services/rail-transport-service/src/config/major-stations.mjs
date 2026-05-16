@@ -281,6 +281,7 @@ export const majorStations = [
   },
   {
     canonicalName: "Barcelona Sants",
+    transportRestId: "7100064",
     transportRestQuery: "Barcelona Sants",
     country: "ES",
     aliases: ["Barcelona Sants", "Barcelona-Sants"]

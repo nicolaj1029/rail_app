@@ -7,6 +7,8 @@ $form = $form ?? [];
 $flags = $flags ?? [];
 $compute = $compute ?? [];
 $incident = $incident ?? [];
+$meta = $meta ?? [];
+$journey = $journey ?? [];
 $profile = $profile ?? ['articles' => []];
 $travelState = strtolower((string)($flags['travel_state'] ?? $form['travel_state'] ?? ''));
 $isOngoing = ($travelState === 'ongoing');
@@ -114,6 +116,20 @@ if (!$step10Ready) {
 
 $priceFromTicket = (float)($ticketPriceAmount ?? 0);
 $priceCurrency = (string)($currency ?? 'EUR');
+$ticketPriceKnownForSummary = $priceFromTicket > 0;
+$railPriceInputMode = strtolower(trim((string)($form['rail_price_input_mode'] ?? '')));
+if (!in_array($railPriceInputMode, ['exact', 'estimate', 'unknown'], true)) {
+    $railPriceInputMode = $ticketPriceKnownForSummary ? 'exact' : 'unknown';
+}
+$railPriceIsEstimate = $transportMode === 'rail' && $railPriceInputMode === 'estimate';
+$ticketPriceSummaryLabel = $railPriceIsEstimate ? 'Billetpris fra TRIN 2 (ca. estimat):' : 'Billetpris fra TRIN 2:';
+$ticketPriceSummaryNote = $ticketPriceKnownForSummary
+    ? ($railPriceIsEstimate
+        ? 'Billetprisen er oplyst som et ca. estimat i TRIN 2. Rail Art. 19 og samlet krav er derfor foreloebige, indtil prisen er bekraeftet i backend.'
+        : 'Prisgrundlaget er hentet fra TRIN 2.')
+    : ($transportMode === 'rail'
+        ? 'Billetpris mangler endnu. Rail Art. 19 og samlet krav er derfor kun delvist beregnet, indtil prisen er registreret i TRIN 2 eller bekraeftet i backend.'
+        : 'Billetpris mangler endnu, saa kompensationen kan vaere foreloebig.');
 $remedyChoice = (string)($form['remedyChoice'] ?? '');
 $rerouteExtraAmount = is_numeric($form['reroute_extra_costs_amount'] ?? null)
     ? (float)$form['reroute_extra_costs_amount']
@@ -338,6 +354,9 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
   <p class="small muted"><?= h($compHint) ?></p>
 <?php endif; ?>
 <?= $this->element('flow_locked_notice') ?>
+<?php if ($transportMode === 'rail'): ?>
+  <?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+<?php endif; ?>
 <?php if ($isAir): ?>
   <?= $this->element('air_downgrade_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
 <?php endif; ?>
@@ -1397,8 +1416,10 @@ $totCurrency = (string)($totals['currency'] ?? $tot['currency'] ?? $priceCurrenc
     if ($returnCur === '') { $returnCur = $priceCurrency; }
   ?>
   <div class="small mt4">
-    <?= __('Billetpris:') ?> <strong><?= number_format($priceFromTicket, 2) ?> <?= h($priceCurrency) ?></strong>
+    <?= h($ticketPriceSummaryLabel) ?>
+    <strong><?= $ticketPriceKnownForSummary ? number_format($priceFromTicket, 2) . ' ' . h($priceCurrency) : __('Afventer prisgrundlag') ?></strong>
   </div>
+  <div class="small muted mt4"><?= h($ticketPriceSummaryNote) ?></div>
   <div style="display:grid;gap:6px;">
     <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff;">
       <div class="small"><strong><?= __('Art. 18(1) – Refusion') ?></strong></div>

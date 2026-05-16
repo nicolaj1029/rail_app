@@ -113,22 +113,48 @@ final class RailTransportServiceManager
             ];
         }
 
-        $psScript = sprintf(
-            'if (Get-Process -Id %d -ErrorAction SilentlyContinue) { Stop-Process -Id %d -Force }',
-            $pid,
-            $pid
-        );
-        $command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' . escapeshellarg($psScript);
         $output = [];
-        $exitCode = 1;
-        @exec($command . ' 2>&1', $output, $exitCode);
+        $shutdownViaHttp = false;
 
-        @unlink($this->pidFile());
-        usleep(400000);
+        if ((new RailTransportServiceClient())->shutdown()) {
+            $shutdownViaHttp = true;
+            usleep(1200000);
+        }
 
         $running = $this->processExists($pid);
+
+        if ($running) {
+            $psScript = sprintf(
+                'if (Get-Process -Id %d -ErrorAction SilentlyContinue) { Stop-Process -Id %d -Force }',
+                $pid,
+                $pid
+            );
+            $command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' . escapeshellarg($psScript);
+            $psOutput = [];
+            $exitCode = 1;
+            @exec($command . ' 2>&1', $psOutput, $exitCode);
+            $output = array_merge($output, $psOutput);
+            usleep(600000);
+            $running = $this->processExists($pid);
+        }
+
+        if ($running) {
+            $taskkillOutput = [];
+            $taskkillExit = 1;
+            @exec(sprintf('cmd.exe /c taskkill /PID %d /T /F 2>&1', $pid), $taskkillOutput, $taskkillExit);
+            $output = array_merge($output, $taskkillOutput);
+            usleep(600000);
+            $running = $this->processExists($pid);
+        }
+
+        if (!$running) {
+            @unlink($this->pidFile());
+        }
+
         $message = !$running
-            ? 'Rail transport service er stoppet.'
+            ? ($shutdownViaHttp
+                ? 'Rail transport service er stoppet via service-shutdown.'
+                : 'Rail transport service er stoppet.')
             : 'Service-processen kunne ikke stoppes.';
         $combinedOutput = strtolower(implode(' ', array_map('strval', $output)));
         if ($running && (str_contains($combinedOutput, 'adgang nægtet') || str_contains($combinedOutput, 'access is denied'))) {

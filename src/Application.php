@@ -29,6 +29,8 @@ use Cake\Routing\Middleware\AssetMiddleware;
 use Cake\Routing\Middleware\RoutingMiddleware;
 use App\Middleware\AdminBasicAuthMiddleware;
 use App\Middleware\ApiCorsMiddleware;
+use App\Middleware\PublicSiteModeMiddleware;
+use App\Middleware\SiteBasicAuthMiddleware;
 
 /**
  * Application setup class.
@@ -73,6 +75,8 @@ class Application extends BaseApplication
             ->add(new AssetMiddleware([
                 'cacheTime' => Configure::read('Asset.cacheTime'),
             ]))
+            ->add(new SiteBasicAuthMiddleware())
+            ->add(new PublicSiteModeMiddleware())
 
             // Add routing middleware.
             // If you have a large number of routes connected, turning on routes

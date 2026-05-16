@@ -118,6 +118,9 @@ $railSeedTransferCount = is_numeric($railIncidentSeed['transfer_count'] ?? null)
 $railSeedMissedConnectionSuspected = !empty($railIncidentSeed['missed_connection_suspected']);
 $railProblemAnchor = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_problem_anchor'] ?? []) : [];
 $selectedRailDeparture = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_selected_departure'] ?? []) : [];
+$railContractSeed = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_contract_structure_seed'] ?? []) : [];
+$railCurrentLocationAnchor = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['rail_current_location_anchor'] ?? []) : [];
+$railContractOptions = (!$isFerry && !$isBus && !$isAir) ? (array)($meta['contract_options'] ?? []) : [];
 $railProblemAnchorType = strtolower(trim((string)($railProblemAnchor['type'] ?? '')));
 $railProblemAnchorStation = trim((string)($railProblemAnchor['station_name'] ?? ''));
 $railProblemAnchorLabel = trim((string)($railProblemAnchor['label'] ?? ''));
@@ -156,9 +159,12 @@ $railActualDelayNoLabel = $isCompleted ? 'Nej / ved ikke' : 'Nej';
 $railActualDelayNote = $isCompleted
     ? 'Hvis du ikke kender det praecise minutantal endnu, kan du fortsaette og justere senere i sagen.'
     : 'Tip: Hvis du ikke ved det endnu, kan du fortsaette og opdatere senere.';
-$railMissedConnectionPrompt = $isCompleted
-    ? 'Blev den valgte forbindelse faktisk misset?'
-    : 'Er forbindelsen ved problemstedet faktisk misset?';
+$railMissedConnectionPrompt = match (true) {
+    $railProblemAnchorType === 'transfer' && $isCompleted => 'Blev den valgte forbindelse faktisk misset?',
+    $railProblemAnchorType === 'transfer' => 'Er forbindelsen ved problemstedet faktisk misset?',
+    $isCompleted => 'Mistede du senere en planlagt videre forbindelse pga. haendelsen?',
+    default => 'Betoed haendelsen, at du senere mistede en planlagt videre forbindelse?',
+};
 $railMissedConnectionDelayPrompt = $isCompleted
     ? 'Medfoerte den mistede forbindelse, at du ankom mindst 60 minutter senere til din endelige destination?'
     : 'Betyder den mistede forbindelse, at du forventer at ankomme mindst 60 minutter senere til din endelige destination?';
@@ -205,6 +211,105 @@ $railIncidentMissedValue = strtolower(trim((string)($form['incident_missed'] ?? 
 if (!in_array($railIncidentMissedValue, ['yes', 'no'], true)) {
     $railIncidentMissedValue = $missedConnectionChosen ? 'yes' : 'no';
 }
+$railMissedConnectionHasTransferAnchor = $railProblemAnchorType === 'transfer' && $missedConnectionChosen;
+$railCanChooseFollowOnConnection = !$railMissedConnectionHasTransferAnchor && !empty($railTransferStations);
+$railMissedConnectionIntro = $railMissedConnectionHasTransferAnchor
+    ? 'Hvis problemet opstod ved et skift, hentes fokuspunktet fra TRIN 3. Her bekraefter du kun, om den valgte forbindelse faktisk blev misset.'
+    : 'Hvis haendelsen foer afgang eller senere paa kontrakten betoed, at du mistede en planlagt videre forbindelse, registrerer du det her.';
+$railMissedConnectionReferenceNote = $railMissedConnectionHasTransferAnchor
+    ? 'Hvis problemet opstod ved et skift, kommer fokuspunktet nu fra TRIN 3 og bruges kun som reference her.'
+    : 'TRIN 3 har her kun valgt et problemanker. Hvis du senere mistede en videre forbindelse, vaelger du den konkrete skifteforbindelse her.';
+$railMissedConnectionNoChoiceNote = $railProblemAnchorType === 'transfer'
+    ? 'Ingen forbindelse valgt endnu. Gaa tilbage til TRIN 3, hvis problemet opstod ved et skift, og vaelg fokuspunktet der.'
+    : 'Der er endnu ikke valgt en konkret videre forbindelse. Hvis den tidlige haendelse senere medfoerte et misset skift, vaelger du det her nedenfor.';
+$railMissedConnectionDelayNote = 'Ved forsinkelse bruger vi 60+-spoergsmaalene ovenfor som hovedgate. Kun hvis begge delay-svar er nej, afklarer vi her, om det missede skift alligevel gav 60+ til slutdestination.';
+$railMissedConnectionCancellationNote = 'Ved aflysning bruges dette kun til forbindelses- og stationskontekst. Art. 18/20 aabnes allerede af aflysningen, saa du skal ikke svare paa et ekstra 60+-spoergsmaal her.';
+$railShowMissedConnectionBlock = !empty($railTransferStations) || $railSeedMissedConnectionSuspected || $railProblemAnchorType === 'transfer' || $missedConnectionChosen;
+$railJourneyRoute = trim((string)($selectedRailDeparture['origin_station_name'] ?? '')) !== '' || trim((string)($selectedRailDeparture['destination_station_name'] ?? '')) !== ''
+    ? trim((string)($selectedRailDeparture['origin_station_name'] ?? '')) . ' -> ' . trim((string)($selectedRailDeparture['destination_station_name'] ?? ''))
+    : trim((string)($form['dep_station'] ?? '')) . ' -> ' . trim((string)($form['arr_station'] ?? ''));
+$railJourneyRoute = trim($railJourneyRoute, ' ->');
+$railJourneyService = trim((string)($selectedRailDeparture['train_number'] ?? ($selectedRailDeparture['service_name'] ?? ($selectedRailDeparture['line_name'] ?? ''))));
+$railJourneyOperatorNames = array_values(array_filter(array_map(
+    static fn($value): string => trim((string)$value),
+    (array)($railContractSeed['operator_names'] ?? (($selectedRailDeparture['raw'] ?? [])['operator_names'] ?? []))
+)));
+if ($railJourneyOperatorNames === []) {
+    $singleOperator = trim((string)($selectedRailDeparture['operator_name'] ?? ($form['operator'] ?? '')));
+    if ($singleOperator !== '') {
+        $railJourneyOperatorNames = [$singleOperator];
+    }
+}
+$railContractModel = strtolower(trim((string)($form['contract_model'] ?? ($railContractSeed['effective_contract_model'] ?? ''))));
+$railContractModelLabel = match ($railContractModel) {
+    'through' => 'Gennemgaaende billet / en kontrakt',
+    'separate' => 'Saerskilte kontrakter',
+    default => 'Afventer Art. 12-afklaring',
+};
+$railSellerChannel = strtolower(trim((string)($form['seller_channel'] ?? ($railContractSeed['seller_channel'] ?? ''))));
+$railSellerChannelLabel = match ($railSellerChannel) {
+    'operator' => 'Jernbaneoperatoer',
+    'retailer' => 'Rejsebureau / billetudsteder',
+    default => 'Ikke afklaret endnu',
+};
+$railSameTransaction = strtolower(trim((string)($form['same_transaction'] ?? ($railContractSeed['same_transaction'] ?? ''))));
+$railSameTransactionLabel = match ($railSameTransaction) {
+    'yes' => 'Ja',
+    'no' => 'Nej',
+    default => 'Ikke afklaret endnu',
+};
+$railDisclosure = strtolower(trim((string)($form['through_ticket_disclosure'] ?? ($railContractSeed['through_ticket_disclosure'] ?? ''))));
+$railDisclosureLabel = match ($railDisclosure) {
+    'yes' => 'Ja',
+    'no' => 'Nej',
+    default => 'Ikke afklaret endnu',
+};
+$railSeparateNotice = strtolower(trim((string)($form['separate_contract_notice'] ?? ($railContractSeed['separate_contract_notice'] ?? ''))));
+$railSeparateNoticeLabel = match ($railSeparateNotice) {
+    'yes' => 'Ja',
+    'no' => 'Nej',
+    default => 'Ikke afklaret endnu',
+};
+$railProblemContractId = trim((string)($form['problem_contract_id'] ?? ($railContractSeed['problem_contract_id'] ?? '')));
+$railSelectedProblemContract = ($railProblemContractId !== '' && isset($railContractOptions[$railProblemContractId]) && is_array($railContractOptions[$railProblemContractId]))
+    ? (array)$railContractOptions[$railProblemContractId]
+    : [];
+$railProblemContractLabel = '';
+if ($railSelectedProblemContract !== []) {
+    $contractStops = array_values(array_filter((array)($railSelectedProblemContract['stops'] ?? []), static fn($stop): bool => is_array($stop)));
+    $firstStop = $contractStops[0] ?? [];
+    $lastStop = $contractStops !== [] ? $contractStops[count($contractStops) - 1] : [];
+    $contractFrom = trim((string)($firstStop['name'] ?? ''));
+    $contractTo = trim((string)($lastStop['name'] ?? ''));
+    $contractOperator = trim((string)($railSelectedProblemContract['operator_name'] ?? ''));
+    $railProblemContractLabel = trim(($contractFrom !== '' || $contractTo !== '' ? ($contractFrom . ' -> ' . $contractTo) : '') . ($contractOperator !== '' ? (' · ' . $contractOperator) : ''), ' ·');
+}
+$railStrandedStation = trim((string)($form['stranded_current_station'] ?? ''));
+if ($railStrandedStation === 'other') {
+    $railStrandedStation = trim((string)($form['stranded_current_station_other'] ?? ''));
+}
+$railWhereEnded = strtolower(trim((string)($form['rail_station_where_ended'] ?? '')));
+$railWhereEndedLabel = match ($railWhereEnded) {
+    'same_station' => 'Endte paa strandingsstationen',
+    'other_station' => 'Kom videre til en anden station',
+    'return_to_departure' => 'Vendte tilbage til afgangsstationen',
+    'final_destination' => 'Naaede endelig destination',
+    'unknown' => 'Ved ikke endnu',
+    default => '',
+};
+$railOutcomeStation = trim((string)($form['rail_station_end_station'] ?? ''));
+if ($railOutcomeStation === 'other') {
+    $railOutcomeStation = trim((string)($form['rail_station_end_station_other'] ?? ''));
+}
+if ($railOutcomeStation === '') {
+    $railOutcomeStation = trim((string)($railCurrentLocationAnchor['station_name'] ?? ''));
+}
+$railStillThere = strtolower(trim((string)($form['rail_station_still_there'] ?? '')));
+$railStillThereLabel = match ($railStillThere) {
+    'yes' => 'Ja',
+    'no' => 'Nej',
+    default => '',
+};
 $airDelayBandOptions = match ($airDelayThresholdHours) {
     2 => [
         'under_threshold' => 'Under 2 timer',
@@ -270,6 +375,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   .mt8 { margin-top:8px; }
   .mt12 { margin-top:12px; }
   .ml8 { margin-left:8px; }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .hidden { display:none; }
   .card { padding:12px; border:1px solid #ddd; background:#fff; border-radius:6px; }
   .flow-wrapper { max-width: 1080px; margin: 0 auto; }
@@ -287,6 +393,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
   .bus-live-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
   .bus-live-actions button { background:#eef2ff; color:#1e3a8a; border:1px solid #c7d2fe; border-radius:6px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
   .bus-live-actions button.bus-live-secondary { background:#f8fafc; color:#334155; border-color:#cbd5e1; }
+  @media (max-width: 820px) { .grid-2 { grid-template-columns:1fr; } }
 </style>
 
 <div class="flow-wrapper">
@@ -304,15 +411,16 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     <h1>TRIN 5 - Haendelse (Art. 18/20 standard gating)</h1>
   <?php endif; ?>
 
+  <?php if (!$isFerry && !$isBus && !$isAir): ?>
+    <?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
+  <?php endif; ?>
+
   <?php if ($isAirShortView): ?>
     <?= $this->element('air_live_estimate', compact('form', 'flags', 'meta', 'airRights', 'airScope', 'airContract')) ?>
     <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Air-incident er holdt kort her: haendelse, missed connection og kompensationsnaere fakta. Mere teknisk kontraktanalyse kan flyttes til sagen bagefter.</div>
   <?php elseif ($isFerry): ?>
     <?= $this->element('ferry_live_estimate', compact('form', 'flags', 'meta', 'journey', 'ferryRights', 'ferryScope')) ?>
     <div class="small muted mt8" style="background:#f8fafc; border:1px solid #bae6fd; border-radius:6px; padding:8px;">Ferry-estimatet viser operator, valgt afgang, AIS/ETA-stoette og foreloebige Art. 17/18/19-gates. Det er ikke et multimodalt claim-kanal step.</div>
-  <?php elseif ($isRailSplitView): ?>
-    <?= $this->element('rail_live_estimate', compact('form', 'flags', 'meta', 'journey')) ?>
-    <div class="small muted mt8" style="background:#f8fafc; border:1px solid #c7d2fe; border-radius:6px; padding:8px;">Rail-estimatet bygger paa den valgte afgang og fungerer kun som UX-seed. Brug altid incident-spoergsmaalene til at bekraefte, om Art. 18, 19 og 20 faktisk er opfyldt.</div>
   <?php endif; ?>
   <?php if ($isAirShortView): ?>
     <?php if (!empty($selectedAirFlight)): ?>
@@ -356,8 +464,8 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       'unknown' => 'Ved ikke',
     ];
   ?>
-  <div class="card mt12 <?= (($art91On && !$isBus && !$isAir) || $isFerry) ? '' : 'hidden' ?>" data-art="9(1)">
-    <?php if ($isFerry): ?>
+  <?php if ($isFerry): ?>
+  <div class="card mt12" data-art="9(1)">
     <div class="card mt12" style="border-color:#d0d7de;background:#f8f9fb">
       <div class="widget-title">
         <span class="step-badge" aria-hidden="true">&#x23F1;</span>
@@ -428,15 +536,25 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
       <div class="small muted mt8" data-show-if="pmr_user:yes">PMR-assistance, ledsager, servicehund, 48-timers varsel og leveret assistance registreres bagefter i backend-supporttrinnet.</div>
     </div>
 
-    <?php elseif (!$isBus && !$isAir): ?>
+  </div>
+  <?php endif; ?>
+
+  <?php if (!$isFerry && !$isBus && !$isAir): ?>
+  <div class="card mt12 <?= $art91On ? '' : 'hidden' ?>" style="border-color:#d0d7de;background:#f8f9fb;" data-art="9(1)">
+    <div class="widget-title">
+      <span class="step-badge" aria-hidden="true">&#x23F1;</span>
+      <span>Afbrydelser/forsinkelser foer koeb</span>
+    </div>
+    <p class="small muted mt8">Vises kun for rail og bruges til vurderingen af, om haendelsen var kendt paa koebstidspunktet.</p>
+
     <div class="mt8">
-      <div class="small">Var der meddelt afbrydelse/forsinkelse foer dit koeb?</div>
+      <div>Var der meddelt afbrydelse/forsinkelse foer dit koeb?</div>
       <label><input type="radio" name="preinformed_disruption" value="yes" <?= $pid==='yes'?'checked':'' ?> /> Ja</label>
       <label class="ml8"><input type="radio" name="preinformed_disruption" value="no" <?= $pid==='no'?'checked':'' ?> /> Nej</label>
     </div>
 
-    <div class="mt8" data-show-if="preinformed_disruption:yes" data-art="9(1)">
-      <div class="small">Hvis ja: Hvor blev det vist?</div>
+    <div class="mt8" data-show-if="preinformed_disruption:yes">
+      <div>Hvis ja: Hvor blev det vist?</div>
       <select name="preinfo_channel">
         <option value="">- Vaelg -</option>
         <option value="website" <?= $pic==='website'?'selected':'' ?>>Hjemmeside</option>
@@ -448,13 +566,13 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     </div>
 
     <div class="mt8 <?= $art92On ? '' : 'hidden' ?>" data-show-if="preinformed_disruption:yes" data-art="9(2)">
-      <div class="small">Saa du realtime-opdateringer under rejsen?</div>
+      <div>Saa du realtime-opdateringer under rejsen?</div>
       <?php $i = 0; foreach ($rtOptions as $key => $label): ?>
         <label class="<?= $i>0 ? 'ml8' : '' ?>"><input type="radio" name="realtime_info_seen" value="<?= h($key) ?>" <?= $ris===$key?'checked':'' ?> /> <?= h($label) ?></label>
       <?php $i++; endforeach; ?>
     </div>
-    <?php endif; ?>
   </div>
+  <?php endif; ?>
 
 
   <!-- Standard gating -->
@@ -1121,11 +1239,26 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <div>Kompensation: <?= !empty($airRights['gate_air_compensation']) ? 'Candidate' : 'Ikke aktiveret' ?><?= !empty($airRights['air_comp_band']) ? ' - ' . h((string)$airRights['air_comp_band']) : '' ?></div>
         </div>
       <?php endif; ?>
-    <?php else: ?>
+<?php else: ?>
       <strong><span aria-hidden="true">&#x26A1;</span> Haendelse (Art.18/20)</strong>
       <p class="small muted">Vaelg den haendelse, der ramte dit tog. Bruges til at aktivere standard vurdering af Art. 18/20.<?= $incidentHint !== '' ? (' ' . h($incidentHint)) : '' ?></p>
-      <?php if ($railSeedIncidentType !== 'unknown' || $railSeedTransferCount > 0): ?>
-        <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
+      <?php /*
+        <div class="widget-title">
+          <span class="step-badge" aria-hidden="true">&#128646;</span>
+          <span>Rail-kontekstpanel</span>
+        </div>
+        <?php if ($railJourneyRoute !== ''): ?>
+          <div class="mt8"><strong>Valgt rejse:</strong> <?= h($railJourneyRoute) ?></div>
+        <?php endif; ?>
+        <?php if ($railJourneyService !== '' || $railJourneyOperatorNames !== []): ?>
+          <div class="small muted mt4">
+            <?php if ($railJourneyService !== ''): ?>Foerste tog: <strong><?= h($railJourneyService) ?></strong><?php endif; ?>
+            <?php if ($railJourneyOperatorNames !== []): ?>
+              <?= $railJourneyService !== '' ? ' · ' : '' ?>Operatoer<?= count($railJourneyOperatorNames) === 1 ? '' : 'er' ?>: <strong><?= h(implode(' · ', $railJourneyOperatorNames)) ?></strong>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+        <div class="small muted mt8" style="background:#ffffff; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
           <strong>Systemet har fundet</strong>:
           <?= h(match ($railSeedIncidentType) {
               'delay' => 'mulig forsinkelse',
@@ -1145,12 +1278,37 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
           <?php endif; ?>
           .
         </div>
-      <?php endif; ?>
-      <?php if ($railProblemAnchorSummary !== ''): ?>
-        <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">
-          <strong>Problemsted fra TRIN 3:</strong> <?= h($railProblemAnchorSummary) ?>.
+        <div class="grid-2 mt8">
+          <div>
+            <div><strong>Art. 12:</strong> <?= h($railContractModelLabel) ?></div>
+            <div class="small muted mt4">Koebskanal: <strong><?= h($railSellerChannelLabel) ?></strong></div>
+            <div class="small muted mt4">Samme transaktion: <strong><?= h($railSameTransactionLabel) ?></strong></div>
+            <div class="small muted mt4">Oplyst om gennemgaaende/saerskilte billetter: <strong><?= h($railDisclosureLabel) ?></strong></div>
+            <div class="small muted mt4">Separate kontrakter angivet paa billet/booking: <strong><?= h($railSeparateNoticeLabel) ?></strong></div>
+            <?php if ($railContractModel === 'separate' && $railProblemContractLabel !== ''): ?>
+              <div class="small muted mt4">Valgt problemkontrakt: <strong><?= h($railProblemContractLabel) ?></strong></div>
+            <?php endif; ?>
+          </div>
+          <div>
+            <?php if ($railProblemAnchorSummary !== ''): ?>
+              <div><strong>Problemsted fra TRIN 3:</strong> <?= h($railProblemAnchorSummary) ?></div>
+            <?php endif; ?>
+            <?php if ($railStrandedStation !== ''): ?>
+              <div class="small muted mt4">Strandingsstation: <strong><?= h($railStrandedStation) ?></strong></div>
+            <?php endif; ?>
+            <?php if ($railStillThereLabel !== ''): ?>
+              <div class="small muted mt4">Stadig paa strandingsstationen: <strong><?= h($railStillThereLabel) ?></strong></div>
+            <?php endif; ?>
+            <?php if ($railWhereEndedLabel !== ''): ?>
+              <div class="small muted mt4">Station-kontekst: <strong><?= h($railWhereEndedLabel) ?></strong></div>
+            <?php endif; ?>
+            <?php if ($railOutcomeStation !== ''): ?>
+              <div class="small muted mt4">Nuvaerende / foreloebig station: <strong><?= h($railOutcomeStation) ?></strong></div>
+            <?php endif; ?>
+          </div>
         </div>
-      <?php endif; ?>
+      </div>
+      */ ?>
 
       <div class="mt8">
         <div>Haendelsestype (vaelg en)</div>
@@ -1175,6 +1333,7 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
 
   <?php if (!$isFerry && !$isBus && !$isAir): ?>
   <!-- Mistet forbindelse -->
+  <?php if (false): ?>
   <div class="card mt12">
     <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
     <p class="small muted">Hvis problemet opstod ved et skift, hentes fokuspunktet fra TRIN 3. Her bekræfter du kun, om den valgte forbindelse faktisk blev misset.</p>
@@ -1213,6 +1372,68 @@ $showHooksPanel = (bool)$this->getRequest()->getQuery('debug');
     <?php endif; ?>
     </div>
   </div>
+  <?php endif; ?>
+  <?php if ($railShowMissedConnectionBlock): ?>
+  <div class="card mt12" data-show-if="incident_main:delay,cancellation">
+    <strong><span aria-hidden="true">&#128206;</span> Mistet forbindelse</strong>
+    <p class="small muted"><?= h($railMissedConnectionIntro) ?></p>
+    <?php if ($railSeedMissedConnectionSuspected): ?>
+      <div class="small muted mt8" style="background:#f8fafc; border:1px solid #dbeafe; border-radius:6px; padding:8px;">Systemet har fundet en mulig mistet forbindelse pga. valgt afgang og dens forsinkelse. Bekraeft nedenfor, om forbindelsen faktisk blev misset.</div>
+    <?php endif; ?>
+    <div class="small muted mt8 hidden rail-missed60-delay-note"><?= h($railMissedConnectionDelayNote) ?></div>
+    <div class="small muted mt8 hidden rail-missed60-cancellation-note"><?= h($railMissedConnectionCancellationNote) ?></div>
+
+    <?php if ($railTransferStationsSummary !== ''): ?>
+      <div class="small muted mt8">Skift i den valgte rejse: <strong><?= h($railTransferStationsSummary) ?></strong></div>
+    <?php endif; ?>
+
+    <div class="small muted mt8"><?= h($railMissedConnectionReferenceNote) ?></div>
+
+    <input type="hidden" name="incident_missed" value="<?= $missedConnectionChosen ? 'yes' : 'no' ?>" />
+
+    <?php if ($railMissedConnectionHasTransferAnchor): ?>
+      <div class="mt8 small">
+        Registreret forbindelse:
+        <strong><?= h($missedConnectionPick !== '' ? $missedConnectionPick : ('Ved skift i ' . $missedConnectionStation)) ?></strong>
+      </div>
+      <div class="mt8">
+        <div><?= h($railMissedConnectionPrompt) ?></div>
+        <label><input type="radio" name="incident_missed" value="yes" <?= $railIncidentMissedValue==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="incident_missed" value="no" <?= $railIncidentMissedValue==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+      <div class="mt8 rail-missed60-wrap" data-show-if="incident_missed:yes">
+        <div><?= h($railMissedConnectionDelayPrompt) ?></div>
+        <label><input type="radio" name="missed_expected_delay_60" value="yes" <?= $v('missed_expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= $v('missed_expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+        <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig vaere relevante afhaengigt af land.</div>
+      </div>
+    <?php else: ?>
+      <div class="small muted mt8"><?= h($railMissedConnectionNoChoiceNote) ?></div>
+      <div class="mt8">
+        <div><strong>Medfoerte haendelsen ogsaa en mistet videre forbindelse?</strong></div>
+        <label><input type="radio" name="incident_missed" value="yes" <?= $railIncidentMissedValue==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="incident_missed" value="no" <?= $railIncidentMissedValue==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+      </div>
+      <?php if ($railCanChooseFollowOnConnection): ?>
+      <div class="mt8" data-show-if="incident_missed:yes">
+        <label for="railMissedConnectionStation"><strong>Hvilken videre forbindelse blev misset?</strong></label>
+        <select id="railMissedConnectionStation" name="missed_connection_station" class="mt4">
+          <option value="">Vaelg skiftestation</option>
+          <?php foreach ($railTransferStations as $transferStationName): ?>
+            <option value="<?= h($transferStationName) ?>" <?= $missedConnectionStation === $transferStationName ? 'selected' : '' ?>><?= h('Ved skift i ' . $transferStationName) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <?php endif; ?>
+      <div class="mt8 rail-missed60-wrap" data-show-if="incident_missed:yes">
+        <div><?= h($railMissedConnectionDelayPrompt) ?></div>
+        <label><input type="radio" name="missed_expected_delay_60" value="yes" <?= $v('missed_expected_delay_60')==='yes'?'checked':'' ?> /> Ja</label>
+        <label class="ml8"><input type="radio" name="missed_expected_delay_60" value="no" <?= $v('missed_expected_delay_60')==='no'?'checked':'' ?> /> Nej / ved ikke</label>
+        <div class="small muted mt4">Hvis nej, kan nationale ordninger stadig vaere relevante afhaengigt af land.</div>
+      </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
   <?php endif; ?>
 
   <?php if (!$isFerry && !$isBus && !$isAir): ?>
@@ -1902,13 +2123,15 @@ function updateRailLiveEstimatePreview() {
   var already60 = getRadioValue('delay_already_60');
   var missed = getVal('incident_missed') === 'yes';
   var missed60 = getRadioValue('missed_expected_delay_60');
+  var delayGateResolvedToNo = (main === 'delay') && expected60 === 'no' && already60 === 'no';
+  var missedCanDriveGate = delayGateResolvedToNo && missed && missed60 === 'yes';
   var extraordinary = getRadioValue('operatorExceptionalCircumstances') === 'yes';
   var stranding = getRadioValue('rail_stranding_context') || getVal('rail_stranding_context') || 'no';
 
   var incidentLabel = 'Afventer';
   if (main === 'delay') incidentLabel = 'Forsinkelse';
   if (main === 'cancellation') incidentLabel = 'Aflysning';
-  if (missed && missed60 === 'yes') incidentLabel = 'Mistet forbindelse';
+  if (missedCanDriveGate) incidentLabel = 'Mistet forbindelse';
   if (incidentLabel === 'Afventer') {
     if (seedIncidentType === 'delay') incidentLabel = 'Forsinkelse';
     else if (seedIncidentType === 'cancellation') incidentLabel = 'Aflysning';
@@ -1938,7 +2161,7 @@ function updateRailLiveEstimatePreview() {
     }
   }
 
-  if (missed && missed60 === 'yes') {
+  if (missedCanDriveGate) {
     art18Active = true;
     art20Active = true;
     art19Active = true;
@@ -1962,26 +2185,48 @@ function updateRailLiveEstimatePreview() {
   if (already60 === 'yes' && (arrivalDelay === null || arrivalDelay < 60)) {
     arrivalDelay = 60;
   }
-  if (missed && missed60 === 'yes' && (arrivalDelay === null || arrivalDelay < 60)) {
+  if (missedCanDriveGate && (arrivalDelay === null || arrivalDelay < 60)) {
     arrivalDelay = 60;
   }
 
   var art19Label = 'Ikke aktiv endnu';
+  var panelTicketPrice = panel.dataset.ticketPrice === '' ? 0 : parseFloat(panel.dataset.ticketPrice);
+  var panelCurrency = String(panel.dataset.currency || 'EUR');
+  var panelPriceKnown = panel.dataset.priceKnown === '1';
+  var panelPriceEstimate = panel.dataset.priceEstimate === '1';
+  var amountText = 'Afventer';
+  var thresholdText = 'Afventer';
+  var bandPct = (arrivalDelay !== null && arrivalDelay >= 120) ? 50 : 25;
   var statusText = 'Afventer rail-bekræftelse';
+  statusText = 'Afventer flere svar';
   if (art19Active && extraordinary) {
     art19Label = 'Blokeret af force majeure';
-    statusText = 'Art. 19 blokeret';
+    statusText = 'Kompensation blokeret';
+    amountText = 'Blokeret';
   } else if (art19Active) {
-    art19Label = (arrivalDelay !== null && arrivalDelay >= 120) ? '50%' : '25%';
-    statusText = 'Art. 19 mulig';
+    art19Label = bandPct + '% af billetpris';
+    statusText = 'Foreloebigt kompensationsniveau';
+    amountText = (panelPriceKnown && panelTicketPrice > 0)
+      ? ((panelTicketPrice * bandPct / 100).toFixed(2) + ' ' + panelCurrency)
+      : (bandPct + '% af billetpris');
   } else if (art18Active || art20Active) {
-    statusText = 'Art. 18/20 aktive';
+    statusText = 'Omlaegning / assistance aktiv';
+  }
+
+  if (main === 'cancellation') {
+    thresholdText = 'Ikke relevant ved aflysning';
+  } else if (art19Active || expected60 === 'yes' || already60 === 'yes' || missedCanDriveGate) {
+    thresholdText = 'Aktiveret';
+  } else if (expected60 === 'no' && already60 === 'no' && !missedCanDriveGate) {
+    thresholdText = 'Under 60 min';
   }
 
   ferrySetLiveText('[data-rail-live-status]', statusText);
+  ferrySetLiveText('[data-rail-live-amount]', amountText);
   ferrySetLiveText('[data-rail-live-incident]', incidentLabel);
   ferrySetLiveText('[data-rail-live-art18]', art18Active ? 'Aktiv' : 'Ikke aktiv endnu');
   ferrySetLiveText('[data-rail-live-art19]', art19Label);
+  ferrySetLiveText('[data-rail-live-threshold]', thresholdText);
   ferrySetLiveText('[data-rail-live-art20]', art20Active ? 'Aktiv' : 'Ikke aktiv endnu');
   ferrySetLiveText('[data-rail-live-arrival-delay]', arrivalDelay !== null ? ((arrivalDelay > 0 ? '+' : '') + arrivalDelay + ' min') : 'Afventer');
   ferrySetLiveText('[data-rail-live-departure-delay]', seedDepartureDelay !== null ? ((seedDepartureDelay > 0 ? '+' : '') + seedDepartureDelay + ' min') : 'Afventer');
@@ -2000,6 +2245,17 @@ function updateRailLiveEstimatePreview() {
     summary = 'Rail-panelet peger på refund/ombooking eller assistance, men endelig rettighed afhænger stadig af de konkrete brugerbekræftelser.';
   } else {
     summary = 'Rail-panelet afventer stadig rail-spørgsmålene om 60+ minutters forsinkelse, aflysning eller mistet forbindelse.';
+  }
+  if (art19Active && extraordinary) {
+    summary = 'Kompensationssporet er foreloebigt blokeret af force majeure.';
+  } else if (art19Active) {
+    summary = (panelPriceKnown && panelTicketPrice > 0)
+      ? ('Foreloebigt Art. 19-estimat ud fra billetpris og ankomstforsinkelse.' + (panelPriceEstimate ? ' Beloebet bygger paa et ca. estimat fra TRIN 2.' : ''))
+      : 'Kompensationen ser mulig ud, men billetpris mangler endnu. Registrer prisen i TRIN 2 eller bekraeft den senere i backend.';
+  } else if (art18Active || art20Active) {
+    summary = 'Kompensationen afventer stadig 60+ minutter, men assistance eller omlaegning / refund kan allerede vaere relevante.';
+  } else {
+    summary = 'Rail-panelet afventer stadig rail-spoergsmaalene om 60+ minutters forsinkelse, aflysning eller mistet forbindelse.';
   }
   ferrySetLiveText('[data-rail-live-note]', summary);
 }
@@ -2352,7 +2608,6 @@ function updateStep4State(){
   var already60 = getRadioValue('delay_already_60');
   var missed = getVal('incident_missed');
   var missed60 = getRadioValue('missed_expected_delay_60');
-  var missedAnswered = (missed === 'yes' || missed === 'no');
 
   // Live (client-side) force-majeure evaluation: if user says "yes", we hide national fallback entirely.
   // This avoids confusing the user with national bands when compensation is likely excluded anyway.
@@ -2367,10 +2622,21 @@ function updateStep4State(){
   if (main === 'cancellation') euGateFromMain = true;
   if (main === 'delay' && (exp60 === 'yes' || already60 === 'yes')) euGateFromMain = true;
 
-  // UX: avoid asking the missed >=60 question when EU gate is already satisfied from delay/cancellation.
-  // NOTE: we keep the value in session (server-side) for audit, but we ignore it for gating in that case.
-  var showMissed60 = (missed === 'yes') && (!euGateFromMain);
-  showById('missed60Wrap', showMissed60);
+  // Missed-connection should only ask its own 60+ follow-up when the main delay branch
+  // is explicitly below threshold (no/no). Cancellation already opens Art. 18/20 directly.
+  var delayGateResolvedToNo = (main === 'delay') && exp60 === 'no' && already60 === 'no';
+  var showMissed60 = (missed === 'yes') && delayGateResolvedToNo;
+  document.querySelectorAll('.rail-missed60-wrap').forEach(function(el) {
+    setBlockVisible(el, showMissed60);
+  });
+  var showDelayFollowupNote = (main === 'delay') && (missed === 'yes') && !showMissed60;
+  document.querySelectorAll('.rail-missed60-delay-note').forEach(function(el) {
+    setBlockVisible(el, showDelayFollowupNote);
+  });
+  var showCancellationContextNote = (main === 'cancellation') && (missed === 'yes');
+  document.querySelectorAll('.rail-missed60-cancellation-note').forEach(function(el) {
+    setBlockVisible(el, showCancellationContextNote);
+  });
 
   var euGate = euGateFromMain;
   if (!euGateFromMain && missed === 'yes' && missed60 === 'yes') euGate = true;

@@ -8,7 +8,11 @@
  * Redistributions of files must retain the above copyright notice.
  */
 
+use Cake\Core\Configure;
+
 $cakeDescription = 'CakePHP: the rapid development php framework';
+$publicSite = (array)Configure::read('PublicSite');
+$hideTopNav = !empty($publicSite['enabled']) && !empty($publicSite['hideTopNav']);
 ?>
 <!DOCTYPE html>
 <html>
@@ -29,30 +33,32 @@ $cakeDescription = 'CakePHP: the rapid development php framework';
 </head>
 <?php $bodyClass = !empty($flowPreview) ? 'flow-preview' : ''; ?>
 <body<?= $bodyClass !== '' ? ' class="' . h($bodyClass) . '"' : '' ?>>
-    <nav class="top-nav">
-        <div class="top-nav-title">
-            <a href="<?= $this->Url->build('/') ?>"><span>Cake</span>PHP</a>
-        </div>
-        <div class="top-nav-links">
-            <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
-            <a href="<?= $this->Url->build('/flow/air/completed') ?>">Fly A</a>
-            <a href="<?= $this->Url->build('/flow/air/ongoing') ?>">Fly I</a>
-            <a href="<?= $this->Url->build('/flow/rail/completed') ?>">Tog A</a>
-            <a href="<?= $this->Url->build('/flow/rail/ongoing') ?>">Tog I</a>
-            <a href="<?= $this->Url->build('/flow/bus/completed') ?>">Bus A</a>
-            <a href="<?= $this->Url->build('/flow/bus/ongoing') ?>">Bus I</a>
-            <a href="<?= $this->Url->build('/flow/ferry/completed') ?>">Færge A</a>
-            <a href="<?= $this->Url->build('/flow/ferry/ongoing') ?>">Færge I</a>
-            <a href="<?= $this->Url->build('/passenger/start') ?>">Passager</a>
-            <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
-            <a href="<?= $this->Url->build('/project/chat-qa') ?>">Chat QA</a>
-            <a href="<?= $this->Url->build('/admin/desk') ?>">Admin Desk</a>
-            <a href="<?= $this->Url->build('/admin/chat') ?>">Admin Chat</a>
-            <a href="<?= $this->Url->build('/admin/audit/latest') ?>">Audit</a>
-            <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/">Docs</a>
-            <a target="_blank" rel="noopener" href="https://api.cakephp.org/">API</a>
-        </div>
-    </nav>
+    <?php if (!$hideTopNav): ?>
+        <nav class="top-nav">
+            <div class="top-nav-title">
+                <a href="<?= $this->Url->build('/') ?>"><span>Cake</span>PHP</a>
+            </div>
+            <div class="top-nav-links">
+                <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
+                <a href="<?= $this->Url->build('/flow/air/completed') ?>">Fly A</a>
+                <a href="<?= $this->Url->build('/flow/air/ongoing') ?>">Fly I</a>
+                <a href="<?= $this->Url->build('/flow/rail/completed') ?>">Tog A</a>
+                <a href="<?= $this->Url->build('/flow/rail/ongoing') ?>">Tog I</a>
+                <a href="<?= $this->Url->build('/flow/bus/completed') ?>">Bus A</a>
+                <a href="<?= $this->Url->build('/flow/bus/ongoing') ?>">Bus I</a>
+                <a href="<?= $this->Url->build('/flow/ferry/completed') ?>">Færge A</a>
+                <a href="<?= $this->Url->build('/flow/ferry/ongoing') ?>">Færge I</a>
+                <a href="<?= $this->Url->build('/passenger/start') ?>">Passager</a>
+                <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
+                <a href="<?= $this->Url->build('/project/chat-qa') ?>">Chat QA</a>
+                <a href="<?= $this->Url->build('/admin/desk') ?>">Admin Desk</a>
+                <a href="<?= $this->Url->build('/admin/chat') ?>">Admin Chat</a>
+                <a href="<?= $this->Url->build('/admin/audit/latest') ?>">Audit</a>
+                <a target="_blank" rel="noopener" href="https://book.cakephp.org/5/">Docs</a>
+                <a target="_blank" rel="noopener" href="https://api.cakephp.org/">API</a>
+            </div>
+        </nav>
+    <?php endif; ?>
     <main class="main">
         <div class="container">
             <?= $this->Flash->render() ?>

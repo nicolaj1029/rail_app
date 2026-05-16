@@ -17,7 +17,21 @@ final class RailTransportServiceClient
 
     public function isConfigured(): bool
     {
-        return (bool)Configure::read('Rail.transportServiceEnabled', false) && $this->baseUrl !== '';
+        if ($this->baseUrl === '') {
+            return false;
+        }
+
+        if ((bool)Configure::read('Rail.transportServiceEnabled', false)) {
+            return true;
+        }
+
+        return (bool)Configure::read('debug', false) && $this->isLocalBaseUrl($this->baseUrl);
+    }
+
+    private function isLocalBaseUrl(string $url): bool
+    {
+        $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?? ''));
+        return in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
     }
 
     /**
@@ -28,7 +42,9 @@ final class RailTransportServiceClient
     {
         $payload = $this->getJson('/journeys', [
             'from_station' => (string)($criteria['from_station'] ?? ''),
+            'from_station_id' => (string)($criteria['from_station_id'] ?? ''),
             'to_station' => (string)($criteria['to_station'] ?? ''),
+            'to_station_id' => (string)($criteria['to_station_id'] ?? ''),
             'date' => (string)($criteria['date'] ?? ''),
             'time' => (string)($criteria['time'] ?? ''),
             'operator_hint' => (string)($criteria['operator_hint'] ?? ''),
@@ -78,6 +94,13 @@ final class RailTransportServiceClient
         return $this->getJson('/health');
     }
 
+    public function shutdown(): bool
+    {
+        $payload = $this->postJson('/shutdown');
+
+        return (bool)($payload['ok'] ?? false);
+    }
+
     /**
      * @param array<string,mixed> $query
      * @return array<string,mixed>
@@ -90,7 +113,7 @@ final class RailTransportServiceClient
 
         $url = $this->baseUrl . $path;
         if ($query !== []) {
-            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($query);
+            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         }
 
         try {
@@ -120,6 +143,54 @@ final class RailTransportServiceClient
             }
 
             $payload = json_decode($body, true);
+            return is_array($payload) ? $payload : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function postJson(string $path, array $data = []): array
+    {
+        if (!$this->isConfigured()) {
+            return [];
+        }
+
+        $url = $this->baseUrl . $path;
+
+        try {
+            $ch = curl_init($url);
+            if ($ch === false) {
+                return [];
+            }
+
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_CONNECTTIMEOUT => $this->timeout,
+                CURLOPT_TIMEOUT => $this->timeout,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $data === [] ? '' : http_build_query($data, '', '&', PHP_QUERY_RFC3986),
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'Content-Type: application/x-www-form-urlencoded',
+                    'User-Agent: rail_app/1.0',
+                ],
+                CURLOPT_NOPROXY => '127.0.0.1,localhost',
+            ]);
+
+            $body = curl_exec($ch);
+            $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($body === false || $statusCode < 200 || $statusCode >= 300) {
+                return [];
+            }
+
+            $payload = json_decode($body, true);
+
             return is_array($payload) ? $payload : [];
         } catch (\Throwable $e) {
             return [];

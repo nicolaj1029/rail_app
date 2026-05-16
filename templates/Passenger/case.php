@@ -8,6 +8,10 @@ $refundReceiptFiles = (array)($caseData['refundReceiptFiles'] ?? []);
 $careReceiptFiles = (array)($caseData['careReceiptFiles'] ?? []);
 $refundExpenseItems = (array)($caseData['refundExpenseItems'] ?? []);
 $careExpenseItems = (array)($caseData['careExpenseItems'] ?? []);
+$railContextStationExpenseItems = (array)($caseData['railContextStationExpenseItems'] ?? []);
+$railContextTrackExpenseItems = (array)($caseData['railContextTrackExpenseItems'] ?? []);
+$railContextStationReceiptFiles = (array)($caseData['railContextStationReceiptFiles'] ?? []);
+$railContextTrackReceiptFiles = (array)($caseData['railContextTrackReceiptFiles'] ?? []);
 $incidentExpenseFlag = (string)($caseData['incidentExpenseFlag'] ?? '');
 $backendExpenseFlag = (string)($caseData['backendExpenseFlag'] ?? '');
 $steps = (array)($caseData['steps'] ?? []);
@@ -19,6 +23,7 @@ $currencyOptions = (array)($caseData['currencyOptions'] ?? ['EUR', 'DKK', 'SEK',
 $compFallbackReasons = (array)($caseData['compFallbackReasons'] ?? []);
 $hasDetails = !empty($caseData['hasDetails']);
 $supportSummary = (string)($caseData['supportSummary'] ?? 'Article 9-care, PMR/handicap og supplerende udgifter samles her.');
+$railContextSummary = (string)($caseData['railContextSummary'] ?? 'Rail gatefakta og kontekst samles her.');
 $operatorExceptionalTypeLabel = (string)($caseData['operatorExceptionalTypeLabel'] ?? '');
 $incidentMain = (string)($caseData['incidentMain'] ?? '');
 $isDeniedBoardingContext = !empty($caseData['isDeniedBoardingContext']);
@@ -48,6 +53,7 @@ $extraordinaryBand = (string)($caseData['extraordinaryBand'] ?? '');
 $manualReviewRequired = !empty($caseData['manualReviewRequired']);
 $showRefundStep = !empty($caseData['showRefundStep']);
 $showSupportStep = !empty($caseData['showSupportStep']);
+$showRailContextStep = !empty($caseData['showRailContextStep']);
 $isVoluntaryDeniedBoarding = !empty($caseData['isVoluntaryDeniedBoarding']);
 $deniedBoardingSelfArrangedFacts = !empty($caseData['deniedBoardingSelfArrangedFacts']);
 $showDeniedBoardingCompensationDetails = !empty($caseData['showDeniedBoardingCompensationDetails']);
@@ -94,6 +100,35 @@ $buildCaseHref = function (string $step = '') use ($caseRef): string {
 $incidentOptions = ['' => 'Vaelg', 'delay' => 'Forsinkelse', 'cancellation' => 'Aflysning', 'denied_boarding' => 'Boardingafvisning', 'missed_connection' => 'Mistet forbindelse'];
 $yesNoUnknown = ['' => 'Vaelg', 'yes' => 'Ja', 'no' => 'Nej', 'unknown' => 'Ved ikke'];
 $yesNo = ['' => 'Vaelg', 'yes' => 'Ja', 'no' => 'Nej'];
+$railStationExpensesSignalOptions = ['' => 'Ikke oplyst', 'yes' => 'Ja', 'no' => 'Nej', 'unknown' => 'Ved ikke endnu'];
+$railStationExpenseTypeLabels = [
+    'meals' => 'Maaltider / forfriskninger',
+    'hotel' => 'Hotel / overnatning',
+    'local_transport' => 'Lokal transport til/fra station eller hotel',
+    'train' => 'Andet tog',
+    'bus' => 'Bus',
+    'taxi' => 'Taxi / minibus',
+    'rideshare' => 'Samkoersel / rideshare',
+    'transport' => 'Transport til/fra station eller hotel',
+    'other' => 'Andet',
+];
+$railStationWhereEndedOptions = [
+    'same_station' => $isCompletedCase ? 'Endte paa denne station' : 'Er stadig paa denne station',
+    'other_station' => 'Kom videre til en anden station',
+    'return_to_departure' => 'Vendte tilbage til afgangsstationen',
+    'final_destination' => 'Naaede endelig destination',
+    'unknown' => 'Ved ikke endnu',
+];
+$railTrackTransportOptions = ['' => 'Ikke oplyst', 'yes' => 'Ja', 'no' => 'Nej', 'irrelevant' => 'Ikke relevant / andet'];
+$railTrackTransportTypeOptions = ['' => 'Ikke oplyst', 'rail' => 'Tog', 'bus' => 'Bus', 'taxi' => 'Taxi', 'other' => 'Andet'];
+$railTrackNoTransportActionOptions = [
+    '' => 'Ikke oplyst',
+    'waited' => 'Ventede til toget kunne koere videre',
+    'walked_station' => 'Fandt selv vej til station / spor',
+    'evacuated_later' => 'Blev evakueret senere',
+    'self_arranged' => 'Fandt selv transport',
+    'other' => 'Andet',
+];
 $noticeBandOptions = ['' => 'Vaelg', '14_plus_days' => '14 dage eller mere', '7_to_13_days' => '7-13 dage', 'under_7_days' => 'Under 7 dage', 'airport_on_day_of_departure' => 'I lufthavnen / ved afgang'];
 $windowOptions = ['' => 'Vaelg', 'within_window' => 'Ja', 'outside_window' => 'Nej', 'unknown' => 'Ved ikke'];
 $airRouteTypeOptions = ['direct' => 'Direkte fly', 'connecting' => 'Med mellemlanding(er)'];
@@ -139,12 +174,36 @@ $careExpenseTypeOptions = [
     'hotel_transport' => 'Transport til/fra hotel',
     'other' => 'Andet',
 ];
+$railContextExpenseTypeOptions = [
+    '' => 'Vaelg',
+    'meal' => 'Maaltider / forfriskninger',
+    'hotel' => 'Hotel / indkvartering',
+    'hotel_transport' => 'Lokal transport til/fra station eller hotel',
+    'new_ticket' => 'Ny billet / andet tog',
+    'other_transport' => 'Alternativ transport (bus/taxi/minibus)',
+    'expensive_solution' => 'Hoejere klasse / dyrere loesning',
+    'other' => 'Andet',
+];
+if ($isRailCase) {
+    $refundExpenseTypeOptions['airport_transfer'] = 'Alternativ transport / taxi / bus';
+    $refundExpenseTypeOptions['other_transport'] = 'Anden noedvendig videre rejse';
+    $refundExpenseTypeOptions['expensive_solution'] = 'Hoejere klasse / dyrere loesning';
+    $rerouteExpenseTypeOptions = [
+        '' => 'Vaelg',
+        'new_ticket' => 'Ny billet / andet tog',
+        'other_transport' => 'Alternativ transport (bus/taxi)',
+        'expensive_solution' => 'Hoejere klasse / dyrere loesning',
+        'other' => 'Andet',
+    ];
+    $careExpenseTypeOptions['hotel_transport'] = 'Lokal transport til/fra station eller hotel';
+}
 $pmrDeliveredOptions = ['' => 'Vaelg', 'fully_delivered' => 'Ja, fuldt leveret', 'partly_delivered' => 'Delvist leveret', 'not_delivered' => 'Nej, ikke leveret'];
 $article11CareOptions = ['' => 'Vaelg', 'fully_delivered' => 'Ja, saa hurtigt som muligt', 'partly_delivered' => 'Delvist / uklart', 'not_delivered' => 'Nej'];
 $ferryPmrSpecialNeedsOptions = ['' => 'Vaelg', 'yes' => 'Ja', 'no' => 'Nej', 'unknown' => 'Ved ikke', 'not_relevant' => 'Ikke relevant / behovet var ikke kendt'];
 $ferryPmrDeliveredOptions = ['' => 'Vaelg', 'full' => 'Fuldt leveret', 'partial' => 'Delvist leveret', 'none' => 'Ikke leveret', 'unknown' => 'Ved ikke'];
 $ferryPmrRefusalBasisOptions = ['' => 'Ikke oplyst', 'safety_requirements' => 'Sikkerhedskrav', 'port_or_ship_infrastructure' => 'Havnens eller skibets indretning', 'other_or_unknown' => 'Andet / ved ikke'];
-$stepDisplayLabels = ['refund' => 'Afhjaelpning', 'documents' => 'Dokumenter', 'support' => 'Assistance', 'applicant' => 'Ansoger', 'consent' => 'Samtykke'];
+$bikeRefusalReasonTypeLabels = ['' => 'Ikke oplyst', 'capacity' => 'Kapacitet', 'equipment' => 'Materiel tillader det ikke', 'weight_dim' => 'Vaegt / dimensioner', 'other' => 'Andet'];
+$stepDisplayLabels = ['rail_context' => 'Rail gates og kontekst', 'refund' => 'Afhjaelpning', 'documents' => 'Dokumenter', 'support' => 'Assistance', 'applicant' => 'Ansoger', 'consent' => 'Samtykke'];
 $multimodalState = (array)($metaState['_multimodal'] ?? []);
 $ferryScopeState = (array)($caseData['ferryScope'] ?? ($multimodalState['ferry_scope'] ?? []));
 $ferryRights = (array)($caseData['ferryRights'] ?? ($multimodalState['ferry_rights'] ?? []));
@@ -225,6 +284,103 @@ $labelFor = static function (array $options, string $value, string $fallback = '
         return (string)$options[$value];
     }
     return $value !== '' ? $value : $fallback;
+};
+$railStationStranded = strtolower($field('a20_station_stranded', $field('rail_stranding_context') === 'station' ? 'yes' : 'no')) === 'yes';
+$railProblemAnchor = (array)($metaState['rail_problem_anchor'] ?? []);
+$railProblemAnchorType = strtolower(trim((string)($railProblemAnchor['type'] ?? '')));
+$railProblemAnchorStation = trim((string)($railProblemAnchor['station_name'] ?? ''));
+$railProblemAnchorLabel = match ($railProblemAnchorType) {
+    'before_departure' => $railProblemAnchorStation !== '' ? ('Foer afgang fra ' . $railProblemAnchorStation) : 'Foer afgang',
+    'transfer' => $railProblemAnchorStation !== '' ? ('Ved skift i ' . $railProblemAnchorStation) : 'Ved skift',
+    'en_route' => $railProblemAnchorStation !== '' ? ('Senere paa kontrakten ved ' . $railProblemAnchorStation) : 'Senere paa kontrakten',
+    default => $railProblemAnchorStation,
+};
+$railStrandedStationValue = trim($field('stranded_current_station'));
+if ($railStrandedStationValue === 'other') {
+    $railStrandedStationValue = trim($field('stranded_current_station_other'));
+}
+$railCurrentLocationAnchor = (array)($metaState['rail_current_location_anchor'] ?? []);
+$railCurrentStationValue = trim((string)($railCurrentLocationAnchor['station_name'] ?? ''));
+$railStationWhereEndedValue = strtolower(trim($field('rail_station_where_ended', $field('a20_where_ended'))));
+$railStationEndValue = trim($field('rail_station_end_station', $field('a20_arrival_station')));
+if ($railStationEndValue === 'other') {
+    $railStationEndValue = trim($field('rail_station_end_station_other', $field('a20_arrival_station_other')));
+}
+$railStationExpenseTypes = array_values(array_filter(array_map(
+    static fn($value): string => trim((string)$value),
+    (array)($formState['rail_station_expense_types'] ?? [])
+)));
+$railStationExpenseTypeDisplay = array_values(array_filter(array_map(
+    static fn(string $value): string => $railStationExpenseTypeLabels[$value] ?? $value,
+    $railStationExpenseTypes
+)));
+$railStationExpensesSignal = strtolower(trim($field('rail_station_expenses_signal')));
+$railStationEndpointAssumed = $field('a20_where_ended_assumed') === '1';
+$railStationHandoff = trim($field('handoff_station'));
+$railTrackStranded = strtolower(trim($field('is_stranded_trin5', 'no'))) === 'yes';
+$railTrackTransportProvided = strtolower(trim($field('blocked_train_alt_transport')));
+$railTrackTransportTypeValue = strtolower(trim($field('assistance_alt_transport_type')));
+$railTrackNoTransportAction = strtolower(trim($field('blocked_no_transport_action')));
+$railTrackContextActive = ((string)($flagsState['gate_art20_2c'] ?? '') === '1')
+    || $railTrackStranded
+    || $railTrackTransportProvided !== ''
+    || $railTrackTransportTypeValue !== ''
+    || $railTrackNoTransportAction !== '';
+if ($railCurrentStationValue === '') {
+    $railCurrentStationValue = $railStationHandoff !== '' ? $railStationHandoff : ($railStationEndValue !== '' ? $railStationEndValue : $railStrandedStationValue);
+}
+$railArt12Seed = (array)($metaState['rail_contract_structure_seed'] ?? []);
+$railArt12Seller = strtolower(trim((string)($field('seller_channel') ?: ($railArt12Seed['seller_channel'] ?? ''))));
+$railArt12SameTransaction = strtolower(trim((string)($field('same_transaction') ?: ($railArt12Seed['same_transaction'] ?? ''))));
+$railArt12Disclosure = strtolower(trim((string)($field('through_ticket_disclosure') ?: ($railArt12Seed['through_ticket_disclosure'] ?? ''))));
+$railArt12Notice = strtolower(trim((string)($field('separate_contract_notice') ?: ($railArt12Seed['separate_contract_notice'] ?? ''))));
+$railArt12OperatorNames = array_values(array_filter(array_map(
+    static fn($value): string => trim((string)$value),
+    (array)($railArt12Seed['operator_names'] ?? [])
+)));
+$railArt12FrontendOutcome = strtolower(trim((string)($field('contract_model') ?: ($railArt12Seed['effective_contract_model'] ?? ''))));
+$railArt12LiableBasis = strtolower(trim((string)($field('rail_art12_liable_basis') ?: ($railArt12Seed['liable_basis'] ?? 'manual_review'))));
+$railArt12ProblemContract = trim((string)($field('problem_contract_id') ?: ($railArt12Seed['problem_contract_id'] ?? '')));
+$railArt12Review = (array)($ticketAnalysis['rail_art12_review'] ?? []);
+$railArt12FinalOutcome = strtolower(trim((string)($railArt12Review['final_outcome'] ?? $field('rail_art12_final_outcome'))));
+$railArt12SameTransactionConfirmed = strtolower(trim((string)($railArt12Review['same_transaction_confirmed'] ?? $field('rail_art12_same_transaction_confirmed'))));
+$railArt12SharedPnr = strtolower(trim((string)($railArt12Review['shared_pnr_scope'] ?? $field('rail_art12_shared_pnr_scope'))));
+$railArt12DisclosureEvidence = strtolower(trim((string)($railArt12Review['disclosure_evidence'] ?? $field('rail_art12_disclosure_evidence'))));
+$railArt12NoticeEvidence = strtolower(trim((string)($railArt12Review['separate_notice_evidence'] ?? $field('rail_art12_separate_notice_evidence'))));
+$railArt12BackendLiableBasis = strtolower(trim((string)($railArt12Review['liable_basis'] ?? $field('rail_art12_liable_basis') ?: ($railArt12Seed['liable_basis'] ?? 'manual_review'))));
+$railArt12ReviewConfidence = strtolower(trim((string)($railArt12Review['confidence'] ?? '')));
+$railArt12ReviewNotes = array_values(array_filter(array_map(static fn($value): string => trim((string)$value), (array)($railArt12Review['notes'] ?? []))));
+$railArt12YesNoLabel = static function (string $value): string {
+    return match ($value) {
+        'yes' => 'Ja',
+        'no' => 'Nej',
+        default => 'Ikke oplyst',
+    };
+};
+$railArt12SystemLabel = static function (string $value): string {
+    return match ($value) {
+        'yes' => 'Ja',
+        'no' => 'Nej',
+        default => 'Ikke fastslaaet',
+    };
+};
+$railArt12EvidenceLabel = static function (string $value): string {
+    return match ($value) {
+        'yes' => 'Dokumenteret i uploaden',
+        'no' => 'Ikke dokumenteret i uploaden',
+        default => 'Afventer systemvurdering',
+    };
+};
+$railArt12OutcomeLabel = static function (string $value): string {
+    return match ($value) {
+        'through' => 'Gennemgaaende billet / en kontrakt',
+        'separate' => 'Saerskilte kontrakter',
+        'manual_review' => 'Manuel vurdering',
+        'stk3' => 'Stk. 3',
+        'stk4' => 'Stk. 4',
+        'individual' => 'Individuel kontrakt',
+        default => 'Ikke afklaret',
+    };
 };
 $cancellationWindowConfig = match ($field('cancellation_notice_band')) {
     '7_to_13_days' => [
@@ -312,9 +468,16 @@ $summarizeExpenseItems = static function (array $items): array {
 };
 $returnExpenseItems = array_values(array_filter($refundExpenseItems, static fn(array $item): bool => (string)($item['type'] ?? '') === 'return_to_origin'));
 $rerouteExpenseItemsOnly = array_values(array_filter($refundExpenseItems, static fn(array $item): bool => (string)($item['type'] ?? '') !== 'return_to_origin'));
+$railContextExpenseItems = array_values(array_filter(array_merge($railContextStationExpenseItems, $railContextTrackExpenseItems), static fn(array $item): bool => is_array($item)));
+$railContextCareExpenseItems = array_values(array_filter($railContextExpenseItems, static fn(array $item): bool => in_array((string)($item['type'] ?? ''), ['meal', 'hotel', 'hotel_transport'], true)));
+$railContextRemedyExpenseItems = array_values(array_filter($railContextExpenseItems, static fn(array $item): bool => !in_array((string)($item['type'] ?? ''), ['meal', 'hotel', 'hotel_transport'], true)));
 $returnExpenseSummary = $summarizeExpenseItems($returnExpenseItems);
 $rerouteExpenseSummary = $summarizeExpenseItems($rerouteExpenseItemsOnly);
 $careExpenseSummary = $summarizeExpenseItems($careExpenseItems);
+$railContextStationExpenseSummary = $summarizeExpenseItems($railContextStationExpenseItems);
+$railContextTrackExpenseSummary = $summarizeExpenseItems($railContextTrackExpenseItems);
+$railContextCareExpenseSummary = $summarizeExpenseItems($railContextCareExpenseItems);
+$railContextRemedyExpenseSummary = $summarizeExpenseItems($railContextRemedyExpenseItems);
 $formatExpenseSummary = static function (array $summary): string {
     if ((int)($summary['count'] ?? 0) === 0) {
         return 'Ingen poster endnu';
@@ -407,13 +570,80 @@ $formatMoneyMap = static function (array $amounts, string $empty = 'Ikke beregne
     }
     return implode(' + ', $parts);
 };
-$ticketPriceNumeric = null;
-$ticketPriceCurrency = strtoupper(trim((string)($formState['price_currency'] ?? 'EUR')));
-$ticketPriceRaw = trim((string)($formState['price'] ?? ''));
-if ($ticketPriceRaw !== '') {
-    $ticketPriceSanitized = str_replace(',', '.', preg_replace('/[^0-9,.-]/', '', $ticketPriceRaw));
-    if ($ticketPriceSanitized !== '' && is_numeric($ticketPriceSanitized)) {
-        $ticketPriceNumeric = (float)$ticketPriceSanitized;
+$parseTicketPriceAmount = static function (string $raw): ?float {
+    $raw = trim($raw);
+    if ($raw === '') {
+        return null;
+    }
+    $raw = preg_replace('/[^0-9,\.\s-]/', '', $raw) ?? '';
+    $raw = preg_replace('/\s+/', '', $raw) ?? '';
+    if ($raw === '') {
+        return null;
+    }
+    $lastComma = strrpos($raw, ',');
+    $lastDot = strrpos($raw, '.');
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastComma > $lastDot) {
+            $raw = str_replace('.', '', $raw);
+            $raw = str_replace(',', '.', $raw);
+        } else {
+            $raw = str_replace(',', '', $raw);
+        }
+    } elseif ($lastComma !== false) {
+        if (substr_count($raw, ',') > 1) {
+            $parts = explode(',', $raw);
+            $decimals = array_pop($parts);
+            $raw = implode('', $parts) . '.' . $decimals;
+        } else {
+            $raw = str_replace(',', '.', $raw);
+        }
+    } elseif ($lastDot !== false && substr_count($raw, '.') > 1) {
+        $parts = explode('.', $raw);
+        $decimals = array_pop($parts);
+        $raw = implode('', $parts) . '.' . $decimals;
+    }
+
+    return is_numeric($raw) ? (float)$raw : null;
+};
+$frontendTicketPriceNumeric = $parseTicketPriceAmount((string)($formState['price'] ?? ''));
+$frontendTicketPriceCurrency = strtoupper(trim((string)($formState['price_currency'] ?? 'EUR')));
+$frontendRailPriceInputMode = strtolower(trim((string)($formState['rail_price_input_mode'] ?? '')));
+if (!in_array($frontendRailPriceInputMode, ['exact', 'estimate', 'unknown'], true)) {
+    $frontendRailPriceInputMode = $frontendTicketPriceNumeric !== null ? 'exact' : 'unknown';
+}
+$frontendTicketPriceIsEstimate = $isRailCase && $frontendRailPriceInputMode === 'estimate';
+$frontendTicketPriceDisplay = $frontendTicketPriceNumeric !== null
+    ? number_format($frontendTicketPriceNumeric, 2, '.', ',') . ' ' . $frontendTicketPriceCurrency
+    : 'Ikke registreret endnu';
+$backendTicketPriceNumeric = $parseTicketPriceAmount((string)($formState['rail_backend_ticket_price'] ?? ''));
+$backendTicketPriceCurrency = strtoupper(trim((string)($formState['rail_backend_ticket_price_currency'] ?? '')));
+$backendTicketPriceBasis = strtolower(trim((string)($formState['rail_backend_ticket_price_basis'] ?? '')));
+$backendTicketPriceBasisLabel = match ($backendTicketPriceBasis) {
+    'whole_ticket' => 'Hele billetten',
+    'affected_part' => 'Kun den relevante del',
+    'season_pass' => 'Pendler / periodekort',
+    'manual_review' => 'Manuel backendvurdering',
+    default => 'Ikke afklaret',
+};
+$backendTicketPriceNote = trim((string)($formState['rail_backend_ticket_price_note'] ?? ''));
+$ticketPriceNumeric = $frontendTicketPriceNumeric;
+$ticketPriceCurrency = $frontendTicketPriceCurrency;
+$ticketPriceDisplay = $frontendTicketPriceDisplay;
+$frontendTicketPriceSummaryLabel = $frontendTicketPriceIsEstimate ? 'Billetpris fra trin 2 (estimat)' : 'Billetpris fra trin 2';
+$ticketPriceSummaryLabel = $frontendTicketPriceSummaryLabel;
+$ticketPriceSummaryNote = $ticketPriceNumeric !== null
+    ? ($frontendTicketPriceIsEstimate
+        ? 'Prisgrundlaget er et passagerestimat fra frontendflowet og kan bekraeftes eller korrigeres i backend.'
+        : 'Prisgrundlaget er hentet fra frontendflowet.')
+    : 'Billetpris mangler stadig og kan derfor holde dele af kravet foreloebige.';
+if ($isRailCase && $backendTicketPriceNumeric !== null) {
+    $ticketPriceNumeric = $backendTicketPriceNumeric;
+    $ticketPriceCurrency = $backendTicketPriceCurrency !== '' ? $backendTicketPriceCurrency : $frontendTicketPriceCurrency;
+    $ticketPriceDisplay = number_format($backendTicketPriceNumeric, 2, '.', ',') . ' ' . $ticketPriceCurrency;
+    $ticketPriceSummaryLabel = 'Backend-bekraeftet billetprisgrundlag';
+    $ticketPriceSummaryNote = 'Backend bruger denne pris i rail-kompensationen og i det samlede krav.';
+    if ($frontendTicketPriceNumeric !== null) {
+        $ticketPriceSummaryNote .= ' Frontend registrerede ' . ($frontendTicketPriceIsEstimate ? 'et estimat paa ' : '') . number_format($frontendTicketPriceNumeric, 2, '.', ',') . ' ' . $frontendTicketPriceCurrency . '.';
     }
 }
 $ferryArt19Amount = null;
@@ -453,6 +683,9 @@ foreach ((array)($returnExpenseSummary['currencies'] ?? []) as $currency => $amo
 foreach ((array)($rerouteExpenseSummary['currencies'] ?? []) as $currency => $amount) {
     $addMoney($article8Amounts, (float)$amount, (string)$currency);
 }
+foreach ((array)($railContextRemedyExpenseSummary['currencies'] ?? []) as $currency => $amount) {
+    $addMoney($article8Amounts, (float)$amount, (string)$currency);
+}
 if ($remedyChoiceValue === 'refund_return' && in_array($refundScopeValue, ['whole_ticket', 'unused_plus_used_if_no_longer_serves_purpose'], true)) {
     if ($ticketPriceNumeric !== null) {
         $addMoney($article8Amounts, $ticketPriceNumeric, $ticketPriceCurrency);
@@ -465,6 +698,9 @@ if ($remedyChoiceValue === 'refund_return' && in_array($refundScopeValue, ['whol
 }
 $article9Amounts = [];
 foreach ((array)($careExpenseSummary['currencies'] ?? []) as $currency => $amount) {
+    $addMoney($article9Amounts, (float)$amount, (string)$currency);
+}
+foreach ((array)($railContextCareExpenseSummary['currencies'] ?? []) as $currency => $amount) {
     $addMoney($article9Amounts, (float)$amount, (string)$currency);
 }
 $article10Amounts = [];
@@ -505,11 +741,24 @@ if ($isFerryCase && $ferryGatePmrRemedy) {
 if (count($grossAmounts) > 1) {
     $settlementNotes[] = 'Oversigten vises pr. kendt valuta. En endelig samlet afregning i én valuta kan kraeve omregning senere.';
 }
+$claimOverviewLead = $isFerryCase
+    ? 'Belobene nedenfor tager udgangspunkt i billetpris fra frontend, kendte ferry-posteringer og de udgifter, der allerede er registreret i backend.'
+    : ($isRailCase
+        ? 'Belobene nedenfor tager udgangspunkt i billetpris fra trin 2, rail-kompensationen og de Art. 18/20-poster, der allerede er kendt fra frontend eller backend.'
+        : 'Belobene nedenfor tager udgangspunkt i billetpris fra frontend og de omkostninger, der allerede er registreret i backend.');
 if ($refundExpenseItems === []) {
     $refundExpenseItems = [['type' => '', 'amount' => '', 'currency' => '', 'description' => '', 'receipt' => []]];
 }
 if ($careExpenseItems === []) {
     $careExpenseItems = [['type' => '', 'amount' => '', 'currency' => '', 'description' => '', 'receipt' => []]];
+}
+$showRailStationExpensePanel = $isRailCase && ($railStationExpensesSignal === 'yes' || $railStationExpenseTypes !== [] || $railContextStationExpenseItems !== []);
+$showRailTrackExpensePanel = $isRailCase && ($railTrackNoTransportAction === 'self_arranged' || $railContextTrackExpenseItems !== []);
+if ($showRailStationExpensePanel && $railContextStationExpenseItems === []) {
+    $railContextStationExpenseItems = [['type' => '', 'amount' => '', 'currency' => '', 'description' => '', 'receipt' => []]];
+}
+if ($showRailTrackExpensePanel && $railContextTrackExpenseItems === []) {
+    $railContextTrackExpenseItems = [['type' => '', 'amount' => '', 'currency' => '', 'description' => '', 'receipt' => []]];
 }
 ?>
 <?= $this->element('passenger_sidebar', compact('passengerNav')) ?>
@@ -688,6 +937,41 @@ if ($careExpenseItems === []) {
       </section>
 
       <section class="case-card case-summary">
+        <strong style="display:block; margin-bottom:10px;"><?= h($isRailCase ? 'Kendt rail-kravsbillede' : 'Kendt kravsbillede') ?></strong>
+        <div class="case-note"><?= h($claimOverviewLead) ?></div>
+        <div class="case-summary-grid">
+          <div class="case-summary-item">
+            <strong><?= h($ticketPriceSummaryLabel) ?></strong>
+            <div><?= h($ticketPriceDisplay) ?></div>
+            <div class="case-muted" style="margin-top:6px;"><?= h($ticketPriceSummaryNote) ?></div>
+            <?php if ($isRailCase && $backendTicketPriceNumeric !== null): ?>
+              <div class="case-muted" style="margin-top:6px;">Prisgrundlag: <?= h($backendTicketPriceBasisLabel) ?></div>
+            <?php endif; ?>
+          </div>
+          <div class="case-summary-item">
+            <strong><?= h($articleCompensationLabel) ?></strong>
+            <div><?= h($formatMoneyMap($article7Amounts, $compOverviewAmountText)) ?></div>
+            <div class="case-muted" style="margin-top:6px;"><?= h($isRailCase ? ($railBandPct > 0 ? ($railBandPct . '% af billetpris') : 'Ikke beregnet') : ($isFerryCase ? ($ferryBandPct > 0 ? ($ferryBandPct . '% af billetpris') : 'Ikke beregnet') : $labelFor($article7EligibilityLabels, $article7EligibilityStatus, 'Foreloebig vurdering mangler'))) ?></div>
+          </div>
+          <div class="case-summary-item">
+            <strong><?= h($articleRemedyLabel) ?></strong>
+            <div><?= h($formatMoneyMap($article8Amounts, 'Afventer kendte beloeb')) ?></div>
+            <div class="case-muted" style="margin-top:6px;"><?= h($refundOverviewText) ?></div>
+          </div>
+          <div class="case-summary-item">
+            <strong><?= h($articleAssistanceLabel) ?></strong>
+            <div><?= h($formatMoneyMap($article9Amounts, 'Ingen poster endnu')) ?></div>
+            <div class="case-muted" style="margin-top:6px;"><?= h($supportSummary) ?></div>
+          </div>
+          <div class="case-summary-item">
+            <strong>Muligt samlet krav</strong>
+            <div><?= h($formatMoneyMap($grossAmounts, 'Afventer flere belob')) ?></div>
+            <div class="case-muted" style="margin-top:6px;">Foer fee og foer eventuelle manuelle korrektioner.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="case-card case-summary">
         <strong style="display:block; margin-bottom:10px;">Foreloebig afregningsoversigt</strong>
         <div class="case-summary-grid">
           <div class="case-summary-item">
@@ -813,7 +1097,232 @@ if ($careExpenseItems === []) {
         <?php $activeStepLabel = (string)($stepDisplayLabels[$activeStep] ?? ($steps[$activeIndex]['label'] ?? 'Case')); ?>
         <h2><?= h($activeStepLabel) ?></h2>
 
-        <?php if ($activeStep === 'refund'): ?>
+        <?php if ($activeStep === 'rail_context'): ?>
+          <p><?= h($railContextSummary) ?></p>
+          <form method="post" action="<?= h($buildCaseHref($activeStep)) ?>" enctype="multipart/form-data">
+            <?php if ($csrfToken !== ''): ?><input type="hidden" name="_csrfToken" value="<?= h($csrfToken) ?>"><?php endif; ?>
+            <input type="hidden" name="active_case_step" value="<?= h($activeStep) ?>">
+
+            <div class="case-subpanel">
+              <h3>Rail gates</h3>
+              <p class="case-muted">Disse felter kommer fra frontendflowet og bruges som gate- og kontekstlag. De skal ikke blandes sammen med konkrete Art. 18-udgifter eller Art. 20-careposter.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Art. 18 gate</strong><div><?= $railGateArt18 ? 'Aktiv' : 'Ikke aktiv' ?></div></div>
+                <div class="case-summary-item"><strong>Art. 20 gate</strong><div><?= $railGateArt20 ? 'Aktiv' : 'Ikke aktiv' ?></div></div>
+                <div class="case-summary-item"><strong>Strandet paa station</strong><div><?= h($labelFor($yesNo, $railStationStranded ? 'yes' : 'no', 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Strandet paa sporet / Art. 20(2)(c)</strong><div><?= h($labelFor($yesNo, $railTrackContextActive ? 'yes' : 'no', 'Ikke oplyst')) ?></div></div>
+              </div>
+            </div>
+
+            <div class="case-subpanel">
+              <h3>Rail PMR / handicap</h3>
+              <p class="case-muted">PMR kan gate baade Art. 18 og Art. 20. Backend bruger derfor dette resume som upstream sagsfakta og ikke som et almindeligt assistanceunderpunkt.</p>
+              <div class="case-note">Frontend har allerede afklaret PMR: <strong><?= h($labelFor($yesNo, $field('pmr_user'), 'Ikke oplyst')) ?></strong></div>
+              <?php if ($field('pmr_user') === 'yes'): ?>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Assistance bestilt foer rejsen</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_booked'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Bestilt assistance leveret</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_delivered_status'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Lovede PMR-faciliteter manglede</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_promised_missing'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Ledsager</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_companion'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Foererhund / servicehund</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_service_dog'), 'Ikke oplyst')) ?></div></div>
+              </div>
+              <?php if ($field('pmr_facility_details') !== ''): ?>
+              <div class="case-note">Frontend-beskrivelse af manglende PMR-faciliteter: <strong><?= h($field('pmr_facility_details')) ?></strong></div>
+              <?php endif; ?>
+              <div class="case-form-grid" style="margin-top:12px;">
+                <div class="case-field"><label for="assistance_pmr_priority_applied">Blev foersteprioritet ved assistance / boarding respekteret?</label><select id="assistance_pmr_priority_applied" name="assistance_pmr_priority_applied"><?php foreach ($yesNoUnknown as $value => $label): ?><option value="<?= h($value) ?>" <?= $selected('assistance_pmr_priority_applied', $value) ?>><?= h($label) ?></option><?php endforeach; ?></select></div>
+              </div>
+              <?php endif; ?>
+            </div>
+
+            <div class="case-subpanel">
+              <h3>Rail cykel (Art. 6)</h3>
+              <p class="case-muted">Cykelsporet kan ogsaa gate Art. 18 og Art. 20. Derfor holdes det her som rail-kontekst og ikke som en expense- eller careblok.</p>
+              <div class="case-note">Frontend har allerede afklaret cykel paa rejsen: <strong><?= h($labelFor($yesNoUnknown, $field('bike_was_present'), 'Ikke oplyst')) ?></strong></div>
+              <?php if ($field('bike_was_present') === 'yes'): ?>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Cyklen forsinkede rejsen</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_delay'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Reservation lavet</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_reservation_made'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Reservation kraevet</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_reservation_required'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Naegtet at tage cyklen med</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_denied_boarding'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Begrundelse oplyst</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_refusal_reason_provided'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Begrundelse</strong><div><?= h($labelFor($bikeRefusalReasonTypeLabels, $field('bike_refusal_reason_type'), 'Ikke oplyst')) ?></div></div>
+              </div>
+              <?php if ($field('bike_refusal_reason_other_text') !== ''): ?>
+              <div class="case-note">Frontend-beskrivelse af anden begrundelse: <strong><?= h($field('bike_refusal_reason_other_text')) ?></strong></div>
+              <?php endif; ?>
+              <?php endif; ?>
+            </div>
+
+            <div class="case-subpanel">
+              <h3>Rail strandet paa station</h3>
+              <p class="case-muted">Stationssporet er ren rail-kontekst. Det gater ikke i sig selv, men forklarer hvorfor maaltider, hotel eller ny videre rejse senere blev relevante.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Strandet paa station</strong><div><?= h($labelFor($yesNo, $railStationStranded ? 'yes' : 'no', 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Strandingsstation</strong><div><?= h($railStrandedStationValue !== '' ? $railStrandedStationValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Nuvaerende / foreloebig station</strong><div><?= h($railCurrentStationValue !== '' ? $railCurrentStationValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Problemsted</strong><div><?= h($railProblemAnchorLabel !== '' ? $railProblemAnchorLabel : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Hvor endte rejsen foreloebigt</strong><div><?= h($labelFor($railStationWhereEndedOptions, $railStationWhereEndedValue, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Slut-/ankomststation</strong><div><?= h($railStationEndValue !== '' ? $railStationEndValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Expense-signal</strong><div><?= h($labelFor($railStationExpensesSignalOptions, $railStationExpensesSignal, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Handoff-station</strong><div><?= h($railStationHandoff !== '' ? $railStationHandoff : 'Ikke oplyst') ?></div></div>
+              </div>
+              <?php if (false && $railStationExpenseTypeDisplay !== []): ?>
+                <div class="case-note" style="margin-top:12px;">Frontend pegede paa disse typer fra stationssituationen: <strong><?= h(implode(' · ', $railStationExpenseTypeDisplay)) ?></strong>.</div>
+              <?php endif; ?>
+              <?php if ($railStationEndpointAssumed): ?>
+                <div class="case-note">Stationsslutpunktet blev seedet automatisk i frontend og kan derfor vaere et foreloebigt hint.</div>
+              <?php endif; ?>
+            </div>
+
+            <?php if ($showRailStationExpensePanel): ?>
+            <div class="case-subpanel">
+              <h3>Stationsudgifter og kvitteringer</h3>
+              <p class="case-muted">Registrer konkrete backend-udgifter fra station-strandingen her. Denne blok bruges netop til udgifter, der udspringer af den konkrete station-situation, i stedet for at sprede dem ud paa andre backend-trin.</p>
+              <?php if ($railStationExpenseTypeDisplay !== []): ?>
+                <div class="case-note">Frontend pegede paa disse typer fra stationssituationen: <strong><?= h(implode(' · ', $railStationExpenseTypeDisplay)) ?></strong>.</div>
+              <?php endif; ?>
+              <div class="case-note">Foreloebigt registreret i backend: <strong><?= h($formatExpenseSummary($railContextStationExpenseSummary)) ?></strong></div>
+              <div class="case-file-list" data-expense-items="rail_context_station">
+                <?php foreach ($railContextStationExpenseItems as $index => $item): ?>
+                  <?php $itemReceipt = (array)($item['receipt'] ?? []); ?>
+                  <div class="case-file-item" data-expense-item>
+                    <div class="case-form-grid">
+                      <div class="case-field">
+                        <label for="rail_case_context_station_expense_items_<?= h((string)$index) ?>_type">Udgiftstype</label>
+                        <select id="rail_case_context_station_expense_items_<?= h((string)$index) ?>_type" name="rail_case_context_station_expense_items[<?= h((string)$index) ?>][type]">
+                          <?php foreach ($railContextExpenseTypeOptions as $value => $label): ?>
+                            <option value="<?= h($value) ?>" <?= ((string)($item['type'] ?? '') === $value) ? 'selected' : '' ?>><?= h($label) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_station_expense_items_<?= h((string)$index) ?>_amount">Beloeb</label>
+                        <input id="rail_case_context_station_expense_items_<?= h((string)$index) ?>_amount" name="rail_case_context_station_expense_items[<?= h((string)$index) ?>][amount]" value="<?= h((string)($item['amount'] ?? '')) ?>" inputmode="decimal">
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_station_expense_items_<?= h((string)$index) ?>_currency">Valuta</label>
+                        <select id="rail_case_context_station_expense_items_<?= h((string)$index) ?>_currency" name="rail_case_context_station_expense_items[<?= h((string)$index) ?>][currency]">
+                          <option value="">Vaelg</option>
+                          <?php foreach ($currencyOptions as $currency): ?>
+                            <option value="<?= h($currency) ?>" <?= ((string)($item['currency'] ?? '') === $currency) ? 'selected' : '' ?>><?= h($currency) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="case-field" style="grid-column: 1 / -1;">
+                        <label for="rail_case_context_station_expense_items_<?= h((string)$index) ?>_description">Kort beskrivelse</label>
+                        <textarea id="rail_case_context_station_expense_items_<?= h((string)$index) ?>_description" name="rail_case_context_station_expense_items[<?= h((string)$index) ?>][description]"><?= h((string)($item['description'] ?? '')) ?></textarea>
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_station_receipts_<?= h((string)$index) ?>">Kvittering</label>
+                        <input id="rail_case_context_station_receipts_<?= h((string)$index) ?>" name="rail_case_context_station_receipts[<?= h((string)$index) ?>]" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                      </div>
+                      <div class="case-field">
+                        <label>Eksisterende kvittering</label>
+                        <?php if ($itemReceipt !== []): ?>
+                          <div class="case-file-item" style="margin-top:6px;">
+                            <a href="<?= h((string)($itemReceipt['path'] ?? '#')) ?>" target="_blank" rel="noopener"><?= h((string)($itemReceipt['name'] ?? 'Upload')) ?></a>
+                            <div class="case-muted">Uploadet <?= h((string)($itemReceipt['uploaded_at'] ?? '')) ?></div>
+                          </div>
+                        <?php else: ?>
+                          <div class="case-muted" style="margin-top:10px;">Ingen kvittering endnu.</div>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                    <div class="case-actions">
+                      <button class="case-button" type="button" data-remove-expense-item>Fjern post</button>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+              <div class="case-actions">
+                <button class="case-button" type="button" data-add-expense-item="rail_context_station">+ Tilfoej stationsudgift</button>
+              </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="case-subpanel">
+              <h3>Rail strandet paa sporet</h3>
+              <p class="case-muted">Dette er Art. 20(2)(c)-kontekst fra frontend. Sporet er afhaengigt af incident og gates, men bruges ikke som separat rodgate i backend.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Strandet paa sporet</strong><div><?= h($labelFor($yesNo, $railTrackStranded ? 'yes' : 'no', 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Art. 20(2)(c)-spor aktivt</strong><div><?= h($labelFor($yesNo, $railTrackContextActive ? 'yes' : 'no', 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Transport stillet til raadighed</strong><div><?= h($labelFor($railTrackTransportOptions, $railTrackTransportProvided, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Transporttype</strong><div><?= h($labelFor($railTrackTransportTypeOptions, $railTrackTransportTypeValue, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Hvis ingen transport: hvad gjorde passageren?</strong><div><?= h($labelFor($railTrackNoTransportActionOptions, $railTrackNoTransportAction, 'Ikke oplyst')) ?></div></div>
+              </div>
+            </div>
+
+            <?php if ($showRailTrackExpensePanel): ?>
+            <div class="case-subpanel">
+              <h3>Udgifter fra strandet paa sporet</h3>
+              <p class="case-muted">Registrer konkrete backend-udgifter fra sporsituationen her, fx selvbetalt transport, andet tog eller anden noedvendig rail-loesning. Disse poster bliver liggende i rail-konteksttrinnet, fordi de udspringer direkte af strandingen paa sporet.</p>
+              <?php if ($railTrackNoTransportAction === 'self_arranged'): ?>
+                <div class="case-note">Frontend registrerede, at passageren selv fandt transport fra sporet. Backend registrerer derfor beloeb og bilag i denne blok.</div>
+              <?php endif; ?>
+              <div class="case-note">Foreloebigt registreret i backend: <strong><?= h($formatExpenseSummary($railContextTrackExpenseSummary)) ?></strong></div>
+              <div class="case-file-list" data-expense-items="rail_context_track">
+                <?php foreach ($railContextTrackExpenseItems as $index => $item): ?>
+                  <?php $itemReceipt = (array)($item['receipt'] ?? []); ?>
+                  <div class="case-file-item" data-expense-item>
+                    <div class="case-form-grid">
+                      <div class="case-field">
+                        <label for="rail_case_context_track_expense_items_<?= h((string)$index) ?>_type">Udgiftstype</label>
+                        <select id="rail_case_context_track_expense_items_<?= h((string)$index) ?>_type" name="rail_case_context_track_expense_items[<?= h((string)$index) ?>][type]">
+                          <?php foreach ($railContextExpenseTypeOptions as $value => $label): ?>
+                            <option value="<?= h($value) ?>" <?= ((string)($item['type'] ?? '') === $value) ? 'selected' : '' ?>><?= h($label) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_track_expense_items_<?= h((string)$index) ?>_amount">Beloeb</label>
+                        <input id="rail_case_context_track_expense_items_<?= h((string)$index) ?>_amount" name="rail_case_context_track_expense_items[<?= h((string)$index) ?>][amount]" value="<?= h((string)($item['amount'] ?? '')) ?>" inputmode="decimal">
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_track_expense_items_<?= h((string)$index) ?>_currency">Valuta</label>
+                        <select id="rail_case_context_track_expense_items_<?= h((string)$index) ?>_currency" name="rail_case_context_track_expense_items[<?= h((string)$index) ?>][currency]">
+                          <option value="">Vaelg</option>
+                          <?php foreach ($currencyOptions as $currency): ?>
+                            <option value="<?= h($currency) ?>" <?= ((string)($item['currency'] ?? '') === $currency) ? 'selected' : '' ?>><?= h($currency) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="case-field" style="grid-column: 1 / -1;">
+                        <label for="rail_case_context_track_expense_items_<?= h((string)$index) ?>_description">Kort beskrivelse</label>
+                        <textarea id="rail_case_context_track_expense_items_<?= h((string)$index) ?>_description" name="rail_case_context_track_expense_items[<?= h((string)$index) ?>][description]"><?= h((string)($item['description'] ?? '')) ?></textarea>
+                      </div>
+                      <div class="case-field">
+                        <label for="rail_case_context_track_receipts_<?= h((string)$index) ?>">Kvittering</label>
+                        <input id="rail_case_context_track_receipts_<?= h((string)$index) ?>" name="rail_case_context_track_receipts[<?= h((string)$index) ?>]" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                      </div>
+                      <div class="case-field">
+                        <label>Eksisterende kvittering</label>
+                        <?php if ($itemReceipt !== []): ?>
+                          <div class="case-file-item" style="margin-top:6px;">
+                            <a href="<?= h((string)($itemReceipt['path'] ?? '#')) ?>" target="_blank" rel="noopener"><?= h((string)($itemReceipt['name'] ?? 'Upload')) ?></a>
+                            <div class="case-muted">Uploadet <?= h((string)($itemReceipt['uploaded_at'] ?? '')) ?></div>
+                          </div>
+                        <?php else: ?>
+                          <div class="case-muted" style="margin-top:10px;">Ingen kvittering endnu.</div>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                    <div class="case-actions">
+                      <button class="case-button" type="button" data-remove-expense-item>Fjern post</button>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+              <div class="case-actions">
+                <button class="case-button" type="button" data-add-expense-item="rail_context_track">+ Tilfoej sporudgift</button>
+              </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="case-step-nav"><?php if ($prevStep !== ''): ?><a class="case-button" href="<?= h($buildCaseHref($prevStep)) ?>">Forrige trin</a><?php else: ?><span></span><?php endif; ?><div style="display:flex; gap:10px;"><button class="case-button" type="submit">Gem</button><?php if ($nextStep !== ''): ?><button class="case-button primary" type="submit" name="goto_step" value="<?= h($nextStep) ?>">Gem og naeste trin</button><?php endif; ?></div></div>
+          </form>
+
+        <?php elseif ($activeStep === 'refund'): ?>
           <?php
             $isOngoingDeniedBoardingContext = $isOngoingCase && $isDeniedBoardingContext;
             $frontendRerouteExpenseType = $field('air_reroute_expense_type');
@@ -827,16 +1336,25 @@ if ($careExpenseItems === []) {
                     break;
                 }
             }
+            $frontendSelfArrangedSignal = $field('air_self_arranged_reroute');
+            $frontendRerouteExpenseSignal = $field('air_reroute_expenses_incurred');
+            if ($isRailCase) {
+                $frontendSelfArrangedSignal = $field('self_purchased_new_ticket');
+                $frontendRerouteExpenseSignal = $field('reroute_extra_costs');
+                $frontendRerouteExpenseType = $field('reroute_extra_costs_type');
+            }
+            $backendSelfArrangedValue = $isRailCase ? ($frontendSelfArrangedSignal !== '' ? $frontendSelfArrangedSignal : $field('air_self_arranged_reroute')) : $field('air_self_arranged_reroute');
+            $backendRerouteExpenseSignal = $isRailCase ? ($frontendRerouteExpenseSignal !== '' ? $frontendRerouteExpenseSignal : $field('air_reroute_expenses_incurred')) : $field('air_reroute_expenses_incurred');
             $hasRerouteRemedy = in_array($field('remedyChoice'), ['reroute_soonest', 'reroute_later'], true)
               || ($isFerryCase && $field('remedyChoice') === 'no_real_choice');
             $deniedBoardingDirectExpensePath = $isDeniedBoardingContext
               && $hasRerouteRemedy
-              && $field('air_self_arranged_reroute') === 'yes';
+              && $backendSelfArrangedValue === 'yes';
             $hasCompletedFrontendRerouteFacts = $isCompletedCase
               && $hasRerouteRemedy
               && (
-                $field('air_self_arranged_reroute') !== ''
-                || $field('air_reroute_expenses_incurred') !== ''
+                $frontendSelfArrangedSignal !== ''
+                || $frontendRerouteExpenseSignal !== ''
                 || $frontendRerouteExpenseType !== ''
               );
             $hasCancellationFrontendIncidentFacts = $isCancellationRefundContext
@@ -853,14 +1371,14 @@ if ($careExpenseItems === []) {
             $hasCancellationFrontendRemedyFacts = $isCancellationRefundContext
               && (
                 $field('remedyChoice') !== ''
-                || $field('air_self_arranged_reroute') !== ''
-                || $field('air_reroute_expenses_incurred') !== ''
+                || $frontendSelfArrangedSignal !== ''
+                || $frontendRerouteExpenseSignal !== ''
                 || $frontendRerouteExpenseType !== ''
               );
             $showCancellationFrontendSummary = $hasCancellationFrontendIncidentFacts || $hasCancellationFrontendRemedyFacts;
             $isCancellationRerouteRemedy = $isCancellationRefundContext && $hasRerouteRemedy;
-            $cancellationHasFrontendSelfArrangedFacts = $field('air_self_arranged_reroute') !== '';
-            $cancellationHasFrontendExpenseFacts = $field('air_reroute_expenses_incurred') !== '' || $frontendRerouteExpenseType !== '';
+            $cancellationHasFrontendSelfArrangedFacts = $frontendSelfArrangedSignal !== '';
+            $cancellationHasFrontendExpenseFacts = $frontendRerouteExpenseSignal !== '' || $frontendRerouteExpenseType !== '';
             $showCancellationPassengerRerouteFacts = $isFerryCase
               ? $isCancellationRerouteRemedy
               : (
@@ -896,7 +1414,7 @@ if ($careExpenseItems === []) {
             $showRerouteSelfArrangedFacts = $isFerryCase
               ? $hasRerouteRemedy
               : ($isDeniedBoardingContext ? $showDeniedBoardingPassengerRerouteFacts : $showCancellationPassengerRerouteFacts);
-            $showSelfArrangedDetailFields = $showRerouteSelfArrangedFacts && $field('air_self_arranged_reroute') === 'yes';
+            $showSelfArrangedDetailFields = $showRerouteSelfArrangedFacts && $frontendSelfArrangedSignal === 'yes';
             $showAcceptedAlternativeExpenseFacts = $hasRerouteRemedy
               && $field('reroute_offered') === 'yes'
               && $field('reroute_used_or_accepted') === 'yes';
@@ -904,24 +1422,30 @@ if ($careExpenseItems === []) {
               || $showSelfArrangedDetailFields
               || $showAcceptedAlternativeExpenseFacts
               || $hasCompletedFrontendRerouteFacts
-              || ($isOngoingDeniedBoardingContext && $field('air_reroute_expenses_incurred') !== '')
-              || ($isCompletedCase && $field('air_reroute_expenses_incurred') !== '');
-            $showRerouteExpensePanel = $showRerouteExpenseGatePanel && $field('air_reroute_expenses_incurred') === 'yes';
+              || ($isOngoingDeniedBoardingContext && $frontendRerouteExpenseSignal !== '')
+              || ($isCompletedCase && $frontendRerouteExpenseSignal !== '');
+            $showRerouteExpensePanel = $showRerouteExpenseGatePanel && $frontendRerouteExpenseSignal === 'yes';
             $rerouteUsedOrAcceptedLabel = $isFerryCase
               ? 'Brugte eller accepterede passageren den tilbudte videre rejse?'
-              : ($isCancellationRefundContext
+              : ($isRailCase
+                ? 'Brugte passageren den tilbudte omlaegning?'
+                : ($isCancellationRefundContext
                 ? 'Fortsatte passageren paa den tilbudte alternative flyvning?'
-                : 'Brugte eller accepterede passageren den alternative flyvning?');
+                : 'Brugte eller accepterede passageren den alternative flyvning?'));
             $selfArrangedRerouteLabel = $isFerryCase
               ? 'Maatte passageren selv finde en anden videre rejse?'
-              : ($isCancellationRefundContext
+              : ($isRailCase
                 ? 'Maatte passageren selv finde en anden videre rejse?'
-                : 'Maatte passageren selv arrangere en loesning?');
+                : ($isCancellationRefundContext
+                ? 'Maatte passageren selv finde en anden videre rejse?'
+                : 'Maatte passageren selv arrangere en loesning?'));
             $rerouteExpenseGateLabel = $isFerryCase
               ? 'Havde passageren konkrete udgifter til ombooking eller videre rejse?'
-              : ($isCancellationRefundContext
+              : ($isRailCase
+                ? 'Havde passageren konkrete rail-udgifter til ny billet, taxi, bus eller anden videre rejse?'
+                : ($isCancellationRefundContext
                 ? 'Havde passageren konkrete udgifter til ombooking eller videre rejse?'
-                : 'Havde passageren udgifter til ny billet, transfer eller anden ombooking?');
+                : 'Havde passageren udgifter til ny billet, transfer eller anden ombooking?'));
             $lockedRemedyChoice = !$isDelayRefundContext
               && $field('remedyChoice') !== ''
               && array_key_exists($field('remedyChoice'), $remedyOptions);
@@ -933,9 +1457,9 @@ if ($careExpenseItems === []) {
             $lockedReturnExpense = $field('return_to_origin_expense') !== '';
             $lockedRerouteOffered = ($isCancellationRefundContext || ($isDeniedBoardingContext && !$isOngoingDeniedBoardingContext)) && $field('reroute_offered') !== '';
             $lockedRerouteUsedOrAccepted = !$isOngoingDeniedBoardingContext && $field('reroute_used_or_accepted') !== '';
-            $lockedSelfArrangedReroute = $field('air_self_arranged_reroute') !== '';
+            $lockedSelfArrangedReroute = $frontendSelfArrangedSignal !== '';
             $lockedSelfArrangedReason = !$isOngoingDeniedBoardingContext && $field('air_self_arranged_reroute_reason') !== '';
-            $lockedRerouteExpensesIncurred = $field('air_reroute_expenses_incurred') !== '';
+            $lockedRerouteExpensesIncurred = $frontendRerouteExpenseSignal !== '';
             $remedyArticleName = $isFerryCase ? 'Art. 18' : ($isRailCase ? 'Art. 18' : 'Article 8');
             $carrierLabel = $isFerryCase ? 'transportoeren' : ($isRailCase ? 'jernbanevirksomheden' : 'carrieren');
             if ($isFerryCase) {
@@ -1002,8 +1526,8 @@ if ($careExpenseItems === []) {
                 <div class="case-summary-item"><strong>Alternativ flyvning tilbudt</strong><div><?= h($labelFor($yesNoUnknown, $field('reroute_offered'), 'Ikke oplyst')) ?></div></div>
                 <?php endif; ?>
                 <div class="case-summary-item"><strong>Valg i remedies</strong><div><?= h($labelFor($remedyOptions, $field('remedyChoice'), 'Ikke valgt')) ?></div></div>
-                <div class="case-summary-item"><strong>Egen videre rejse</strong><div><?= h($labelFor($yesNo, $field('air_self_arranged_reroute'), 'Ikke oplyst')) ?></div></div>
-                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $field('air_reroute_expenses_incurred'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Egen videre rejse</strong><div><?= h($labelFor($yesNo, $frontendSelfArrangedSignal, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $frontendRerouteExpenseSignal, 'Ikke oplyst')) ?></div></div>
                 <div class="case-summary-item"><strong>Udgiftstype fra frontend</strong><div><?= h($labelFor($rerouteExpenseTypeOptions, $frontendRerouteExpenseType, 'Ikke valgt')) ?></div></div>
               </div>
               <div class="case-note"><?= h($cancellationFollowupText) ?></div>
@@ -1021,8 +1545,8 @@ if ($careExpenseItems === []) {
               <p class="case-muted">Disse svar kommer fra den igangvaerende frontend. De beskriver passagerens aktuelle valg og udgiftsspor, ikke en endelig backend-vurdering af carrierens tilbud.</p>
               <div class="case-summary-grid">
                 <div class="case-summary-item"><strong>Valg nu</strong><div><?= h($labelFor($remedyOptions, $field('remedyChoice'), 'Ikke valgt')) ?></div></div>
-                <div class="case-summary-item"><strong>Egen videre rejse</strong><div><?= h($labelFor($yesNo, $field('air_self_arranged_reroute'), 'Ikke oplyst')) ?></div></div>
-                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $field('air_reroute_expenses_incurred'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Egen videre rejse</strong><div><?= h($labelFor($yesNo, $frontendSelfArrangedSignal, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $frontendRerouteExpenseSignal, 'Ikke oplyst')) ?></div></div>
                 <div class="case-summary-item"><strong>Udgiftstype fra liveflow</strong><div><?= h($labelFor($rerouteExpenseTypeOptions, $frontendRerouteExpenseType, 'Ikke valgt')) ?></div></div>
               </div>
               <div class="case-note">Carrierens faktiske tilbud, om tilbuddet blev brugt, aarsag og beloeb/kvitteringer afklares nedenfor i backend.</div>
@@ -1034,8 +1558,8 @@ if ($careExpenseItems === []) {
               <p class="case-muted"><?= h($isFerryCase ? 'Disse svar kommer fra completed-frontflowet. Ferry-haendelse og Art. 18-gate kommer fra incident, mens passagerens faktiske forloeb og udgiftsspor kommer fra remedies.' : ($isRailCase ? 'Disse svar kommer fra completed-frontflowet. Rail-haendelse og Art. 18-gate kommer fra incident, mens passagerens faktiske forloeb og udgiftsspor kommer fra remedies.' : 'Disse svar kommer fra completed-frontflowet. Varsel og tilbudt alternativ flyvning kommer fra incident, mens passagerens faktiske forloeb og udgiftsspor kommer fra remedies.')) ?></p>
               <div class="case-summary-grid">
                 <div class="case-summary-item"><strong>Valg</strong><div><?= h($labelFor($remedyOptions, $field('remedyChoice'), 'Ikke valgt')) ?></div></div>
-                <div class="case-summary-item"><strong><?= h(($isFerryCase || $isRailCase) ? 'Egen videre rejse' : 'Egen loesning') ?></strong><div><?= h($labelFor($yesNo, $field('air_self_arranged_reroute'), 'Ikke oplyst')) ?></div></div>
-                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $field('air_reroute_expenses_incurred'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong><?= h(($isFerryCase || $isRailCase) ? 'Egen videre rejse' : 'Egen loesning') ?></strong><div><?= h($labelFor($yesNo, $frontendSelfArrangedSignal, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Ekstraudgifter</strong><div><?= h($labelFor($yesNo, $frontendRerouteExpenseSignal, 'Ikke oplyst')) ?></div></div>
                 <div class="case-summary-item"><strong>Udgiftstype fra frontflow</strong><div><?= h($labelFor($rerouteExpenseTypeOptions, $frontendRerouteExpenseType, 'Ikke valgt')) ?></div></div>
               </div>
               <div class="case-note">Udgiftstype, beloeb, valuta, forklaring og kvittering registreres nedenfor, mens kompensationssporet vurderes separat.</div>
@@ -1043,6 +1567,26 @@ if ($careExpenseItems === []) {
           <?php endif; ?>
           <?php if ($isDelayRefundContext): ?>
             <div class="case-note">Delay-sporet bruger ikke generel ombooking her. Hvis refund-gaten er aaben, afklarer vi kun hvad der skulle refunderes, og om der var faktiske returudgifter.</div>
+          <?php endif; ?>
+              <?php if (false && $railStationExpenseTypeDisplay !== []): ?>
+                <div class="case-note" style="margin-top:12px;">Frontend pegede paa disse typer: <strong><?= h(implode(' · ', $railStationExpenseTypeDisplay)) ?></strong>.</div>
+              <?php endif; ?>
+          <?php if ($isRailCase && $hasRerouteRemedy): ?>
+            <div class="case-subpanel">
+              <h3>Rail Art. 18-resume fra frontend</h3>
+              <p class="case-muted">Frontend har kun samlet rail-valg, fallback-spor og lette udgiftssignaler. Konkrete beloeb, valuta og bilag registreres nedenfor i backend.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Valg i remedies</strong><div><?= h($labelFor($remedyOptions, $field('remedyChoice'), 'Ikke valgt')) ?></div></div>
+                <div class="case-summary-item"><strong>Brugbar omlægning tilbudt</strong><div><?= h($labelFor($yesNoUnknown, $field('offer_provided'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Egen videre rejse</strong><div><?= h($labelFor($yesNoUnknown, $field('self_purchased_new_ticket'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong><?= h($isRailCase ? 'Aarsag til egen videre rejse' : 'Aarsag til egen loesning') ?></strong><div><?= h($field('self_purchase_reason') !== '' ? $field('self_purchase_reason') : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Godkendt af operatoeren</strong><div><?= h($labelFor($yesNoUnknown, $field('self_purchase_approved_by_operator'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Alternativ info inden 100 min</strong><div><?= h($labelFor($yesNoUnknown, $field('reroute_info_within_100min'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Ekstraudgifter signal</strong><div><?= h($labelFor($yesNoUnknown, $field('reroute_extra_costs'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Udgiftstype fra frontend</strong><div><?= h($labelFor($rerouteExpenseTypeOptions, $frontendRerouteExpenseType, 'Ikke valgt')) ?></div></div>
+                <div class="case-summary-item"><strong>Senere omlaegning udfald</strong><div><?= h($field('reroute_later_outcome') !== '' ? $field('reroute_later_outcome') : 'Ikke oplyst') ?></div></div>
+              </div>
+            </div>
           <?php endif; ?>
           <form method="post" action="<?= h($buildCaseHref($activeStep)) ?>" enctype="multipart/form-data">
             <?php if ($csrfToken !== ''): ?><input type="hidden" name="_csrfToken" value="<?= h($csrfToken) ?>"><?php endif; ?>
@@ -1182,20 +1726,28 @@ if ($careExpenseItems === []) {
               </div>
             </div>
             <div class="case-subpanel<?= (!$isDelayRefundContext && $hasRerouteRemedy) ? '' : ' case-hidden' ?>" data-reroute-panel>
-              <h3><?= h($isFerryCase ? 'Omlaegning / egen videre rejse' : 'Omlaegning / egen loesning') ?></h3>
-              <p class="case-muted"><?= h($isFerryCase ? 'Start med passagerens faktiske forloeb og konkrete udgifter. Transportoerens Art. 18-tilbud bruges som kontekst og holdes adskilt fra Art. 19.' : 'Start med passagerens faktiske forloeb og konkrete udgifter. Carrierens alternative flyvning bruges kun som kompensationsfakta laengere nede.') ?></p>
+              <h3><?= h($isFerryCase ? 'Omlaegning / egen videre rejse' : ($isRailCase ? 'Omlaegning / egen videre rejse' : 'Omlaegning / egen loesning')) ?></h3>
+              <p class="case-muted"><?= h($isFerryCase
+                ? 'Start med passagerens faktiske forloeb og konkrete udgifter. Transportoerens Art. 18-tilbud bruges som kontekst og holdes adskilt fra Art. 19.'
+                : ($isRailCase
+                    ? 'Start med passagerens faktiske rail-forloeb og konkrete udgifter. Operatoerens omlaegning og Art. 19-kompensation holdes adskilt fra de dokumenterede Art. 18-poster her.'
+                    : 'Start med passagerens faktiske forloeb og konkrete udgifter. Carrierens alternative flyvning bruges kun som kompensationsfakta laengere nede.')) ?></p>
 
               <div class="case-subpanel<?= $showRerouteSelfArrangedFacts ? '' : ' case-hidden' ?>" data-reroute-self-arranged-panel>
-                <h3>Passagerens egen loesning</h3>
-                <p class="case-muted"><?= h($isFerryCase ? 'Denne del bruges til passagerens faktiske videre rejse og holdes adskilt fra ferry-kompensationsfakta.' : 'Denne del bruges til passagerens faktiske forloeb og holdes adskilt fra carrierens kompensationsfakta ovenfor.') ?></p>
+                <h3><?= h($isRailCase ? 'Passagerens egen videre rejse' : 'Passagerens egen loesning') ?></h3>
+                <p class="case-muted"><?= h($isFerryCase
+                  ? 'Denne del bruges til passagerens faktiske videre rejse og holdes adskilt fra ferry-kompensationsfakta.'
+                  : ($isRailCase
+                      ? 'Denne del bruges til passagerens faktiske videre rejse og holdes adskilt fra rail-kompensationsfakta og stationsassistance.'
+                      : 'Denne del bruges til passagerens faktiske forloeb og holdes adskilt fra carrierens kompensationsfakta ovenfor.')) ?></p>
                 <div class="case-form-grid<?= $showRerouteSelfArrangedFacts ? '' : ' case-hidden' ?>" data-cancellation-passenger-reroute-fields data-denied-boarding-self-arranged-fields>
                   <div class="case-field">
                     <label for="air_self_arranged_reroute"><?= h($selfArrangedRerouteLabel) ?></label>
                     <?php if ($lockedSelfArrangedReroute): ?>
-                      <input id="air_self_arranged_reroute" type="hidden" name="air_self_arranged_reroute" value="<?= h($field('air_self_arranged_reroute')) ?>">
-                      <div class="case-note"><?= h($labelFor($yesNo, $field('air_self_arranged_reroute'), 'Ikke oplyst')) ?></div>
+                      <input id="air_self_arranged_reroute" type="hidden" name="air_self_arranged_reroute" value="<?= h($backendSelfArrangedValue) ?>">
+                      <div class="case-note"><?= h($labelFor($yesNo, $backendSelfArrangedValue, 'Ikke oplyst')) ?></div>
                     <?php else: ?>
-                      <select id="air_self_arranged_reroute" name="air_self_arranged_reroute"><?php foreach ($yesNo as $value => $label): ?><option value="<?= h($value) ?>" <?= $selected('air_self_arranged_reroute', $value) ?>><?= h($label) ?></option><?php endforeach; ?></select>
+                      <select id="air_self_arranged_reroute" name="air_self_arranged_reroute"><?php foreach ($yesNo as $value => $label): ?><option value="<?= h($value) ?>" <?= ($backendSelfArrangedValue === $value) ? 'selected' : '' ?>><?= h($label) ?></option><?php endforeach; ?></select>
                     <?php endif; ?>
                   </div>
                   <?php if ($isFerryCase): ?>
@@ -1220,10 +1772,10 @@ if ($careExpenseItems === []) {
                   <div class="case-field">
                     <label for="air_reroute_expenses_incurred"><?= h($rerouteExpenseGateLabel) ?></label>
                     <?php if ($lockedRerouteExpensesIncurred): ?>
-                      <input id="air_reroute_expenses_incurred" type="hidden" name="air_reroute_expenses_incurred" value="<?= h($field('air_reroute_expenses_incurred')) ?>">
-                      <div class="case-note"><?= h($labelFor($yesNo, $field('air_reroute_expenses_incurred'), 'Ikke oplyst')) ?></div>
+                      <input id="air_reroute_expenses_incurred" type="hidden" name="air_reroute_expenses_incurred" value="<?= h($backendRerouteExpenseSignal) ?>">
+                      <div class="case-note"><?= h($labelFor($yesNo, $backendRerouteExpenseSignal, 'Ikke oplyst')) ?></div>
                     <?php else: ?>
-                      <select id="air_reroute_expenses_incurred" name="air_reroute_expenses_incurred"><?php foreach ($yesNo as $value => $label): ?><option value="<?= h($value) ?>" <?= ($field('air_reroute_expenses_incurred') === $value) ? 'selected' : '' ?>><?= h($label) ?></option><?php endforeach; ?></select>
+                      <select id="air_reroute_expenses_incurred" name="air_reroute_expenses_incurred"><?php foreach ($yesNo as $value => $label): ?><option value="<?= h($value) ?>" <?= ($backendRerouteExpenseSignal === $value) ? 'selected' : '' ?>><?= h($label) ?></option><?php endforeach; ?></select>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -1231,7 +1783,11 @@ if ($careExpenseItems === []) {
 
               <div class="case-subpanel<?= $showRerouteExpensePanel ? '' : ' case-hidden' ?>" data-reroute-expense-panel>
                 <h3>Ombookingsudgifter</h3>
-                <p class="case-muted"><?= h($isFerryCase ? 'Registrer ny faergebillet, transfer eller anden noedvendig videre transport. Maaltider og hotel hoerer til under assistance.' : 'Registrer ny billet, transfer eller anden noedvendig transport. Upload kvittering direkte paa den relevante post.') ?></p>
+                <p class="case-muted"><?= h($isFerryCase
+                  ? 'Registrer ny faergebillet, transfer eller anden noedvendig videre transport. Maaltider og hotel hoerer til under assistance.'
+                  : ($isRailCase
+                      ? 'Registrer ny billet, andet tog, taxi, bus eller anden noedvendig videre rejse. Maaltider og hotel hoerer til under assistance. Upload kvittering direkte paa den relevante post.'
+                      : 'Registrer ny billet, transfer eller anden noedvendig transport. Upload kvittering direkte paa den relevante post.')) ?></p>
                 <div class="case-file-list" data-expense-items="reroute">
                   <?php foreach ($refundExpenseItems as $index => $item): ?>
                     <?php $itemReceipt = (array)($item['receipt'] ?? []); ?>
@@ -1289,7 +1845,7 @@ if ($careExpenseItems === []) {
                 </div>
               </div>
 
-              <?php if ($isCancellationRefundContext && !$isFerryCase): ?>
+              <?php if ($isCancellationRefundContext && !$isFerryCase && !$isRailCase): ?>
                 <div class="case-subpanel">
                   <h3>Carrierens tilbud fra incident (Article 5 / 7(2))</h3>
                   <p class="case-muted"><?= h($isOngoingCase
@@ -1453,6 +2009,71 @@ if ($careExpenseItems === []) {
               <div class="case-field"><label for="air_backend_ticket_upload">Upload billet</label><input id="air_backend_ticket_upload" name="air_backend_ticket_upload" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
               <?php if ($ticketFiles !== []): ?><div class="case-file-list"><?php foreach ($ticketFiles as $file): ?><div class="case-file-item"><a href="<?= h((string)($file['path'] ?? '#')) ?>" target="_blank" rel="noopener"><?= h((string)($file['name'] ?? 'Upload')) ?></a><div class="case-muted">Uploadet <?= h((string)($file['uploaded_at'] ?? '')) ?></div></div><?php endforeach; ?></div><?php endif; ?>
             </div>
+            <?php if ($isRailCase): ?>
+            <div class="case-subpanel">
+              <h3>Rail prisgrundlag (Art. 19)</h3>
+              <p class="case-muted">Trin 2 leverer den foreloebige billetpris. Hvis billetuploaden viser et andet beloeb, eller hvis prisen manglede i frontend, kan backend bekraefte prisgrundlaget her. Denne pris bruges i kompensationspanelet og i det samlede krav.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item">
+                  <strong><?= h($frontendTicketPriceSummaryLabel) ?></strong>
+                  <div><?= h($frontendTicketPriceDisplay) ?></div>
+                  <div class="case-muted" style="margin-top:6px;"><?= h($frontendTicketPriceIsEstimate ? 'Frontend oplyste dette som et ca. estimat.' : 'Frontend oplyste dette som billetpris i trin 2.') ?></div>
+                </div>
+                <div class="case-summary-item">
+                  <strong>Aktivt prisgrundlag i backend</strong>
+                  <div><?= h($ticketPriceDisplay) ?></div>
+                  <div class="case-muted" style="margin-top:6px;"><?= h($backendTicketPriceNumeric !== null ? 'Backendpris overstyrer frontend i rail-sagen.' : 'Tomt backendfelt betyder, at frontendprisen fortsat bruges i oversigten.') ?></div>
+                </div>
+              </div>
+              <div class="case-form-grid" style="margin-top:12px;">
+                <div class="case-field"><label for="rail_backend_ticket_price">Bekraeftet billetpris</label><input id="rail_backend_ticket_price" name="rail_backend_ticket_price" value="<?= h((string)($formState['rail_backend_ticket_price'] ?? '')) ?>" placeholder="Fx 1200.00"></div>
+                <div class="case-field"><label for="rail_backend_ticket_price_currency">Valuta</label><select id="rail_backend_ticket_price_currency" name="rail_backend_ticket_price_currency"><option value="">Vaelg valuta</option><?php foreach (['EUR','DKK','SEK','NOK','GBP','CHF','BGN','CZK','HUF','PLN','RON'] as $cc): ?><option value="<?= h($cc) ?>" <?= strtoupper((string)($formState['rail_backend_ticket_price_currency'] ?? '')) === $cc ? 'selected' : '' ?>><?= h($cc) ?></option><?php endforeach; ?></select></div>
+                <div class="case-field"><label for="rail_backend_ticket_price_basis">Prisgrundlag</label><select id="rail_backend_ticket_price_basis" name="rail_backend_ticket_price_basis"><option value="">Vaelg...</option><option value="whole_ticket" <?= $backendTicketPriceBasis === 'whole_ticket' ? 'selected' : '' ?>>Hele billetten</option><option value="affected_part" <?= $backendTicketPriceBasis === 'affected_part' ? 'selected' : '' ?>>Kun den relevante del</option><option value="season_pass" <?= $backendTicketPriceBasis === 'season_pass' ? 'selected' : '' ?>>Pendler / periodekort</option><option value="manual_review" <?= $backendTicketPriceBasis === 'manual_review' ? 'selected' : '' ?>>Manuel backendvurdering</option></select></div>
+                <div class="case-field"><label for="rail_backend_ticket_price_note">Note til prisgrundlaget</label><textarea id="rail_backend_ticket_price_note" name="rail_backend_ticket_price_note"><?= h($backendTicketPriceNote) ?></textarea></div>
+              </div>
+            </div>
+            <div class="case-subpanel">
+              <h3>Rail Art. 12 review</h3>
+              <p class="case-muted">Frontend afklarede den lette Art. 12-struktur i trin 3. Backend bruger billet, booking og eventuelle PNR-spor til den endelige vurdering. Bevisbyrden for, at oplysningen blev givet foer koeb, paahviler saelgeren.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Frontend: koebt hos operatoer</strong><div><?= h($railArt12Seller === 'operator' ? 'Ja' : ($railArt12Seller === 'retailer' ? 'Nej, hos rejsebureau / billetudsteder' : 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Frontend: samme transaktion</strong><div><?= h($railArt12YesNoLabel($railArt12SameTransaction)) ?></div></div>
+                <div class="case-summary-item"><strong>Frontend: oplyst foer koeb</strong><div><?= h($railArt12YesNoLabel($railArt12Disclosure)) ?></div></div>
+                <div class="case-summary-item"><strong>Frontend: separate notice</strong><div><?= h($railArt12YesNoLabel($railArt12Notice)) ?></div></div>
+                <div class="case-summary-item"><strong>Frontend: kontraktudfald</strong><div><?= h($railArt12OutcomeLabel($railArt12FrontendOutcome)) ?></div></div>
+                <div class="case-summary-item"><strong>Frontend: ansvarsbasis</strong><div><?= h($railArt12OutcomeLabel($railArt12LiableBasis)) ?></div></div>
+              </div>
+              <?php if ($railArt12OperatorNames !== []): ?>
+                <div class="case-note">Operatoerer fundet paa den valgte rail-rejse: <strong><?= h(implode(' · ', $railArt12OperatorNames)) ?></strong>.</div>
+              <?php endif; ?>
+              <?php if ($railArt12ProblemContract !== ''): ?>
+                <div class="case-note">Frontend fokuserede paa kontrakt: <strong><?= h($railArt12ProblemContract) ?></strong>.</div>
+              <?php endif; ?>
+              <div class="case-note">De resterende Art. 12-spoergsmaal udfyldes af systemet ud fra billetupload, OCR og rail-kontraktlogikken. De overlades ikke til passageren.</div>
+              <div class="case-summary-grid" style="margin-top:12px;">
+                <div class="case-summary-item"><strong>Backend bekraeftelse: samme transaktion</strong><div><?= h($railArt12SystemLabel($railArt12SameTransactionConfirmed)) ?></div></div>
+                <div class="case-summary-item"><strong>Delt bookingreference / PNR</strong><div><?= h($railArt12SystemLabel($railArt12SharedPnr)) ?></div></div>
+                <div class="case-summary-item"><strong>Kontraktoplysning dokumenteret i upload</strong><div><?= h($railArt12EvidenceLabel($railArt12DisclosureEvidence)) ?></div></div>
+                <div class="case-summary-item"><strong>Separate kontrakter dokumenteret i upload</strong><div><?= h($railArt12EvidenceLabel($railArt12NoticeEvidence)) ?></div></div>
+                <div class="case-summary-item"><strong>Endelig Art. 12-konklusion</strong><div><?= h($railArt12OutcomeLabel($railArt12FinalOutcome)) ?></div></div>
+                <div class="case-summary-item"><strong>Ansvarsbasis</strong><div><?= h($railArt12OutcomeLabel($railArt12BackendLiableBasis)) ?></div></div>
+                <div class="case-summary-item"><strong>System-confidence</strong><div><?= h($railArt12ReviewConfidence !== '' ? strtoupper($railArt12ReviewConfidence) : 'Afventer upload') ?></div></div>
+              </div>
+              <?php if ($railArt12ReviewNotes !== []): ?>
+                <div class="case-note">
+                  <?php foreach ($railArt12ReviewNotes as $note): ?>
+                    <div><?= h($note) ?></div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+              <input type="hidden" name="rail_art12_same_transaction_confirmed" value="<?= h($railArt12SameTransactionConfirmed) ?>">
+              <input type="hidden" name="rail_art12_shared_pnr_scope" value="<?= h($railArt12SharedPnr) ?>">
+              <input type="hidden" name="rail_art12_disclosure_evidence" value="<?= h($railArt12DisclosureEvidence) ?>">
+              <input type="hidden" name="rail_art12_separate_notice_evidence" value="<?= h($railArt12NoticeEvidence) ?>">
+              <input type="hidden" name="rail_art12_final_outcome" value="<?= h($railArt12FinalOutcome) ?>">
+              <input type="hidden" name="rail_art12_liable_basis" value="<?= h($railArt12BackendLiableBasis) ?>">
+            </div>
+            <?php endif; ?>
             <?php if ($ticketAnalysis !== []): ?>
               <?php
                 $analysisNeedsReview = (string)($ticketAnalysis['needs_manual_review'] ?? 'yes') === 'yes';
@@ -1618,6 +2239,28 @@ if ($careExpenseItems === []) {
           <form method="post" action="<?= h($buildCaseHref($activeStep)) ?>" enctype="multipart/form-data">
             <?php if ($csrfToken !== ''): ?><input type="hidden" name="_csrfToken" value="<?= h($csrfToken) ?>"><?php endif; ?>
             <input type="hidden" name="active_case_step" value="<?= h($activeStep) ?>">
+            <?php if (false && $isRailCase && $railStationStranded): ?>
+            <div class="case-subpanel">
+              <h3>Rail station-kontekst fra frontend</h3>
+              <p class="case-muted">Dette resume kommer fra rail-trinnet <em>Strandet paa station</em>. Brug det som guide til hvilke Art. 20-care poster der skal oprettes nedenfor og hvilke kvitteringer der skal uploades.</p>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Strandingsstation</strong><div><?= h($railStrandedStationValue !== '' ? $railStrandedStationValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Nuvaerende / foreloebig station</strong><div><?= h($railCurrentStationValue !== '' ? $railCurrentStationValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Problemsted</strong><div><?= h($railProblemAnchorLabel !== '' ? $railProblemAnchorLabel : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Hvor endte rejsen foreloebigt</strong><div><?= h($labelFor($railStationWhereEndedOptions, $railStationWhereEndedValue, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Slut-/ankomststation</strong><div><?= h($railStationEndValue !== '' ? $railStationEndValue : 'Ikke oplyst') ?></div></div>
+                <div class="case-summary-item"><strong>Expense-signal</strong><div><?= h($labelFor($railStationExpensesSignalOptions, $railStationExpensesSignal, 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Handoff-station</strong><div><?= h($railStationHandoff !== '' ? $railStationHandoff : 'Ikke oplyst') ?></div></div>
+              </div>
+              <?php if ($railStationExpenseTypeDisplay !== []): ?>
+                <div class="case-note" style="margin-top:12px;">Frontend forventede eller registrerede disse typer fra stationssituationen: <strong><?= h(implode(' · ', $railStationExpenseTypeDisplay)) ?></strong>.</div>
+              <?php endif; ?>
+              <div class="case-note">Upload kvitteringer for maaltider, hotel og lokal transport under <strong>Care-udgifter og kvitteringer</strong> nedenfor. Hvis passageren derimod maatte koebe ny billet, betale retur eller anden videre rejse, registreres det i <strong>Afhjaelpning</strong>.</div>
+              <?php if ($railStationEndpointAssumed): ?>
+                <div class="case-note">Det foreloebige slutpunkt blev seedet automatisk fra frontend. Korriger det her i backend, hvis rail-forloebet eller dokumenterne viser noget andet.</div>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <div class="case-subpanel">
               <h3>Maaltider / forfriskninger</h3>
               <div class="case-form-grid">
@@ -1675,7 +2318,7 @@ if ($careExpenseItems === []) {
               </div>
               <div class="case-note<?= $supportOvernightValue === 'yes' ? '' : ' case-hidden' ?>" data-hotel-requires-overnight>Hotel-delen aabnes kun, hvis overnatning faktisk var noedvendig. Derefter afklares foerst, om hotel blev tilbudt, og kun hvis ja, om hoteltransport var inkluderet.</div>
               <div class="case-note<?= ($supportOvernightValue === 'yes' && $field('hotel_offered') === 'no') ? '' : ' case-hidden' ?>" data-hotel-fields>Hvis passageren selv betalte hotel, saa registreres det som en expense-post med typen <strong>Hotel / indkvartering</strong>.</div>
-              <div class="case-note<?= ($supportOvernightValue === 'yes' && $field('hotel_offered') === 'yes' && $field('assistance_hotel_transport_included') === 'no') ? '' : ' case-hidden' ?>" data-hotel-transport-fields>Hvis passageren selv betalte transport til/fra hotel, saa registreres det som en expense-post med typen <strong>Transport til/fra hotel</strong>.</div>
+              <div class="case-note<?= ($supportOvernightValue === 'yes' && $field('hotel_offered') === 'yes' && $field('assistance_hotel_transport_included') === 'no') ? '' : ' case-hidden' ?>" data-hotel-transport-fields>Hvis passageren selv betalte <?= h($isRailCase ? 'lokal transport til/fra station eller hotel' : 'transport til/fra hotel') ?>, saa registreres det som en expense-post med typen <strong><?= h($isRailCase ? 'Lokal transport til/fra station eller hotel' : 'Transport til/fra hotel') ?></strong>.</div>
               <?php endif; ?>
             </div>
 
@@ -1700,7 +2343,9 @@ if ($careExpenseItems === []) {
                 <h3>Care-udgifter og kvitteringer</h3>
                 <p class="case-muted"><?= h($isFerryCase
                   ? 'Her registreres kun assistanceudgifter for ferry: maaltider, hotel og hoteltransport. Upload kvittering direkte paa den relevante post.'
-                  : 'Her registreres kun Article 9-care: maaltider, hotel og hoteltransport. Upload kvittering direkte paa den relevante post.'
+                  : ($isRailCase
+                      ? 'Her registreres kun rail Art. 20-care: maaltider, hotel og lokal transport til/fra station eller hotel. Upload kvittering direkte paa den relevante post.'
+                      : 'Her registreres kun Article 9-care: maaltider, hotel og hoteltransport. Upload kvittering direkte paa den relevante post.')
                 ) ?></p>
               <?php endif; ?>
               <div class="case-file-list" data-expense-items="care">
@@ -1760,7 +2405,28 @@ if ($careExpenseItems === []) {
               </div>
             </<?= $careExpenseOverrideOnly ? 'details' : 'div' ?>>
 
-            <div class="case-subpanel">
+            <div class="case-subpanel<?= $isRailCase ? ' case-hidden' : '' ?>">
+              <?php if (false && $isRailCase): ?>
+              <h3>Rail PMR / handicap</h3>
+              <p class="case-muted">Dette resume kommer fra rail-trinnet PMR / handicap. Backend bruger det som kontekst for rail-assistance, prioritet og eventuelle fejl i den leverede hjaelp.</p>
+              <input id="pmr_user" name="pmr_user" type="hidden" value="<?= h($field('pmr_user')) ?>">
+              <div class="case-note">Frontend har allerede afklaret PMR: <strong><?= h($labelFor($yesNo, $field('pmr_user'), 'Ikke oplyst')) ?></strong></div>
+              <div class="<?= $field('pmr_user') === 'yes' ? '' : ' case-hidden' ?>" data-pmr-panel>
+                <div class="case-summary-grid">
+                  <div class="case-summary-item"><strong>Assistance bestilt foer rejsen</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_booked'), 'Ikke oplyst')) ?></div></div>
+                  <div class="case-summary-item"><strong>Bestilt assistance leveret</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_delivered_status'), 'Ikke oplyst')) ?></div></div>
+                  <div class="case-summary-item"><strong>Lovede PMR-faciliteter manglede</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_promised_missing'), 'Ikke oplyst')) ?></div></div>
+                  <div class="case-summary-item"><strong>Ledsager</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_companion'), 'Ikke oplyst')) ?></div></div>
+                  <div class="case-summary-item"><strong>Foererhund / servicehund</strong><div><?= h($labelFor($yesNoUnknown, $field('pmr_service_dog'), 'Ikke oplyst')) ?></div></div>
+                </div>
+                <?php if ($field('pmr_facility_details') !== ''): ?>
+                <div class="case-note">Frontend-beskrivelse af manglende PMR-faciliteter: <strong><?= h($field('pmr_facility_details')) ?></strong></div>
+                <?php endif; ?>
+                <div class="case-form-grid" style="margin-top:12px;">
+                  <div class="case-field"><label for="assistance_pmr_priority_applied">Blev foersteprioritet ved assistance / boarding respekteret?</label><select id="assistance_pmr_priority_applied" name="assistance_pmr_priority_applied"><?php foreach ($yesNoUnknown as $value => $label): ?><option value="<?= h($value) ?>" <?= $selected('assistance_pmr_priority_applied', $value) ?>><?= h($label) ?></option><?php endforeach; ?></select></div>
+                </div>
+              </div>
+              <?php elseif (!$isRailCase): ?>
               <h3><?= h($isFerryCase ? 'PMR: assistance og boarding support' : 'Artikel 11: PMR') ?></h3>
               <p class="case-muted"><?= h($isFerryCase ? 'Frontend har allerede afklaret PMR-status og eventuel naegtet indskibning. Her i backend samler vi den assistance-orienterede PMR-dokumentation og supplerende ferry-evidence.' : 'PMR-sporet bruges kun til artikel 11: foersteprioritet ved transport samt hurtig adgang til artikel 9-care.') ?></p>
               <input id="pmr_user" name="pmr_user" type="hidden" value="<?= h($field('pmr_user')) ?>">
@@ -1787,8 +2453,27 @@ if ($careExpenseItems === []) {
                   <?php endif; ?>
                 </div>
               </div>
+              <?php endif; ?>
             </div>
-            <div class="case-subpanel">
+            <div class="case-subpanel<?= $isRailCase ? ' case-hidden' : '' ?>">
+              <?php if (false && $isRailCase): ?>
+              <h3>Rail cykel (Art. 6)</h3>
+              <p class="case-muted">Dette resume kommer fra rail-trinnet Cykel og bagage. Backend bruger det som kontekst for cykelkapacitet, afvisning og eventuelle rail-rettigheder, der blev aktiveret paa grund af cyklen.</p>
+              <div class="case-note">Frontend har allerede afklaret cykel paa rejsen: <strong><?= h($labelFor($yesNoUnknown, $field('bike_was_present'), 'Ikke oplyst')) ?></strong></div>
+              <?php if ($field('bike_was_present') === 'yes'): ?>
+              <div class="case-summary-grid">
+                <div class="case-summary-item"><strong>Cyklen forsinkede rejsen</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_delay'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Reservation lavet</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_reservation_made'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Reservation kraevet</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_reservation_required'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Naegtet at tage cyklen med</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_denied_boarding'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Begrundelse oplyst</strong><div><?= h($labelFor($yesNoUnknown, $field('bike_refusal_reason_provided'), 'Ikke oplyst')) ?></div></div>
+                <div class="case-summary-item"><strong>Begrundelse</strong><div><?= h($labelFor($bikeRefusalReasonTypeLabels, $field('bike_refusal_reason_type'), 'Ikke oplyst')) ?></div></div>
+              </div>
+              <?php if ($field('bike_refusal_reason_other_text') !== ''): ?>
+              <div class="case-note">Frontend-beskrivelse af anden begrundelse: <strong><?= h($field('bike_refusal_reason_other_text')) ?></strong></div>
+              <?php endif; ?>
+              <?php endif; ?>
+              <?php elseif (!$isRailCase): ?>
               <h3>Artikel 11: Uledsaget barn</h3>
               <p class="case-muted">Uledsaget barn holdes adskilt fra PMR. Ogsaa her handler artikel 11 kun om foersteprioritet ved transport og artikel 9-care saa hurtigt som muligt.</p>
               <input id="unaccompanied_minor" name="unaccompanied_minor" type="hidden" value="<?= h($field('unaccompanied_minor')) ?>">
@@ -1799,6 +2484,7 @@ if ($careExpenseItems === []) {
                   <div class="case-field"><label for="child_delivered_status">Fik barnet forplejning og indkvartering efter artikel 9 saa hurtigt som muligt?</label><select id="child_delivered_status" name="child_delivered_status"><?php foreach ($article11CareOptions as $value => $label): ?><option value="<?= h($value) ?>" <?= $selected('child_delivered_status', $value) ?>><?= h($label) ?></option><?php endforeach; ?></select></div>
                 </div>
               </div>
+              <?php endif; ?>
             </div>
             <div class="case-step-nav"><?php if ($prevStep !== ''): ?><a class="case-button" href="<?= h($buildCaseHref($prevStep)) ?>">Forrige trin</a><?php else: ?><span></span><?php endif; ?><div style="display:flex; gap:10px;"><button class="case-button" type="submit">Gem</button><?php if ($nextStep !== ''): ?><button class="case-button primary" type="submit" name="goto_step" value="<?= h($nextStep) ?>">Gem og naeste trin</button><?php endif; ?></div></div>
           </form>
@@ -2104,6 +2790,15 @@ if ($careExpenseItems === []) {
       refund: <?= json_encode($refundExpenseTypeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
       reroute: <?= json_encode($rerouteExpenseTypeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
       care: <?= json_encode($careExpenseTypeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+      rail_context_station: <?= json_encode($railContextExpenseTypeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+      rail_context_track: <?= json_encode($railContextExpenseTypeOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+    };
+    const expenseStorageConfig = {
+      refund: { prefix: 'air_case_refund_expense_items', receiptPrefix: 'air_case_refund_receipts' },
+      reroute: { prefix: 'air_case_refund_expense_items', receiptPrefix: 'air_case_refund_receipts' },
+      care: { prefix: 'air_case_care_expense_items', receiptPrefix: 'air_case_care_receipts' },
+      rail_context_station: { prefix: 'rail_case_context_station_expense_items', receiptPrefix: 'rail_case_context_station_receipts' },
+      rail_context_track: { prefix: 'rail_case_context_track_expense_items', receiptPrefix: 'rail_case_context_track_receipts' },
     };
     const shouldShowCancellationPassengerRerouteFields = () => {
       if (!<?= json_encode($isCancellationRefundContext) ?>) {
@@ -2293,10 +2988,9 @@ if ($careExpenseItems === []) {
       const options = expenseOptionSets[kind] || {};
       return Object.entries(options).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
     };
+    const getExpenseStorage = (kind) => expenseStorageConfig[kind] || expenseStorageConfig.care;
     const buildExpenseItem = (kind, index) => {
-      const usesRefundStorage = kind === 'refund' || kind === 'reroute';
-      const prefix = usesRefundStorage ? 'air_case_refund_expense_items' : 'air_case_care_expense_items';
-      const receiptPrefix = usesRefundStorage ? 'air_case_refund_receipts' : 'air_case_care_receipts';
+      const { prefix, receiptPrefix } = getExpenseStorage(kind);
       const wrapper = document.createElement('div');
       wrapper.className = 'case-file-item';
       wrapper.setAttribute('data-expense-item', '');
@@ -2342,9 +3036,7 @@ if ($careExpenseItems === []) {
     const renumberExpenseItems = (container) => {
       if (!container) return;
       const kind = container.getAttribute('data-expense-items') || 'care';
-      const usesRefundStorage = kind === 'refund' || kind === 'reroute';
-      const prefix = usesRefundStorage ? 'air_case_refund_expense_items' : 'air_case_care_expense_items';
-      const receiptPrefix = usesRefundStorage ? 'air_case_refund_receipts' : 'air_case_care_receipts';
+      const { prefix, receiptPrefix } = getExpenseStorage(kind);
       [...container.querySelectorAll('[data-expense-item]')].forEach((item, index) => {
         item.querySelectorAll('label[for], input[id], select[id], textarea[id]').forEach((node) => {
           if (node.tagName === 'LABEL') {

@@ -20,6 +20,15 @@ class FlowControllerTest extends TestCase
     {
         $this->session([
             'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+                'ticket_upload_mode' => 'ticketless',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+            ],
         ]);
 
         $this->configRequest([
@@ -63,10 +72,109 @@ class FlowControllerTest extends TestCase
         $this->assertNotSame('', $this->_response->getHeaderLine('Location'));
     }
 
+    public function testRailChoicesShowsGuidanceCapsCard(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art20_2c' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'is_stranded_trin5' => 'yes',
+                'blocked_train_alt_transport' => 'no',
+                'blocked_no_transport_action' => 'self_arranged',
+                'blocked_self_paid_transport_type' => 'taxi',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'price_hints' => [
+                    'taxi' => ['min' => 20, 'max' => 60, 'currency' => 'EUR'],
+                    'altTransport' => ['min' => 35, 'max' => 120, 'currency' => 'EUR'],
+                ],
+            ],
+            'flow.incident' => ['main' => 'cancellation'],
+        ]);
+
+        $this->get('/flow/choices');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Live rail-estimat', $body);
+        $this->assertStringNotContainsString('Rail-kontekstpanel', $body);
+        $this->assertStringContainsString('Vejledende rail-niveauer (ikke faste juridiske caps)', $body);
+        $this->assertStringContainsString('Taxi / minibus:', $body);
+        $this->assertStringContainsString('Typisk niveau for taxi/minibus:', $body);
+        $this->assertStringContainsString('Registrer kun transporttypen her. Beloeb, valuta og dokumentation indtastes senere i backend-sagen.', $body);
+        $this->assertStringContainsString('name="blocked_self_paid_transport_type"', $body);
+        $this->assertStringNotContainsString('name="blocked_self_paid_amount"', $body);
+        $this->assertStringNotContainsString('name="blocked_self_paid_currency"', $body);
+        $this->assertStringNotContainsString('name="blocked_self_paid_receipt"', $body);
+    }
+
+    public function testRailChoicesPostClearsFrontendExpenseInputs(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art20_2c' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'blocked_self_paid_amount' => '55.00',
+                'blocked_self_paid_currency' => 'EUR',
+                'blocked_self_paid_receipt' => 'C:\\fake\\receipt.pdf',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.incident' => ['main' => 'cancellation'],
+        ]);
+
+        $this->post('/flow/choices', [
+            'is_stranded_trin5' => 'yes',
+            'blocked_train_alt_transport' => 'no',
+            'blocked_no_transport_action' => 'self_arranged',
+            'blocked_self_paid_transport_type' => 'bus',
+            'a20_where_ended' => 'final_destination',
+            'blocked_self_paid_amount' => '99.00',
+            'blocked_self_paid_currency' => 'DKK',
+            'blocked_self_paid_receipt' => 'C:\\fake\\new_receipt.pdf',
+        ]);
+
+        $this->assertResponseCode(302);
+        $this->assertSession('bus', 'flow.form.blocked_self_paid_transport_type');
+        $this->assertSessionNotHasKey('flow.form.blocked_self_paid_amount');
+        $this->assertSessionNotHasKey('flow.form.blocked_self_paid_currency');
+        $this->assertSessionNotHasKey('flow.form.blocked_self_paid_receipt');
+    }
+
     public function testBikeWasPresentAutoDefaultsToNoOnEntitlements(): void
     {
         $this->session([
             'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+                'ticket_upload_mode' => 'ticketless',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+            ],
         ]);
 
         // Step 1: POST OCR text with no bike signals to trigger detection with low confidence and no hits
@@ -115,6 +223,389 @@ class FlowControllerTest extends TestCase
 
         $this->assertStringContainsString('id="ticketlessFieldset" disabled', $body);
         $this->assertStringNotContainsString('id="journeyFieldsFieldset" disabled', $body);
+    }
+
+    public function testRailEntitlementsShowsDirectPriceEstimatePrompt(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+                'ticket_upload_mode' => 'ticketless',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+            ],
+        ]);
+
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Hvad kostede billetten?', $body);
+        $this->assertStringContainsString('Praecis pris', $body);
+        $this->assertStringContainsString('Ca. estimat', $body);
+        $this->assertStringContainsString('Kender ikke endnu', $body);
+        $this->assertStringContainsString('Live rail-estimat', $body);
+    }
+
+    public function testRailEntitlementsShowsAwaitingIncidentMessageWhenPriceIsKnown(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+                'ticket_upload_mode' => 'ticketless',
+                'rail_price_input_mode' => 'exact',
+                'price' => '200.00',
+                'price_currency' => 'DKK',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'transport_mode_source' => 'manual',
+            ],
+        ]);
+
+        $this->get('/flow/entitlements');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Live rail-estimat', $body);
+        $this->assertStringContainsString('Afventer haendelse', $body);
+        $this->assertStringContainsString('Billetpris er registreret. Kompensationen beregnes, naar haendelsen er afklaret i TRIN 5.', $body);
+    }
+
+    public function testRailIncidentPostActivatesGateArt19WhenDelay60Confirmed(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => [
+                'step1_done' => '1',
+                'step2_done' => '1',
+                'step4_done' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+                'gate_art19' => '',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'price' => '200.00',
+                'price_currency' => 'DKK',
+                'rail_price_input_mode' => 'exact',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'rail_incident_seed' => [
+                    'mode' => 'rail',
+                    'gate_art18' => false,
+                    'gate_art19' => false,
+                    'gate_art20' => false,
+                ],
+            ],
+        ]);
+
+        $this->post('/flow/incident', [
+            'incident_main' => 'delay',
+            'expected_delay_60' => 'yes',
+            'delay_already_60' => 'no',
+            'operatorExceptionalCircumstances' => 'no',
+        ]);
+
+        $this->assertResponseCode(302);
+        $this->assertSession('1', 'flow.flags.step5_done');
+        $this->assertSession('1', 'flow.flags.gate_art19');
+        $this->assertSession('1', 'flow.flags.gate_art18');
+        $this->assertSession('1', 'flow.flags.gate_art20');
+    }
+
+    public function testRailEntitlementsRequiresTicketPriceWhenPriceMarkedKnown(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+        ]);
+
+        $this->post('/flow/entitlements', [
+            'transport_mode' => 'rail',
+            'ticket_upload_mode' => 'ticketless',
+            'dep_station' => 'Odense',
+            'arr_station' => 'Aarhus H',
+            'dep_date' => '2026-05-15',
+            'rail_price_input_mode' => 'exact',
+            'price' => '',
+            'continue' => '1',
+        ]);
+
+        $this->assertResponseCode(302);
+        $this->assertStringContainsString('/flow/entitlements', $this->_response->getHeaderLine('Location'));
+        $this->assertSession('', 'flow.flags.step2_done');
+    }
+
+    public function testRailEntitlementsAllowsBackendFallbackWhenPriceUnknown(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'travel_state' => 'ongoing'],
+        ]);
+
+        $this->post('/flow/entitlements', [
+            'transport_mode' => 'rail',
+            'ticket_upload_mode' => 'ticketless',
+            'dep_station' => 'Odense',
+            'arr_station' => 'Aarhus H',
+            'dep_date' => '2026-05-15',
+            'rail_price_input_mode' => 'unknown',
+            'continue' => '1',
+        ]);
+
+        $this->assertResponseCode(302);
+    }
+
+    public function testRailEntitlementsPreservesRailDownstreamStateWhenOnlyPriceChanges(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => [
+                'step1_done' => '1',
+                'step2_done' => '1',
+                'step35_done' => '1',
+                'step4_done' => '1',
+                'step5_done' => '1',
+                'entry_variant' => 'rail_split',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'ticket_upload_mode' => 'ticketless',
+                'dep_station' => 'Odense',
+                'arr_station' => 'Aarhus H',
+                'dep_date' => '2026-05-15',
+                'dep_time' => '08:00',
+                'price' => '299.00',
+                'price_currency' => 'DKK',
+                'rail_price_input_mode' => 'exact',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'entry_variant' => 'rail_split',
+                'gating_mode' => 'rail',
+                'rail_selected_departure' => [
+                    'id' => 'dep-1',
+                    'origin_station_name' => 'Odense',
+                    'destination_station_name' => 'Aarhus H',
+                ],
+            ],
+        ]);
+
+        $this->post('/flow/entitlements', [
+            'transport_mode' => 'rail',
+            'ticket_upload_mode' => 'ticketless',
+            'dep_station' => 'Odense',
+            'arr_station' => 'Aarhus H',
+            'dep_date' => '2026-05-15',
+            'dep_time' => '08:00',
+            'rail_price_input_mode' => 'estimate',
+            'price' => '349.00',
+            'price_currency' => 'DKK',
+            'continue' => '1',
+        ]);
+
+        $this->assertResponseCode(302);
+        $this->assertStringContainsString('/flow/rail-departure-select', $this->_response->getHeaderLine('Location'));
+        $this->assertSession('1', 'flow.flags.step35_done');
+        $this->assertSession('1', 'flow.flags.step4_done');
+        $this->assertSession('1', 'flow.flags.step5_done');
+        $this->assertSession('estimate', 'flow.form.rail_price_input_mode');
+        $this->assertSession('yes', 'flow.form.price_known');
+    }
+
+    public function testRailCompensationShowsPendingPriceNoticeWhenTicketPriceMissing(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art19' => '1',
+                'travel_state' => 'completed',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'incident_main' => 'delay',
+                'rail_price_input_mode' => 'unknown',
+                'price_known' => 'no',
+                'delayAtFinalMinutes' => '90',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'rail_incident_seed' => [
+                    'gate_art19' => true,
+                    'arrival_delay_minutes' => 90,
+                ],
+            ],
+            'flow.incident' => [
+                'main' => 'delay',
+            ],
+        ]);
+
+        $this->get('/flow/compensation');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Billetpris fra TRIN 2:', $body);
+        $this->assertStringContainsString('Afventer prisgrundlag', $body);
+        $this->assertStringContainsString('Rail Art. 19 og samlet krav er derfor kun delvist beregnet', $body);
+    }
+
+    public function testRailDepartureSelectShowsAiFallbackOperatorHintsAsLowConfidenceOnly(): void
+    {
+        $candidate = [
+            'id' => 'ai-case-1',
+            'source' => 'ai_fallback',
+            'confidence' => 0.24,
+            'service_name' => 'International rail corridor',
+            'line_name' => 'via Hamburg Hbf',
+            'product' => 'EC',
+            'operator_name' => null,
+            'origin_station_name' => 'Kobenhavn H',
+            'destination_station_name' => 'Barcelona Sants',
+            'planned_departure_at' => '2026-05-11T06:00:00+02:00',
+            'estimated_departure_at' => '2026-05-11T06:00:00+02:00',
+            'planned_arrival_at' => '2026-05-12T11:39:00+02:00',
+            'estimated_arrival_at' => '2026-05-12T11:39:00+02:00',
+            'status' => 'unknown',
+            'raw' => [
+                'provider_hint' => 'ai_fallback',
+                'transfer_count' => 7,
+                'rail_leg_count' => 8,
+                'leg_count' => 8,
+                'has_connections' => true,
+                'transfer_station_names' => [
+                    'Hamburg Hbf',
+                    'Koln Hbf',
+                    'Paris Gare du Nord',
+                    'Paris Gare de Lyon',
+                    'Lyon Part-Dieu',
+                ],
+                'generated_path' => [
+                    'Kobenhavn H',
+                    'Hamburg Hbf',
+                    'Koln Hbf',
+                    'Paris Gare du Nord',
+                    'Paris Gare de Lyon',
+                    'Lyon Part-Dieu',
+                    'Barcelona Sants',
+                ],
+                'generated_from_country' => 'DK',
+                'generated_to_country' => 'ES',
+            ],
+        ];
+        $signature = (new \App\Service\Rail\RailDepartureSearchService())->buildLookupSignature([
+            'from_station' => 'Kobenhavn H',
+            'to_station' => 'Barcelona Sants',
+            'date' => '2026-05-11',
+            'time' => '06:00',
+            'locale' => 'da-DK',
+        ]);
+
+        $this->session([
+            'flow.flags' => [
+                'step2_done' => '1',
+                'travel_state' => 'ongoing',
+                'transport_mode' => 'rail',
+                'entry_variant' => 'rail_split',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'dep_station' => 'Kobenhavn H',
+                'arr_station' => 'Barcelona Sants',
+                'dep_date' => '2026-05-11',
+                'dep_time' => '06:00',
+                'selected_rail_departure_id' => 'ai-case-1',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'entry_variant' => 'rail_split',
+                'rail_selected_departure' => $candidate,
+                'rail_selected_departure_id' => 'ai-case-1',
+                'rail_departure_candidates' => [$candidate],
+                'rail_departure_candidates_signature' => $signature,
+                'rail_contract_structure_seed' => [
+                    'operator_count' => 0,
+                    'needs_followup' => true,
+                    'confidence' => 'low',
+                    'auto_label' => 'Kraver Art. 12-afklaring',
+                ],
+            ],
+        ]);
+
+        $this->get('/flow/rail-departure-select');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Sandsynlige operatoerer (AI hint): DSB · Deutsche Bahn · SNCF Voyageurs · Renfe', $body);
+        $this->assertStringContainsString('AI fallback peger paa sandsynlige operatoerer: DSB · Deutsche Bahn · SNCF Voyageurs · Renfe.', $body);
+        $this->assertStringContainsString('Hintene har lav confidence og bruges kun som UX-stoette. De taeller ikke som sikker Art. 12-dokumentation.', $body);
+    }
+
+    public function testRailCompensationShowsEstimateNoticeWhenPriceIsApproximate(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art19' => '1',
+                'travel_state' => 'completed',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'incident_main' => 'delay',
+                'rail_price_input_mode' => 'estimate',
+                'price_known' => 'yes',
+                'price' => '200.00',
+                'price_currency' => 'DKK',
+                'delayAtFinalMinutes' => '90',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'rail_incident_seed' => [
+                    'gate_art19' => true,
+                    'arrival_delay_minutes' => 90,
+                ],
+            ],
+            'flow.incident' => [
+                'main' => 'delay',
+            ],
+        ]);
+
+        $this->get('/flow/compensation');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Billetpris fra TRIN 2 (ca. estimat):', $body);
+        $this->assertStringContainsString('Billetprisen er oplyst som et ca. estimat i TRIN 2.', $body);
     }
 
     public function testEntitlementsUsesUnifiedContractBlock(): void
@@ -279,6 +770,31 @@ class FlowControllerTest extends TestCase
         $this->assertStringContainsString('TRIN 3.5 - Strandet paa station/sporet', $body);
         $this->assertStringContainsString('name="rail_stranding_context"', $body);
         $this->assertStringContainsString('/flow/entitlements', $body);
+    }
+
+    public function testRailStrandingShowsGuidanceCapsCard(): void
+    {
+        $this->session([
+            'flow.flags' => ['step1_done' => '1', 'step2_done' => '1', 'transport_mode' => 'rail', 'needs_initial_incident_router' => '', 'travel_state' => 'ongoing'],
+            'flow.form' => ['transport_mode' => 'rail', 'gating_mode' => 'rail'],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'price_hints' => [
+                    'meals' => ['min' => 12, 'max' => 30, 'currency' => 'EUR'],
+                    'hotelPerNight' => ['min' => 80, 'max' => 140, 'currency' => 'EUR'],
+                    'taxi' => ['min' => 20, 'max' => 60, 'currency' => 'EUR'],
+                    'altTransport' => ['min' => 35, 'max' => 120, 'currency' => 'EUR'],
+                ],
+            ],
+        ]);
+
+        $this->get('/flow/railstranding');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Vejledende rail-niveauer (ikke faste juridiske caps)', $body);
+        $this->assertStringContainsString('Alternativ videre transport:', $body);
     }
 
     public function testRailJourneyRequiresRailStrandingStepBeforeAccess(): void
@@ -750,6 +1266,38 @@ class FlowControllerTest extends TestCase
         $this->assertStringContainsString('name="missed_connection_pick" value="Herning St."', $body);
     }
 
+    public function testRailIncidentShowsPreinformedDisruptionWidgetInMainRailCard(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step1_done' => '1',
+                'step2_done' => '1',
+                'step3_done' => '1',
+                'step4_done' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+        ]);
+
+        $this->get('/flow/incident');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Afbrydelser/forsinkelser foer koeb', $body);
+        $this->assertStringContainsString('Var der meddelt afbrydelse/forsinkelse foer dit koeb?', $body);
+        $this->assertStringContainsString('name="preinformed_disruption"', $body);
+        $this->assertStringContainsString('name="preinfo_channel"', $body);
+    }
+
     public function testFerryIncidentHooksPanelShowsFerrySummary(): void
     {
         $this->session([
@@ -915,6 +1463,251 @@ class FlowControllerTest extends TestCase
         $this->assertStringContainsString('name="air_self_arranged_reroute"', $body);
         $this->assertStringNotContainsString('Operat&oslash;ren tilb&oslash;d senere oml&aelig;gning', $body);
         $this->assertStringNotContainsString('Jeg k&oslash;bte selv en billet til senere', $body);
+    }
+
+    public function testRailRerouteUsesBackendHintInsteadOfFrontendExpenseAmounts(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'remedyChoice' => 'reroute_soonest',
+                'offer_provided' => 'no',
+                'self_purchased_new_ticket' => 'yes',
+                'self_purchase_reason' => 'no_offer',
+                'self_purchase_approved_by_operator' => 'yes',
+                'reroute_extra_costs' => 'yes',
+                'reroute_extra_costs_type' => 'new_ticket',
+                'reroute_extra_costs_amount' => '350.00',
+                'reroute_extra_costs_currency' => 'DKK',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.compute' => [
+                'delayMinEU' => 60,
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->get('/flow/remedies');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Type af ombookingsudgift', $body);
+        $this->assertStringContainsString('Vaelg den mest relevante udgiftstype for den aktuelle rail-loesning. Beloeb, valuta, forklaring og kvitteringer registreres senere paa sagen.', $body);
+        $this->assertStringContainsString('Vejledende rail-niveauer (ikke faste juridiske caps):', $body);
+        $this->assertStringContainsString('Hvilken type udgift havde du?', $body);
+        $this->assertStringNotContainsString('name="reroute_extra_costs_amount"', $body);
+        $this->assertStringNotContainsString('name="reroute_extra_costs_currency"', $body);
+    }
+
+    public function testRailRerouteKeeps100MinuteQuestionHiddenUntilApprovalAnswered(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'remedyChoice' => 'reroute_soonest',
+                'offer_provided' => 'no',
+                'self_purchased_new_ticket' => 'yes',
+                'self_purchase_reason' => 'no_offer',
+                'reroute_extra_costs' => 'no',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.compute' => [
+                'delayMinEU' => 60,
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->get('/flow/remedies');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Var din egen loesning godkendt af operatoeren?', $body);
+        $this->assertMatchesRegularExpression('/id="rail100MinuteWrapPast"[^>]*style="display:none;"/', $body);
+    }
+
+    public function testRailRerouteForcesNoExtraCostsWhenAlternativeWasCommunicatedWithin100Minutes(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'remedyChoice' => 'reroute_soonest',
+                'offer_provided' => 'no',
+                'self_purchased_new_ticket' => 'yes',
+                'self_purchase_reason' => 'no_offer',
+                'self_purchase_approved_by_operator' => 'no',
+                'reroute_info_within_100min' => 'yes',
+                'reroute_extra_costs' => 'yes',
+                'reroute_extra_costs_type' => 'new_ticket',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.compute' => [
+                'delayMinEU' => 60,
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->get('/flow/remedies');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertMatchesRegularExpression('/name="reroute_extra_costs" value="no" checked/', $body);
+        $this->assertMatchesRegularExpression('/<div class="grid-2 mt8 hidden" id="recWrapPast"/', $body);
+        $this->assertStringNotContainsString('name="reroute_extra_costs_amount"', $body);
+        $this->assertStringNotContainsString('name="reroute_extra_costs_currency"', $body);
+    }
+
+    public function testRailRemediesPostClearsExpenseTypeWhenSelfPurchaseWasNotApprovedAnd100MinuteRuleBlocksFallback(): void
+    {
+        $this->enableCsrfToken();
+        $this->enableSecurityToken();
+
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.compute' => [
+                'delayMinEU' => 60,
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->post('/flow/remedies', [
+            'remedyChoice' => 'reroute_soonest',
+            'offer_provided' => 'no',
+            'self_purchased_new_ticket' => 'yes',
+            'self_purchase_reason' => 'no_offer',
+            'self_purchase_approved_by_operator' => 'no',
+            'reroute_info_within_100min' => 'yes',
+            'reroute_extra_costs' => 'yes',
+            'reroute_extra_costs_type' => 'new_ticket',
+        ]);
+
+        $this->assertResponseCode(302);
+        $this->assertSession('no', 'flow.form.reroute_extra_costs');
+        $this->assertSessionNotHasKey('flow.form.reroute_extra_costs_type');
+    }
+
+    public function testRailAssistanceShowsGuidanceCapsCard(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art20' => '1',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'travel_state' => 'ongoing',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'price_hints' => [
+                    'meals' => ['min' => 12, 'max' => 30, 'currency' => 'EUR'],
+                    'hotelPerNight' => ['min' => 80, 'max' => 140, 'currency' => 'EUR'],
+                    'taxi' => ['min' => 20, 'max' => 60, 'currency' => 'EUR'],
+                ],
+            ],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        $this->get('/flow/assistance');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Live rail-estimat', $body);
+        $this->assertStringNotContainsString('Rail-kontekstpanel', $body);
+        $this->assertStringContainsString('Vejledende rail-niveauer (ikke faste juridiske caps)', $body);
+        $this->assertStringContainsString('Lokal transport / taxi:', $body);
+    }
+
+    public function testRailCompensationShowsLiveEstimatePanel(): void
+    {
+        $this->session([
+            'flow.flags' => [
+                'step5_done' => '1',
+                'gate_art19' => '1',
+                'travel_state' => 'completed',
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'incident_main' => 'delay',
+                'rail_price_input_mode' => 'exact',
+                'price_known' => 'yes',
+                'price' => '200.00',
+                'price_currency' => 'DKK',
+                'delayAtFinalMinutes' => '90',
+            ],
+            'flow.meta' => [
+                'transport_mode' => 'rail',
+                'gating_mode' => 'rail',
+                'rail_incident_seed' => [
+                    'gate_art19' => true,
+                    'arrival_delay_minutes' => 90,
+                ],
+            ],
+            'flow.incident' => [
+                'main' => 'delay',
+            ],
+        ]);
+
+        $this->get('/flow/compensation');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Live rail-estimat', $body);
+        $this->assertStringContainsString('50.00 DKK', $body);
+        $this->assertStringContainsString('Foreloebigt Art. 19-estimat ud fra billetpris og ankomstforsinkelse.', $body);
     }
 
     public function testCompletedAirAssistanceUsesLiteFrontendWithoutExpenseFieldsOrPmrPanel(): void

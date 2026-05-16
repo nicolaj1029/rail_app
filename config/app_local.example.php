@@ -20,6 +20,20 @@ return [
      */
     'debug' => filter_var(env('DEBUG', true), FILTER_VALIDATE_BOOLEAN),
 
+    'SiteAccess' => [
+        'enabled' => filter_var(env('SITE_BASIC_AUTH_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'username' => env('SITE_BASIC_AUTH_USER', ''),
+        'password' => env('SITE_BASIC_AUTH_PASS', ''),
+        'realm' => env('SITE_BASIC_AUTH_REALM', 'Preview'),
+    ],
+
+    'PublicSite' => [
+        'enabled' => filter_var(env('PUBLIC_SITE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'landingPath' => env('PUBLIC_SITE_LANDING_PATH', '/passenger/start'),
+        'hideTopNav' => filter_var(env('PUBLIC_SITE_HIDE_TOP_NAV', true), FILTER_VALIDATE_BOOLEAN),
+        'hidePassengerNav' => filter_var(env('PUBLIC_SITE_HIDE_PASSENGER_NAV', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     /*
      * Security and encryption configuration
      *

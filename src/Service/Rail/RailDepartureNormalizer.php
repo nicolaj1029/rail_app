@@ -150,6 +150,82 @@ final class RailDepartureNormalizer
         return $value;
     }
 
+    public function normalizeStationQuery(?string $value): string
+    {
+        $value = $this->normalizeString($value);
+        if ($value === null) {
+            return '';
+        }
+
+        return (string)($this->canonicalizeStationName($value) ?? $value);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public function aliasesForStation(?string $value): array
+    {
+        $value = $this->normalizeString($value);
+        if ($value === null) {
+            return [];
+        }
+
+        $needle = $this->stationKey($value);
+        foreach ($this->stationAliases as $canonical => $aliases) {
+            $variants = array_merge([$canonical], (array)$aliases);
+            foreach ($variants as $variant) {
+                if ($this->stationKey((string)$variant) !== $needle) {
+                    continue;
+                }
+
+                return $this->uniqueStationQueries($variants);
+            }
+        }
+
+        return [$value];
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public function expandStationQueries(?string $query): array
+    {
+        $query = $this->normalizeString($query);
+        if ($query === null) {
+            return [];
+        }
+
+        $stripped = trim((string)(preg_replace('/\s*\/.*$/u', '', $query) ?? $query));
+        $variants = array_merge(
+            [$query, $this->canonicalizeStationName($query) ?? $query, $stripped],
+            $this->aliasesForStation($query)
+        );
+
+        return $this->uniqueStationQueries($variants);
+    }
+
+    public function hasCentralStationMarker(?string $value): bool
+    {
+        $value = $this->normalizeString($value);
+        if ($value === null) {
+            return false;
+        }
+
+        $key = $this->compareKey($value);
+
+        return preg_match('/\b(hbf|hauptbahnhof|central|central station|centralstation|centrale|centraal|hovedbanegard|hovedbanegaard|gare centrale)\b/', $key) === 1;
+    }
+
+    public function stationLookupKey(?string $value): string
+    {
+        $value = $this->normalizeString($value);
+        if ($value === null) {
+            return '';
+        }
+
+        return $this->stationKey($value);
+    }
+
     public function compareKey(string $value): string
     {
         $value = mb_strtolower(trim($value), 'UTF-8');
@@ -174,6 +250,30 @@ final class RailDepartureNormalizer
         $key = str_replace([' centralstation', ' centrale', ' centraal'], ' c', $key);
 
         return $key;
+    }
+
+    /**
+     * @param array<int,string> $variants
+     * @return array<int,string>
+     */
+    private function uniqueStationQueries(array $variants): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($variants as $variant) {
+            $variant = trim((string)$variant);
+            if ($variant === '') {
+                continue;
+            }
+            $key = $this->stationKey($variant);
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $variant;
+        }
+
+        return $out;
     }
 
     private function applyOperatorDefaults(array &$normalized): void
@@ -269,6 +369,8 @@ final class RailDepartureNormalizer
             'rail_leg_count',
             'transfer_count',
             'transfer_station_names',
+            'operator_names',
+            'operator_codes',
             'has_connections',
             'has_replacement',
             'generated_path',
@@ -280,7 +382,7 @@ final class RailDepartureNormalizer
             if (!array_key_exists($key, $raw)) {
                 continue;
             }
-            if (in_array($key, ['transfer_station_names', 'generated_path'], true)) {
+            if (in_array($key, ['transfer_station_names', 'generated_path', 'operator_names', 'operator_codes'], true)) {
                 $out[$key] = array_values(array_filter(
                     array_map(static fn($value): string => trim((string)$value), (array)$raw[$key]),
                     static fn(string $value): bool => $value !== ''

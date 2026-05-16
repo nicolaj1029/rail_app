@@ -11,6 +11,7 @@ final class HafasRailDepartureProvider implements RailDepartureProviderInterface
     private Client $http;
     private string $baseUrl;
     private int $timeoutSeconds = 10;
+    private HafasRailLocationProvider $locationProvider;
 
     public function __construct(?Client $http = null, ?RailDepartureNormalizer $normalizer = null)
     {
@@ -23,6 +24,7 @@ final class HafasRailDepartureProvider implements RailDepartureProviderInterface
             ],
         ]);
         $this->normalizer = $normalizer ?? new RailDepartureNormalizer();
+        $this->locationProvider = new HafasRailLocationProvider($this->http, $this->normalizer);
         $this->baseUrl = rtrim((string)(
             Configure::read('Rail.hafasBaseUrl')
             ?: Configure::read('External.dbTransportRestBase')
@@ -79,55 +81,9 @@ final class HafasRailDepartureProvider implements RailDepartureProviderInterface
 
     private function resolveLocationId(string $query): string
     {
-        $query = trim($query);
-        if ($query === '') {
-            return '';
-        }
+        $resolved = $this->locationProvider->resolveLocation($query);
 
-        $queries = array_values(array_filter(array_unique([
-            $query,
-            (string)($this->normalizer->canonicalizeStationName($query) ?? ''),
-            trim((string)preg_replace('/\s*\/.*$/u', '', $query)),
-        ])));
-
-        foreach ($queries as $candidateQuery) {
-            try {
-                $payload = $this->requestJson('/locations', [
-                    'query' => $candidateQuery,
-                    'results' => 6,
-                    'addresses' => false,
-                    'poi' => false,
-                ]);
-                if (!is_array($payload)) {
-                    continue;
-                }
-
-                $items = is_array($payload) && array_is_list($payload) ? $payload : (array)($payload['items'] ?? []);
-                $fallbackId = '';
-                foreach ($items as $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $id = trim((string)($item['id'] ?? ''));
-                    $type = strtolower(trim((string)($item['type'] ?? 'station')));
-                    if ($id === '' || !in_array($type, ['station', 'stop'], true)) {
-                        continue;
-                    }
-                    if ($fallbackId === '') {
-                        $fallbackId = $id;
-                    }
-                    if ($this->normalizer->stationsMatch((string)($item['name'] ?? ''), $id, $candidateQuery)) {
-                        return $id;
-                    }
-                }
-                if ($fallbackId !== '') {
-                    return $fallbackId;
-                }
-            } catch (\Throwable $e) {
-            }
-        }
-
-        return '';
+        return is_array($resolved) ? trim((string)($resolved['id'] ?? '')) : '';
     }
 
     /**
@@ -238,6 +194,20 @@ final class HafasRailDepartureProvider implements RailDepartureProviderInterface
 
         $line = (array)($first['line'] ?? []);
         $operator = (array)($line['operator'] ?? []);
+        $operatorNames = [];
+        $operatorCodes = [];
+        foreach ($railLegs as $railLeg) {
+            $railLine = (array)($railLeg['line'] ?? []);
+            $railOperator = (array)($railLine['operator'] ?? []);
+            $operatorName = trim((string)($railOperator['name'] ?? ''));
+            $operatorCode = trim((string)($railOperator['id'] ?? ''));
+            if ($operatorName !== '') {
+                $operatorNames[strtolower($operatorName)] = $operatorName;
+            }
+            if ($operatorCode !== '') {
+                $operatorCodes[strtolower($operatorCode)] = $operatorCode;
+            }
+        }
 
         return [
             'id' => trim((string)($journey['id'] ?? ($journey['tripId'] ?? ''))),
@@ -280,6 +250,8 @@ final class HafasRailDepartureProvider implements RailDepartureProviderInterface
                 'leg_count' => count($legs),
                 'rail_leg_count' => count($railLegs),
                 'transfer_count' => max(0, count($railLegs) - 1),
+                'operator_names' => array_values($operatorNames),
+                'operator_codes' => array_values($operatorCodes),
                 'has_connections' => count($railLegs) > 1,
                 'has_replacement' => $hasReplacement,
             ],

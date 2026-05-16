@@ -10,7 +10,7 @@ function json(response, statusCode, payload) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type"
   });
   response.end(JSON.stringify(payload));
@@ -138,7 +138,9 @@ async function handleStations(requestUrl, response) {
 async function handleJourneys(requestUrl, response) {
   const criteria = {
     from_station: requestUrl.searchParams.get("from_station") || "",
+    from_station_id: requestUrl.searchParams.get("from_station_id") || "",
     to_station: requestUrl.searchParams.get("to_station") || "",
+    to_station_id: requestUrl.searchParams.get("to_station_id") || "",
     date: requestUrl.searchParams.get("date") || "",
     time: requestUrl.searchParams.get("time") || "",
     operator_hint: requestUrl.searchParams.get("operator_hint") || "",
@@ -161,11 +163,40 @@ async function handleDepartures(requestUrl, response) {
   json(response, 200, result);
 }
 
-const server = createServer(async (request, response) => {
+function isLoopbackAddress(remoteAddress) {
+  const normalized = String(remoteAddress || "").trim().toLowerCase();
+  return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(normalized);
+}
+
+let server;
+
+async function handleShutdown(request, response) {
+  if (!isLoopbackAddress(request.socket?.remoteAddress)) {
+    return json(response, 403, { ok: false, error: "Forbidden" });
+  }
+
+  json(response, 202, {
+    ok: true,
+    service: "rail-transport-service",
+    message: "Shutdown accepted"
+  });
+
+  setTimeout(() => {
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 500).unref();
+  }, 50).unref();
+}
+
+server = createServer(async (request, response) => {
   if (!request.url) return notFound(response);
   if (request.method === "OPTIONS") return json(response, 204, {});
 
   const requestUrl = new URL(request.url, `http://127.0.0.1:${env.port}`);
+  if (request.method === "POST" && requestUrl.pathname === "/shutdown") {
+    return handleShutdown(request, response);
+  }
   if (request.method !== "GET") return json(response, 405, { error: "Method not allowed" });
 
   if (requestUrl.pathname === "/") {
@@ -173,7 +204,7 @@ const server = createServer(async (request, response) => {
       service: "rail-transport-service",
       version: "0.1.0",
       ok: true,
-      endpoints: ["/health", "/stations/search", "/journeys", "/departures"]
+      endpoints: ["/health", "/stations/search", "/journeys", "/departures", "/shutdown"]
     });
   }
   if (requestUrl.pathname === "/health") {
