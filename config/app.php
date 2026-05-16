@@ -210,6 +210,15 @@ return [
         // SNCF/Navitia base URL and API key (if used)
         'sncfNavitiaBase' => env('SNCF_NAVITIA_BASE', 'https://api.sncf.com'),
         'sncfApiKey' => env('SNCF_API_KEY', null),
+        'aeroDataBox' => [
+            'apiKey' => env('AERODATABOX_API_KEY', ''),
+            'apiHost' => env('AERODATABOX_API_HOST', 'aerodatabox.p.rapidapi.com'),
+            'baseUrl' => env('AERODATABOX_BASE_URL', 'https://aerodatabox.p.rapidapi.com'),
+        ],
+        'aviationstack' => [
+            'apiKey' => env('AVIATIONSTACK_API_KEY', ''),
+            'baseUrl' => env('AVIATIONSTACK_BASE_URL', 'https://api.aviationstack.com/v1/flights'),
+        ],
         // Local/remote RNE mock base can be set via RNE_BASE_URL env, used by RneClient
     ],
 

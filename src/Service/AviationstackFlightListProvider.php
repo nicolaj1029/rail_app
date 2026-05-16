@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Cake\Core\Configure;
 use Cake\Http\Client;
 
 final class AviationstackFlightListProvider implements FlightListProviderInterface
@@ -13,9 +14,10 @@ final class AviationstackFlightListProvider implements FlightListProviderInterfa
 
     public function __construct(?string $apiKey = null, ?Client $http = null, ?string $endpoint = null)
     {
-        $this->apiKey = trim((string)($apiKey ?? $this->env('AVIATIONSTACK_API_KEY') ?? ''));
+        $config = (array)Configure::read('External.aviationstack');
+        $this->apiKey = trim((string)($apiKey ?? $config['apiKey'] ?? $this->env('AVIATIONSTACK_API_KEY') ?? ''));
         $this->http = $http ?? new Client(['timeout' => 8]);
-        $this->endpoint = rtrim((string)($endpoint ?? $this->env('AVIATIONSTACK_BASE_URL') ?? 'https://api.aviationstack.com/v1/flights'), '/');
+        $this->endpoint = rtrim((string)($endpoint ?? $config['baseUrl'] ?? $this->env('AVIATIONSTACK_BASE_URL') ?? 'https://api.aviationstack.com/v1/flights'), '/');
     }
 
     public function searchByRouteAndDate(string $fromIata, string $toIata, string $date, array $context = []): array

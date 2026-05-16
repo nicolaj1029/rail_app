@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Cake\Core\Configure;
 use Cake\Http\Client;
 
 final class AeroDataBoxFlightListProvider implements FlightListProviderInterface
@@ -14,9 +15,10 @@ final class AeroDataBoxFlightListProvider implements FlightListProviderInterface
 
     public function __construct(?string $apiKey = null, ?string $apiHost = null, ?string $baseUrl = null, ?Client $http = null)
     {
-        $this->apiKey = trim((string)($apiKey ?? $this->env('AERODATABOX_API_KEY') ?? ''));
-        $this->apiHost = trim((string)($apiHost ?? $this->env('AERODATABOX_API_HOST') ?? 'aerodatabox.p.rapidapi.com'));
-        $this->baseUrl = rtrim((string)($baseUrl ?? $this->env('AERODATABOX_BASE_URL') ?? 'https://aerodatabox.p.rapidapi.com'), '/');
+        $config = (array)Configure::read('External.aeroDataBox');
+        $this->apiKey = trim((string)($apiKey ?? $config['apiKey'] ?? $this->env('AERODATABOX_API_KEY') ?? ''));
+        $this->apiHost = trim((string)($apiHost ?? $config['apiHost'] ?? $this->env('AERODATABOX_API_HOST') ?? 'aerodatabox.p.rapidapi.com'));
+        $this->baseUrl = rtrim((string)($baseUrl ?? $config['baseUrl'] ?? $this->env('AERODATABOX_BASE_URL') ?? 'https://aerodatabox.p.rapidapi.com'), '/');
         $this->http = $http ?? new Client(['timeout' => 10]);
     }
 

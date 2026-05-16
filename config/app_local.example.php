@@ -34,6 +34,29 @@ return [
         'hidePassengerNav' => filter_var(env('PUBLIC_SITE_HIDE_PASSENGER_NAV', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
+    'External' => [
+        'useLiveApis' => true,
+        'dbTransportRestBase' => 'https://v6.db.transport.rest',
+        'aeroDataBox' => [
+            'apiKey' => '',
+            'apiHost' => 'aerodatabox.p.rapidapi.com',
+            'baseUrl' => 'https://aerodatabox.p.rapidapi.com',
+        ],
+        'aviationstack' => [
+            'apiKey' => '',
+            'baseUrl' => 'https://api.aviationstack.com/v1/flights',
+        ],
+    ],
+
+    'Rail' => [
+        // Shared hosting should normally use direct HAFAS calls, not a local node service.
+        'transportServiceEnabled' => false,
+        'transportServiceBaseUrl' => 'http://127.0.0.1:7071',
+        'hafas' => [
+            'enabled' => true,
+        ],
+    ],
+
     /*
      * Security and encryption configuration
      *
