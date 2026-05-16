@@ -22,7 +22,7 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
         $landingPath = $this->normalizePath((string)($config['landingPath'] ?? '/passenger/start'));
         $path = $this->normalizePath($request->getUri()->getPath());
 
-        if ($path === '/' || $path === '/pages/home') {
+        if ($this->shouldRedirectToLanding($path, $landingPath)) {
             return (new Response())
                 ->withStatus(302)
                 ->withHeader('Location', $landingPath);
@@ -43,5 +43,22 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
         }
 
         return rtrim($path, '/') ?: '/';
+    }
+
+    private function shouldRedirectToLanding(string $path, string $landingPath): bool
+    {
+        if ($path === $landingPath) {
+            return false;
+        }
+
+        if ($path === '/' || $path === '/pages/home') {
+            return true;
+        }
+
+        if ($path === '/flow' || str_starts_with($path, '/flow/')) {
+            return true;
+        }
+
+        return false;
     }
 }
