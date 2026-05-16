@@ -55,7 +55,7 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
             return true;
         }
 
-        if ($path === '/flow' || str_starts_with($path, '/flow/')) {
+        if ($path === '/flow') {
             return true;
         }
 

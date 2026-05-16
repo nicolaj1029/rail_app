@@ -13,6 +13,11 @@ use Cake\Core\Configure;
 $cakeDescription = 'CakePHP: the rapid development php framework';
 $publicSite = (array)Configure::read('PublicSite');
 $hideTopNav = !empty($publicSite['enabled']) && !empty($publicSite['hideTopNav']);
+$publicLandingPath = '/' . ltrim((string)($publicSite['landingPath'] ?? '/passenger/start'), '/');
+$currentPath = '/' . ltrim((string)$this->getRequest()->getUri()->getPath(), '/');
+$showPublicBackLink = !empty($publicSite['enabled'])
+    && $currentPath !== rtrim($publicLandingPath, '/')
+    && str_starts_with($currentPath, '/flow');
 ?>
 <!DOCTYPE html>
 <html>
@@ -62,6 +67,11 @@ $hideTopNav = !empty($publicSite['enabled']) && !empty($publicSite['hideTopNav']
     <main class="main">
         <div class="container">
             <?= $this->Flash->render() ?>
+            <?php if ($showPublicBackLink): ?>
+                <div style="display:flex; justify-content:flex-end; margin:14px 0 10px;">
+                    <a href="<?= h($this->Url->build($publicLandingPath)) ?>" style="display:inline-block; padding:8px 12px; border-radius:10px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; text-decoration:none; font-weight:600;">Aabn hovedmenu</a>
+                </div>
+            <?php endif; ?>
             <?php if (!empty($flowSteps) && is_array($flowSteps)): ?>
                 <div class="flow-layout">
                     <?= $this->element('flow_stepper', ['flowSteps' => $flowSteps, 'flowCurrentAction' => $flowCurrentAction ?? '']) ?>

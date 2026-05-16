@@ -17,7 +17,6 @@ $nextActionText = is_array($nextStep)
   .hero { border: 1px solid #cce7de; background: linear-gradient(135deg, #eef8f4 0%, #f8fffd 100%); border-radius: 20px; padding: 24px; margin-bottom: 18px; }
   .hero h1 { margin: 0 0 8px; }
   .hero p { margin: 0; color: #334155; line-height: 1.5; }
-  .hero-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
   .flow-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 18px; }
   .flow-card { border: 1px solid #dbe3ea; border-radius: 18px; background: #fff; overflow: hidden; box-shadow: 0 8px 22px rgba(15, 23, 42, .06); }
   .flow-card-head { padding: 16px 18px 12px; color: #fff; }
@@ -59,9 +58,6 @@ $nextActionText = is_array($nextStep)
     <span class="pill">Ny passageroplevelse</span>
     <h1>En enklere vej gennem sagen</h1>
     <p>Denne side er et alternativ til det eksisterende flow. Den samme motor og de samme regler bruges stadig, men indgangen er gjort mere direkte: fortsæt hvor du slap, åbn hjælpen i kontekst, eller gå direkte til pendler-sporet.</p>
-    <div class="hero-actions">
-      <a class="cta secondary" href="<?= h($quickLinks['mainMenu']) ?>">Aabn hovedmenu</a>
-    </div>
   </div>
 
   <div class="flow-cards">
