@@ -32,6 +32,7 @@ class PassengerController extends AppController
             'commuter' => Router::url('/passenger/commuter', true),
             'claims' => Router::url('/passenger/claims', true),
             'faq' => Router::url('/passenger/faq', true),
+            'mainMenu' => Router::url('/project/links-v2', true),
         ];
         $passengerNav = $this->buildPassengerNav('dashboard');
 
