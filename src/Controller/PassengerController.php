@@ -22,9 +22,14 @@ class PassengerController extends AppController
     public function start(): void
     {
         $snapshot = $this->buildSnapshot();
-        $transportFlows = $this->buildTransportFlows();
+        $siteContext = (array)$this->request->getAttribute('siteContext', []);
+        $preferredTransportMode = strtolower(trim((string)($siteContext['transportMode'] ?? '')));
+        $transportFlows = $this->buildTransportFlows($preferredTransportMode);
+        $defaultFlowStart = $preferredTransportMode !== ''
+            ? Router::url('/flow/' . $preferredTransportMode . '/completed', true)
+            : Router::url('/flow/start', true);
         $quickLinks = [
-            'flowStart' => Router::url('/flow/start', true),
+            'flowStart' => $defaultFlowStart,
             'flowJourney' => Router::url('/flow/journey', true),
             'flowCompensation' => Router::url('/flow/compensation', true),
             'case' => $this->buildPassengerCaseUrl(fullBase: true),
@@ -751,7 +756,7 @@ class PassengerController extends AppController
     /**
      * @return array<int,array<string,mixed>>
      */
-    private function buildTransportFlows(): array
+    private function buildTransportFlows(string $preferredTransportMode = ''): array
     {
         $states = [
             'completed' => ['label' => 'Afsluttet rejse', 'cta' => 'Start afsluttet'],
@@ -782,6 +787,9 @@ class PassengerController extends AppController
 
         $cards = [];
         foreach ($modes as $mode => $config) {
+            if ($preferredTransportMode !== '' && $preferredTransportMode !== $mode) {
+                continue;
+            }
             $links = [];
             foreach ($states as $state => $stateConfig) {
                 $links[] = [

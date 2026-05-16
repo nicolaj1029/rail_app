@@ -25,6 +25,9 @@ return [
         'username' => env('SITE_BASIC_AUTH_USER', ''),
         'password' => env('SITE_BASIC_AUTH_PASS', ''),
         'realm' => env('SITE_BASIC_AUTH_REALM', 'Preview'),
+        'hosts' => [
+            'test.gourmetdunord.com',
+        ],
     ],
 
     'PublicSite' => [
@@ -32,6 +35,24 @@ return [
         'landingPath' => env('PUBLIC_SITE_LANDING_PATH', '/passenger/start'),
         'hideTopNav' => filter_var(env('PUBLIC_SITE_HIDE_TOP_NAV', true), FILTER_VALIDATE_BOOLEAN),
         'hidePassengerNav' => filter_var(env('PUBLIC_SITE_HIDE_PASSENGER_NAV', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'HostRouting' => [
+        'adminHosts' => [
+            'admin.gourmetdunord.com',
+        ],
+        'defaults' => [
+            'landingPath' => '/passenger/start',
+            'hideTopNav' => true,
+            'hidePassengerNav' => true,
+            'blockAdminRoutes' => true,
+        ],
+        'publicHosts' => [
+            'test.gourmetdunord.com' => ['transportMode' => ''],
+            'rail*.gourmetdunord.com' => ['transportMode' => 'rail'],
+            'air*.gourmetdunord.com' => ['transportMode' => 'air'],
+            'ferry*.gourmetdunord.com' => ['transportMode' => 'ferry'],
+        ],
     ],
 
     'External' => [

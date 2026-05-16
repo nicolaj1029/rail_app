@@ -4,7 +4,12 @@ use Cake\Core\Configure;
 
 $passengerNav = $passengerNav ?? [];
 $publicSite = (array)Configure::read('PublicSite');
-$hidePassengerNav = !empty($publicSite['enabled']) && !empty($publicSite['hidePassengerNav']);
+$siteContext = (array)$this->getRequest()->getAttribute('siteContext', []);
+$publicSiteEnabled = array_key_exists('enabled', $siteContext)
+    ? !empty($siteContext['enabled'])
+    : !empty($publicSite['enabled']);
+$hidePassengerNav = $publicSiteEnabled
+    && (array_key_exists('hidePassengerNav', $siteContext) ? !empty($siteContext['hidePassengerNav']) : !empty($publicSite['hidePassengerNav']));
 if ($hidePassengerNav) {
     return;
 }

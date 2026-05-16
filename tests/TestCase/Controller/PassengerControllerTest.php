@@ -3,12 +3,20 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
+use Cake\Core\Configure;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
 
 class PassengerControllerTest extends TestCase
 {
     use IntegrationTestTrait;
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        Configure::delete('PublicSite');
+        Configure::delete('HostRouting');
+    }
 
     public function testRailCaseShowsCompensationOverviewAndSeededRefundExpenseUpload(): void
     {
@@ -443,5 +451,36 @@ class PassengerControllerTest extends TestCase
         $this->assertStringContainsString('Backend-bekraeftet billetprisgrundlag', $refundBody);
         $this->assertStringContainsString('Prisgrundlag: Kun den relevante del', $refundBody);
         $this->assertStringContainsString('750.00 DKK', $refundBody);
+    }
+
+    public function testPassengerStartShowsOnlyRailCardOnRailPublicHost(): void
+    {
+        Configure::write('PublicSite', ['enabled' => false, 'landingPath' => '/passenger/start']);
+        Configure::write('HostRouting', [
+            'defaults' => [
+                'landingPath' => '/passenger/start',
+                'hideTopNav' => true,
+                'hidePassengerNav' => true,
+                'blockAdminRoutes' => true,
+            ],
+            'publicHosts' => [
+                'rail.example.com' => ['transportMode' => 'rail'],
+            ],
+        ]);
+
+        $this->configRequest([
+            'environment' => [
+                'HTTP_HOST' => 'rail.example.com',
+            ],
+        ]);
+
+        $this->get('/passenger/start');
+        $this->assertResponseOk();
+        $body = (string)$this->_response->getBody();
+
+        $this->assertStringContainsString('Tog', $body);
+        $this->assertStringNotContainsString('Fly', $body);
+        $this->assertStringNotContainsString('Faerge', $body);
+        $this->assertStringNotContainsString('Bus', $body);
     }
 }

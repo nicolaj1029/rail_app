@@ -15,7 +15,7 @@ final class SiteBasicAuthMiddleware implements MiddlewareInterface
 {
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        if (!$this->isEnabled()) {
+        if (!$this->isEnabled($request)) {
             return $handler->handle($request);
         }
 
@@ -32,11 +32,30 @@ final class SiteBasicAuthMiddleware implements MiddlewareInterface
         return $handler->handle($request);
     }
 
-    private function isEnabled(): bool
+    private function isEnabled(ServerRequestInterface $request): bool
     {
         $config = (array)Configure::read('SiteAccess');
+        if (!(bool)($config['enabled'] ?? false)) {
+            return false;
+        }
 
-        return (bool)($config['enabled'] ?? false);
+        $hosts = array_values(array_filter((array)($config['hosts'] ?? []), 'is_string'));
+        if ($hosts === []) {
+            return true;
+        }
+
+        $host = strtolower(trim((string)$request->getUri()->getHost()));
+        if ($host === '') {
+            return false;
+        }
+
+        foreach ($hosts as $pattern) {
+            if ($this->hostMatches($host, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function credentialsMatch(string $username, string $password): bool
@@ -103,5 +122,23 @@ final class SiteBasicAuthMiddleware implements MiddlewareInterface
         return $res->withStatus(401)
             ->withHeader('WWW-Authenticate', sprintf('Basic realm="%s", charset="UTF-8"', addslashes($realm)))
             ->withStringBody('Authentication required');
+    }
+
+    private function hostMatches(string $host, string $pattern): bool
+    {
+        $host = strtolower(trim($host));
+        $pattern = strtolower(trim($pattern));
+        if ($host === '' || $pattern === '') {
+            return false;
+        }
+
+        if (!str_contains($pattern, '*')) {
+            return $host === $pattern;
+        }
+
+        $quoted = preg_quote($pattern, '/');
+        $regex = '/^' . str_replace('\*', '.*', $quoted) . '$/i';
+
+        return (bool)preg_match($regex, $host);
     }
 }

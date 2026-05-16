@@ -241,6 +241,8 @@ return [
         'username' => env('SITE_BASIC_AUTH_USER', ''),
         'password' => env('SITE_BASIC_AUTH_PASS', ''),
         'realm' => env('SITE_BASIC_AUTH_REALM', 'Preview'),
+        // Optional host allowlist/wildcards. Empty = apply to every host this app serves.
+        'hosts' => [],
     ],
 
     'PublicSite' => [
@@ -248,6 +250,27 @@ return [
         'landingPath' => env('PUBLIC_SITE_LANDING_PATH', '/passenger/start'),
         'hideTopNav' => filter_var(env('PUBLIC_SITE_HIDE_TOP_NAV', true), FILTER_VALIDATE_BOOLEAN),
         'hidePassengerNav' => filter_var(env('PUBLIC_SITE_HIDE_PASSENGER_NAV', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'HostRouting' => [
+        // Hosts that may show /admin/* and should not be treated as public passenger sites.
+        'adminHosts' => [],
+        // Defaults for host-specific public sites such as railXX / airXX / ferryXX.
+        'defaults' => [
+            'landingPath' => '/passenger/start',
+            'hideTopNav' => true,
+            'hidePassengerNav' => true,
+            'blockAdminRoutes' => true,
+        ],
+        // Map exact hosts or wildcard patterns to a transport-aware public site profile.
+        // Example:
+        // 'publicHosts' => [
+        //     'test.gourmetdunord.com' => ['transportMode' => ''],
+        //     'rail*.example.com' => ['transportMode' => 'rail'],
+        //     'air*.example.com' => ['transportMode' => 'air'],
+        //     'ferry*.example.com' => ['transportMode' => 'ferry'],
+        // ],
+        'publicHosts' => [],
     ],
 
     /*

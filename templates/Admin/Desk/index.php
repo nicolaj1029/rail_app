@@ -13,6 +13,10 @@ $stats = (array)($inbox['stats'] ?? []);
 $availableFilters = (array)($inbox['available_filters'] ?? []);
 $currentUrl = $this->Url->build($this->getRequest()->getRequestTarget());
 $railTransport = (array)($railTransport ?? []);
+$railConfig = (array)($railTransport['config'] ?? []);
+$railUsesLiveApis = !empty($railConfig['use_live']);
+$railDefaultProvider = strtolower((string)($railConfig['default_provider'] ?? ''));
+$railHafasLive = !empty($railTransport['ok']) && $railUsesLiveApis && $railDefaultProvider === 'transport_rest';
 ?>
 <style>
   .desk-page { max-width: 1280px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -123,6 +127,9 @@ $railTransport = (array)($railTransport ?? []);
           <span class="desk-badge <?= !empty($railTransport['ok']) ? 'desk-risk-low' : 'desk-risk-high' ?>">
             <?= !empty($railTransport['ok']) ? 'Service up' : 'Service down/off' ?>
           </span>
+          <span class="desk-badge <?= $railHafasLive ? 'desk-risk-low' : 'desk-risk-medium' ?>">
+            <?= $railHafasLive ? 'HAFAS live on' : 'HAFAS live off/fallback' ?>
+          </span>
           <?php if (!empty($railTransport['configured'])): ?>
             <a class="desk-button" href="<?= h((string)($railTransport['base_url'] ?? '') . '/health') ?>" target="_blank" rel="noopener">/health</a>
             <a class="desk-button" href="<?= h((string)($railTransport['base_url'] ?? '')) ?>" target="_blank" rel="noopener">/</a>
@@ -132,12 +139,13 @@ $railTransport = (array)($railTransport ?? []);
           <input type="hidden" name="_csrfToken" value="<?= h((string)$this->getRequest()->getAttribute('csrfToken')) ?>">
           <input type="hidden" name="redirect" value="<?= h($currentUrl) ?>">
           <?php if (!empty(($railTransport['manager']['running'] ?? false))): ?>
-            <button class="desk-button" type="submit">Stop rail service</button>
+            <button class="desk-button" type="submit">Stop lokal rail-service</button>
           <?php else: ?>
-            <button class="desk-button primary" type="submit">Start rail service</button>
+            <button class="desk-button primary" type="submit">Start lokal rail-service</button>
           <?php endif; ?>
         </form>
         <div class="desk-muted" style="margin-top:10px;">
+          Knappen styrer kun den lokale node-wrapper pÃ¥ localhost. Hvis service er up og HAFAS-badget er grÃ¸nt, er live rail-opslag tÃ¦ndt.<br>
           Dev-start:
           <code class="desk-code">cd services/rail-transport-service</code>
           <code class="desk-code">node src/server.mjs</code>

@@ -12,10 +12,15 @@ use Cake\Core\Configure;
 
 $cakeDescription = 'CakePHP: the rapid development php framework';
 $publicSite = (array)Configure::read('PublicSite');
-$hideTopNav = !empty($publicSite['enabled']) && !empty($publicSite['hideTopNav']);
-$publicLandingPath = '/' . ltrim((string)($publicSite['landingPath'] ?? '/passenger/start'), '/');
+$siteContext = (array)$this->getRequest()->getAttribute('siteContext', []);
+$publicSiteEnabled = array_key_exists('enabled', $siteContext)
+    ? !empty($siteContext['enabled'])
+    : !empty($publicSite['enabled']);
+$hideTopNav = $publicSiteEnabled
+    && (array_key_exists('hideTopNav', $siteContext) ? !empty($siteContext['hideTopNav']) : !empty($publicSite['hideTopNav']));
+$publicLandingPath = '/' . ltrim((string)($siteContext['landingPath'] ?? ($publicSite['landingPath'] ?? '/passenger/start')), '/');
 $currentPath = '/' . ltrim((string)$this->getRequest()->getUri()->getPath(), '/');
-$showPublicBackLink = !empty($publicSite['enabled'])
+$showPublicBackLink = $publicSiteEnabled
     && $currentPath !== rtrim($publicLandingPath, '/')
     && str_starts_with($currentPath, '/flow');
 ?>
