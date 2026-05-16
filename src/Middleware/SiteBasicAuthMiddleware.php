@@ -19,17 +19,12 @@ final class SiteBasicAuthMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         }
 
-        $hdr = $request->getHeaderLine('Authorization');
-        if (!preg_match('/^Basic\s+(.*)$/i', $hdr, $m)) {
+        $credentials = $this->extractCredentials($request);
+        if ($credentials === null) {
             return $this->deny();
         }
 
-        $decoded = base64_decode($m[1] ?? '', true) ?: '';
-        if (!str_contains($decoded, ':')) {
-            return $this->deny();
-        }
-
-        [$username, $password] = explode(':', $decoded, 2);
+        [$username, $password] = $credentials;
         if (!$this->credentialsMatch($username, $password)) {
             return $this->deny();
         }
@@ -55,6 +50,44 @@ final class SiteBasicAuthMiddleware implements MiddlewareInterface
         }
 
         return hash_equals($expectedUser, $username) && hash_equals($expectedPassword, $password);
+    }
+
+    /**
+     * @return array{0:string,1:string}|null
+     */
+    private function extractCredentials(ServerRequestInterface $request): ?array
+    {
+        $server = $request->getServerParams();
+
+        $phpAuthUser = (string)($server['PHP_AUTH_USER'] ?? '');
+        if ($phpAuthUser !== '') {
+            return [$phpAuthUser, (string)($server['PHP_AUTH_PW'] ?? '')];
+        }
+
+        $headerCandidates = [
+            $request->getHeaderLine('Authorization'),
+            (string)($server['HTTP_AUTHORIZATION'] ?? ''),
+            (string)($server['REDIRECT_HTTP_AUTHORIZATION'] ?? ''),
+        ];
+
+        foreach ($headerCandidates as $candidate) {
+            if ($candidate === '') {
+                continue;
+            }
+
+            if (!preg_match('/^Basic\s+(.*)$/i', $candidate, $m)) {
+                continue;
+            }
+
+            $decoded = base64_decode($m[1] ?? '', true) ?: '';
+            if (!str_contains($decoded, ':')) {
+                continue;
+            }
+
+            return explode(':', $decoded, 2);
+        }
+
+        return null;
     }
 
     private function deny(): ResponseInterface
