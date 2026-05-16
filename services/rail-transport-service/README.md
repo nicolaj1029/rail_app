@@ -40,6 +40,20 @@ cd services/rail-transport-service
 node src/server.mjs
 ```
 
+## Render deploy
+
+This repo now includes a root `render.yaml`, so the easiest setup is:
+
+1. Push the repo to GitHub.
+2. In Render choose `New +` -> `Blueprint`.
+3. Select this repository and branch.
+4. Render will create the `rail-transport-service` web service automatically.
+
+Expected result:
+
+- public base URL like `https://rail-transport-service.onrender.com`
+- health check at `/health`
+
 Example health check:
 
 ```bash
