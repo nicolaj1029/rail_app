@@ -3505,11 +3505,16 @@ if ($a12Applies === false && !empty($contractsView)) {
       if (!box) {
         box = document.createElement('div');
         box.className = 'node-suggest portal';
+        box.id = input.dataset.nodeSuggestOwner;
+        box.setAttribute('role', 'listbox');
         box.dataset.for = input.name;
         box.dataset.owner = input.dataset.nodeSuggestOwner;
         box.style.display = 'none';
         document.body.appendChild(box);
       }
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-controls', box.id);
       return box;
     }
 
@@ -3525,6 +3530,11 @@ if ($a12Applies === false && !empty($contractsView)) {
       if (!box) return;
       box.style.display = 'none';
       box.innerHTML = '';
+      const owner = String(box.dataset.owner || '');
+      if (owner) {
+        const ownerInput = document.querySelector('[data-node-suggest-owner="' + owner + '"]');
+        if (ownerInput) ownerInput.setAttribute('aria-expanded', 'false');
+      }
     }
 
     function nodeTypeLabel(mode, nodeType) {
@@ -3542,14 +3552,18 @@ if ($a12Applies === false && !empty($contractsView)) {
       return raw ? raw.replace(/_/g, ' ') : '';
     }
 
-    function render(box, input, nodes) {
+    function render(box, input, nodes, localState) {
       if (!box) return;
       box.innerHTML = '';
+      localState.lastNodes = Array.isArray(nodes) ? nodes : [];
+      localState.focusIndex = -1;
       if (!nodes || !nodes.length) { hide(box); return; }
       const mode = currentTransportMode();
       nodes.slice(0, 10).forEach((node) => {
         const btn = document.createElement('button');
         btn.type = 'button';
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', 'false');
         btn.appendChild(document.createTextNode(node.name || '(ukendt sted)'));
         const metaBits = [];
         if (node.code) metaBits.push(String(node.code));
@@ -3592,6 +3606,7 @@ if ($a12Applies === false && !empty($contractsView)) {
       });
       positionBox(box, input);
       box.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
     }
 
     function buildNodeSearchUrl(input, q) {
@@ -3646,28 +3661,40 @@ if ($a12Applies === false && !empty($contractsView)) {
 
     async function fetchNodes(input, box) {
       if (!shouldUseTransportNodes(input)) { hide(box); return; }
-      const q = getNodeSearchQuery(input);
-      const mode = currentTransportMode();
-      const minChars = mode === 'air' ? 3 : (mode === 'bus' ? 3 : 2);
-      if (q.length < minChars) { hide(box); return; }
-      const url = buildNodeSearchUrl(input, q);
-
       let localState = state.get(input);
       if (!localState) {
-        localState = { timer: null, ctrl: null };
+        localState = { timer: null, ctrl: null, lastNodes: [], requestToken: 0, focusIndex: -1 };
         state.set(input, localState);
       }
+      const q = getNodeSearchQuery(input);
+      const mode = currentTransportMode();
+      const minChars = mode === 'bus' ? 3 : 2;
+      if (q.length < minChars) { hide(box); return; }
+      const url = buildNodeSearchUrl(input, q);
+      const requestToken = localState.requestToken;
       if (localState.ctrl) {
         try { localState.ctrl.abort(); } catch (e) {}
       }
       localState.ctrl = new AbortController();
+      const controller = localState.ctrl;
 
       try {
-        const js = await fetchNodeSearchJson(url, localState.ctrl.signal);
+        const js = await fetchNodeSearchJson(url, controller.signal);
+        if (requestToken !== localState.requestToken || q !== getNodeSearchQuery(input)) {
+          return;
+        }
         const nodes = js && js.data && Array.isArray(js.data.nodes) ? js.data.nodes : [];
-        render(box, input, nodes);
+        render(box, input, nodes, localState);
       } catch (e) {
+        if ((e && e.name === 'AbortError') || requestToken !== localState.requestToken) {
+          return;
+        }
+        localState.lastNodes = [];
         hide(box);
+      } finally {
+        if (localState.ctrl === controller) {
+          localState.ctrl = null;
+        }
       }
     }
 
@@ -3699,15 +3726,21 @@ if ($a12Applies === false && !empty($contractsView)) {
     inputs.forEach((input) => {
       const box = ensureBox(input);
       if (!box) return;
-      let localState = { timer: null, ctrl: null };
+      let localState = { timer: null, ctrl: null, lastNodes: [], requestToken: 0, focusIndex: -1 };
       state.set(input, localState);
       input.addEventListener('input', () => {
         if (!shouldUseTransportNodes(input)) { hide(box); return; }
+        localState.requestToken += 1;
+        localState.focusIndex = -1;
+        if (localState.ctrl) {
+          try { localState.ctrl.abort(); } catch (e) {}
+          localState.ctrl = null;
+        }
         clearGenericLookupMeta(input.name);
         clearDerivedScopeForNodeInput(input.name);
         deriveScopeFromNodes();
         if (localState.timer) clearTimeout(localState.timer);
-        localState.timer = setTimeout(() => fetchNodes(input, box), currentTransportMode() === 'air' ? 260 : (currentTransportMode() === 'bus' ? 320 : 180));
+        localState.timer = setTimeout(() => fetchNodes(input, box), currentTransportMode() === 'air' ? 100 : (currentTransportMode() === 'bus' ? 320 : 180));
       });
       input.addEventListener('focus', () => {
         if (!shouldUseTransportNodes(input)) { hide(box); return; }
@@ -3730,7 +3763,31 @@ if ($a12Applies === false && !empty($contractsView)) {
         resolveExactNode(input);
       });
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') hide(box);
+        if (e.key === 'Escape') {
+          localState.focusIndex = -1;
+          hide(box);
+          return;
+        }
+        const nodes = Array.isArray(localState.lastNodes) ? localState.lastNodes.slice(0, 10) : [];
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && nodes.length && box.style.display !== 'none') {
+          e.preventDefault();
+          const direction = e.key === 'ArrowDown' ? 1 : -1;
+          localState.focusIndex = (localState.focusIndex + direction + nodes.length) % nodes.length;
+          Array.from(box.querySelectorAll('button[role="option"]')).forEach((button, index) => {
+            const selected = index === localState.focusIndex;
+            button.setAttribute('aria-selected', selected ? 'true' : 'false');
+            button.style.outline = selected ? '2px solid currentColor' : '';
+          });
+          return;
+        }
+        if (e.key === 'Enter' && nodes.length && box.style.display !== 'none') {
+          const selectedNode = nodes[localState.focusIndex >= 0 ? localState.focusIndex : 0] || null;
+          if (selectedNode && selectedNode.name) {
+            e.preventDefault();
+            applyNodeSelection(input, selectedNode);
+            hide(box);
+          }
+        }
       });
       box.addEventListener('mousedown', (e) => e.preventDefault());
       window.addEventListener('resize', () => {

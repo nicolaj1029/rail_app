@@ -22,6 +22,7 @@ class TransportNodesController extends AppController
     public function search()
     {
         $this->request->allowMethod(['get']);
+        $startedAt = hrtime(true);
 
         $mode = strtolower(trim((string)($this->request->getQuery('mode') ?? '')));
         if (!in_array($mode, ['ferry', 'bus', 'air'], true)) {
@@ -53,6 +54,11 @@ class TransportNodesController extends AppController
 
         $service = new TransportNodeSearchService();
         $nodes = $service->search($mode, $q, $country, $limit, $kind);
+        if ($mode === 'air') {
+            $this->response = $this->response
+                ->withHeader('X-Airport-Search-Source', 'local')
+                ->withHeader('Server-Timing', sprintf('airport;dur=%.3f', (hrtime(true) - $startedAt) / 1_000_000));
+        }
 
         $this->set([
             'success' => true,

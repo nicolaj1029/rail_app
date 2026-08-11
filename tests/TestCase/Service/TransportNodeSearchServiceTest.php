@@ -47,6 +47,124 @@ final class TransportNodeSearchServiceTest extends TestCase
         $this->assertSame('air', $rows[0]['mode']);
     }
 
+    public function testAirSearchPrioritizesExactCodesAndSupportsIcao(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'air-arn',
+                'mode' => 'air',
+                'name' => 'Stockholm-Arlanda Airport',
+                'code' => 'ARN',
+                'iata_code' => 'ARN',
+                'icao_code' => 'ESSA',
+                'city' => 'Stockholm',
+                'country' => 'SE',
+                'in_eu' => true,
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+                'has_scheduled_passenger_service' => true,
+            ],
+            [
+                'id' => 'air-arnborg',
+                'mode' => 'air',
+                'name' => 'Arnborg Gliding Center',
+                'code' => 'EKAB',
+                'icao_code' => 'EKAB',
+                'city' => 'Arnborg',
+                'country' => 'DK',
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+            ],
+        ]);
+        $service = new TransportNodeSearchService($path);
+
+        $iataRows = $service->search('air', 'ARN', null, 5);
+        $icaoRows = $service->search('air', 'ESSA', null, 5);
+
+        $this->assertSame('air-arn', $iataRows[0]['id']);
+        $this->assertSame('air-arn', $icaoRows[0]['id']);
+        $this->assertSame('ARN', $icaoRows[0]['iata_code']);
+        $this->assertSame('ESSA', $icaoRows[0]['icao_code']);
+    }
+
+    public function testAirSearchPrioritizesStockholmPassengerAirports(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'air-skavsta',
+                'mode' => 'air',
+                'name' => 'Stockholm Skavsta Airport',
+                'code' => 'NYO',
+                'city' => 'Nykoping',
+                'country' => 'SE',
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+            ],
+            [
+                'id' => 'air-arn',
+                'mode' => 'air',
+                'name' => 'Stockholm-Arlanda Airport',
+                'code' => 'ARN',
+                'city' => 'Stockholm',
+                'country' => 'SE',
+                'in_eu' => true,
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+                'has_scheduled_passenger_service' => true,
+            ],
+            [
+                'id' => 'air-bma',
+                'mode' => 'air',
+                'name' => 'Stockholm-Bromma Airport',
+                'code' => 'BMA',
+                'city' => 'Stockholm',
+                'country' => 'SE',
+                'in_eu' => true,
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+                'has_scheduled_passenger_service' => true,
+            ],
+        ]);
+        $service = new TransportNodeSearchService($path);
+
+        $rows = $service->search('air', 'Stockholm', null, 5);
+
+        $this->assertSame(['ARN', 'BMA', 'NYO'], array_column($rows, 'code'));
+    }
+
+    public function testAirSearchUsesMetroAliasesForMajorAirports(): void
+    {
+        $path = $this->writeTempJson([
+            [
+                'id' => 'air-local-paris',
+                'mode' => 'air',
+                'name' => 'Paris Municipal Airport',
+                'code' => 'PRX',
+                'city' => 'Paris',
+                'country' => 'US',
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+            ],
+            [
+                'id' => 'air-cdg',
+                'mode' => 'air',
+                'name' => 'Charles de Gaulle International Airport',
+                'code' => 'CDG',
+                'iata_code' => 'CDG',
+                'city' => 'Roissy-en-France',
+                'country' => 'FR',
+                'node_type' => 'airport',
+                'allow_in_frontend_search' => true,
+                'has_scheduled_passenger_service' => true,
+            ],
+        ]);
+        $service = new TransportNodeSearchService($path);
+
+        $rows = $service->search('air', 'Paris', null, 5);
+
+        $this->assertSame('CDG', $rows[0]['code']);
+    }
+
     public function testSearchRespectsCountryFilter(): void
     {
         $rows = $this->service->search('air', 'Aachen', 'DE', 10);

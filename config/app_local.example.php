@@ -77,13 +77,6 @@ return [
             'historicalCacheSeconds' => 86400,
             'noDataCacheSeconds' => 60,
         ],
-        'airAirportSearch' => [
-            'useAeroDataBoxFallback' => true,
-            'preferAeroDataBox' => true,
-            'fallbackMinChars' => 3,
-            'fallbackMinLocalResults' => 2,
-            'cacheSeconds' => 21600,
-        ],
         'aviationstack' => [
             'apiKey' => '',
             'baseUrl' => 'https://api.aviationstack.com/v1/flights',

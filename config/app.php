@@ -233,14 +233,6 @@ return [
             'historicalCacheSeconds' => max(60, (int)env('AIR_HISTORICAL_CACHE_SECONDS', 86400)),
             'noDataCacheSeconds' => max(15, (int)env('AIR_NO_DATA_CACHE_SECONDS', 60)),
         ],
-        'airAirportSearch' => [
-            // Air TC6 autocomplete: prefer AeroDataBox when available, but keep local nodes as cached fallback.
-            'useAeroDataBoxFallback' => filter_var(env('AIR_AIRPORT_SEARCH_USE_AERODATABOX_FALLBACK', env('USE_LIVE_APIS', false)), FILTER_VALIDATE_BOOLEAN),
-            'preferAeroDataBox' => filter_var(env('AIR_AIRPORT_SEARCH_PREFER_AERODATABOX', true), FILTER_VALIDATE_BOOLEAN),
-            'fallbackMinChars' => (int)env('AIR_AIRPORT_SEARCH_FALLBACK_MIN_CHARS', 3),
-            'fallbackMinLocalResults' => (int)env('AIR_AIRPORT_SEARCH_FALLBACK_MIN_LOCAL_RESULTS', 2),
-            'cacheSeconds' => (int)env('AIR_AIRPORT_SEARCH_CACHE_SECONDS', 21600),
-        ],
         'aviationstack' => [
             'apiKey' => env('AVIATIONSTACK_API_KEY', ''),
             'baseUrl' => env('AVIATIONSTACK_BASE_URL', 'https://api.aviationstack.com/v1/flights'),

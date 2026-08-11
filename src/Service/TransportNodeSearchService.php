@@ -24,6 +24,22 @@ final class TransportNodeSearchService
         'copenhagen' => ['København', 'Kobenhavn'],
     ];
 
+    /** @var array<string,array<int,string>> */
+    private const AIRPORT_METRO_ALIASES_BY_CODE = [
+        'CPH' => ['Copenhagen', 'København', 'Kobenhavn'],
+        'RKE' => ['Copenhagen', 'København', 'Kobenhavn'],
+        'LHR' => ['London'],
+        'LGW' => ['London'],
+        'LCY' => ['London'],
+        'LTN' => ['London'],
+        'STN' => ['London'],
+        'SEN' => ['London'],
+        'CDG' => ['Paris'],
+        'ORY' => ['Paris'],
+        'LBG' => ['Paris'],
+        'BVA' => ['Paris'],
+    ];
+
     /** @var array<int,array<string,mixed>>|null */
     private static array $cacheRowsByKey = [];
     private static array $cacheSignatureByKey = [];
@@ -58,14 +74,22 @@ final class TransportNodeSearchService
         }
         $limit = max(1, min(50, $limit));
 
-        $queryCacheKey = 'transport_node_search_v3_' . md5(json_encode([
+        $datasetPath = $this->resolvePath($mode);
+        $seedPath = $mode === 'ferry'
+            ? $this->resolveFerrySeedPath()
+            : ($mode === 'bus' ? $this->resolveBusSeedPath() : null);
+        $queryCachePayload = json_encode([
             'mode' => $mode,
             'query' => $query,
             'country' => $country,
             'limit' => $limit,
             'kind' => $kind,
             'ai' => $enableAiNormalization,
-        ]));
+            'dataset_path' => $datasetPath,
+            'dataset_signature' => $this->buildCacheSignature($datasetPath, $seedPath),
+            'seed_path' => $seedPath,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $queryCacheKey = 'transport_node_search_v15_' . md5((string)$queryCachePayload);
         $cachedQueryRows = Cache::read($queryCacheKey, 'default');
         if (is_array($cachedQueryRows)) {
             return $cachedQueryRows;
@@ -249,9 +273,7 @@ final class TransportNodeSearchService
             if (($row['mode'] ?? '') !== $mode) {
                 continue;
             }
-            if ($mode === 'air' && !$this->isAllowedAirFrontendRow($row)) {
-                continue;
-            }
+
             $rowCountry = strtoupper((string)($row['country'] ?? ''));
             if ($country !== null && $rowCountry !== $country) {
                 continue;
@@ -261,11 +283,31 @@ final class TransportNodeSearchService
             /** @var array<int,string> $aliasSearch */
             $aliasSearch = is_array($row['__alias_search'] ?? null) ? $row['__alias_search'] : [];
             $codeSearch = (string)($row['__code_search'] ?? '');
-            $searchBlob = $this->buildRowSearchBlob($row, $nameSearch, $aliasSearch, $codeSearch);
+            $citySearch = (string)($row['__city_search'] ?? '');
+            $searchBlob = (string)($row['__search_blob'] ?? '');
+            if ($searchBlob === '') {
+                $searchBlob = $this->buildRowSearchBlob($row, $nameSearch, $aliasSearch, $codeSearch);
+            }
             if ($searchBlob === '') {
                 continue;
             }
-            $score = $this->scoreRow($mode, $qa, $qWords, $row, $nameSearch, $aliasSearch, $codeSearch, $searchBlob, $kind);
+            if (count($qWords) <= 1) {
+                if (!str_contains($searchBlob, $qa)) {
+                    continue;
+                }
+            } else {
+                $allWordsPresent = true;
+                foreach ($qWords as $word) {
+                    if (!str_contains($searchBlob, $word)) {
+                        $allWordsPresent = false;
+                        break;
+                    }
+                }
+                if (!$allWordsPresent) {
+                    continue;
+                }
+            }
+            $score = $this->scoreRow($mode, $qa, $qWords, $row, $nameSearch, $aliasSearch, $codeSearch, $citySearch, $searchBlob, $kind);
 
             if ($score <= 0) {
                 continue;
@@ -281,6 +323,8 @@ final class TransportNodeSearchService
                 'country' => $rowCountry !== '' ? $rowCountry : null,
                 'in_eu' => $this->normalizeNullableBool($row['in_eu'] ?? null),
                 'code' => isset($row['code']) ? (string)$row['code'] : null,
+                'iata_code' => isset($row['iata_code']) ? (string)$row['iata_code'] : null,
+                'icao_code' => isset($row['icao_code']) ? (string)$row['icao_code'] : null,
                 'lat' => isset($row['lat']) ? (float)$row['lat'] : null,
                 'lon' => isset($row['lon']) ? (float)$row['lon'] : null,
                 'node_type' => $nodeType !== '' ? $nodeType : null,
@@ -329,11 +373,24 @@ final class TransportNodeSearchService
      * @param array<int,string> $aliasSearch
      * @param array<string,mixed> $row
      */
-    private function scoreRow(string $mode, string $qa, array $qWords, array $row, string $nameSearch, array $aliasSearch, string $codeSearch, string $searchBlob, ?string $kind): int
+    private function scoreRow(string $mode, string $qa, array $qWords, array $row, string $nameSearch, array $aliasSearch, string $codeSearch, string $citySearch, string $searchBlob, ?string $kind): int
     {
         $score = 0;
+        $airCodeSearch = array_values(array_filter([
+            $codeSearch,
+            (string)($row['__iata_search'] ?? ''),
+            (string)($row['__icao_search'] ?? ''),
+        ], static fn(string $value): bool => $value !== ''));
 
-        if ($nameSearch === $qa) {
+        if ($mode === 'air' && in_array($qa, $airCodeSearch, true)) {
+            $score = 240;
+        } elseif ($mode === 'air' && array_filter($airCodeSearch, static fn(string $value): bool => str_starts_with($value, $qa)) !== []) {
+            $score = 220;
+        } elseif ($mode === 'air' && $this->isAirMetroAliasMatch($row, $qa)) {
+            $score = 200;
+        } elseif ($mode === 'air' && $citySearch === $qa) {
+            $score = $this->normalizeNullableBool($row['in_eu'] ?? null) === true ? 180 : 90;
+        } elseif ($nameSearch === $qa) {
             $score = 124;
         } elseif ($codeSearch !== '' && $codeSearch === $qa) {
             $score = 120;
@@ -360,6 +417,19 @@ final class TransportNodeSearchService
             }
             if ($hits === count($qWords) && $hits > 0) {
                 $score = 65 + min(10, $hits * 2);
+            }
+        }
+
+        if ($mode === 'air' && $score > 0 && strlen($qa) >= 4) {
+            $hasStructuredMatch =
+                ($codeSearch !== '' && ($codeSearch === $qa || str_starts_with($codeSearch, $qa)))
+                || $this->startsWithAny($aliasSearch, $qa)
+                || in_array($qa, $aliasSearch, true)
+                || $this->containsWholeToken($nameSearch, $qa)
+                || $this->containsWholeToken($citySearch, $qa);
+
+            if (!$hasStructuredMatch && strpos($searchBlob, $qa) !== false) {
+                return 0;
             }
         }
 
@@ -420,6 +490,21 @@ final class TransportNodeSearchService
         }
 
         return $score;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function isAirMetroAliasMatch(array $row, string $query): bool
+    {
+        foreach ([$row['iata_code'] ?? null, $row['code'] ?? null] as $code) {
+            $code = strtoupper(trim((string)$code));
+            foreach (self::AIRPORT_METRO_ALIASES_BY_CODE[$code] ?? [] as $alias) {
+                if ($this->ascii($this->norm($alias)) === $query) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -551,8 +636,12 @@ final class TransportNodeSearchService
 
         foreach ([
             'heliport',
+            ' hls',
             'seaplane',
             'balloonport',
+            'airstrip',
+            'landing strip',
+            'gliding',
             'training field',
             'test range',
             'maintenance base',
@@ -577,6 +666,15 @@ final class TransportNodeSearchService
         }
 
         return false;
+    }
+
+    private function containsWholeToken(string $haystack, string $needle): bool
+    {
+        if ($haystack === '' || $needle === '') {
+            return false;
+        }
+
+        return preg_match('/(^|[^a-z0-9])' . preg_quote($needle, '/') . '($|[^a-z0-9])/', $haystack) === 1;
     }
 
     /**
@@ -656,7 +754,7 @@ final class TransportNodeSearchService
         if ($signature !== '' && isset(self::$cacheRowsByKey[$cacheKey]) && (self::$cacheSignatureByKey[$cacheKey] ?? null) === $signature) {
             return self::$cacheRowsByKey[$cacheKey];
         }
-        $rowsCacheKey = $signature !== '' ? ('transport_nodes_rows_' . md5($cacheKey . '|' . $signature)) : null;
+        $rowsCacheKey = $signature !== '' ? ('transport_nodes_rows_v6_' . md5($cacheKey . '|' . $signature)) : null;
         if ($rowsCacheKey !== null) {
             $cachedRows = Cache::read($rowsCacheKey, 'default');
             if (is_array($cachedRows)) {
@@ -674,7 +772,9 @@ final class TransportNodeSearchService
             ? $this->loadRowsFromStream($path, $mode)
             : $this->loadRowsFromDecodedJson($path, $mode);
 
-        if ($mode === 'ferry') {
+        if ($mode === 'air') {
+            $rows = array_values(array_filter($rows, fn(array $row): bool => $this->isAllowedAirFrontendRow($row)));
+        } elseif ($mode === 'ferry') {
             $rows = $this->mergeSeedRows($rows, $this->loadFerrySeedRows($seedPath));
             $rows = $this->enrichFerryRows($rows);
         } elseif ($mode === 'bus') {
@@ -877,6 +977,11 @@ final class TransportNodeSearchService
         if (count($aliases) > 12) {
             $aliases = array_slice($aliases, 0, 12);
         }
+        $parentName = isset($row['parent_name']) ? trim((string)$row['parent_name']) : '';
+        $city = isset($row['city']) ? trim((string)$row['city']) : '';
+        if ($parentName === '' && $mode === 'air' && $city !== '') {
+            $parentName = $city;
+        }
 
         return [
             'id' => (string)($row['id'] ?? ''),
@@ -884,16 +989,29 @@ final class TransportNodeSearchService
             'name' => trim((string)($row['name'] ?? '')),
             'aliases' => $aliases,
             'code' => isset($row['code']) ? (string)$row['code'] : null,
+            'iata_code' => isset($row['iata_code']) ? (string)$row['iata_code'] : null,
+            'icao_code' => isset($row['icao_code']) ? (string)$row['icao_code'] : null,
             'country' => strtoupper((string)($row['country'] ?? '')),
             'in_eu' => $this->normalizeNullableBool($row['in_eu'] ?? null),
             'lat' => isset($row['lat']) && is_numeric($row['lat']) ? (float)$row['lat'] : null,
             'lon' => isset($row['lon']) && is_numeric($row['lon']) ? (float)$row['lon'] : null,
             'node_type' => isset($row['node_type']) ? (string)$row['node_type'] : null,
-            'parent_name' => isset($row['parent_name']) ? (string)$row['parent_name'] : null,
-            'city' => isset($row['city']) ? (string)$row['city'] : null,
+            'parent_name' => $parentName !== '' ? $parentName : null,
+            'city' => $city !== '' ? $city : null,
             'source' => isset($row['source']) ? (string)$row['source'] : 'seed',
             'verification_status' => isset($row['verification_status']) ? (string)$row['verification_status'] : null,
             'seed_record_type' => isset($row['seed_record_type']) ? (string)$row['seed_record_type'] : null,
+            'has_scheduled_passenger_service' => $this->normalizeNullableBool($row['has_scheduled_passenger_service'] ?? null),
+            'allow_in_frontend_search' => $this->normalizeNullableBool($row['allow_in_frontend_search'] ?? null),
+            'allow_in_claim_flow' => $this->normalizeNullableBool($row['allow_in_claim_flow'] ?? null),
+            'is_private_use' => $this->normalizeNullableBool($row['is_private_use'] ?? null),
+            'is_public_use' => $this->normalizeNullableBool($row['is_public_use'] ?? null),
+            'is_military' => $this->normalizeNullableBool($row['is_military'] ?? null),
+            'is_joint_use' => $this->normalizeNullableBool($row['is_joint_use'] ?? null),
+            'is_cargo_only' => $this->normalizeNullableBool($row['is_cargo_only'] ?? null),
+            'is_active' => $this->normalizeNullableBool($row['is_active'] ?? null),
+            'is_closed' => $this->normalizeNullableBool($row['is_closed'] ?? null),
+            'lookup_priority' => isset($row['lookup_priority']) ? (int)$row['lookup_priority'] : null,
         ];
     }
 
@@ -1389,6 +1507,18 @@ final class TransportNodeSearchService
             }
         }
 
+        if ($mode === 'air') {
+            foreach ([$row['iata_code'] ?? null, $row['code'] ?? null] as $code) {
+                $code = strtoupper(trim((string)$code));
+                if ($code === '') {
+                    continue;
+                }
+                foreach (self::AIRPORT_METRO_ALIASES_BY_CODE[$code] ?? [] as $alias) {
+                    $aliases[] = $alias;
+                }
+            }
+        }
+
         foreach ([$row['city'] ?? null, $row['name'] ?? null] as $candidate) {
             if (!is_string($candidate) || trim($candidate) === '') {
                 continue;
@@ -1473,10 +1603,24 @@ final class TransportNodeSearchService
             $row['country'] = strtoupper((string)($row['country'] ?? ''));
             $row['__name_search'] = $this->ascii($this->norm($name));
             $row['__alias_search'] = array_values(array_filter(array_map(fn(string $value): string => $this->ascii($this->norm($value)), $aliases), static fn(string $value): bool => $value !== ''));
+            $row['__iata_search'] = !empty($row['iata_code']) ? $this->ascii($this->norm((string)$row['iata_code'])) : '';
+            $row['__icao_search'] = !empty($row['icao_code']) ? $this->ascii($this->norm((string)$row['icao_code'])) : '';
+            foreach ([$row['__iata_search'], $row['__icao_search']] as $airportCodeSearch) {
+                if ($airportCodeSearch !== '' && !in_array($airportCodeSearch, $row['__alias_search'], true)) {
+                    $row['__alias_search'][] = $airportCodeSearch;
+                }
+            }
             if (count($row['__alias_search']) > 8) {
                 $row['__alias_search'] = array_slice($row['__alias_search'], 0, 8);
             }
             $row['__code_search'] = !empty($row['code']) ? $this->ascii($this->norm((string)$row['code'])) : '';
+            $row['__city_search'] = $this->ascii($this->norm((string)($row['city'] ?? '')));
+            $row['__search_blob'] = $this->buildRowSearchBlob(
+                $row,
+                $row['__name_search'],
+                $row['__alias_search'],
+                $row['__code_search']
+            );
             unset($row['aliases']);
         }
         unset($row);
