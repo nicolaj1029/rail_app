@@ -11,6 +11,7 @@ use Cake\TestSuite\TestCase;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use stdClass;
 
 final class PublicSiteModeMiddlewareTest extends TestCase
 {
@@ -94,7 +95,7 @@ final class PublicSiteModeMiddlewareTest extends TestCase
             ],
         ]);
 
-        $capture = new \stdClass();
+        $capture = new stdClass();
         $capture->request = null;
         $middleware = new PublicSiteModeMiddleware();
         $request = new ServerRequest([
@@ -106,10 +107,10 @@ final class PublicSiteModeMiddlewareTest extends TestCase
             ],
         ]);
 
-        $response = $middleware->process($request, new class($capture) implements RequestHandlerInterface {
-            private \stdClass $capture;
+        $response = $middleware->process($request, new class ($capture) implements RequestHandlerInterface {
+            private stdClass $capture;
 
-            public function __construct(\stdClass $capture)
+            public function __construct(stdClass $capture)
             {
                 $this->capture = $capture;
             }
@@ -117,6 +118,7 @@ final class PublicSiteModeMiddlewareTest extends TestCase
             public function handle(ServerRequestInterface $request): ResponseInterface
             {
                 $this->capture->request = $request;
+
                 return new Response();
             }
         });
@@ -143,19 +145,84 @@ final class PublicSiteModeMiddlewareTest extends TestCase
             ],
         ]);
 
-        $middleware = new PublicSiteModeMiddleware();
+        foreach (['/admin/desk', '/admin/chat'] as $path) {
+            $request = new ServerRequest([
+                'url' => $path,
+                'environment' => [
+                    'HTTP_HOST' => 'admin.example.com',
+                    'REQUEST_URI' => $path,
+                    'HTTPS' => 'on',
+                ],
+            ]);
+
+            $response = (new PublicSiteModeMiddleware())->process($request, $this->okHandler());
+
+            $this->assertSame(200, $response->getStatusCode());
+        }
+    }
+
+    public function testUnknownHostCannotReachAdminWhenAdminAllowlistExists(): void
+    {
+        Configure::write('PublicSite', ['enabled' => false, 'landingPath' => '/passenger/start']);
+        Configure::write('HostRouting', [
+            'adminHosts' => ['admin.example.com'],
+            'publicHosts' => [
+                'air.example.com' => ['transportMode' => 'air'],
+            ],
+        ]);
+
         $request = new ServerRequest([
             'url' => '/admin/desk',
             'environment' => [
-                'HTTP_HOST' => 'admin.example.com',
+                'HTTP_HOST' => 'unrecognised.example.net',
                 'REQUEST_URI' => '/admin/desk',
                 'HTTPS' => 'on',
             ],
         ]);
 
-        $response = $middleware->process($request, $this->okHandler());
+        $response = (new PublicSiteModeMiddleware())->process($request, $this->okHandler());
 
-        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(404, $response->getStatusCode());
+    }
+
+    public function testConfiguredTransportHostsPassTheirPublicEntrypointsAndBlockAdmin(): void
+    {
+        Configure::write('PublicSite', ['enabled' => false, 'landingPath' => '/passenger/start']);
+        Configure::write('HostRouting', [
+            'adminHosts' => ['admin.example.com'],
+            'defaults' => ['blockAdminRoutes' => true],
+            'publicHosts' => [
+                'air.example.com' => ['transportMode' => 'air'],
+                'rail.example.com' => ['transportMode' => 'rail'],
+                'ferry.example.com' => ['transportMode' => 'ferry'],
+            ],
+        ]);
+
+        foreach (
+            [
+            'air.example.com' => '/fly-ny',
+            'rail.example.com' => '/tog-ny',
+            'ferry.example.com' => '/faerge-ny',
+            ] as $host => $path
+        ) {
+            $publicRequest = new ServerRequest([
+                'url' => $path,
+                'environment' => ['HTTP_HOST' => $host, 'REQUEST_URI' => $path, 'HTTPS' => 'on'],
+            ]);
+            $adminRequest = new ServerRequest([
+                'url' => '/admin/chat',
+                'environment' => ['HTTP_HOST' => $host, 'REQUEST_URI' => '/admin/chat', 'HTTPS' => 'on'],
+            ]);
+
+            $this->assertSame(
+                200,
+                (new PublicSiteModeMiddleware())->process($publicRequest, $this->okHandler())->getStatusCode(),
+            );
+            $this->assertSame(
+                404,
+                (new PublicSiteModeMiddleware())->process($adminRequest, $this->okHandler())->getStatusCode(),
+            );
+        }
     }
 
     private function okHandler(): RequestHandlerInterface

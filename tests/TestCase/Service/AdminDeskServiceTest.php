@@ -9,6 +9,21 @@ use ReflectionMethod;
 
 final class AdminDeskServiceTest extends TestCase
 {
+    public function testSharedInboxOffersCanonicalTransportFilters(): void
+    {
+        $service = new AdminDeskService();
+        $filters = $service->availableInboxFilters();
+        $method = new ReflectionMethod($service, 'matchesInboxFilter');
+        $method->setAccessible(true);
+        $airItem = ['meta' => ['transport_mode' => 'air']];
+
+        $this->assertSame('AIR', $filters['air']);
+        $this->assertSame('RAIL', $filters['rail']);
+        $this->assertSame('FERRY', $filters['ferry']);
+        $this->assertTrue($method->invoke($service, $airItem, 'air'));
+        $this->assertFalse($method->invoke($service, $airItem, 'rail'));
+    }
+
     public function testOperationalReviewUsesRailEvidenceLabelsAndSourceNote(): void
     {
         $review = $this->invokeOperationalReview([

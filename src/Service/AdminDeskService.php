@@ -280,6 +280,9 @@ final class AdminDeskService
             'due_today' => 'Forfalder i dag',
             'overdue' => 'Overskredet',
             'scheduled' => 'Har opfølgning',
+            'air' => 'AIR',
+            'rail' => 'RAIL',
+            'ferry' => 'FERRY',
         ];
     }
 
@@ -1213,6 +1216,9 @@ final class AdminDeskService
             }
 
             return 'in_review';
+        }
+        if (in_array($filter, ['air', 'rail', 'ferry'], true)) {
+            return strtolower(trim((string)($item['meta']['transport_mode'] ?? ''))) === $filter;
         }
 
         if ((bool)($summary['profile_blocked'] ?? false)) {

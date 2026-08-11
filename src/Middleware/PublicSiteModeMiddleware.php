@@ -12,21 +12,22 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 final class PublicSiteModeMiddleware implements MiddlewareInterface
 {
+    /** Resolve host context, enforce host isolation, and pass public requests onward. */
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $context = $this->resolveContext($request);
         $request = $request->withAttribute('siteContext', $context);
 
+        $path = $this->normalizePath($request->getUri()->getPath());
+        if (!empty($context['blockAdminRoutes']) && $this->isAdminPath($path)) {
+            return (new Response())->withStatus(404)->withStringBody('Not Found');
+        }
+
         if (empty($context['enabled'])) {
             return $handler->handle($request);
         }
 
-        $path = $this->normalizePath($request->getUri()->getPath());
         $landingPath = $this->normalizePath((string)($context['landingPath'] ?? '/passenger/start'));
-
-        if (!empty($context['blockAdminRoutes']) && $this->isAdminPath($path)) {
-            return (new Response())->withStatus(404)->withStringBody('Not Found');
-        }
 
         if ($this->shouldRedirectToLanding($path, $landingPath)) {
             return (new Response())
@@ -81,18 +82,35 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
                 'enabled' => true,
                 'isPublicHost' => true,
                 'isAdminHost' => false,
-                'transportMode' => $this->normalizeTransportMode((string)($hostConfig['transportMode'] ?? $publicDefaults['transportMode'] ?? '')),
-                'landingPath' => (string)($hostConfig['landingPath'] ?? $publicDefaults['landingPath'] ?? $defaults['landingPath']),
-                'hideTopNav' => (bool)($hostConfig['hideTopNav'] ?? $publicDefaults['hideTopNav'] ?? true),
-                'hidePassengerNav' => (bool)($hostConfig['hidePassengerNav'] ?? $publicDefaults['hidePassengerNav'] ?? true),
-                'blockAdminRoutes' => (bool)($hostConfig['blockAdminRoutes'] ?? $publicDefaults['blockAdminRoutes'] ?? true),
+                'transportMode' => $this->normalizeTransportMode((string)(
+                    $hostConfig['transportMode'] ?? $publicDefaults['transportMode'] ?? ''
+                )),
+                'landingPath' => (string)(
+                    $hostConfig['landingPath'] ?? $publicDefaults['landingPath'] ?? $defaults['landingPath']
+                ),
+                'hideTopNav' => (bool)(
+                    $hostConfig['hideTopNav'] ?? $publicDefaults['hideTopNav'] ?? true
+                ),
+                'hidePassengerNav' => (bool)(
+                    $hostConfig['hidePassengerNav'] ?? $publicDefaults['hidePassengerNav'] ?? true
+                ),
+                'blockAdminRoutes' => (bool)(
+                    $hostConfig['blockAdminRoutes'] ?? $publicDefaults['blockAdminRoutes'] ?? true
+                ),
                 'host' => $host,
             ];
+        }
+
+        // Once an explicit admin-host allowlist exists, every other host fails
+        // closed for /admin. This also covers an unrecognised or forged Host.
+        if ($adminHosts !== []) {
+            $defaults['blockAdminRoutes'] = true;
         }
 
         return $defaults;
     }
 
+    /** Normalize a request path for exact prefix checks. */
     private function normalizePath(string $path): string
     {
         $path = trim($path);
@@ -107,14 +125,17 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
         return rtrim($path, '/') ?: '/';
     }
 
+    /** Return whether a request targets the shared admin route namespace. */
     private function isAdminPath(string $path): bool
     {
         return $path === '/admin' || str_starts_with($path, '/admin/');
     }
 
+    /** Restrict host-selected transport mode to supported canonical values. */
     private function normalizeTransportMode(string $mode): string
     {
         $mode = strtolower(trim($mode));
+
         return in_array($mode, ['air', 'rail', 'ferry', 'bus'], true) ? $mode : '';
     }
 
@@ -132,6 +153,7 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
         return false;
     }
 
+    /** Match an exact or configured wildcard host pattern. */
     private function hostMatches(string $host, string $pattern): bool
     {
         $host = strtolower(trim($host));
@@ -150,6 +172,7 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
         return (bool)preg_match($regex, $host);
     }
 
+    /** Return whether a bare public path should redirect to the passenger landing. */
     private function shouldRedirectToLanding(string $path, string $landingPath): bool
     {
         if ($path === $landingPath) {

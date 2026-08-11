@@ -211,6 +211,7 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/regulation/search', ['controller' => 'Regulation', 'action' => 'search']);
         $builder->connect('/regulation/quote', ['controller' => 'Regulation', 'action' => 'quote']);
         $builder->connect('/air/flights/search', ['controller' => 'AirFlights', 'action' => 'search']);
+        $builder->connect('/air/health', ['controller' => 'AirFlights', 'action' => 'health']);
         $builder->connect('/ferry/departures/search', ['controller' => 'FerryDepartures', 'action' => 'search']);
         $builder->connect('/ferry/incident/suggest', ['controller' => 'FerryDepartures', 'action' => 'suggestIncident']);
         $builder->connect('/rail/departures/search', ['controller' => 'RailDepartures', 'action' => 'search']);

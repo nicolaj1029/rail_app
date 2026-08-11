@@ -22,6 +22,8 @@ final class AirRightsEvaluator
         $delayBand = strtolower(trim((string)($incidentMeta['delay_departure_band'] ?? '')));
         $boardingDenied = $this->toBool($incidentMeta['boarding_denied'] ?? null);
         $voluntaryDenied = $this->toBool($incidentMeta['voluntary_denied_boarding'] ?? null);
+        $deniedBoardingRefusalGround = $this->toBool($incidentMeta['air_denied_boarding_refused_for_safety_security_health_documents'] ?? null);
+        $deniedBoardingAtGateOnTime = $this->toBool($incidentMeta['air_denied_boarding_at_gate_on_time'] ?? null);
         $protectedMissed = $this->toBool($incidentMeta['protected_connection_missed'] ?? null);
         $rerouteArrivalDelay = (int)($incidentMeta['reroute_arrival_delay_minutes'] ?? 0);
         $extraordinary = $this->toBool(
@@ -65,7 +67,11 @@ final class AirRightsEvaluator
         $cancellation = $incidentType === 'cancellation';
         $cancellationRerouteChosen = in_array($remedyChoice, ['reroute_soonest', 'reroute_later'], true);
         $delay = $incidentType === 'delay';
-        $missedProtectedConnection = $incidentType === 'missed_connection' && $isProtected && ($protectedMissed !== false);
+        $missedProtectedConnection = $isProtected
+            && (
+                $protectedMissed === true
+                || ($incidentType === 'missed_connection' && $protectedMissed !== false)
+            );
         $longArrivalDelay = $arrivalDelay >= 180;
         $delayThresholdMet = false;
         $delayFivePlus = false;
@@ -108,6 +114,23 @@ final class AirRightsEvaluator
             $compensationCandidate = false;
             $compensationBlockedReason = 'voluntary_denied_boarding';
             $eligibilityStatus = 'not_eligible';
+        } elseif ($deniedBoarding && $voluntaryDenied !== true && $deniedBoardingRefusalGround === true) {
+            $compensationCandidate = false;
+            $compensationBlockedReason = 'denied_boarding_refusal_ground_excluded';
+            $eligibilityStatus = 'not_eligible';
+        } elseif ($deniedBoarding && $voluntaryDenied !== true && $deniedBoardingAtGateOnTime === false) {
+            $compensationCandidate = false;
+            $compensationBlockedReason = 'denied_boarding_not_at_gate_on_time';
+            $eligibilityStatus = 'not_eligible';
+        } elseif (
+            $deniedBoarding
+            && !$isOngoing
+            && $voluntaryDenied !== true
+            && ($deniedBoardingRefusalGround === null || $deniedBoardingAtGateOnTime === null)
+        ) {
+            $compensationCandidate = false;
+            $compensationBlockedReason = 'denied_boarding_compensation_uncertain';
+            $eligibilityStatus = 'uncertain';
         } elseif ($incidentType === 'missed_connection' && !$isProtected) {
             $compensationCandidate = false;
             $compensationBlockedReason = 'self_transfer_or_unprotected_connection';
@@ -225,7 +248,7 @@ final class AirRightsEvaluator
             'gate_air_reroute_refund' => $gateRefundReroute,
             'gate_air_delay_refund_5h' => $gateDelayRefund5h,
             'gate_air_compensation' => $compensationCandidate,
-            'gate_air_denied_boarding' => $nonVoluntaryDenied,
+            'gate_air_denied_boarding' => $nonVoluntaryDenied && $deniedBoardingRefusalGround !== true && $deniedBoardingAtGateOnTime !== false,
             'gate_air_priority_transport' => $priorityTransport,
             'gate_air_art11_priority_assistance' => $gateArt11PriorityAssistance,
             'air_pmr_companion' => $pmrCompanion,

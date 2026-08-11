@@ -30,11 +30,22 @@ final class AirOperationalEvidenceService
         $status = trim((string)($selectedFlight['status'] ?? ''));
         $scheduledDeparture = trim((string)($selectedFlight['scheduled_departure_local'] ?? ''));
         $scheduledArrival = trim((string)($selectedFlight['scheduled_arrival_local'] ?? ''));
-        $estimatedDeparture = trim((string)($selectedFlight['estimated_departure_local'] ?? ($selectedFlight['revised_departure_local'] ?? '')));
-        $estimatedArrival = trim((string)($selectedFlight['estimated_arrival_local'] ?? ($selectedFlight['revised_arrival_local'] ?? '')));
+        $estimatedDeparture = trim((string)(
+            $selectedFlight['estimated_departure_local']
+            ?? $selectedFlight['revised_departure_local']
+            ?? ''
+        ));
+        $estimatedArrival = trim((string)(
+            $selectedFlight['estimated_arrival_local']
+            ?? $selectedFlight['revised_arrival_local']
+            ?? ''
+        ));
         $actualDeparture = trim((string)($selectedFlight['actual_departure_local'] ?? ''));
         $actualArrival = trim((string)($selectedFlight['actual_arrival_local'] ?? ''));
-        $cancelled = $this->toBool($selectedFlight['cancelled'] ?? null) ?? $this->statusLooksCancelled($status);
+        $cancelled = $this->toBool($selectedFlight['cancelled'] ?? null);
+        if ($cancelled === null && $this->statusLooksCancelled($status)) {
+            $cancelled = true;
+        }
 
         $checks = [];
         $score = $this->baseScoreForSource($source);
@@ -42,11 +53,18 @@ final class AirOperationalEvidenceService
 
         $depCodeCurrent = strtoupper(trim((string)($form['dep_station_lookup_code'] ?? '')));
         $arrCodeCurrent = strtoupper(trim((string)($form['arr_station_lookup_code'] ?? '')));
-        $depCodeDetected = strtoupper(trim((string)($selectedFlight['departure_airport_iata'] ?? ($selectedLeg['dep_iata'] ?? ''))));
-        $arrCodeDetected = strtoupper(trim((string)($selectedFlight['arrival_airport_iata'] ?? ($selectedLeg['arr_iata'] ?? ''))));
+        $depCodeDetected = strtoupper(trim((string)(
+            $selectedFlight['departure_airport_iata'] ?? $selectedLeg['dep_iata'] ?? ''
+        )));
+        $arrCodeDetected = strtoupper(trim((string)(
+            $selectedFlight['arrival_airport_iata'] ?? $selectedLeg['arr_iata'] ?? ''
+        )));
         $routeStatus = 'unknown';
         if ($depCodeCurrent !== '' && $arrCodeCurrent !== '' && $depCodeDetected !== '' && $arrCodeDetected !== '') {
-            $routeStatus = ($depCodeCurrent === $depCodeDetected && $arrCodeCurrent === $arrCodeDetected) ? 'match' : 'mismatch';
+            $routeStatus = $depCodeCurrent === $depCodeDetected
+                && $arrCodeCurrent === $arrCodeDetected
+                ? 'match'
+                : 'mismatch';
         } elseif ($depCodeDetected !== '' || $arrCodeDetected !== '') {
             $routeStatus = 'partial';
         }
@@ -90,8 +108,12 @@ final class AirOperationalEvidenceService
         ];
         [$score, $hasMismatch] = $this->applyScore($score, $hasMismatch, $flightStatus, 18, 16);
 
-        $currentCarrier = $this->normalizeCompareText((string)($form['marketing_carrier'] ?? ($form['operator'] ?? '')));
-        $detectedCarrier = $this->normalizeCompareText((string)($selectedFlight['carrier_name'] ?? ($selectedFlight['marketing_carrier_name'] ?? '')));
+        $currentCarrier = $this->normalizeCompareText(
+            (string)($form['marketing_carrier'] ?? $form['operator'] ?? ''),
+        );
+        $detectedCarrier = $this->normalizeCompareText(
+            (string)($selectedFlight['carrier_name'] ?? $selectedFlight['marketing_carrier_name'] ?? ''),
+        );
         $carrierStatus = 'unknown';
         if ($currentCarrier !== '' && $detectedCarrier !== '') {
             $carrierStatus = $currentCarrier === $detectedCarrier ? 'match' : 'mismatch';
@@ -102,7 +124,11 @@ final class AirOperationalEvidenceService
             'label' => 'Carrier',
             'status' => $carrierStatus,
             'current' => trim((string)($form['marketing_carrier'] ?? ($form['operator'] ?? ''))),
-            'detected' => trim((string)($selectedFlight['carrier_name'] ?? ($selectedFlight['marketing_carrier_name'] ?? ''))),
+            'detected' => trim((string)(
+                $selectedFlight['carrier_name']
+                ?? $selectedFlight['marketing_carrier_name']
+                ?? ''
+            )),
         ];
         [$score, $hasMismatch] = $this->applyScore($score, $hasMismatch, $carrierStatus, 10, 10);
 
@@ -122,7 +148,20 @@ final class AirOperationalEvidenceService
         ];
         [$score, $hasMismatch] = $this->applyScore($score, $hasMismatch, $timeStatus, 8, 0);
 
-        $delayMinutes = $this->minutesDifference($scheduledArrival, $actualArrival !== '' ? $actualArrival : $estimatedArrival);
+        $actualArrivalDelay = is_numeric($selectedFlight['arrival_delay_minutes'] ?? null)
+            ? (int)$selectedFlight['arrival_delay_minutes']
+            : $this->minutesDifference(
+                (string)($selectedFlight['scheduled_arrival_utc'] ?? ''),
+                (string)($selectedFlight['actual_arrival_utc'] ?? ''),
+            );
+        $estimatedArrivalDelay = is_numeric($selectedFlight['estimated_arrival_delay_minutes'] ?? null)
+            ? (int)$selectedFlight['estimated_arrival_delay_minutes']
+            : $this->minutesDifference(
+                (string)($selectedFlight['scheduled_arrival_utc'] ?? ''),
+                (string)($selectedFlight['estimated_arrival_utc'] ?? ''),
+            );
+        $delayMinutes = $actualArrivalDelay ?? $estimatedArrivalDelay;
+        $delayBasis = $actualArrivalDelay !== null ? 'actual' : ($estimatedArrivalDelay !== null ? 'estimated' : null);
         $confidence = $hasMismatch ? 'low' : ($score >= 80 ? 'high' : ($score >= 55 ? 'medium' : 'low'));
         $needsManualReview = $hasMismatch || $score < 55 ? 'yes' : 'no';
 
@@ -136,7 +175,7 @@ final class AirOperationalEvidenceService
         if ($delayMinutes !== null && $delayMinutes > 0) {
             $summaryParts[] = 'Ankomstafvigelse ca. ' . $delayMinutes . ' min';
         }
-        if ($cancelled) {
+        if ($cancelled === true) {
             $summaryParts[] = 'Status peger paa cancellation';
         }
         $summaryParts[] = $needsManualReview === 'yes'
@@ -153,8 +192,17 @@ final class AirOperationalEvidenceService
             'estimated_arrival_local' => $estimatedArrival,
             'actual_departure_local' => $actualDeparture,
             'actual_arrival_local' => $actualArrival,
-            'cancelled' => $cancelled ? 'yes' : 'no',
+            'cancelled' => $cancelled === null ? 'unknown' : ($cancelled ? 'yes' : 'no'),
             'delay_minutes_estimated' => $delayMinutes,
+            'arrival_delay_minutes' => $actualArrivalDelay,
+            'estimated_arrival_delay_minutes' => $estimatedArrivalDelay,
+            'arrival_delay_basis' => $delayBasis,
+            'departure_delay_minutes' => is_numeric($selectedFlight['departure_delay_minutes'] ?? null)
+                ? (int)$selectedFlight['departure_delay_minutes']
+                : null,
+            'estimated_departure_delay_minutes' => is_numeric(
+                $selectedFlight['estimated_departure_delay_minutes'] ?? null,
+            ) ? (int)$selectedFlight['estimated_departure_delay_minutes'] : null,
             'match_checks' => $checks,
             'evidence_score' => max(0, min(100, $score)),
             'confidence' => $confidence,
@@ -174,6 +222,7 @@ final class AirOperationalEvidenceService
         ];
     }
 
+    /** Return the evidence confidence seed for a provider class. */
     private function baseScoreForSource(string $source): int
     {
         return match ($source) {
@@ -185,8 +234,14 @@ final class AirOperationalEvidenceService
         };
     }
 
-    private function applyScore(int $score, bool $hasMismatch, string $status, int $matchPoints, int $mismatchPenalty): array
-    {
+    /** Apply one identity check to the evidence score. */
+    private function applyScore(
+        int $score,
+        bool $hasMismatch,
+        string $status,
+        int $matchPoints,
+        int $mismatchPenalty,
+    ): array {
         if ($status === 'match') {
             $score += $matchPoints;
         } elseif ($status === 'partial') {
@@ -199,13 +254,16 @@ final class AirOperationalEvidenceService
         return [$score, $hasMismatch];
     }
 
+    /** Normalize carrier text for conservative comparison. */
     private function normalizeCompareText(string $value): string
     {
         $value = trim(mb_strtolower($value));
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
         return preg_replace('/[^a-z0-9 ]/iu', '', $value) ?? $value;
     }
 
+    /** Normalize a flow date for evidence matching. */
     private function normalizeDate(string $value): string
     {
         $value = trim($value);
@@ -222,6 +280,7 @@ final class AirOperationalEvidenceService
         return $value;
     }
 
+    /** Normalize a flow wall-clock time for evidence matching. */
     private function normalizeTime(string $value): string
     {
         $value = trim($value);
@@ -231,9 +290,11 @@ final class AirOperationalEvidenceService
         if (str_contains($value, 'T')) {
             $value = substr($value, strpos($value, 'T') + 1);
         }
+
         return preg_match('/^\d{2}:\d{2}/', $value, $m) ? $m[0] : $value;
     }
 
+    /** Calculate minutes only for supplied normalized timestamps. */
     private function minutesDifference(string $scheduled, string $observed): ?int
     {
         if ($scheduled === '' || $observed === '') {
@@ -248,18 +309,22 @@ final class AirOperationalEvidenceService
         return (int)round(($observedTs - $scheduledTs) / 60);
     }
 
+    /** Detect an explicit cancellation status without treating no-data as cancellation. */
     private function statusLooksCancelled(string $status): bool
     {
         $status = strtolower(trim($status));
+
         return $status !== '' && (str_contains($status, 'cancel') || str_contains($status, 'annul'));
     }
 
+    /** Preserve unknown provider boolean values as null. */
     private function toBool(mixed $value): ?bool
     {
         if (is_bool($value)) {
             return $value;
         }
         $normalized = strtolower(trim((string)$value));
+
         return match ($normalized) {
             '1', 'true', 'yes', 'ja', 'y' => true,
             '0', 'false', 'no', 'nej', 'n' => false,

@@ -106,6 +106,14 @@ return [
             'path' => CACHE,
             'url' => env('CACHE_DEFAULT_URL', null),
         ],
+        'air_flights' => [
+            'className' => FileEngine::class,
+            'prefix' => 'air_flights_',
+            'path' => CACHE . 'air' . DS,
+            'serialize' => true,
+            // The envelope carries the status-specific expiry; this is only the storage ceiling.
+            'duration' => '+2 days',
+        ],
 
         /*
          * Configure the cache used for general framework caching.
@@ -214,10 +222,30 @@ return [
             'apiKey' => env('AERODATABOX_API_KEY', ''),
             'apiHost' => env('AERODATABOX_API_HOST', 'aerodatabox.p.rapidapi.com'),
             'baseUrl' => env('AERODATABOX_BASE_URL', 'https://aerodatabox.p.rapidapi.com'),
+            'connectTimeoutSeconds' => max(1, (int)env('AIR_PROVIDER_CONNECT_TIMEOUT_SECONDS', 2)),
+            'timeoutSeconds' => max(1, (int)env('AIR_PROVIDER_TIMEOUT_SECONDS', 5)),
+            'minRequestIntervalMs' => max(0, min(5000, (int)env('AIR_PROVIDER_MIN_REQUEST_INTERVAL_MS', 1100))),
+        ],
+        'airLookup' => [
+            'budgetSeconds' => max(1, (int)env('AIR_LOOKUP_BUDGET_SECONDS', 8)),
+            'activeCacheSeconds' => max(15, (int)env('AIR_ACTIVE_CACHE_SECONDS', 60)),
+            'futureCacheSeconds' => max(60, (int)env('AIR_FUTURE_CACHE_SECONDS', 900)),
+            'historicalCacheSeconds' => max(60, (int)env('AIR_HISTORICAL_CACHE_SECONDS', 86400)),
+            'noDataCacheSeconds' => max(15, (int)env('AIR_NO_DATA_CACHE_SECONDS', 60)),
+        ],
+        'airAirportSearch' => [
+            // Air TC6 autocomplete: prefer AeroDataBox when available, but keep local nodes as cached fallback.
+            'useAeroDataBoxFallback' => filter_var(env('AIR_AIRPORT_SEARCH_USE_AERODATABOX_FALLBACK', env('USE_LIVE_APIS', false)), FILTER_VALIDATE_BOOLEAN),
+            'preferAeroDataBox' => filter_var(env('AIR_AIRPORT_SEARCH_PREFER_AERODATABOX', true), FILTER_VALIDATE_BOOLEAN),
+            'fallbackMinChars' => (int)env('AIR_AIRPORT_SEARCH_FALLBACK_MIN_CHARS', 3),
+            'fallbackMinLocalResults' => (int)env('AIR_AIRPORT_SEARCH_FALLBACK_MIN_LOCAL_RESULTS', 2),
+            'cacheSeconds' => (int)env('AIR_AIRPORT_SEARCH_CACHE_SECONDS', 21600),
         ],
         'aviationstack' => [
             'apiKey' => env('AVIATIONSTACK_API_KEY', ''),
             'baseUrl' => env('AVIATIONSTACK_BASE_URL', 'https://api.aviationstack.com/v1/flights'),
+            'connectTimeoutSeconds' => max(1, (int)env('AIR_PROVIDER_CONNECT_TIMEOUT_SECONDS', 2)),
+            'timeoutSeconds' => max(1, (int)env('AIR_PROVIDER_TIMEOUT_SECONDS', 5)),
         ],
         // Local/remote RNE mock base can be set via RNE_BASE_URL env, used by RneClient
     ],
@@ -250,6 +278,11 @@ return [
         'landingPath' => env('PUBLIC_SITE_LANDING_PATH', '/passenger/start'),
         'hideTopNav' => filter_var(env('PUBLIC_SITE_HIDE_TOP_NAV', true), FILTER_VALIDATE_BOOLEAN),
         'hidePassengerNav' => filter_var(env('PUBLIC_SITE_HIDE_PASSENGER_NAV', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'AdminAuth' => [
+        // Enabled by default and fail-closed when no strong credential is configured.
+        'enabled' => filter_var(env('ADMIN_AUTH_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'HostRouting' => [

@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 
 use App\Controller\AppController;
 use App\Service\AdminDeskService;
+use App\Service\FlightSearchService;
 use App\Service\Rail\RailTransportServiceClient;
 use App\Service\Rail\RailTransportServiceManager;
 use Cake\Http\Response;
@@ -21,6 +22,7 @@ final class DeskController extends AppController
         $search = trim((string)$this->request->getQuery('q', ''));
         $inbox = $service->buildInbox($session, $filter, $search);
         $railTransport = $this->buildRailTransportStatus();
+        $airStatus = (new FlightSearchService())->health();
 
         $this->set([
             'role' => $role,
@@ -31,6 +33,7 @@ final class DeskController extends AppController
             'authUser' => $service->getAuthenticatedUser($session),
             'roleLabel' => $service->getRoleLabel($session),
             'railTransport' => $railTransport,
+            'airStatus' => $airStatus,
         ]);
     }
 

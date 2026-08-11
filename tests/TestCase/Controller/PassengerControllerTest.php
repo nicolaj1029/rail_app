@@ -3,7 +3,10 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Controller;
 
+use App\Service\AdminDeskService;
 use Cake\Core\Configure;
+use Cake\Http\Session;
+use Cake\ORM\TableRegistry;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
 
@@ -482,5 +485,82 @@ class PassengerControllerTest extends TestCase
         $this->assertStringNotContainsString('Fly', $body);
         $this->assertStringNotContainsString('Faerge', $body);
         $this->assertStringNotContainsString('Bus', $body);
+    }
+
+    public function testCompletedAirPassengerCasePersistsEvidenceAndReachesSharedAdminDesk(): void
+    {
+        $ref = 'air-launch-' . bin2hex(random_bytes(6));
+        $cases = TableRegistry::getTableLocator()->get('Cases');
+        $this->session([
+            'passenger.authenticated' => true,
+            'passenger.auth_user' => 'passenger',
+            'passenger.auth_label' => 'Launch test',
+            'flow.flags' => [
+                'travel_state' => 'completed',
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'entry_variant' => 'air_short',
+            ],
+            'flow.form' => [
+                'transport_mode' => 'air',
+                'gating_mode' => 'air',
+                'incident_main' => 'delay',
+                'dep_station' => 'CPH',
+                'arr_station' => 'LHR',
+                'dep_date' => '2026-08-10',
+                'firstName' => 'AIR',
+                'lastName' => 'Launch Test',
+                'operator' => 'British Airways',
+                'flight_number' => 'BA823',
+                'arrival_delay_minutes' => -12,
+            ],
+            'flow.meta' => [
+                'air_case_ref' => $ref,
+                'air_case_created_at' => '2026-08-11T12:00:00Z',
+                'air_selected_flight' => [
+                    'flight_number' => 'BA823',
+                    'marketing_flight_number' => 'BA823',
+                    'operating_flight_number' => 'BA823',
+                    'departure_airport_iata' => 'CPH',
+                    'arrival_airport_iata' => 'LHR',
+                    'operating_carrier_name' => 'British Airways',
+                    'provider' => 'aerodatabox',
+                    'operational_data_verified' => true,
+                ],
+                'air_operational_evidence' => [
+                    'source' => 'aerodatabox',
+                    'status' => 'arrived',
+                    'scheduled_arrival_utc' => '2026-08-10T07:25:00Z',
+                    'actual_arrival_utc' => '2026-08-10T07:13:00Z',
+                    'arrival_delay_minutes' => -12,
+                    'arrival_delay_basis' => 'actual',
+                    'operational_data_verified' => true,
+                    'retrieved_at' => '2026-08-11T11:14:42Z',
+                ],
+            ],
+            'flow.compute' => ['delayMinEU' => -12, 'euOnly' => true],
+            'flow.incident' => ['main' => 'delay'],
+        ]);
+
+        try {
+            $this->get('/passenger/case?ref=' . rawurlencode($ref));
+            $this->assertResponseOk();
+            $case = $cases->find()->where(['ref' => $ref])->firstOrFail();
+            $snapshot = json_decode((string)$case->get('flow_snapshot'), true);
+
+            $this->assertSame('air', $snapshot['form']['transport_mode']);
+            $this->assertSame('BA823', $snapshot['meta']['air_selected_flight']['marketing_flight_number']);
+            $this->assertSame('BA823', $snapshot['meta']['air_selected_flight']['operating_flight_number']);
+            $this->assertSame('aerodatabox', $snapshot['meta']['air_operational_evidence']['source']);
+            $this->assertSame('actual', $snapshot['meta']['air_operational_evidence']['arrival_delay_basis']);
+
+            $deskItem = (new AdminDeskService())->loadDeskItem(new Session(), 'case', (string)$case->get('id'));
+            $this->assertNotNull($deskItem);
+            $this->assertSame('air', $deskItem['item']['meta']['transport_mode']);
+            $this->assertTrue($deskItem['ops_review']['available']);
+            $this->assertSame('AeroDataBox', $deskItem['ops_review']['source_label']);
+        } finally {
+            $cases->deleteAll(['ref' => $ref]);
+        }
     }
 }

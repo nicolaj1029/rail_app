@@ -8,6 +8,7 @@
 /** @var string $filter */
 /** @var string $search */
 /** @var array<string,mixed> $railTransport */
+/** @var array<string,mixed> $airStatus */
 $items = (array)($inbox['items'] ?? []);
 $stats = (array)($inbox['stats'] ?? []);
 $availableFilters = (array)($inbox['available_filters'] ?? []);
@@ -17,6 +18,15 @@ $railConfig = (array)($railTransport['config'] ?? []);
 $railUsesLiveApis = !empty($railConfig['use_live']);
 $railDefaultProvider = strtolower((string)($railConfig['default_provider'] ?? ''));
 $railHafasLive = !empty($railTransport['ok']) && $railUsesLiveApis && $railDefaultProvider === 'transport_rest';
+$airStatus = (array)($airStatus ?? []);
+$airLastOutcome = (array)($airStatus['last_provider_outcome'] ?? []);
+$aeroDataBoxConfigured = false;
+foreach ((array)($airStatus['providers'] ?? []) as $airProvider) {
+    if (($airProvider['provider'] ?? '') === 'aerodatabox') {
+        $aeroDataBoxConfigured = !empty($airProvider['configured']);
+        break;
+    }
+}
 ?>
 <style>
   .desk-page { max-width: 1280px; margin: 0 auto; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -115,6 +125,34 @@ $railHafasLive = !empty($railTransport['ok']) && $railUsesLiveApis && $railDefau
         </div>
       </div>
       <div class="desk-note">
+        <strong>AIR provider</strong><br>
+        <div class="desk-toolbar" style="margin-top:10px;">
+          <span class="desk-badge <?= !empty($airStatus['live_apis_enabled']) ? 'desk-risk-low' : 'desk-risk-medium' ?>">
+            Live AIR APIs: <?= !empty($airStatus['live_apis_enabled']) ? 'ON' : 'OFF' ?>
+          </span>
+          <span class="desk-badge <?= $aeroDataBoxConfigured ? 'desk-risk-low' : 'desk-risk-high' ?>">
+            AeroDataBox configured: <?= $aeroDataBoxConfigured ? 'YES' : 'NO' ?>
+          </span>
+          <span class="desk-badge <?= !empty($airStatus['live_provider_ready']) ? 'desk-risk-low' : 'desk-risk-medium' ?>">
+            Provider verified: <?= !empty($airStatus['live_provider_ready']) ? 'YES' : 'NO' ?>
+          </span>
+          <span class="desk-badge <?= !empty($airStatus['cache_configured']) ? 'desk-risk-low' : 'desk-risk-high' ?>">
+            AIR cache: <?= !empty($airStatus['cache_configured']) ? 'READY' : 'UNAVAILABLE' ?>
+          </span>
+          <a class="desk-button" href="<?= h($this->Url->build('/api/air/health')) ?>" target="_blank" rel="noopener">/api/air/health</a>
+        </div>
+        <?php if ($airLastOutcome !== []): ?>
+          <div class="desk-muted" style="margin-top:10px;">
+            Last outcome: <?= h((string)($airLastOutcome['provider'] ?? '-')) ?> /
+            <?= h((string)($airLastOutcome['status'] ?? '-')) ?> /
+            <?= h((string)($airLastOutcome['latency_ms'] ?? '0')) ?> ms /
+            <?= h((string)($airLastOutcome['checked_at'] ?? '-')) ?>
+          </div>
+        <?php else: ?>
+          <div class="desk-muted" style="margin-top:10px;">No live AIR provider lookup has been verified in this cache yet.</div>
+        <?php endif; ?>
+      </div>
+      <div class="desk-note">
         <strong>Rail transport service</strong><br>
         <?= h((string)($railTransport['message'] ?? 'Ingen status')) ?><br>
         <?php if (!empty($railTransport['configured'])): ?>
@@ -189,6 +227,9 @@ $railHafasLive = !empty($railTransport['ok']) && $railUsesLiveApis && $railDefau
               </div>
               <div class="desk-actions">
                 <span class="desk-badge"><?= h((string)($item['ops_status_label'] ?? '')) ?></span>
+                <?php if (in_array(($item['meta']['transport_mode'] ?? ''), ['air', 'rail', 'ferry'], true)): ?>
+                  <span class="desk-badge"><?= h(strtoupper((string)$item['meta']['transport_mode'])) ?></span>
+                <?php endif; ?>
                 <?php if (!empty($risk['evaluated'])): ?>
                   <span class="desk-badge <?= h((string)($risk['badge_class'] ?? 'desk-risk-low')) ?>"><?= h((string)($risk['level_label'] ?? 'Low risk')) ?></span>
                 <?php endif; ?>

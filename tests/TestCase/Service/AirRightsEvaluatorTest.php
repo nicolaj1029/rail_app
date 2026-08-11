@@ -68,6 +68,29 @@ final class AirRightsEvaluatorTest extends TestCase
         $this->assertSame('self_transfer_or_unprotected_connection', $result['compensation_block_reason']);
     }
 
+    public function testProtectedMissedConnectionDuringDelayActivatesCareAndRemedy(): void
+    {
+        $result = (new AirRightsEvaluator())->evaluate([
+            'incident_type' => 'delay',
+            'travel_state' => 'completed',
+            'protected_connection_missed' => true,
+            'delay_departure_band' => 'threshold_to_under_5h',
+            'delay_minutes_departure' => 240,
+            'arrival_delay_minutes' => 210,
+            'extraordinary_circumstances' => false,
+        ], [
+            'regulation_applies' => true,
+            'air_delay_threshold_hours' => 4,
+        ], [
+            'air_connection_type' => 'protected_connection',
+        ]);
+
+        $this->assertTrue($result['gate_air_care']);
+        $this->assertTrue($result['gate_air_reroute_refund']);
+        $this->assertTrue($result['gate_air_compensation']);
+        $this->assertSame('eligible', $result['article7_eligibility_status']);
+    }
+
     public function testOngoingDelayFivePlusActivatesCareAndRefundWithoutCompletedCompensationYet(): void
     {
         $result = (new AirRightsEvaluator())->evaluate([
