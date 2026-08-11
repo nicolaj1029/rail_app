@@ -60,11 +60,18 @@ class TransportNodesController extends AppController
                 ->withHeader('Server-Timing', sprintf('airport;dur=%.3f', (hrtime(true) - $startedAt) / 1_000_000));
         }
 
-        $this->set([
+        $payload = [
             'success' => true,
             'data' => [
                 'nodes' => $nodes,
             ],
-        ]);
+        ];
+        if ($mode === 'air') {
+            return $this->response
+                ->withType('application/json')
+                ->withStringBody((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+
+        $this->set($payload);
     }
 }

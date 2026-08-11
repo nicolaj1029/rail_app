@@ -8,10 +8,13 @@ use RuntimeException;
 final class TransportNodeImportService
 {
     private string $targetPath;
+    private string $searchOutputDir;
 
-    public function __construct(?string $targetPath = null)
+    public function __construct(?string $targetPath = null, ?string $searchOutputDir = null)
     {
         $this->targetPath = $targetPath ?: TransportDataPaths::transportNodes();
+        $this->searchOutputDir = $searchOutputDir
+            ?: dirname($this->targetPath) . DIRECTORY_SEPARATOR . 'search';
     }
 
     /**
@@ -85,7 +88,7 @@ final class TransportNodeImportService
             throw new RuntimeException('could not encode target JSON');
         }
         file_put_contents($this->targetPath, $json . PHP_EOL);
-        (new TransportNodeSearchIndexBuilder())->build($this->targetPath, TransportDataPaths::nodesSearchDir());
+        (new TransportNodeSearchIndexBuilder())->build($this->targetPath, $this->searchOutputDir);
 
         return [
             'mode' => $mode,

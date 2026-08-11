@@ -3,23 +3,37 @@ declare(strict_types=1);
 
 namespace App\Test\TestCase\Service;
 
+use App\Service\TransportDataPaths;
 use App\Service\TransportNodeImportService;
 use Cake\TestSuite\TestCase;
 
 final class TransportNodeImportServiceTest extends TestCase
 {
     private string $target;
+    private string $searchOutputDir;
+    private string $canonicalAirHash;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->target = TMP . 'transport_nodes_import_test_' . uniqid('', true) . '.json';
+        $this->searchOutputDir = TMP . 'transport_nodes_search_test_' . uniqid('', true);
+        $this->canonicalAirHash = hash_file('sha256', TransportDataPaths::transportNodesSearch('air')) ?: '';
         file_put_contents($this->target, json_encode([], JSON_PRETTY_PRINT));
     }
 
     protected function tearDown(): void
     {
+        $this->assertSame(
+            $this->canonicalAirHash,
+            hash_file('sha256', TransportDataPaths::transportNodesSearch('air')) ?: '',
+            'A custom import target must never overwrite the canonical airport search index.'
+        );
         @unlink($this->target);
+        foreach (glob($this->searchOutputDir . DIRECTORY_SEPARATOR . '*.json') ?: [] as $generatedIndex) {
+            @unlink($generatedIndex);
+        }
+        @rmdir($this->searchOutputDir);
         parent::tearDown();
     }
 
@@ -38,7 +52,7 @@ final class TransportNodeImportServiceTest extends TestCase
             ],
         ], JSON_PRETTY_PRINT));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('air', $source, ['format' => 'json', 'replace' => true, 'source_label' => 'testjson']);
 
         $this->assertSame(1, $result['added']);
@@ -57,7 +71,7 @@ final class TransportNodeImportServiceTest extends TestCase
             'Test Bus Terminal,DE,TBT,53.55,10.00,Hamburg,terminal',
         ]));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('bus', $source, [
             'format' => 'csv',
             'replace' => true,
@@ -82,7 +96,7 @@ final class TransportNodeImportServiceTest extends TestCase
             'Small Airport,DK,STA,55.0,12.0,Town,small_airport',
         ]));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('air', $source, [
             'format' => 'csv',
             'replace' => true,
@@ -116,7 +130,7 @@ final class TransportNodeImportServiceTest extends TestCase
             ',DK,AAL,Aalborg,Aalborg,,AI,--3-----,--34-6--,,5703N 00955E,',
         ]));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('ferry', $source, [
             'format' => 'csv',
             'replace' => true,
@@ -165,7 +179,7 @@ final class TransportNodeImportServiceTest extends TestCase
             ],
         ], JSON_PRETTY_PRINT));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('ferry', $source, [
             'format' => 'json',
             'replace' => true,
@@ -206,7 +220,7 @@ final class TransportNodeImportServiceTest extends TestCase
             ],
         ], JSON_PRETTY_PRINT));
 
-        $service = new TransportNodeImportService($this->target);
+        $service = new TransportNodeImportService($this->target, $this->searchOutputDir);
         $result = $service->import('bus', $source, [
             'format' => 'json',
             'replace' => true,

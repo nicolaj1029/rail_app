@@ -25,6 +25,9 @@ const stockholmNodes = [
   },
 ];
 
+const configuredBase = process.env.RAIL_APP_BASE_URL?.replace(/\/+$/, "");
+const airFlowUrl = configuredBase ? `${configuredBase}/flow/air/ongoing` : "/flow/air/ongoing";
+
 test.describe("AIR airport autocomplete", () => {
   test("debounces normal typing, renders quickly, caches, and supports the keyboard", async ({ page }) => {
     let airportRequests = 0;
@@ -34,7 +37,7 @@ test.describe("AIR airport autocomplete", () => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { nodes: stockholmNodes } }) });
     });
 
-    await page.goto("/flow/air/ongoing");
+    await page.goto(airFlowUrl);
     const input = page.locator('input[name="dep_station"]').first();
     await expect(input).toBeVisible();
     await input.evaluate((element: HTMLInputElement) => { element.value = ""; });
@@ -87,7 +90,7 @@ test.describe("AIR airport autocomplete", () => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { nodes } }) });
     });
 
-    await page.goto("/flow/air/ongoing");
+    await page.goto(airFlowUrl);
     const input = page.locator('input[name="dep_station"]').first();
     await input.evaluate((element: HTMLInputElement) => { element.value = ""; });
     await input.fill("St");

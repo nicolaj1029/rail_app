@@ -768,9 +768,11 @@ final class TransportNodeSearchService
         }
 
         $firstChar = $this->firstSignificantChar($path);
-        $rows = $firstChar === '['
-            ? $this->loadRowsFromStream($path, $mode)
-            : $this->loadRowsFromDecodedJson($path, $mode);
+        $rows = $mode === 'air'
+            ? $this->loadRowsFromDecodedJson($path, $mode)
+            : ($firstChar === '['
+                ? $this->loadRowsFromStream($path, $mode)
+                : $this->loadRowsFromDecodedJson($path, $mode));
 
         if ($mode === 'air') {
             $rows = array_values(array_filter($rows, fn(array $row): bool => $this->isAllowedAirFrontendRow($row)));

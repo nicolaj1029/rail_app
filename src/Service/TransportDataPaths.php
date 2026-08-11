@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Cake\Log\Log;
+
 final class TransportDataPaths
 {
     public static function dataDir(): string
@@ -45,10 +47,18 @@ final class TransportDataPaths
     {
         $mode = strtolower(trim($mode));
 
-        return self::resolve(
+        $path = self::resolve(
             self::nodesSearchDir() . DIRECTORY_SEPARATOR . $mode . '.json',
             self::dataDir() . DIRECTORY_SEPARATOR . 'transport_nodes_search_' . $mode . '.json'
         );
+        if ($mode === 'air') {
+            $integrityError = AirportSearchDatasetIntegrity::preflightFile($path);
+            if ($integrityError !== null) {
+                Log::error('Airport search dataset integrity failure: ' . $integrityError);
+            }
+        }
+
+        return $path;
     }
 
     public static function busTerminalSeed(): string

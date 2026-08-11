@@ -139,6 +139,16 @@ De er kun skabeloner. De skal erstattes af rigtige eksportfiler før import.
 - baseline geografi: `OSM`
 - service metadata: `GTFS / NeTEx / National Access Points`
 
+## Airport cache prewarm
+
+Efter deployment eller rydning af application cache bør det komplette lokale airport-indeks prewarmes, før passagertrafik åbnes:
+
+```powershell
+php bin/cake.php airport_search_prewarm
+```
+
+Kommandoen fejler, hvis canonical sentinel-søgninger mangler, og varmer både det forberedte row-cache og almindelige metro-queries uden at kalde en ekstern flight-provider.
+
 ## Bemærkning
 
 Denne importer er bevidst generisk og lokal-first. Den downloader ikke selv data. Formålet er at kunne:

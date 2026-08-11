@@ -10,7 +10,7 @@ final class TransportNodeSearchIndexBuilder
     /**
      * @return array<string,int>
      */
-    public function build(?string $sourcePath = null, ?string $outputDir = null): array
+    public function build(?string $sourcePath = null, ?string $outputDir = null, ?bool $enforceAirIntegrity = null): array
     {
         $sourcePath = $sourcePath ?? TransportDataPaths::transportNodes();
         $outputDir = $outputDir ?? TransportDataPaths::nodesSearchDir();
@@ -49,7 +49,7 @@ final class TransportNodeSearchIndexBuilder
                 continue;
             }
 
-            $grouped[$mode][] = [
+            $indexRow = [
                 'id' => (string)($row['id'] ?? ''),
                 'mode' => $mode,
                 'name' => $name,
@@ -63,25 +63,42 @@ final class TransportNodeSearchIndexBuilder
                 'parent_name' => isset($row['parent_name']) ? (string)$row['parent_name'] : null,
                 'city' => isset($row['city']) ? (string)$row['city'] : null,
                 'source' => isset($row['source']) ? (string)$row['source'] : null,
-                'iata_code' => isset($row['iata_code']) ? (string)$row['iata_code'] : null,
-                'icao_code' => isset($row['icao_code']) ? (string)$row['icao_code'] : null,
-                'timezone' => isset($row['timezone']) ? (string)$row['timezone'] : null,
-                'airport_type' => isset($row['airport_type']) ? (string)$row['airport_type'] : null,
-                'is_civil' => array_key_exists('is_civil', $row) ? (bool)$row['is_civil'] : null,
-                'is_military' => array_key_exists('is_military', $row) ? (bool)$row['is_military'] : null,
-                'is_joint_use' => array_key_exists('is_joint_use', $row) ? (bool)$row['is_joint_use'] : null,
-                'is_cargo_only' => array_key_exists('is_cargo_only', $row) ? (bool)$row['is_cargo_only'] : null,
-                'has_scheduled_passenger_service' => array_key_exists('has_scheduled_passenger_service', $row) ? (bool)$row['has_scheduled_passenger_service'] : null,
-                'is_private_use' => array_key_exists('is_private_use', $row) ? (bool)$row['is_private_use'] : null,
-                'is_public_use' => array_key_exists('is_public_use', $row) ? (bool)$row['is_public_use'] : null,
-                'is_active' => array_key_exists('is_active', $row) ? (bool)$row['is_active'] : null,
-                'is_closed' => array_key_exists('is_closed', $row) ? (bool)$row['is_closed'] : null,
-                'allow_in_frontend_search' => array_key_exists('allow_in_frontend_search', $row) ? (bool)$row['allow_in_frontend_search'] : null,
-                'allow_in_claim_flow' => array_key_exists('allow_in_claim_flow', $row) ? (bool)$row['allow_in_claim_flow'] : null,
-                'allow_as_alternative_airport' => array_key_exists('allow_as_alternative_airport', $row) ? (bool)$row['allow_as_alternative_airport'] : null,
-                'lookup_priority' => isset($row['lookup_priority']) ? (int)$row['lookup_priority'] : null,
-                'needs_manual_review' => array_key_exists('needs_manual_review', $row) ? (bool)$row['needs_manual_review'] : null,
             ];
+
+            foreach (['iata_code', 'icao_code', 'timezone', 'airport_type'] as $key) {
+                if (isset($row[$key])) {
+                    $indexRow[$key] = (string)$row[$key];
+                }
+            }
+            foreach ([
+                'is_civil',
+                'is_military',
+                'is_joint_use',
+                'is_cargo_only',
+                'has_scheduled_passenger_service',
+                'is_private_use',
+                'is_public_use',
+                'is_active',
+                'is_closed',
+                'allow_in_frontend_search',
+                'allow_in_claim_flow',
+                'allow_as_alternative_airport',
+                'needs_manual_review',
+            ] as $key) {
+                if (array_key_exists($key, $row) && $row[$key] !== null) {
+                    $indexRow[$key] = (bool)$row[$key];
+                }
+            }
+            if (isset($row['lookup_priority'])) {
+                $indexRow['lookup_priority'] = (int)$row['lookup_priority'];
+            }
+
+            $grouped[$mode][] = $indexRow;
+        }
+
+        $enforceAirIntegrity ??= $this->samePath($outputDir, TransportDataPaths::nodesSearchDir());
+        if ($enforceAirIntegrity) {
+            AirportSearchDatasetIntegrity::assertValid($grouped['air'], 'generated airport search index');
         }
 
         $counts = [];
@@ -99,5 +116,12 @@ final class TransportNodeSearchIndexBuilder
         }
 
         return $counts;
+    }
+
+    private function samePath(string $left, string $right): bool
+    {
+        $normalize = static fn(string $path): string => strtolower(rtrim(str_replace('\\', '/', $path), '/'));
+
+        return $normalize($left) === $normalize($right);
     }
 }

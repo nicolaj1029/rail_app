@@ -22383,7 +22383,10 @@
         "id": "2155",
         "mode": "air",
         "name": "Brussels Airport",
-        "aliases": [],
+        "aliases": [
+            "Bruxelles",
+            "Brussel"
+        ],
         "code": "BRU",
         "country": "BE",
         "in_eu": true,
@@ -22398,7 +22401,10 @@
         "id": "2157",
         "mode": "air",
         "name": "Brussels South Charleroi Airport",
-        "aliases": [],
+        "aliases": [
+            "Bruxelles",
+            "Brussel"
+        ],
         "code": "CRL",
         "country": "BE",
         "in_eu": true,
