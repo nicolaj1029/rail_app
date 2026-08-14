@@ -1,0 +1,7 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} ^(.*/)webroot/airclaim(?:/.*)?$ [NC]
+    RewriteRule ^ %1fly-ny [R=302,L,NE]
+    RewriteCond %{REQUEST_URI} ^(.*/)airclaim(?:/.*)?$ [NC]
+    RewriteRule ^ %1fly-ny [R=302,L,NE]
+</IfModule>

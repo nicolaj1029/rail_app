@@ -8,6 +8,10 @@
     RewriteEngine on
     RewriteCond %{HTTP:Authorization} ^(.+)$
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+    RewriteCond %{REQUEST_URI} ^(.*/)webroot/airclaim(?:/.*)?$ [NC]
+    RewriteRule ^ %1fly-ny [R=302,L,NE]
+    RewriteCond %{REQUEST_URI} ^(.*/)airclaim(?:/.*)?$ [NC]
+    RewriteRule ^ %1fly-ny [R=302,L,NE]
     RewriteRule    ^(\.well-known/.*)$ $1 [L]
     RewriteRule    ^$    webroot/    [L]
     RewriteRule    (.*) webroot/$1    [L]

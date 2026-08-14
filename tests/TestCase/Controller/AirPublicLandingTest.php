@@ -34,6 +34,14 @@ final class AirPublicLandingTest extends TestCase
         $this->assertStringContainsString('/fly-ny', $this->_response->getHeaderLine('Location'));
     }
 
+    public function testLegacyAirclaimRedirectsToFlyNy(): void
+    {
+        $this->get('/airclaim');
+
+        $this->assertResponseCode(302);
+        $this->assertStringContainsString('/fly-ny', $this->_response->getHeaderLine('Location'));
+    }
+
     public function testFlyNyCompletedEntryPersistsAirEvidenceIntoSharedAdmin(): void
     {
         $this->get('/fly-ny');

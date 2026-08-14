@@ -73,6 +73,8 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/fly/*', ['controller' => 'AirLanding', 'action' => 'index']);
         $builder->connect('/fly-ny', ['controller' => 'AirLanding', 'action' => 'modern']);
         $builder->connect('/fly-ny/*', ['controller' => 'AirLanding', 'action' => 'modern']);
+        $builder->connect('/airclaim', ['controller' => 'AirLanding', 'action' => 'index']);
+        $builder->connect('/airclaim/*', ['controller' => 'AirLanding', 'action' => 'index']);
         $builder->connect('/passenger', ['controller' => 'Passenger', 'action' => 'start']);
         $builder->connect('/passenger/start', ['controller' => 'Passenger', 'action' => 'start']);
         $builder->connect('/passenger/case', ['controller' => 'Passenger', 'action' => 'case']);
