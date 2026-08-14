@@ -8,6 +8,7 @@
  * Redistributions of files must retain the above copyright notice.
  */
 
+use App\View\PageContentTranslator;
 use Cake\Core\Configure;
 
 $cakeDescription = 'CakePHP: the rapid development php framework';
@@ -41,7 +42,14 @@ $showPublicBackLink = $publicSiteEnabled
     <?= $this->fetch('css') ?>
     <?= $this->fetch('script') ?>
 </head>
-<?php $bodyClass = !empty($flowPreview) ? 'flow-preview' : ''; ?>
+<?php
+$bodyClass = !empty($flowPreview) ? 'flow-preview' : '';
+$pageTranslations = isset($pageTranslations) && is_array($pageTranslations) ? $pageTranslations : [];
+$translatedContent = $this->fetch('content');
+if ($pageTranslations !== []) {
+    $translatedContent = PageContentTranslator::translate($translatedContent, $pageTranslations);
+}
+?>
 <body<?= $bodyClass !== '' ? ' class="' . h($bodyClass) . '"' : '' ?>>
     <?php if (!$hideTopNav): ?>
         <nav class="top-nav">
@@ -80,11 +88,11 @@ $showPublicBackLink = $publicSiteEnabled
                 <div class="flow-layout">
                     <?= $this->element('flow_stepper', ['flowSteps' => $flowSteps, 'flowCurrentAction' => $flowCurrentAction ?? '']) ?>
                     <div class="flow-content">
-                        <?= $this->fetch('content') ?>
+                        <?= $translatedContent ?>
                     </div>
                 </div>
             <?php else: ?>
-                <?= $this->fetch('content') ?>
+                <?= $translatedContent ?>
             <?php endif; ?>
         </div>
     </main>

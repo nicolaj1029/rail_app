@@ -3,6 +3,7 @@
  * Minimal full-bleed landing layout for train marketing variants.
  */
 
+use App\View\PageContentTranslator;
 use Cake\Core\Configure;
 
 $cakeDescription = 'CakePHP: the rapid development php framework';
@@ -54,7 +55,7 @@ $loadDisplayFonts = str_starts_with($currentPath, '/tog');
     $pageTranslations = isset($pageTranslations) && is_array($pageTranslations) ? $pageTranslations : [];
     $translatedContent = $this->fetch('content');
     if ($pageTranslations !== []) {
-        $translatedContent = strtr($translatedContent, $pageTranslations);
+        $translatedContent = PageContentTranslator::translate($translatedContent, $pageTranslations);
     }
     ?>
     <?= $this->Flash->render() ?>

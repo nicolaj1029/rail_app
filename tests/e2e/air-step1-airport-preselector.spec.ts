@@ -187,3 +187,22 @@ test("AIR Step 1 search matrix is visible in both airport fields", async ({ page
   }
   console.log(`AIR_STEP1_PERF ${JSON.stringify({ visibleMetrics, httpMetrics: Object.fromEntries(httpMetrics) })}`);
 });
+
+test("French TC6 AIR Step 1 preserves scripts and shows Bruxelles choices", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto(appUrl("/fly-ny?lang=fr"));
+  await page.locator('a[href*="/flow/air/completed?tc6=1"]').first().click();
+  await page.goto(appUrl("/flow/entitlements?tc6=1&lang=fr"));
+
+  const departure = page.locator('input[name="dep_station"][data-airport-preselector="departure"]').first();
+  await expect(departure).toBeVisible();
+  await expect(departure).toHaveAttribute("data-airport-preselector-bound", "true");
+
+  await departure.fill("Bruxelles");
+  const box = await suggestionBox(page, departure);
+  await expect(box.locator('button[role="option"]', { hasText: "BRU" }).first()).toBeVisible();
+  await expect(box.locator('button[role="option"]', { hasText: "CRL" }).first()).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
