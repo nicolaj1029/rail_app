@@ -2535,6 +2535,7 @@ if ($a12Applies === false && !empty($contractsView)) {
 <script>
 (function(){
   const form = document.getElementById('entitlementsForm');
+  let airRouteTypeSelects = [];
   let entitlementsAutoSubmitReady = false;
   window.setTimeout(() => { entitlementsAutoSubmitReady = true; }, 350);
   const journeyToggleSeed = document.getElementById('toggleJourneyFields');
@@ -4876,7 +4877,7 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
   updateDisruption();
 
-  const airRouteTypeSelects = Array.from(form.querySelectorAll('select[name="air_route_type"]'));
+  airRouteTypeSelects = Array.from(form.querySelectorAll('select[name="air_route_type"]'));
   function activeAirRouteTypeContext() {
     for (const select of airRouteTypeSelects) {
       if (!select || select.disabled) continue;

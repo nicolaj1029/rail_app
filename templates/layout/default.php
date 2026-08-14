@@ -59,12 +59,10 @@ if ($pageTranslations !== []) {
             <div class="top-nav-links">
                 <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
                 <a href="<?= $this->Url->build('/fly-ny') ?>">Fly &#9992;</a>
-                <a href="<?= $this->Url->build('/flow/rail/completed') ?>">Tog A</a>
-                <a href="<?= $this->Url->build('/flow/rail/ongoing') ?>">Tog I</a>
+                <a href="<?= $this->Url->build('/tog-ny') ?>">Tog</a>
                 <a href="<?= $this->Url->build('/flow/bus/completed') ?>">Bus A</a>
                 <a href="<?= $this->Url->build('/flow/bus/ongoing') ?>">Bus I</a>
-                <a href="<?= $this->Url->build('/flow/ferry/completed') ?>">Færge A</a>
-                <a href="<?= $this->Url->build('/flow/ferry/ongoing') ?>">Færge I</a>
+                <a href="<?= $this->Url->build('/faerge-ny') ?>">F&aelig;rge</a>
                 <a href="<?= $this->Url->build('/passenger/start') ?>">Passager</a>
                 <a href="<?= $this->Url->build('/project/flow-qa') ?>">Flow QA</a>
                 <a href="<?= $this->Url->build('/project/chat-qa') ?>">Chat QA</a>

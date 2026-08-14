@@ -69,12 +69,14 @@ return function (RouteBuilder $routes): void {
         $builder->connect('/project/mobile-qa', ['controller' => 'Project', 'action' => 'mobileQa']);
         $builder->connect('/project/flow-qa', ['controller' => 'Project', 'action' => 'flowQa']);
         $builder->connect('/project/chat-qa', ['controller' => 'Project', 'action' => 'chatQa']);
+        $builder->connect('/tog-ny', ['controller' => 'RailLanding', 'action' => 'modern']);
         $builder->connect('/fly', ['controller' => 'AirLanding', 'action' => 'index']);
         $builder->connect('/fly/*', ['controller' => 'AirLanding', 'action' => 'index']);
         $builder->connect('/fly-ny', ['controller' => 'AirLanding', 'action' => 'modern']);
         $builder->connect('/fly-ny/*', ['controller' => 'AirLanding', 'action' => 'modern']);
         $builder->connect('/airclaim', ['controller' => 'AirLanding', 'action' => 'index']);
         $builder->connect('/airclaim/*', ['controller' => 'AirLanding', 'action' => 'index']);
+        $builder->connect('/faerge-ny', ['controller' => 'FerryLanding', 'action' => 'modern']);
         $builder->connect('/passenger', ['controller' => 'Passenger', 'action' => 'start']);
         $builder->connect('/passenger/start', ['controller' => 'Passenger', 'action' => 'start']);
         $builder->connect('/passenger/case', ['controller' => 'Passenger', 'action' => 'case']);
