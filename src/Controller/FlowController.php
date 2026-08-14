@@ -1209,7 +1209,14 @@ class FlowController extends AppController
         $sess->write('flow.journey', $journey);
         $sess->write('flow.compute', ['euOnly' => true]);
 
-        return $this->redirect(['action' => 'entitlements']);
+        $displayQuery = array_intersect_key(
+            $this->request->getQueryParams(),
+            ['tc6' => true, 'lang' => true, 'locale' => true]
+        );
+        $redirect = ['action' => 'entitlements'];
+        $redirect['?'] = $displayQuery;
+
+        return $this->redirect($redirect);
     }
 
     /**

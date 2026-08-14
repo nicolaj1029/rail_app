@@ -47,4 +47,16 @@ class CanonicalProductLandingTest extends TestCase
         $this->assertSession('completed', 'flow.flags.travel_state');
         $this->assertSession('ferry_split', 'flow.flags.entry_variant');
     }
+
+    public function testLocalizedAirEntryPreservesDisplayQuery(): void
+    {
+        $this->get('/flow/air/completed?tc6=1&lang=fr&ignored=drop');
+
+        $this->assertResponseCode(302);
+        $location = $this->_response->getHeaderLine('Location');
+        $this->assertStringContainsString('/flow/entitlements?', $location);
+        $this->assertStringContainsString('tc6=1', $location);
+        $this->assertStringContainsString('lang=fr', $location);
+        $this->assertStringNotContainsString('ignored=', $location);
+    }
 }
