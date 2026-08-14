@@ -1089,10 +1089,12 @@ $uploadIntroText = $isModeEntryFlow
       </label>
       <?php elseif ($isAir): ?>
       <label>Afgangslufthavn
-        <input type="text" name="dep_station" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx CPH" />
+        <input type="text" name="dep_station" data-airport-preselector="departure" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Skriv by, lufthavn eller IATA" aria-describedby="airDepartureAirportHelp" required />
+        <span id="airDepartureAirportHelp" class="small muted">Skriv mindst 2 tegn, og vælg en lufthavn fra listen.</span>
       </label>
       <label>Ankomstlufthavn
-        <input type="text" name="arr_station" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Fx ARN" />
+        <input type="text" name="arr_station" data-airport-preselector="arrival" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Skriv by, lufthavn eller IATA" aria-describedby="airArrivalAirportHelp" required />
+        <span id="airArrivalAirportHelp" class="small muted">Skriv mindst 2 tegn, og vælg en lufthavn fra listen.</span>
       </label>
       <?php $airRouteTypeInput = (string)($airRouteTypeSeed !== '' ? $airRouteTypeSeed : ($airStopoverSeed !== '' ? 'connecting' : 'direct')); ?>
       <label>Rejsetype
@@ -2769,6 +2771,10 @@ if ($a12Applies === false && !empty($contractsView)) {
     Object.values(meta).forEach((node) => {
       if (node) node.value = '';
     });
+    const input = form.querySelector('input[name="' + name + '"][data-airport-preselector]');
+    if (input instanceof HTMLInputElement) {
+      input.setCustomValidity('');
+    }
   }
 
   function setGenericLookupMeta(name, node) {
@@ -3515,6 +3521,9 @@ if ($a12Applies === false && !empty($contractsView)) {
       input.setAttribute('role', 'combobox');
       input.setAttribute('aria-autocomplete', 'list');
       input.setAttribute('aria-controls', box.id);
+      if (input.matches('[data-airport-preselector]')) {
+        input.dataset.airportPreselectorBound = 'true';
+      }
       return box;
     }
 
@@ -4981,8 +4990,33 @@ if ($a12Applies === false && !empty($contractsView)) {
   const art9_1_enforced = false;
   const disruptionBlock = document.getElementById('disruptionBlock');
   const contBtn = form.querySelector('button[name="continue"]');
+  const hasCanonicalAirportLookup = (prefix) => {
+    const code = String(getFieldValue(prefix + '_lookup_code') || '').trim().toUpperCase();
+    return String(getFieldValue(prefix + '_lookup_id') || '').trim() !== ''
+      && /^[A-Z]{3}$/.test(code)
+      && String(getFieldValue(prefix + '_lookup_mode') || '').trim().toLowerCase() === 'air'
+      && String(getFieldValue(prefix + '_lookup_node_type') || '').trim().toLowerCase() === 'airport';
+  };
   if (contBtn) {
     contBtn.addEventListener('click', (e)=>{
+      if (currentTransportMode() === 'air') {
+        for (const [prefix, message] of [
+          ['dep_station', 'Vælg en gyldig afgangslufthavn fra listen.'],
+          ['arr_station', 'Vælg en gyldig ankomstlufthavn fra listen.']
+        ]) {
+          const input = form.querySelector('input[name="' + prefix + '"][data-airport-preselector]');
+          if (input instanceof HTMLInputElement && !hasCanonicalAirportLookup(prefix)) {
+            e.preventDefault();
+            input.setCustomValidity(message);
+            input.focus();
+            input.reportValidity();
+            return;
+          }
+          if (input instanceof HTMLInputElement) {
+            input.setCustomValidity('');
+          }
+        }
+      }
       // Skip gating entirely when Art. 9(1) is exempt/hidden
       if (!art9_1_enforced || !disruptionBlock) { return; }
       const err = document.getElementById('disruptionReqError');
