@@ -1,4 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openFlyNyOngoing(page: Page) {
+  const configuredBase = process.env.RAIL_APP_BASE_URL?.replace(/\/+$/, "");
+  await page.goto(configuredBase ? `${configuredBase}/fly-ny` : "/fly-ny");
+  const ongoing = page.locator('a[href*="/flow/air/ongoing?tc6=1"]').first();
+  await expect(ongoing).toBeVisible();
+  await ongoing.click();
+  await expect(page).toHaveURL(/\/flow\/entitlements(?:\?tc6=1)?/);
+}
 
 test("live Step 1 resolves Bruxelles locally for departure and arrival", async ({ page }) => {
   let airportRequests = 0;
@@ -16,8 +25,7 @@ test("live Step 1 resolves Bruxelles locally for departure and arrival", async (
     airportSources.push(headers["x-airport-search-source"] ?? "");
   });
 
-  const configuredBase = process.env.RAIL_APP_BASE_URL?.replace(/\/+$/, "");
-  await page.goto(configuredBase ? `${configuredBase}/flow/air/ongoing` : "/flow/air/ongoing");
+  await openFlyNyOngoing(page);
   const departure = page.locator('input[name="dep_station"]').first();
   await expect(departure).toBeVisible();
   await departure.evaluate((element: HTMLInputElement) => { element.value = ""; });

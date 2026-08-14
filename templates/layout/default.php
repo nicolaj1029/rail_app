@@ -50,8 +50,7 @@ $showPublicBackLink = $publicSiteEnabled
             </div>
             <div class="top-nav-links">
                 <a href="<?= $this->Url->build('/flow/start') ?>">Flow</a>
-                <a href="<?= $this->Url->build('/flow/air/completed') ?>">Fly A</a>
-                <a href="<?= $this->Url->build('/flow/air/ongoing') ?>">Fly I</a>
+                <a href="<?= $this->Url->build('/fly-ny') ?>">Fly</a>
                 <a href="<?= $this->Url->build('/flow/rail/completed') ?>">Tog A</a>
                 <a href="<?= $this->Url->build('/flow/rail/ongoing') ?>">Tog I</a>
                 <a href="<?= $this->Url->build('/flow/bus/completed') ?>">Bus A</a>

@@ -225,6 +225,27 @@ final class PublicSiteModeMiddlewareTest extends TestCase
         }
     }
 
+    public function testAirPublicHostRedirectsRootToFlyNyByTransportMode(): void
+    {
+        Configure::write('PublicSite', ['enabled' => false, 'landingPath' => '/passenger/start']);
+        Configure::write('HostRouting', [
+            'adminHosts' => ['admin.example.com'],
+            'defaults' => ['landingPath' => '/passenger/start', 'blockAdminRoutes' => true],
+            'publicHosts' => [
+                'air.example.com' => ['transportMode' => 'air'],
+            ],
+        ]);
+
+        $request = new ServerRequest([
+            'url' => '/',
+            'environment' => ['HTTP_HOST' => 'air.example.com', 'REQUEST_URI' => '/', 'HTTPS' => 'on'],
+        ]);
+        $response = (new PublicSiteModeMiddleware())->process($request, $this->okHandler());
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/fly-ny', $response->getHeaderLine('Location'));
+    }
+
     private function okHandler(): RequestHandlerInterface
     {
         return new class implements RequestHandlerInterface {

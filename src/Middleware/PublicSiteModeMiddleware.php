@@ -77,17 +77,21 @@ final class PublicSiteModeMiddleware implements MiddlewareInterface
                 continue;
             }
             $hostConfig = is_array($config) ? $config : [];
+            $transportMode = $this->normalizeTransportMode((string)(
+                $hostConfig['transportMode'] ?? $publicDefaults['transportMode'] ?? ''
+            ));
+            $landingPath = array_key_exists('landingPath', $hostConfig)
+                ? (string)$hostConfig['landingPath']
+                : ($transportMode === 'air'
+                    ? '/fly-ny'
+                    : (string)($publicDefaults['landingPath'] ?? $defaults['landingPath']));
 
             return [
                 'enabled' => true,
                 'isPublicHost' => true,
                 'isAdminHost' => false,
-                'transportMode' => $this->normalizeTransportMode((string)(
-                    $hostConfig['transportMode'] ?? $publicDefaults['transportMode'] ?? ''
-                )),
-                'landingPath' => (string)(
-                    $hostConfig['landingPath'] ?? $publicDefaults['landingPath'] ?? $defaults['landingPath']
-                ),
+                'transportMode' => $transportMode,
+                'landingPath' => $landingPath,
                 'hideTopNav' => (bool)(
                     $hostConfig['hideTopNav'] ?? $publicDefaults['hideTopNav'] ?? true
                 ),
