@@ -77,14 +77,14 @@ test("AIR Step 1 visibly selects canonical departure and arrival airports", asyn
   await expect(page.locator('input[name="dep_station_lookup_id"]')).toHaveValue("");
   await page.locator('input[name="dep_date"]').fill("2026-08-12");
   await page.locator('input[name="passenger_count"]').fill("1");
-  await page.locator('button[type="submit"][name="continue"]').click();
+  await page.locator('.tc6-action-bar button[type="submit"][name="continue"]').click();
   await expect(page).toHaveURL(/\/flow\/entitlements/);
   await expect.poll(() => departure.evaluate((input: HTMLInputElement) => input.validationMessage))
     .toContain("gyldig afgangslufthavn fra listen");
   await expect(page.locator('input[name="arr_station_lookup_code"]')).toHaveValue("LHR");
 
   await chooseWithMouse(page, page.locator('input[name="dep_station"]').first(), "Bruxelles", "BRU");
-  await page.locator('button[type="submit"][name="continue"]').click();
+  await page.locator('.tc6-action-bar button[type="submit"][name="continue"]').click();
   await expect(page).toHaveURL(/\/flow\/air-reservation-contract/);
 
   expect(localAirportRequests).toBeGreaterThan(0);

@@ -7,6 +7,7 @@ $journeyRowsDowng = $journeyRowsDowng ?? [];
 $classOptions = $classOptions ?? [];
 $reservationOptions = $reservationOptions ?? [];
 $form = $form ?? [];
+$journey = $journey ?? [];
 $meta = $meta ?? [];
 $isAir = !empty($isAir);
 $isFerry = !empty($isFerry);
@@ -56,6 +57,17 @@ if ($isAir) {
 if ($isFerry) {
     $reservationOptions = [];
 }
+
+$airContractSeed = $isAir ? (array)($meta['air_contract_structure_seed'] ?? []) : [];
+$airBookingSeed = $isAir ? (array)($meta['air_booking_topology_seed'] ?? []) : [];
+$airTopology = strtolower(trim((string)($airContractSeed['topology'] ?? ($airBookingSeed['topology'] ?? ''))));
+$airContractUnits = $isAir ? array_values(array_filter((array)($airContractSeed['contract_units'] ?? []), 'is_array')) : [];
+$airSelectedContractId = $isAir
+    ? trim((string)($airContractSeed['selected_contract_id'] ?? ($meta['air_problem_contract_id'] ?? ($form['air_problem_contract_id'] ?? ''))))
+    : '';
+$airRouteLegs = $isAir ? array_values(array_filter((array)($meta['air_route_legs'] ?? []), 'is_array')) : [];
+$airLegSeeds = $isAir ? array_values(array_filter((array)($meta['air_legs_seed'] ?? []), 'is_array')) : [];
+$rowLegKeys = [];
 
 $mapClass = function($v): string {
     $v = strtolower(trim((string)$v));
@@ -110,11 +122,18 @@ if (empty($journeyRowsDowng)) {
         }
         return $s;
     };
-    $dep = $clean($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? ''));
-    $arr = $clean($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? ''));
+    $selectedDeparture = (array)($meta['rail_selected_departure'] ?? []);
+    $dep = $clean(
+        $form['dep_station']
+        ?? ($meta['_auto']['dep_station']['value'] ?? ($journey['origin']['value'] ?? ($selectedDeparture['origin_station_name'] ?? '')))
+    );
+    $arr = $clean(
+        $form['arr_station']
+        ?? ($meta['_auto']['arr_station']['value'] ?? ($journey['destination']['value'] ?? ($selectedDeparture['destination_station_name'] ?? '')))
+    );
     $depTime = (string)($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? ''));
     $arrTime = (string)($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? ''));
-    $train = (string)($form['train_no'] ?? ($meta['_auto']['train_no']['value'] ?? ''));
+    $train = (string)($form['train_no'] ?? ($meta['_auto']['train_no']['value'] ?? ($selectedDeparture['train_number'] ?? '')));
     if ($dep !== '' && $arr !== '' && $dep !== $arr) {
         $journeyRowsDowng = [[
             'leg' => $dep . ' -> ' . $arr,
@@ -123,6 +142,13 @@ if (empty($journeyRowsDowng)) {
             'train' => $train,
             'change' => '',
         ]];
+    }
+}
+if ($isAir) {
+    foreach ($journeyRowsDowng as $idx => $row) {
+        $routeLeg = $airRouteLegs[$idx] ?? [];
+        $seedLeg = $airLegSeeds[$idx] ?? [];
+        $rowLegKeys[$idx] = (string)($routeLeg['key'] ?? ($seedLeg['id'] ?? ''));
     }
 }
 ?>
@@ -152,10 +178,157 @@ if (empty($journeyRowsDowng)) {
           if ($toN !== '' && $toN === $missedNorm) { $missedIdx = (int)$i + 1; break; }
       }
   }
+
+  $airContractGroups = [];
+  if ($isAir && $airTopology === 'separate_contracts' && $airContractUnits !== []) {
+      foreach ($airContractUnits as $groupIndex => $unit) {
+          $unitLegs = array_values(array_filter(array_map('strval', (array)($unit['legs'] ?? []))));
+          $rowIndexes = [];
+          foreach ($rowLegKeys as $idx => $legKey) {
+              if ($legKey !== '' && in_array($legKey, $unitLegs, true)) {
+                  $rowIndexes[] = (int)$idx;
+              }
+          }
+          if ($rowIndexes === []) {
+              continue;
+          }
+          $airContractGroups[] = [
+              'id' => (string)($unit['id'] ?? ('contract_' . ($groupIndex + 1))),
+              'title' => 'Billet ' . ($groupIndex + 1),
+              'subtitle' => trim((string)($unit['origin'] ?? '') . ' -> ' . (string)($unit['destination'] ?? ''), ' ->'),
+              'row_indexes' => $rowIndexes,
+          ];
+      }
+  }
 ?>
 <?php if (!empty($journeyRowsDowng)): ?>
   <div id="perLegDowngrade" style="margin-top:12px; display:block;">
-    <div class="small"><strong><?= $isAir ? 'Flight-segmenter (koebt vs floejet)' : ($isFerry ? 'Overfart / service (koebt vs leveret)' : 'Per-leg niveau (nedgradering)') ?></strong></div>
+    <?php if ($isAir): ?>
+      <div style="display:grid; gap:12px;">
+        <?php
+          $airLoopSets = [];
+          if ($airContractGroups !== []) {
+              foreach ($airContractGroups as $group) {
+                  $airLoopSets[] = [
+                      'group' => $group,
+                      'rows' => array_values(array_intersect_key($journeyRowsDowng, array_flip($group['row_indexes']))),
+                  ];
+              }
+              $assignedIdx = [];
+              foreach ($airContractGroups as $group) {
+                  foreach ((array)$group['row_indexes'] as $assigned) {
+                      $assignedIdx[(int)$assigned] = true;
+                  }
+              }
+              $unassignedRows = [];
+              foreach ($journeyRowsDowng as $idx => $row) {
+                  if (!isset($assignedIdx[(int)$idx])) {
+                      $unassignedRows[$idx] = $row;
+                  }
+              }
+              if ($unassignedRows !== []) {
+                  $airLoopSets[] = [
+                      'group' => ['id' => 'ungrouped', 'title' => 'Andre ben', 'subtitle' => '', 'row_indexes' => array_keys($unassignedRows)],
+                      'rows' => array_values($unassignedRows),
+                  ];
+              }
+          } else {
+              $airLoopSets[] = [
+                  'group' => null,
+                  'rows' => array_values($journeyRowsDowng),
+              ];
+          }
+        ?>
+        <?php foreach ($airLoopSets as $airSet): ?>
+          <?php $group = $airSet['group']; ?>
+          <?php if (is_array($group)): ?>
+            <div style="display:flex; align-items:center; gap:8px; margin:2px 0 -2px;">
+              <div style="font-size:13px; font-weight:700; color:#475569;"><?= h((string)($group['title'] ?? '')) ?></div>
+              <?php if (!empty($group['subtitle'])): ?>
+                <div class="small muted"><?= h((string)$group['subtitle']) ?></div>
+              <?php endif; ?>
+              <?php if ($airSelectedContractId !== '' && $airSelectedContractId === (string)($group['id'] ?? '')): ?>
+                <span style="display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; font-size:12px; font-weight:700;">Berort billet</span>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+        <?php foreach ($airSet['rows'] as $localIndex => $r): ?>
+          <?php
+            $idx = is_array($group) ? (int)($group['row_indexes'][$localIndex] ?? $localIndex) : $localIndex;
+          ?>
+          <?php
+            $autoClass = (string)($meta['_auto']['fare_class_purchased']['value'] ?? ($meta['fare_class_purchased'] ?? ($form['fare_class_purchased'] ?? '')));
+            $autoBerth = (string)($meta['_auto']['berth_seat_type']['value'] ?? ($meta['berth_seat_type'] ?? ($form['berth_seat_type'] ?? '')));
+            $autoLegClass = (string)($meta['_auto']['leg_class_purchased'][$idx]['value'] ?? '');
+            $purchasedVal = (string)($form["leg_class_purchased"][$idx] ?? '');
+            if ($purchasedVal === '') {
+                if ($autoLegClass !== '') {
+                    $purchasedVal = $autoLegClass;
+                } elseif (in_array(strtolower($autoBerth), ['sleeper','couchette'], true)) {
+                    $purchasedVal = $autoBerth;
+                } else {
+                    $purchasedVal = $autoClass;
+                }
+            }
+            $purchasedVal = $mapClass($purchasedVal);
+            $deliveredVal = $mapClass($form["leg_class_delivered"][$idx] ?? ($meta['_auto']['class_delivered'][$idx]['value'] ?? ""));
+            $downgradeChecked = ((string)($form["leg_downgraded"][$idx] ?? '') === '1');
+            $autoAffected = isset($affectedSet[(int)$idx]);
+          ?>
+          <div
+            class="card js-downgrade-leg-row"
+            data-row-index="<?= (int)$idx ?>"
+            <?= $autoAffected ? ' data-auto-affected="1" style="border-color:#dbeafe;background:#fbfdff;"' : ' data-auto-affected="0" style="border-color:#e5e7eb;background:#fff;"' ?>
+          >
+            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+              <div style="min-width:220px; flex:1 1 260px;">
+                <div style="font-weight:700; color:#0f172a;"><?= h((string)$r['leg']) ?></div>
+                <div class="small muted mt4">
+                  <?= h((string)$r['dep']) ?>
+                  <?php if ((string)($r['arr'] ?? '') !== ''): ?> &bull; <?= h((string)$r['arr']) ?><?php endif; ?>
+                  <?php if ((string)($r['train'] ?? '') !== ''): ?> &bull; <?= h((string)$r['train']) ?><?php endif; ?>
+                </div>
+              </div>
+              <div style="flex:0 1 280px; width:100%;">
+                <input type="hidden" name="leg_downgraded[<?= (int)$idx ?>]" value="" />
+                <label style="display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid #dbeafe; border-radius:14px; background:#f8fbff; font-weight:600; color:#0f172a;">
+                  <input
+                    type="checkbox"
+                    value="1"
+                    <?= $downgradeChecked ? 'checked' : '' ?>
+                    data-leg-downgraded-toggle
+                    data-leg-index="<?= (int)$idx ?>"
+                  />
+                  Ja, dette ben blev downgradet
+                </label>
+              </div>
+            </div>
+            <div class="grid-2 mt12">
+              <label>Koebt kabineklasse
+                <select name="leg_class_purchased[<?= (int)$idx ?>]" style="width:100%;">
+                  <option value=""><?= __("Vaelg koebt kabineklasse") ?></option>
+                  <?php foreach ($classOptions as $key => $label): ?>
+                    <option value="<?= h($key) ?>" <?= $purchasedVal===$key?"selected":"" ?>><?= h($label) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label>Faktisk floejet kabineklasse
+                <select name="leg_class_delivered[<?= (int)$idx ?>]" style="width:100%;">
+                  <option value=""><?= __("Vaelg floejet kabineklasse") ?></option>
+                  <?php foreach ($classOptions as $key => $label): ?>
+                    <option value="<?= h($key) ?>" <?= $deliveredVal===$key?"selected":"" ?>><?= h($label) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+            </div>
+            <input type="hidden" name="leg_reservation_purchased[<?= (int)$idx ?>]" value="" />
+            <input type="hidden" name="leg_reservation_delivered[<?= (int)$idx ?>]" value="" />
+          </div>
+        <?php endforeach; ?>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+    <div class="small"><strong><?= $isFerry ? 'Overfart / service (koebt vs leveret)' : 'Per-leg niveau (nedgradering)' ?></strong></div>
     <?php if ($missedNorm !== '' && $missedIdx !== null): ?>
       <div class="small muted" style="margin-top:4px;">Skift ved: <strong><?= h($missedStation) ?></strong>. R&aelig;kker f&oslash;r/efter markeres.</div>
     <?php endif; ?>
@@ -165,7 +338,7 @@ if (empty($journeyRowsDowng)) {
         <button type="button" id="toggleAllDowngLegs" style="margin-left:8px; padding:2px 6px; font-size:12px;">Vis alle ben</button>
       </div>
     <?php endif; ?>
-    <div class="small muted" style="margin-top:4px;"><?= $isAir ? 'LLM/OCR har udfyldt koebt/floejet kabineklasse. Marker nedgraderet hvis faktisk floejet var lavere.' : ($isFerry ? 'Brug felterne til at vise, hvad du havde koebt, og hvad der faktisk blev leveret. Reservationstabeller bruges ikke i ferry-sporet.' : 'LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.') ?></div>
+    <div class="small muted" style="margin-top:4px;"><?= $isFerry ? 'Brug felterne til at vise, hvad du havde koebt, og hvad der faktisk blev leveret. Reservationstabeller bruges ikke i ferry-sporet.' : 'LLM/OCR har udfyldt koebt/leveret niveau; marker nedgraderet hvis leveret var lavere.' ?></div>
     <div class="small" style="overflow:auto; margin-top:6px;">
       <table style="width:100%; border-collapse:collapse;">
         <thead>
@@ -284,6 +457,7 @@ if (empty($journeyRowsDowng)) {
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
     <script>
       (function(){
         const classRank = {
@@ -359,15 +533,15 @@ if (empty($journeyRowsDowng)) {
           auto();
           syncExplicit();
         }
-        document.querySelectorAll('#perLegDowngrade table tbody tr').forEach((tr,i)=>bindRow(tr,i));
+        document.querySelectorAll('#perLegDowngrade .js-downgrade-leg-row, #perLegDowngrade table tbody tr').forEach((row,i)=>bindRow(row,i));
 
         var btn = document.getElementById('toggleAllDowngLegs');
         if (btn) {
           var shown = false;
           btn.addEventListener('click', function(){
             shown = !shown;
-            document.querySelectorAll('#perLegDowngrade table tbody tr[data-auto-affected=\"0\"]').forEach(function(tr){
-              tr.style.display = shown ? '' : 'none';
+            document.querySelectorAll('#perLegDowngrade [data-auto-affected=\"0\"]').forEach(function(row){
+              row.style.display = shown ? '' : 'none';
             });
             btn.textContent = shown ? 'Skjul ekstra ben' : 'Vis alle ben';
           });

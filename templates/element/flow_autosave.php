@@ -2,19 +2,31 @@
 /** @var \App\View\AppView $this */
 $step = strtolower(trim((string)($step ?? '')));
 $formSelector = trim((string)($formSelector ?? 'form'));
+$disabled = !empty($disabled);
+$csrfToken = (string)($this->getRequest()->getAttribute('csrfToken') ?? '');
 $autosaveUrl = $this->Url->build([
     'controller' => 'Flow',
     'action' => 'autosave',
     '?' => ['step' => $step],
 ]);
 ?>
-<?php if ($step !== ''): ?>
+<?php if ($step !== '' && !$disabled): ?>
 <script>
 (() => {
   const form = document.querySelector(<?= json_encode($formSelector) ?>);
   if (!form) return;
 
   const autosaveUrl = <?= json_encode($autosaveUrl) ?>;
+  const requestCsrfToken = <?= json_encode($csrfToken) ?>;
+  const formCsrfToken = (() => {
+    const field = form.querySelector('input[name="_csrfToken"]');
+    return field instanceof HTMLInputElement ? String(field.value || '') : '';
+  })();
+  const metaCsrfToken = (() => {
+    const meta = document.querySelector('meta[name="csrfToken"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+  })();
+  const csrfToken = requestCsrfToken || formCsrfToken || metaCsrfToken;
   let saveTimer = null;
   let activeSave = null;
 
@@ -22,6 +34,9 @@ $autosaveUrl = $this->Url->build([
     const fd = new FormData(form);
     fd.append('_step', <?= json_encode($step) ?>);
     fd.append('_autosave', '1');
+    if (csrfToken && !fd.has('_csrfToken')) {
+      fd.append('_csrfToken', csrfToken);
+    }
 
     form.querySelectorAll('input[type="file"]').forEach((input) => {
       if (input.name) {
@@ -48,7 +63,8 @@ $autosaveUrl = $this->Url->build([
       body: buildPayload(),
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
       },
       credentials: 'same-origin'
     }).catch(() => null).finally(() => {

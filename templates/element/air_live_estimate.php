@@ -7,16 +7,33 @@ $airRights = (array)($airRights ?? []);
 $airScope = (array)($airScope ?? []);
 $airContract = (array)($airContract ?? []);
 $opsEvidence = (array)($meta['air_operational_evidence'] ?? []);
+$airLiveEstimateScope = trim((string)($airLiveEstimateScope ?? ''));
+$showPrimaryCards = isset($showPrimaryCards) ? (bool)$showPrimaryCards : true;
 $transportCaps = (new \App\Service\TransportCapsResolver())->resolveAir($airScope, [
     'form' => $form,
     'flags' => $flags,
     'meta' => $meta,
     'contract' => $airContract,
 ]);
+$airExpenseReview = [];
+$airCostZonesPath = CONFIG . 'air' . DS . 'air_airport_cost_zones.php';
+$airReviewBandsPath = CONFIG . 'air' . DS . 'air_expense_review_bands.php';
+if (is_file($airCostZonesPath) && is_file($airReviewBandsPath)) {
+    $airExpenseReview = (new \App\Service\Air\AirExpenseReviewBandService())->availableBandsForScope([
+        'scope' => in_array($airLiveEstimateScope, ['air_assistance_scope', 'air_reroute_scope', 'air_refund_scope'], true)
+            ? $airLiveEstimateScope
+            : (!empty($airRights['gate_air_care']) ? 'air_assistance_scope' : 'air_reroute_scope'),
+        'form' => $form,
+        'flags' => $flags,
+        'meta' => $meta,
+        'air_scope' => $airScope,
+    ]);
+}
 
 $travelState = strtolower((string)($flags['travel_state'] ?? ($form['travel_state'] ?? '')));
 $isCompleted = $travelState === 'completed';
 $isOngoing = $travelState === 'ongoing';
+$showTechnicalDetails = trim((string)$this->request->getSession()->read('admin.auth_user')) !== '';
 
 $distanceBand = strtolower(trim((string)($form['air_distance_band'] ?? ($airScope['air_distance_band'] ?? ($airRights['air_distance_band'] ?? '')))));
 $distanceBandLabel = match ($distanceBand) {
@@ -41,10 +58,50 @@ $article7ReductionStatus = strtolower(trim((string)($airRights['article7_reducti
 $article7ReductionApplies = !empty($airRights['article7_reduction_applies']);
 $article7ReductionProvisional = $article7ReductionStatus === 'provisional';
 $selectedFlight = (array)($meta['air_selected_flight'] ?? []);
+$selectedLeg = (array)($meta['air_selected_leg'] ?? []);
+$routeLegs = array_values(array_filter((array)($meta['air_route_legs'] ?? []), 'is_array'));
 $claimParty = trim((string)($airContract['primary_claim_party_name'] ?? ($airContract['primary_claim_party'] ?? '')));
 if ($claimParty === '' || $claimParty === 'manual_review') {
     $claimParty = trim((string)($selectedFlight['operating_carrier_name'] ?? ($selectedFlight['marketing_carrier_name'] ?? ($form['operating_carrier'] ?? ($form['marketing_carrier'] ?? 'manual_review')))));
 }
+$responsibleCarrier = trim((string)($selectedFlight['operating_carrier_name'] ?? ($selectedFlight['marketing_carrier_name'] ?? ($form['operating_carrier'] ?? ($form['marketing_carrier'] ?? '')))));
+if ($responsibleCarrier === '') {
+    $responsibleCarrier = trim((string)($airContract['liable_carrier_candidate'] ?? $claimParty));
+}
+$responsibleCarrierLabel = $responsibleCarrier !== '' && strtolower($responsibleCarrier) !== 'manual_review'
+    ? $responsibleCarrier
+    : 'Afventer svar';
+$claimChannelLabel = match (strtolower($claimParty)) {
+    '', 'manual_review' => 'Manuel vurdering',
+    default => $claimParty,
+};
+$routeLabel = '';
+if ($routeLegs !== []) {
+    $routePoints = [];
+    foreach ($routeLegs as $index => $leg) {
+        $depLabel = trim((string)($leg['dep_label'] ?? ''));
+        $arrLabel = trim((string)($leg['arr_label'] ?? ''));
+        if ($index === 0 && $depLabel !== '') {
+            $routePoints[] = $depLabel;
+        }
+        if ($arrLabel !== '') {
+            $routePoints[] = $arrLabel;
+        }
+    }
+    $routeLabel = implode(' -> ', $routePoints);
+}
+if ($routeLabel === '') {
+    $routeLabel = trim((string)($form['dep_station'] ?? '')) . ' -> ' . trim((string)($form['arr_station'] ?? ''));
+    $routeLabel = trim($routeLabel, ' ->');
+}
+$selectedLegLabel = trim((string)($selectedLeg['title'] ?? ''));
+if ($selectedLegLabel === '' && !empty($selectedLeg['dep_label']) && !empty($selectedLeg['arr_label'])) {
+    $selectedLegLabel = trim((string)$selectedLeg['dep_label']) . ' -> ' . trim((string)$selectedLeg['arr_label']);
+}
+$selectedFlightSummary = trim(implode(' | ', array_filter([
+    trim((string)($selectedFlight['flight_number'] ?? '')),
+    trim((string)($selectedFlight['carrier_name'] ?? ($selectedFlight['marketing_carrier_name'] ?? ''))),
+])));
 
 $perPassengerBase = match ($distanceBand) {
     'up_to_1500' => 250.0,
@@ -108,6 +165,13 @@ $eligibilityResolved = $article7EligibilityStatus === 'eligible'
     || $cancellationCompQuestionAnswered
     || $deniedBoardingCompQuestionAnswered;
 $resolvedNotEligible = $article7EligibilityStatus === 'not_eligible' && $eligibilityResolved;
+$statusTone = $article7EligibilityStatus === 'eligible'
+    ? 'green'
+    : (($resolvedNotEligible || $ongoingDelayBelowThreshold) ? 'red' : 'gray');
+$careTone = $previewCareActive ? 'green' : 'gray';
+$remedyTone = $previewRemedyActive ? 'green' : 'gray';
+$carrierTone = $responsibleCarrierLabel !== 'Afventer svar' ? 'green' : 'gray';
+$panelTone = $statusTone;
 
 $displayAmount = $article7EligibilityStatus === 'eligible'
     ? $totalAmount
@@ -148,101 +212,152 @@ $opsDetailParts = array_filter([
     $opsScore !== null && $opsScore > 0 ? ('score ' . $opsScore) : null,
     $opsConfidence !== '' ? $opsConfidence : null,
 ]);
+$expenseLocationLabel = trim((string)($airExpenseReview['expense_airport_iata'] ?? ''));
+if ($expenseLocationLabel === '') {
+    $expenseLocationLabel = trim((string)($airExpenseReview['expense_airport_label'] ?? ''));
+}
+$expenseCountryCode = strtoupper(trim((string)($airExpenseReview['expense_country_code'] ?? '')));
+$expenseLocationDisplay = $expenseLocationLabel;
+if ($expenseLocationDisplay !== '' && $expenseCountryCode !== '') {
+    $expenseLocationDisplay .= ', ' . $expenseCountryCode;
+}
+$expenseLocationZone = strtolower(trim((string)($airExpenseReview['airport_cost_zone'] ?? '')));
+$expenseLocationConfidence = strtolower(trim((string)($airExpenseReview['location_confidence'] ?? '')));
+$chipToneStyle = static function (string $tone): string {
+    return match ($tone) {
+        'green' => 'background:rgba(220,252,231,0.98);border-color:rgba(34,197,94,0.34);color:#166534;',
+        'red' => 'background:rgba(254,226,226,0.98);border-color:rgba(239,68,68,0.34);color:#b91c1c;',
+        default => 'background:rgba(248,250,252,0.96);border-color:rgba(148,163,184,0.30);color:#475569;',
+    };
+};
+$cardToneStyle = static function (string $tone): string {
+    return match ($tone) {
+        'green' => 'background:rgba(240,253,244,0.98);border-color:rgba(34,197,94,0.28);',
+        'red' => 'background:rgba(254,242,242,0.98);border-color:rgba(239,68,68,0.28);',
+        default => 'background:rgba(248,250,252,0.96);border-color:rgba(148,163,184,0.22);',
+    };
+};
 ?>
 
 <style>
   .air-live-estimate { margin-top:10px; padding:12px; border:1px solid #dbeafe; border-radius:8px; background:#f8fbff; }
   .air-live-estimate-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
   .air-live-estimate-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; }
+  .air-live-estimate-amount-block { margin-top:10px; }
   .air-live-estimate-amount { font-size:28px; font-weight:800; line-height:1; color:#0f172a; }
   .air-live-estimate-sub { color:#475569; font-size:12px; }
+  .air-live-estimate-route { margin-top:10px; color:#334155; font-size:13px; }
+  .air-live-estimate-route strong { color:#0f172a; }
+  .air-live-estimate-route-meta { margin-top:4px; color:#64748b; font-size:12px; }
+  .air-live-estimate-primary { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px; }
   .air-live-estimate-grid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px; }
   .air-live-estimate-cell { padding:8px; border-radius:6px; background:#fff; border:1px solid #e2e8f0; }
   .air-live-estimate-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
   .air-live-estimate-label-row { display:flex; align-items:center; gap:6px; }
   .air-live-estimate-value { margin-top:4px; font-weight:700; color:#1e293b; }
   .air-live-estimate-tooltip { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:999px; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:700; cursor:help; }
+  .air-live-estimate-details { margin-top:10px; border-top:1px solid #dbeafe; padding-top:10px; }
+  .air-live-estimate-details summary { display:flex; align-items:center; gap:8px; color:#0f172a; font-weight:700; cursor:pointer; list-style:none; }
+  .air-live-estimate-details summary::-webkit-details-marker { display:none; }
+  .air-live-estimate-details summary::after { content:'Vis'; color:#64748b; font-size:12px; font-weight:500; }
+  .air-live-estimate-details[open] summary::after { content:'Skjul'; }
 </style>
 
 <div
   id="airLiveEstimate"
-  class="air-live-estimate"
+  class="air-live-estimate tc6-live-estimate tc6-live-estimate--<?= h($panelTone) ?>"
   data-passenger-count="<?= h((string)$passengerCount) ?>"
   data-potential-total="<?= h(number_format($potentialTotalAmount, 2, '.', '')) ?>"
+  data-reduction-threshold="<?= h((string)$reductionThreshold) ?>"
   data-has-known-distance="<?= $hasKnownDistanceBand ? '1' : '0' ?>"
   data-travel-state="<?= h($travelState) ?>"
+  data-live-tone="<?= h($panelTone) ?>"
 >
   <div class="air-live-estimate-head">
     <div>
       <div><strong>Live air-estimat</strong></div>
-      <div class="air-live-estimate-sub"><?= h($nextText) ?></div>
     </div>
-    <div id="airLiveEstimateStatus" class="air-live-estimate-status"><?= h($statusText) ?></div>
+    <div id="airLiveEstimateStatus" class="air-live-estimate-status tc6-live-chip tc6-live-chip--<?= h($statusTone) ?>" style="<?= h($chipToneStyle($statusTone)) ?>"><?= h($statusText) ?></div>
   </div>
 
-  <div style="margin-top:10px;">
+  <div class="air-live-estimate-amount-block">
     <div id="airLiveEstimateAmount" class="air-live-estimate-amount">
       <?= $displayAmount !== null ? h(number_format($displayAmount, 2, '.', ',')) . ' EUR' : 'Afventer' ?>
     </div>
-    <div id="airLiveEstimateSummary" class="air-live-estimate-sub">
-      <?= $article7EligibilityStatus === 'eligible'
-          ? ('Foreloebigt kompensationsestimat' . ($passengerCount > 1 ? ' for ' . $passengerCount . ' passagerer' : ' pr. sag'))
-          : ($article7EligibilityStatus === 'uncertain'
-              ? 'Kompensationsretten er foreloebigt usikker og kraever flere svar om varsel, ombooking eller extraordinary circumstances.'
-          : ($ongoingDelayBelowThreshold
-              ? 'Den meldte forsinkelse ligger under den aktuelle threshold. Kompensationssporet er derfor ikke aktiveret endnu.'
-          : ($resolvedNotEligible
-              ? 'Kompensationsretten er foreloebigt afvist ud fra de nuvaerende svar.'
-              : ($hasKnownDistanceBand
-                  ? ('Foreloebigt beloeb ud fra distancekategori' . ($passengerCount > 1 ? ' for ' . $passengerCount . ' passagerer' : '') . '. Det endelige krav afhaenger af haendelsen og de oevrige svar.')
-                  : 'Kompensationsbeloebet bliver vist, saa snart distancekategori eller gate er klare.')))) ?>
-      <?php if ($article7EligibilityStatus === 'eligible' && $reductionPct > 0): ?>
-        Reduktion paa 50% er medregnet ud fra nuvaerende reroute-ankomst.
-      <?php elseif ($article7ReductionProvisional): ?>
-        En mulig 50% reduktion er identificeret, men vises foreloebigt ikke som endeligt belob i den igangvaerende sag.
-      <?php elseif ($article7ReductionStatus === 'unknown'): ?>
-        Eventuel 50% reduktion er endnu ikke afklaret.
-      <?php endif; ?>
-    </div>
   </div>
 
-  <div class="air-live-estimate-grid">
-    <div class="air-live-estimate-cell">
-      <div class="air-live-estimate-label">Distancekategori</div>
-      <div class="air-live-estimate-value"><?= h($distanceBandLabel) ?></div>
+  <?php if ($routeLabel !== ''): ?>
+    <div class="air-live-estimate-route">
+      <div><strong><?= h($routeLabel) ?></strong></div>
     </div>
-    <div class="air-live-estimate-cell">
-      <div class="air-live-estimate-label">Art. 6 threshold</div>
-      <div class="air-live-estimate-value"><?= h($thresholdLabel) ?></div>
+  <?php endif; ?>
+  <?php if ($expenseLocationDisplay !== ''): ?>
+    <div class="air-live-estimate-route-meta">
+      Expense location: <?= h($expenseLocationDisplay) ?><?= $expenseLocationZone !== '' ? ' (' . h($expenseLocationZone) . ')' : '' ?>
     </div>
-    <div class="air-live-estimate-cell">
+  <?php endif; ?>
+  <?php if ($expenseLocationConfidence === 'low'): ?>
+    <div class="air-live-estimate-route-meta">Vi har estimeret ud fra den mest sandsynlige lufthavn. Du kan rette placeringen senere, hvis den ikke passer.</div>
+  <?php endif; ?>
+
+  <?php if ($showPrimaryCards): ?>
+  <div class="air-live-estimate-primary">
+    <div class="air-live-estimate-cell tc6-live-card tc6-live-card--<?= h($careTone) ?>" data-air-live-card="care" style="<?= h($cardToneStyle($careTone)) ?>">
       <div class="air-live-estimate-label-row">
-        <div class="air-live-estimate-label">Care</div>
+        <div class="air-live-estimate-label">Assistance</div>
         <span class="air-live-estimate-tooltip" title="<?= h($careTooltip) ?>" aria-label="<?= h($careTooltip) ?>">i</span>
       </div>
-      <div id="airLiveEstimateCareValue" class="air-live-estimate-value"><?= $previewCareActive ? 'Aktiv' : 'Ikke aktiv endnu' ?></div>
+      <div id="airLiveEstimateCareValue" class="air-live-estimate-value"><?= $previewCareActive ? 'Rimelige noedvendige udgifter kan daekkes' : 'Afventer flere svar' ?></div>
     </div>
-    <div class="air-live-estimate-cell">
+    <div class="air-live-estimate-cell tc6-live-card tc6-live-card--<?= h($remedyTone) ?>" data-air-live-card="remedy" style="<?= h($cardToneStyle($remedyTone)) ?>">
       <div class="air-live-estimate-label-row">
         <div class="air-live-estimate-label"><?= h($remedyLabel) ?></div>
         <span class="air-live-estimate-tooltip" title="<?= h($rerouteTooltip) ?>" aria-label="<?= h($rerouteTooltip) ?>">i</span>
       </div>
-      <div id="airLiveEstimateRemedyValue" class="air-live-estimate-value"><?= $previewRemedyActive ? 'Aktiv' : 'Ikke aktiv endnu' ?></div>
+      <div id="airLiveEstimateRemedyValue" class="air-live-estimate-value"><?= $previewRemedyActive ? 'Fuld daekning mulig' : 'Afventer flere svar' ?></div>
     </div>
-    <div class="air-live-estimate-cell">
-      <div class="air-live-estimate-label">Claim-kanal</div>
-      <div class="air-live-estimate-value"><?= h($claimParty !== '' ? $claimParty : 'manual_review') ?></div>
-    </div>
-    <div class="air-live-estimate-cell">
-      <div class="air-live-estimate-label">Flydistance</div>
-      <div class="air-live-estimate-value"><?= h($flightDistanceKm !== '' ? ($flightDistanceKm . ' km') : 'Ikke afledt endnu') ?></div>
-    </div>
-    <div class="air-live-estimate-cell">
-      <div class="air-live-estimate-label">Ops status</div>
-      <div class="air-live-estimate-value"><?= h($opsLabel) ?></div>
-      <?php if ($opsDetailParts !== []): ?>
-        <div class="air-live-estimate-sub" style="margin-top:4px;"><?= h(implode(' · ', $opsDetailParts)) ?></div>
-      <?php endif; ?>
+    <div class="air-live-estimate-cell tc6-live-card tc6-live-card--<?= h($carrierTone) ?>" data-air-live-card="carrier" style="<?= h($cardToneStyle($carrierTone)) ?>">
+      <div class="air-live-estimate-label">Ansvarligt flyselskab</div>
+      <div class="air-live-estimate-value"><?= h($responsibleCarrierLabel) ?></div>
     </div>
   </div>
+  <?php endif; ?>
+
+  <?php if ($showTechnicalDetails): ?>
+  <details class="air-live-estimate-details">
+    <summary>Tekniske detaljer</summary>
+    <div class="air-live-estimate-grid">
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Distancekategori</div>
+        <div class="air-live-estimate-value"><?= h($distanceBandLabel) ?></div>
+      </div>
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Art. 6 threshold</div>
+        <div class="air-live-estimate-value"><?= h($thresholdLabel) ?></div>
+      </div>
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Claim-kanal</div>
+        <div class="air-live-estimate-value"><?= h($claimChannelLabel) ?></div>
+      </div>
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Flydistance</div>
+        <div class="air-live-estimate-value"><?= h($flightDistanceKm !== '' ? ($flightDistanceKm . ' km') : 'Ikke afledt endnu') ?></div>
+      </div>
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Expense location</div>
+        <div class="air-live-estimate-value"><?= h($expenseLocationDisplay !== '' ? $expenseLocationDisplay : 'Afventer') ?></div>
+        <?php if ($expenseLocationZone !== ''): ?>
+          <div class="air-live-estimate-sub" style="margin-top:4px;"><?= h('Zone: ' . $expenseLocationZone . ' · confidence: ' . ($expenseLocationConfidence !== '' ? $expenseLocationConfidence : 'low')) ?></div>
+        <?php endif; ?>
+      </div>
+      <div class="air-live-estimate-cell">
+        <div class="air-live-estimate-label">Ops status</div>
+        <div class="air-live-estimate-value"><?= h($opsLabel) ?></div>
+        <?php if ($opsDetailParts !== []): ?>
+          <div class="air-live-estimate-sub" style="margin-top:4px;"><?= h(implode(' · ', $opsDetailParts)) ?></div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </details>
+  <?php endif; ?>
 </div>

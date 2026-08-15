@@ -1165,7 +1165,18 @@ class FlowController extends AppController
         }
 
         $sess = $this->request->getSession();
+        $tc6Query = $this->request->getQuery('tc6');
+        $tc6Enabled = $tc6Query !== null
+            && !in_array(strtolower(trim((string)$tc6Query)), ['', '0', 'false', 'off', 'no'], true);
+        $languageQuery = $this->request->getQuery('lang') ?? $this->request->getQuery('locale');
+        $uiLanguage = strtolower(substr(trim((string)$languageQuery), 0, 2));
         $sess->delete('flow');
+        if ($tc6Query !== null) {
+            $sess->write('flow.tc6_mode', $tc6Enabled ? '1' : '0');
+        }
+        if (in_array($uiLanguage, ['da', 'en', 'fr'], true)) {
+            $sess->write('flow.ui_language', $uiLanguage);
+        }
 
         $entryVariant = match ($mode) {
             'air' => 'air_short',
@@ -2458,8 +2469,160 @@ class FlowController extends AppController
         return null;
     }
 
+    public function airReservationContract(): \Cake\Http\Response|null
+    {
+        $session = $this->request->getSession();
+        $journey = (array)$session->read('flow.journey') ?: [];
+        $meta = (array)$session->read('flow.meta') ?: [];
+        $compute = (array)$session->read('flow.compute') ?: [];
+        $form = (array)$session->read('flow.form') ?: [];
+        $incident = (array)$session->read('flow.incident') ?: [];
+        $flags = (array)$session->read('flow.flags') ?: [];
+
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step2_done'], 'entitlements');
+        if ($resp) {
+            return $resp;
+        }
+        if (!$this->isAirShortEntry($flags, $form, $meta)) {
+            return $this->redirect(['action' => 'incident']);
+        }
+
+        $routeType = $this->normalizeAirRouteType($form);
+        $routeLegs = $this->buildAirRouteLegs($form, $meta);
+        if ($routeType === 'connecting' && count($routeLegs) <= 1) {
+            $this->Flash->error('Tilføj mindst én mellemlandingslufthavn i rigtig rækkefølge, eller vælg direkte fly.');
+
+            return $this->redirect(['action' => 'entitlements']);
+        }
+
+        $sellerChannel = strtolower(trim((string)($form['seller_channel'] ?? 'operator')));
+        if (!in_array($sellerChannel, ['operator', 'agency', 'retailer', 'tour_operator'], true)) {
+            $sellerChannel = 'operator';
+        }
+        $bookingTopology = count($routeLegs) <= 1
+            ? 'direct_single_flight'
+            : strtolower(trim((string)($form['air_booking_topology_answer'] ?? '')));
+        if (count($routeLegs) > 1 && !in_array($bookingTopology, ['through_booking', 'separate_contracts'], true)) {
+            $bookingTopology = '';
+        }
+        $problemContractId = trim((string)($form['air_problem_contract_id'] ?? ''));
+        $problemLegId = trim((string)($form['air_disruption_leg_id'] ?? ''));
+
+        $contractUnits = [];
+        foreach ($routeLegs as $index => $leg) {
+            if (!is_array($leg)) {
+                continue;
+            }
+            $legKey = (string)($leg['key'] ?? ('leg_' . ($index + 1)));
+            $contractUnits[] = [
+                'id' => $legKey,
+                'type' => count($routeLegs) <= 1 ? 'direct_single_flight' : 'separate_contract',
+                'legs' => [$legKey],
+                'origin' => (string)($leg['dep_label'] ?? ''),
+                'destination' => (string)($leg['arr_label'] ?? ''),
+            ];
+        }
+
+        if ($this->request->is('post')) {
+            $sellerChannel = strtolower(trim((string)($this->request->getData('seller_channel') ?? $sellerChannel)));
+            if (!in_array($sellerChannel, ['operator', 'agency', 'retailer', 'tour_operator'], true)) {
+                $sellerChannel = 'operator';
+            }
+            $bookingTopology = count($routeLegs) <= 1
+                ? 'direct_single_flight'
+                : strtolower(trim((string)$this->request->getData('air_booking_topology_answer')));
+            $problemContractId = trim((string)$this->request->getData('air_problem_contract_id'));
+            $problemLegId = trim((string)$this->request->getData('air_disruption_leg_id'));
+
+            $routeLegKeys = array_values(array_filter(array_map(
+                static fn(array $leg): string => (string)($leg['key'] ?? ''),
+                array_values(array_filter($routeLegs, 'is_array'))
+            )));
+            $errors = [];
+            if (count($routeLegs) > 1 && !in_array($bookingTopology, ['through_booking', 'separate_contracts'], true)) {
+                $errors[] = 'Angiv om flyvningerne var booket samlet eller på separate billetter.';
+            }
+            if ($bookingTopology === 'separate_contracts' && !in_array($problemContractId, $routeLegKeys, true)) {
+                $errors[] = 'Vælg hvilken reservation kravet vedrører.';
+            }
+            if ($bookingTopology === 'through_booking' && !in_array($problemLegId, $routeLegKeys, true)) {
+                $errors[] = 'Vælg hvilken afgang i reservationen problemet opstod på.';
+            }
+
+            if ($bookingTopology === 'direct_single_flight') {
+                $problemLegId = (string)($routeLegKeys[0] ?? '');
+                $problemContractId = $problemLegId;
+            } elseif ($bookingTopology === 'separate_contracts') {
+                $problemLegId = $problemContractId;
+            }
+
+            $selectedLeg = [];
+            foreach ($routeLegs as $leg) {
+                if (is_array($leg) && (string)($leg['key'] ?? '') === $problemLegId) {
+                    $selectedLeg = $leg;
+                    break;
+                }
+            }
+
+            $form['seller_channel'] = $sellerChannel;
+            $form['air_booking_topology_answer'] = $bookingTopology === 'direct_single_flight' ? '' : $bookingTopology;
+            $form['air_problem_contract_id'] = $problemContractId;
+            $form['air_route_type'] = $routeType === 'connecting' ? 'connecting' : 'direct';
+            $form['air_connection_type'] = match ($bookingTopology) {
+                'direct_single_flight' => 'single_flight',
+                'through_booking' => 'protected_connection',
+                'separate_contracts' => 'self_transfer',
+                default => 'unknown',
+            };
+            $form['same_transaction'] = $bookingTopology === 'separate_contracts' ? 'no' : 'yes';
+            $form['same_pnr'] = $bookingTopology === 'separate_contracts' ? 'no' : 'yes';
+            $meta['air_route_legs'] = $routeLegs;
+            $meta['air_selected_leg'] = $selectedLeg !== [] ? $selectedLeg : ($routeLegs[0] ?? []);
+            $meta['air_problem_contract_id'] = $problemContractId !== '' ? $problemContractId : null;
+            $meta['air_disruption_leg_id'] = $problemLegId !== '' ? $problemLegId : null;
+
+            if ($errors !== []) {
+                $flags['step24_done'] = '';
+                $this->Flash->error(implode(' ', $errors));
+            } else {
+                unset($meta['air_selected_flight'], $meta['air_selected_flight_key'], $meta['air_operational_evidence']);
+                $flags['step24_done'] = '1';
+                $flags['step25_done'] = '';
+            }
+            $session->write('flow.form', $form);
+            $session->write('flow.meta', $meta);
+            $session->write('flow.flags', $flags);
+
+            if ($errors === []) {
+                return $this->redirect(['action' => 'airFlightSelect']);
+            }
+        }
+
+        $this->set(compact(
+            'journey',
+            'meta',
+            'compute',
+            'form',
+            'incident',
+            'flags',
+            'routeType',
+            'routeLegs',
+            'sellerChannel',
+            'bookingTopology',
+            'problemContractId',
+            'contractUnits',
+            'problemLegId'
+        ));
+
+        return null;
+    }
+
     public function airLegSelect(): \Cake\Http\Response|null
     {
+        if ($this->resolveTc6Mode()) {
+            return $this->redirect(['action' => 'airReservationContract']);
+        }
+
         $session = $this->request->getSession();
         $journey = (array)$session->read('flow.journey') ?: [];
         $meta = (array)$session->read('flow.meta') ?: [];
@@ -2564,7 +2727,10 @@ class FlowController extends AppController
         $incident = (array)$session->read('flow.incident') ?: [];
         $flags = (array)$session->read('flow.flags') ?: [];
 
-        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs(['step2_done'], 'entitlements');
+        $tc6Mode = $this->resolveTc6Mode();
+        $flightPrerequisites = $tc6Mode ? ['step24_done'] : ['step2_done'];
+        $flightPreviousAction = $tc6Mode ? 'airReservationContract' : 'entitlements';
+        [$unlocked, $preview, $missing, $resp] = $this->enforceStepPrereqs($flightPrerequisites, $flightPreviousAction);
         if ($resp) { return $resp; }
 
         if (!$this->isAirShortEntry($flags, $form, $meta)) {
@@ -2575,7 +2741,7 @@ class FlowController extends AppController
         $routeType = $this->normalizeAirRouteType($form);
         $needsLegSelection = $routeType === 'connecting' && count($routeLegs) > 1;
         $flags['air_has_stopovers'] = $needsLegSelection ? '1' : '';
-        if (!$needsLegSelection) {
+        if (!$needsLegSelection && !$tc6Mode) {
             $flags['step24_done'] = '';
         }
         $session->write('flow.flags', $flags);
@@ -2584,7 +2750,7 @@ class FlowController extends AppController
         if ($selectedLegKey === '' || !in_array($selectedLegKey, array_column($routeLegs, 'key'), true)) {
             $selectedLeg = $routeLegs[0] ?? [];
         }
-        $prevAction = 'entitlements';
+        $prevAction = $flightPreviousAction;
 
         $depAirport = trim((string)($selectedLeg['dep_label'] ?? ($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? ''))));
         $arrAirport = trim((string)($selectedLeg['arr_label'] ?? ($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? ''))));
@@ -5772,6 +5938,13 @@ class FlowController extends AppController
         $incident = (array)$session->read('flow.incident') ?: [];
         $flags = (array)$session->read('flow.flags') ?: [];
         $isAirShortFlow = $this->isAirShortEntry($flags, $form, $meta);
+        if ($isAirShortFlow && $this->request->is('post') && $this->request->getData('passenger_count') !== null) {
+            $passengerCount = max(1, min(20, (int)$this->request->getData('passenger_count')));
+            $form['passenger_count'] = (string)$passengerCount;
+            $journey['passengerCount'] = $passengerCount;
+            $session->write('flow.form', $form);
+            $session->write('flow.journey', $journey);
+        }
         $skipAirShortHeavyEntitlements = $isAirShortFlow && !$this->request->is('post') && !$isAjaxHooks;
         $currentMode = $this->normalizeTransportMode((string)($form['transport_mode'] ?? ($meta['transport_mode'] ?? '')));
         $entitlementsWarnings = array_merge(
@@ -7908,7 +8081,9 @@ class FlowController extends AppController
                         $session->write('flow.form', $form);
                         $session->write('flow.meta', $meta);
                         $session->write('flow.flags', $flags);
-                        return $this->redirect(['action' => 'airFlightSelect']);
+                        return $this->redirect([
+                            'action' => $this->resolveTc6Mode() ? 'airReservationContract' : 'airFlightSelect',
+                        ]);
                     }
                     $meta['air_selected_leg'] = $routeLegs[0] ?? [];
                     unset($meta['air_selected_flight']);
@@ -7918,7 +8093,9 @@ class FlowController extends AppController
                     $session->write('flow.form', $form);
                     $session->write('flow.meta', $meta);
                     $session->write('flow.flags', $flags);
-                    return $this->redirect(['action' => 'airFlightSelect']);
+                    return $this->redirect([
+                        'action' => $this->resolveTc6Mode() ? 'airReservationContract' : 'airFlightSelect',
+                    ]);
                 }
                 if ($this->isFerrySplitEntry($flags, $form, $meta) && $defaultMode === 'ferry') {
                     unset($meta['ferry_selected_departure'], $meta['ferry_selected_departure_key'], $meta['ferry_operational_evidence']);

@@ -152,6 +152,7 @@ return function (RouteBuilder $routes): void {
     $builder->connect('/flow/rail-departures/search', ['controller' => 'Flow', 'action' => 'railDepartureSelect']);
     $builder->connect('/flow/rail-departures/select', ['controller' => 'Flow', 'action' => 'railDepartureSelect']);
     $builder->connect('/flow/air-leg-select', ['controller' => 'Flow', 'action' => 'airLegSelect']);
+    $builder->connect('/flow/air-reservation-contract', ['controller' => 'Flow', 'action' => 'airReservationContract']);
     $builder->connect('/flow/air-flight-select', ['controller' => 'Flow', 'action' => 'airFlightSelect']);
     $builder->connect('/flow/ferry-departure-select', ['controller' => 'Flow', 'action' => 'ferryDepartureSelect']);
     $builder->connect('/flow/entitlements', ['controller' => 'Flow', 'action' => 'entitlements']);

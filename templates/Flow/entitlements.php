@@ -1137,6 +1137,11 @@ $uploadIntroText = $isModeEntryFlow
       <label>Planlagt afgangsdato
         <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
       </label>
+      <?php if ($isAirShortEntryFlow): ?>
+      <label>Antal passagerer
+        <input type="number" name="passenger_count" min="1" max="20" value="<?= h((string)max(1, (int)($form['passenger_count'] ?? ($journey['passengerCount'] ?? 1)))) ?>" />
+      </label>
+      <?php endif; ?>
       <label class="ticketless-optional">Planlagt afgangstid (valgfri)
         <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
@@ -5048,4 +5053,3 @@ if ($a12Applies === false && !empty($contractsView)) {
   }
 })();
 </script>
-
