@@ -90,6 +90,28 @@ class Tc6PresentationReleaseTest extends TestCase
         $this->assertSession('LHR', 'flow.meta.air_selected_leg.arr_iata');
     }
 
+    public function testAirReservationPresentationAssetsExistAndAreLinked(): void
+    {
+        $session = $this->flowSession('air', 'air_short');
+        $session['flow.flags']['step2_done'] = '1';
+        $session['flow.form'] += [
+            'dep_station' => 'Brussels Airport',
+            'arr_station' => 'London Heathrow Airport',
+            'dep_station_lookup_code' => 'BRU',
+            'arr_station_lookup_code' => 'LHR',
+            'air_route_type' => 'direct',
+        ];
+        $this->session($session);
+
+        $this->get('/flow/air-reservation-contract');
+
+        $this->assertResponseOk();
+        $this->assertResponseContains('/css/flow-form-steps.css');
+        $this->assertResponseContains('/css/flow-select-steps.css');
+        $this->assertFileExists(WWW_ROOT . 'css' . DS . 'flow-form-steps.css');
+        $this->assertFileExists(WWW_ROOT . 'css' . DS . 'flow-select-steps.css');
+    }
+
     /**
      * @return array<string,mixed>
      */

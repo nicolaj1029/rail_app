@@ -1,0 +1,284 @@
+:root {
+    --fps-navy: #0A1628;
+    --fps-text: #0f172a;
+    --fps-muted: #64748b;
+    --fps-surface: #ffffff;
+    --fps-border: rgba(15, 23, 42, 0.10);
+    --fps-shadow: 0 1px 4px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --fps-blue: #1D6FD8;
+    --fps-blue-soft: #dbeafe;
+    --fps-teal: #0891B2;
+    --fps-teal-soft: #ecfeff;
+    --fps-sky: #0EA5E9;
+    --fps-sky-soft: #eff6ff;
+}
+
+body.flow-action-raildepartureselect .rail-step,
+body.flow-action-ferrydepartureselect .ferry-step,
+body.flow-action-airflightselect .air-step,
+body.flow-action-airlegselect .air-leg-step {
+    max-width: 1040px;
+    font-family: "DM Sans", "Segoe UI", sans-serif;
+}
+
+body.flow-action-raildepartureselect .rail-step > h1:first-of-type,
+body.flow-action-ferrydepartureselect .ferry-step > h1:first-of-type,
+body.flow-action-airflightselect .air-step > h1:first-of-type,
+body.flow-action-airlegselect .air-leg-step > h1:first-of-type {
+    margin: 0 0 8px;
+    font-family: "Syne", "Raleway", sans-serif;
+    font-size: clamp(3rem, 4vw, 4.8rem);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    color: var(--fps-navy);
+}
+
+body.flow-action-raildepartureselect .rail-step > .small.muted:first-of-type,
+body.flow-action-ferrydepartureselect .ferry-step > .small.muted:first-of-type,
+body.flow-action-airflightselect .air-step > .small.muted:first-of-type,
+body.flow-action-airlegselect .air-leg-step > .small.muted:first-of-type {
+    font-size: 1.7rem;
+    line-height: 1.55;
+    color: var(--fps-muted);
+    max-width: 72rem;
+    margin-bottom: 14px;
+}
+
+body.flow-action-raildepartureselect .rail-card,
+body.flow-action-raildepartureselect .manual-box,
+body.flow-action-raildepartureselect .contract-auto-box,
+body.flow-action-raildepartureselect .contract-edit,
+body.flow-action-raildepartureselect .helper-note,
+body.flow-action-raildepartureselect .contract-warning,
+body.flow-action-ferrydepartureselect .ferry-card,
+body.flow-action-ferrydepartureselect .manual-box,
+body.flow-action-ferrydepartureselect .helper-note,
+body.flow-action-airflightselect .flight-card,
+body.flow-action-airflightselect .manual-box,
+body.flow-action-airflightselect .helper-note,
+body.flow-action-airlegselect .air-leg-card,
+body.flow-action-airlegselect .air-leg-helper {
+    border-radius: 18px;
+    border-color: var(--fps-border);
+    background: var(--fps-surface);
+    box-shadow: var(--fps-shadow);
+}
+
+body.flow-action-raildepartureselect .departure-option,
+body.flow-action-ferrydepartureselect .departure-option,
+body.flow-action-airflightselect .flight-option,
+body.flow-action-airlegselect .air-leg-option {
+    border-radius: 16px;
+    border-color: var(--fps-border);
+    background: var(--fps-surface);
+}
+
+body.flow-action-raildepartureselect .departure-option.selected {
+    border-color: var(--fps-blue);
+    box-shadow: 0 0 0 3px rgba(29, 111, 216, 0.10);
+    background: #f8fbff;
+}
+
+body.flow-action-ferrydepartureselect .departure-option.selected {
+    border-color: var(--fps-teal);
+    box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.10);
+    background: #f3fcff;
+}
+
+body.flow-action-airflightselect .flight-option.selected,
+body.flow-action-airlegselect .air-leg-option.selected {
+    border-color: var(--fps-sky);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.10);
+    background: #f8fcff;
+}
+
+body.flow-action-raildepartureselect .pill,
+body.flow-action-raildepartureselect .departure-option.selected .departure-source {
+    background: var(--fps-blue-soft);
+    color: #1d4ed8;
+}
+
+body.flow-action-ferrydepartureselect .pill,
+body.flow-action-ferrydepartureselect .departure-option.selected .departure-source {
+    background: var(--fps-teal-soft);
+    color: #0f766e;
+}
+
+body.flow-action-airflightselect .pill,
+body.flow-action-airflightselect .flight-option.selected .flight-source {
+    background: var(--fps-sky-soft);
+    color: #0369a1;
+}
+
+body.flow-action-raildepartureselect .button-primary,
+body.flow-action-ferrydepartureselect .button-primary,
+body.flow-action-airflightselect .button-primary,
+body.flow-action-airlegselect .button-primary {
+    background: var(--fps-navy);
+    border-radius: 12px;
+}
+
+body.flow-action-raildepartureselect .button-secondary,
+body.flow-action-ferrydepartureselect .button-secondary,
+body.flow-action-airflightselect .button-secondary,
+body.flow-action-airlegselect .button-secondary {
+    border-radius: 12px;
+}
+
+body.flow-action-raildepartureselect .rail-step-kicker,
+body.flow-action-ferrydepartureselect .rail-step-kicker,
+body.flow-action-airflightselect .rail-step-kicker,
+body.flow-action-airlegselect .rail-step-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--fps-blue-soft);
+    color: #1d4ed8;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+body.flow-action-raildepartureselect .rail-step-sub,
+body.flow-action-ferrydepartureselect .rail-step-sub,
+body.flow-action-airflightselect .rail-step-sub,
+body.flow-action-airlegselect .rail-step-sub {
+    margin: 0 0 18px;
+    max-width: 74rem;
+    font-size: 1.6rem;
+    line-height: 1.6;
+    color: #475569;
+}
+
+body.flow-action-raildepartureselect .route-line,
+body.flow-action-ferrydepartureselect .route-line,
+body.flow-action-airflightselect .route-line,
+body.flow-action-airlegselect .air-leg-title {
+    color: var(--fps-text);
+}
+
+body.flow-action-raildepartureselect .small,
+body.flow-action-ferrydepartureselect .small,
+body.flow-action-airflightselect .small,
+body.flow-action-airlegselect .small,
+body.flow-action-raildepartureselect .muted,
+body.flow-action-ferrydepartureselect .muted,
+body.flow-action-airflightselect .muted,
+body.flow-action-airlegselect .muted {
+    line-height: 1.55;
+}
+
+body.flow-action-raildepartureselect .rail-card,
+body.flow-action-raildepartureselect .manual-box,
+body.flow-action-raildepartureselect .contract-auto-box,
+body.flow-action-raildepartureselect .contract-edit,
+body.flow-action-raildepartureselect .helper-note,
+body.flow-action-raildepartureselect .contract-warning {
+    padding: 20px;
+}
+
+body.flow-action-raildepartureselect .route-line {
+    margin-top: 10px;
+    font-family: "Syne", "Raleway", sans-serif;
+    font-size: clamp(2.4rem, 3vw, 3.2rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+}
+
+body.flow-action-raildepartureselect .departure-list {
+    gap: 14px;
+}
+
+body.flow-action-raildepartureselect .departure-option {
+    overflow: hidden;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+}
+
+body.flow-action-raildepartureselect .departure-option:hover {
+    border-color: rgba(29, 111, 216, 0.32);
+    box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
+}
+
+body.flow-action-raildepartureselect .departure-option-label {
+    padding: 18px 18px 18px 52px;
+}
+
+body.flow-action-raildepartureselect .departure-option input[type=radio] {
+    top: 20px;
+    left: 18px;
+}
+
+body.flow-action-raildepartureselect .departure-journey-label {
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+}
+
+body.flow-action-raildepartureselect .departure-route {
+    font-family: "Syne", "Raleway", sans-serif;
+    font-size: clamp(2.2rem, 2.8vw, 2.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+}
+
+body.flow-action-raildepartureselect .departure-first-train,
+body.flow-action-raildepartureselect .departure-service {
+    font-size: 1.55rem;
+}
+
+body.flow-action-raildepartureselect .departure-operator,
+body.flow-action-raildepartureselect .departure-via,
+body.flow-action-raildepartureselect .departure-meta {
+    font-size: 1.4rem;
+}
+
+body.flow-action-raildepartureselect .departure-badge,
+body.flow-action-raildepartureselect .departure-source,
+body.flow-action-raildepartureselect .pill {
+    min-height: 30px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+}
+
+body.flow-action-raildepartureselect .contract-section-title {
+    margin: 0 0 12px;
+    font-size: 1.15rem;
+    letter-spacing: 0.08em;
+}
+
+body.flow-action-raildepartureselect .contract-choice-item,
+body.flow-action-raildepartureselect .manual-box,
+body.flow-action-raildepartureselect .helper-note {
+    border-radius: 16px;
+}
+
+body.flow-action-raildepartureselect .contract-edit label,
+body.flow-action-raildepartureselect .manual-grid label {
+    color: #0f172a;
+    font-size: 1.6rem;
+    font-weight: 650;
+}
+
+body.flow-action-raildepartureselect .contract-edit input[type='text'],
+body.flow-action-raildepartureselect .contract-edit select,
+body.flow-action-raildepartureselect .manual-grid input[type='text'] {
+    min-height: 46px;
+    border-radius: 12px;
+    border: 0.5px solid rgba(15, 23, 42, 0.14);
+}
+
+body.flow-action-raildepartureselect .step-actions {
+    justify-content: flex-end;
+    margin-top: 22px;
+}
+
+body.flow-action-raildepartureselect .button-primary,
+body.flow-action-raildepartureselect .button-secondary {
+    min-height: 48px;
+    min-width: 140px;
+    padding: 0 18px;
+}
