@@ -105,10 +105,14 @@ $ticketReference = trim((string)($form['ticket_no'] ?? ($meta['_identifiers']['p
   <h1 class="ffs-title"><?= h($stepTitle) ?></h1>
 
   <?= $this->element('flow_locked_notice') ?>
-  <?= $this->Form->create(null, ['novalidate' => true]) ?>
+  <?= $this->Form->create(null, [
+      'novalidate' => true,
+      'id' => 'airReservationContractForm',
+      'data-air-progressive-form' => 'reservation-contract',
+  ]) ?>
   <fieldset <?= $isPreview ? 'disabled' : '' ?>>
     <section class="arc-form-card mt16">
-      <div class="arc-section">
+      <div class="arc-section" data-progressive-group="seller" data-progressive-fields="seller_channel">
         <div class="arc-section-title">1. Koebssted</div>
         <div class="arc-question">Hvem koebte reservationen hos?</div>
         <div class="arc-inline-options">
@@ -128,7 +132,7 @@ $ticketReference = trim((string)($form['ticket_no'] ?? ($meta['_identifiers']['p
       </div>
 
       <?php if ($routeType === 'connecting'): ?>
-        <div class="arc-section">
+        <div class="arc-section" data-progressive-group="topology" data-progressive-fields="air_booking_topology_answer">
           <div class="arc-section-title">2. Bookingstruktur</div>
           <div class="arc-question">Var flyvningerne booket samlet?</div>
           <div class="arc-inline-options">
@@ -145,7 +149,7 @@ $ticketReference = trim((string)($form['ticket_no'] ?? ($meta['_identifiers']['p
           </div>
         </div>
 
-        <div class="arc-section" id="contractScopeBlock" style="<?= $bookingTopology === 'separate_contracts' ? '' : 'display:none;' ?>">
+        <div class="arc-section" id="contractScopeBlock" data-progressive-group="affected-unit" data-progressive-show-if="air_booking_topology_answer:separate_contracts" data-progressive-fields="air_problem_contract_id" data-progressive-clear="air_problem_contract_id">
           <div class="arc-section-title">3. Relevant reservation</div>
           <div class="arc-question">Hvilken reservation/kontrakt vedroerer kravet?</div>
           <?php if ($ticketReference !== ''): ?>
@@ -169,7 +173,7 @@ $ticketReference = trim((string)($form['ticket_no'] ?? ($meta['_identifiers']['p
           </div>
         </div>
 
-        <div class="arc-section" id="problemLegBlock" style="<?= $bookingTopology === 'through_booking' ? '' : 'display:none;' ?>">
+        <div class="arc-section" id="problemLegBlock" data-progressive-group="affected-unit" data-progressive-show-if="air_booking_topology_answer:through_booking" data-progressive-fields="air_disruption_leg_id" data-progressive-clear="air_disruption_leg_id">
           <div class="arc-section-title">3. Problemafgang</div>
           <div class="arc-question">Hvor opstod problemet i reservationen?</div>
           <div class="arc-choice-list" id="problemLegChoiceList">
@@ -196,7 +200,7 @@ $ticketReference = trim((string)($form['ticket_no'] ?? ($meta['_identifiers']['p
       <?php endif; ?>
     </section>
 
-    <div class="arc-actions mt16">
+    <div class="arc-actions mt16" data-progressive-group="actions" data-progressive-complete="always">
       <?= $this->Html->link('Tilbage', ['action' => 'entitlements'], ['class' => 'button-secondary']) ?>
       <button type="submit" class="button-primary">Naeste</button>
       <span class="small muted">Naeste trin matcher den konkrete flyvning for den valgte afgang.</span>

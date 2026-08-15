@@ -123,6 +123,12 @@ $legacyMarkupTools = require ROOT . DS . 'templates' . DS . 'element' . DS . 'tc
 $legacyContent = $legacyMarkupTools['stripEstimate']($legacyContent, 'airLiveEstimate', '.air-live-estimate');
 $legacyContent = $legacyMarkupTools['stripById']($legacyContent, 'ticketUploadCard');
 $legacyContent = $legacyMarkupTools['stripById']($legacyContent, 'modeJourneyFields');
+$legacyContent = preg_replace(
+    '/(<form\b[^>]*\bid="entitlementsForm"[^>]*)(>)/i',
+    '$1 data-air-progressive-form="entitlements"$2',
+    $legacyContent,
+    1
+) ?? $legacyContent;
 
 ob_start();
 echo $this->element('tc6/action_bar', [
@@ -132,6 +138,12 @@ echo $this->element('tc6/action_bar', [
     'submitName' => 'continue',
 ]);
 $actionBarHtml = (string)ob_get_clean();
+$actionBarHtml = preg_replace(
+    '/<div class="tc6-action-bar">/',
+    '<div class="tc6-action-bar" data-progressive-group="actions" data-progressive-complete="always">',
+    $actionBarHtml,
+    1
+) ?? $actionBarHtml;
 $legacyContent = preg_replace('/<div class="actions-row fe-actions-row">.*?<\/div>/s', '', $legacyContent, 1) ?? $legacyContent;
 $legacyContent = preg_replace('/<\/fieldset>\s*<\/form>/i', '</fieldset>' . $actionBarHtml . '</form>', $legacyContent, 1) ?? ($legacyContent . $actionBarHtml);
 

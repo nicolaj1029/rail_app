@@ -19,7 +19,7 @@ final class AirStep1AirportSelectionTest extends TestCase
         $body = (string)$this->_response->getBody();
         $this->assertStringContainsString('data-airport-preselector="departure"', $body);
         $this->assertStringContainsString('data-airport-preselector="arrival"', $body);
-        $this->assertStringContainsString('/api/transport-nodes/search', $body);
+        $this->assertStringContainsString('/js/tc6/stations.js', $body);
         $this->assertStringContainsString('name="dep_station_lookup_id"', $body);
         $this->assertStringContainsString('name="arr_station_lookup_id"', $body);
 

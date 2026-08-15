@@ -915,6 +915,49 @@
   }
 }
 
+/* AIR progressive disclosure is enabled only after its JS contract validates. */
+[data-air-progressive-form].air-progressive-ready [data-progressive-group][hidden] {
+  display: none !important;
+}
+
+[data-air-progressive-form] [data-progressive-group] {
+  position: relative;
+}
+
+[data-air-progressive-form] [data-progressive-group].air-progressive-answered::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--tc6-success, #16a34a);
+  opacity: .52;
+  pointer-events: none;
+}
+
+[data-air-progressive-form] [data-progressive-group].air-progressive-revealing {
+  animation: air-progressive-reveal 200ms ease-out both;
+}
+
+@keyframes air-progressive-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-air-progressive-form] [data-progressive-group].air-progressive-revealing {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  [data-air-progressive-form="entitlements"] .grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .tc6-contact-case {
   --tc-contact-accent: rgba(59, 130, 246, 0.16);
   --tc-contact-bg-start: #f8fbff;

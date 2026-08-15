@@ -255,6 +255,7 @@ ob_start();
     'url' => ['action' => 'choices', '?' => ['tc6' => 1]],
     'id' => 'tc6-air-choices-form',
     'class' => 'tc6-form',
+    'data-air-progressive-form' => 'choices',
     'novalidate' => true,
 ]) ?>
 <div class="t6ac-grid">
@@ -267,7 +268,7 @@ ob_start();
   </div>
 
   <?php if ($showCompletedOfferOutcome): ?>
-    <section class="t6ac-card">
+    <section class="t6ac-card" data-progressive-group="operator-offer" data-progressive-fields="air_article8_offer">
       <div class="t6ac-kicker">Flyselskabets loesning</div>
       <div class="t6ac-copy" style="margin-bottom:16px;">Hvilke muligheder tilboed flyselskabet dig?</div>
       <input type="hidden" name="air_article8_offer" value="" />
@@ -295,7 +296,7 @@ ob_start();
       </div>
     </section>
 
-    <section class="t6ac-card">
+    <section class="t6ac-card" data-progressive-group="passenger-outcome" data-progressive-fields="remedyChoice">
       <div class="t6ac-kicker">Passagerens loesning</div>
       <div class="t6ac-copy" style="margin-bottom:16px;">Hvilken loesning endte du med?</div>
       <div class="t6ac-options">
@@ -329,7 +330,7 @@ ob_start();
       </div>
     </section>
   <?php elseif ($airPostIncidentChoices !== []): ?>
-    <section class="t6ac-card">
+    <section class="t6ac-card" data-progressive-group="post-incident-choice" data-progressive-fields="air_post_incident_choice">
       <div class="t6ac-kicker">Refund / ombooking</div>
       <div class="t6ac-options">
         <?php foreach ($airPostIncidentChoices as $choiceKey): ?>
@@ -353,7 +354,7 @@ ob_start();
   <?php endif; ?>
 
   <?php if (((string)($flags['gate_art20'] ?? '')) === '1'): ?>
-    <section class="t6ac-card">
+    <section class="t6ac-card" data-progressive-group="assistance-tracks" data-progressive-complete="always">
       <div class="t6ac-kicker">Assistance</div>
       <div class="t6ac-options">
         <?php foreach ($assistanceOptions as $assistKey => $assistLabel): ?>
@@ -375,6 +376,7 @@ ob_start();
     </section>
   <?php endif; ?>
 
+  <div data-progressive-group="actions" data-progressive-complete="always">
   <?= $this->element('tc6/action_bar', [
       'backUrl' => $backUrl,
       'backLabel' => $t('Tilbage'),
@@ -382,6 +384,7 @@ ob_start();
       'nextVariant' => 'navy',
       'disabled' => $isPreview,
   ]) ?>
+  </div>
 </div>
 <?= $this->Form->end() ?>
 <?= $this->element('flow_autosave', ['step' => 'choices', 'formSelector' => '#tc6-air-choices-form']) ?>

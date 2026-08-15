@@ -39,12 +39,14 @@ $tc6LayoutPath = WWW_ROOT . 'css' . DS . 'tc6' . DS . 'layout.css';
 $tc6ComponentsPath = WWW_ROOT . 'css' . DS . 'tc6' . DS . 'components.css';
 $tc6RevealPath = WWW_ROOT . 'js' . DS . 'tc6' . DS . 'reveal.js';
 $tc6FormsPath = WWW_ROOT . 'js' . DS . 'tc6' . DS . 'forms.js';
+$tc6AirProgressivePath = WWW_ROOT . 'js' . DS . 'tc6' . DS . 'air-progressive.js';
 $tc6StationsPath = WWW_ROOT . 'js' . DS . 'tc6' . DS . 'stations.js';
 $tc6TokensVersion = is_file($tc6TokensPath) ? filemtime($tc6TokensPath) : time();
 $tc6LayoutVersion = is_file($tc6LayoutPath) ? filemtime($tc6LayoutPath) : time();
 $tc6ComponentsVersion = is_file($tc6ComponentsPath) ? filemtime($tc6ComponentsPath) : time();
 $tc6RevealVersion = is_file($tc6RevealPath) ? filemtime($tc6RevealPath) : time();
 $tc6FormsVersion = is_file($tc6FormsPath) ? filemtime($tc6FormsPath) : time();
+$tc6AirProgressiveVersion = is_file($tc6AirProgressivePath) ? filemtime($tc6AirProgressivePath) : time();
 $tc6StationsVersion = is_file($tc6StationsPath) ? filemtime($tc6StationsPath) : time();
 ?>
 <!DOCTYPE html>
@@ -60,6 +62,7 @@ $tc6StationsVersion = is_file($tc6StationsPath) ? filemtime($tc6StationsPath) : 
     <link rel="stylesheet" href="<?= h($this->Url->build('/css/tc6/components.css?v=' . $tc6ComponentsVersion)) ?>">
     <script src="<?= h($this->Url->build('/js/tc6/reveal.js?v=' . $tc6RevealVersion)) ?>"></script>
     <script src="<?= h($this->Url->build('/js/tc6/forms.js?v=' . $tc6FormsVersion)) ?>"></script>
+    <script src="<?= h($this->Url->build('/js/tc6/air-progressive.js?v=' . $tc6AirProgressiveVersion)) ?>"></script>
     <script src="<?= h($this->Url->build('/js/tc6/stations.js?v=' . $tc6StationsVersion)) ?>"></script>
     <?= $this->fetch('meta') ?>
     <?= $this->fetch('css') ?>

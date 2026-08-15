@@ -27,7 +27,7 @@ test("Fly ny completed journey selects a live verified AeroDataBox flight", asyn
   await page.locator('select[name="air_route_type"]').first().selectOption("direct");
   await page.locator('input[name="dep_date"]').first().fill("2026-08-12");
   await page.locator('input[name="passenger_count"]').first().fill("1");
-  await page.locator('button[type="submit"][name="continue"]').click();
+  await page.locator('.tc6-action-bar button[type="submit"][name="continue"]').click();
 
   await expect(page).toHaveURL(/\/flow\/(?:air-reservation-contract|air-flight-select)/);
   if (page.url().includes("air-reservation-contract")) {

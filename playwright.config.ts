@@ -13,7 +13,7 @@ export default defineConfig({
     outputDir: 'tests/.artifacts/playwright',
     webServer: {
         command: 'bin\\cake.bat server -p 3000',
-        url: 'http://localhost:3000',
+        url: 'http://localhost:3000/fly-ny',
         reuseExistingServer: true,
         timeout: 60_000,
     },

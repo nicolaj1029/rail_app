@@ -662,6 +662,7 @@ ob_start();
     'id' => 'airIncidentForm',
     'class' => 'tc6-form',
     'data-tc6-air-incident' => '1',
+    'data-air-progressive-form' => 'incident',
     'data-t6ai-owns-cancellation-details' => $showAirCancellationDetailQuestions ? '1' : '0',
     'data-t6ai-connection-fallback' => $airConnectionNeedsFallback ? '1' : '0',
     'data-t6ai-backend-connection-followup' => '0',
@@ -674,7 +675,7 @@ ob_start();
   <h1 class="tc6-h1">Hvad skete der med dit fly?</h1>
   <p class="tc6-subtitle">Vaelg haendelsestype og besvar spoergsmaalene nedenfor. Estimatet i hoejre kolonne opdateres loebende.</p>
 
-  <div class="tc6-card" id="t6aiIncidentTypeCard">
+  <div class="tc6-card" id="t6aiIncidentTypeCard" data-progressive-group="incident-type" data-progressive-fields="incident_main">
     <div class="tc6-section-label">Haendelsestype</div>
     <div class="tc6-choice-cards tc6-choice-cards--3">
       <label class="tc6-choice-card">
@@ -701,8 +702,8 @@ ob_start();
     </div>
   </div>
 
-  <div id="t6aiDelaySection" class="<?= $incidentMain !== 'delay' ? 't6ai-hidden' : '' ?>">
-    <div class="tc6-card">
+  <div id="t6aiDelaySection">
+    <div class="tc6-card" data-progressive-group="delay-expected" data-progressive-show-if="incident_main:delay" data-progressive-fields="air_expected_delay_bucket" data-progressive-clear="air_expected_delay_bucket,air_actual_arrival_delay_bucket,delay_departure_band,delay_minutes_departure,arrival_delay_minutes,air_next_day_departure">
       <div class="tc6-section-label">Forsinkelse</div>
       <div class="t6ai-info-box">
         <span class="t6ai-info-box-icon">&#x2139;</span>
@@ -718,7 +719,7 @@ ob_start();
       </div>
 
       <?php if ($isCompleted): ?>
-      <div class="t6ai-subsection">
+      <div class="t6ai-subsection" data-progressive-group="delay-actual" data-progressive-show-if="incident_main:delay" data-progressive-fields="air_actual_arrival_delay_bucket">
         <div class="tc6-section-label">Faktisk forsinkelse ved slutdestination</div>
         <div class="t6ai-info-box">
           <span class="t6ai-info-box-icon">&#x2139;</span>
@@ -743,8 +744,8 @@ ob_start();
     </div>
   </div>
 
-  <div id="t6aiCancellationSection" class="<?= $incidentMain !== 'cancellation' ? 't6ai-hidden' : '' ?>">
-    <div class="tc6-card">
+  <div id="t6aiCancellationSection">
+    <div class="tc6-card" data-progressive-group="cancellation-notice" data-progressive-show-if="incident_main:cancellation" data-progressive-fields="cancellation_notice_band" data-progressive-clear="cancellation_notice_band,air_cancellation_reason_informed,air_cancellation_reason_given,reroute_offered">
       <div class="tc6-section-label">Hvornaar fik du besked om aflysningen?</div>
       <div class="t6ai-info-box">
         <span class="t6ai-info-box-icon">&#x2139;</span>
@@ -760,7 +761,7 @@ ob_start();
       </div>
 
       <?php if ($isCompleted): ?>
-      <div class="t6ai-subsection">
+      <div class="t6ai-subsection" data-progressive-group="cancellation-reason" data-progressive-show-if="incident_main:cancellation" data-progressive-fields="air_cancellation_reason_informed">
         <div class="tc6-section-label">Begrundelse for aflysning</div>
         <div class="tc6-choice-cards tc6-choice-cards--2">
           <label class="tc6-choice-card">
@@ -778,7 +779,7 @@ ob_start();
             </span>
           </label>
         </div>
-        <div id="t6aiCancellationReasonSelectWrap" class="t6ai-subsection <?= $cancellationReasonInformed === 'yes' ? '' : 't6ai-hidden' ?>">
+        <div id="t6aiCancellationReasonSelectWrap" class="t6ai-subsection" data-progressive-group="cancellation-reason" data-progressive-show-if="incident_main:cancellation;air_cancellation_reason_informed:yes" data-progressive-fields="air_cancellation_reason_given" data-progressive-clear="air_cancellation_reason_given">
           <label class="tc6-label" for="t6aiCancellationReasonSelect">Hvilken begrundelse fik du?</label>
           <select id="t6aiCancellationReasonSelect" name="air_cancellation_reason_given" class="tc6-input">
             <?php foreach ($cancellationReasonOptions as $reasonValue => $reasonLabel): ?>
@@ -792,7 +793,7 @@ ob_start();
       <input type="hidden" name="air_cancellation_reason_given" value="<?= h($cancellationReasonGiven) ?>" />
       <?php endif; ?>
 
-      <div class="t6ai-subsection">
+      <div class="t6ai-subsection" data-progressive-group="cancellation-reroute" data-progressive-show-if="incident_main:cancellation" data-progressive-fields="reroute_offered">
         <div class="tc6-section-label">Tilboed flyselskabet en alternativ flyvning?</div>
         <div class="tc6-choice-cards tc6-choice-cards--3">
           <label class="tc6-choice-card">
@@ -812,11 +813,11 @@ ob_start();
     </div>
   </div>
 
-  <div id="t6aiDeniedSection" class="<?= $incidentMain !== 'denied_boarding' ? 't6ai-hidden' : '' ?>">
-    <div class="tc6-card">
+  <div id="t6aiDeniedSection">
+    <div class="tc6-card" data-progressive-group="<?= $isCompleted ? 'denied-volunteers' : 'denied-voluntary' ?>" data-progressive-show-if="incident_main:denied_boarding" data-progressive-fields="<?= $isCompleted ? 'air_denied_boarding_called_for_volunteers' : 'voluntary_denied_boarding' ?>" data-progressive-clear="air_denied_boarding_called_for_volunteers,voluntary_denied_boarding,air_denied_boarding_refused_for_safety_security_health_documents,air_denied_boarding_at_gate_on_time,boarding_denied">
       <div class="tc6-section-label">Afvisning af boarding</div>
       <?php if ($isCompleted): ?>
-      <div class="t6ai-subsection">
+      <div class="t6ai-subsection"<?= $isCompleted ? ' data-progressive-group="denied-voluntary" data-progressive-show-if="incident_main:denied_boarding" data-progressive-fields="voluntary_denied_boarding"' : '' ?>>
         <div class="tc6-section-label">Kaldte flyselskabet efter frivillige?</div>
         <div class="tc6-choice-cards tc6-choice-cards--3">
           <label class="tc6-choice-card">
@@ -857,7 +858,7 @@ ob_start();
       </div>
 
       <?php if ($isCompleted): ?>
-      <div id="t6aiDeniedDetailWrap" class="t6ai-subsection <?= $voluntaryDenied === 'no' ? '' : 't6ai-hidden' ?>">
+      <div id="t6aiDeniedDetailWrap" class="t6ai-subsection" data-progressive-group="denied-details" data-progressive-show-if="incident_main:denied_boarding;voluntary_denied_boarding:no" data-progressive-fields="air_denied_boarding_refused_for_safety_security_health_documents,air_denied_boarding_at_gate_on_time" data-progressive-clear="air_denied_boarding_refused_for_safety_security_health_documents,air_denied_boarding_at_gate_on_time">
         <div class="tc6-field">
           <label class="tc6-label">Blev du afvist af hensyn til sikkerhed, security, helbred eller manglende rejsedokumenter?</label>
           <div class="tc6-choice-cards tc6-choice-cards--3" style="margin-top:10px">
@@ -898,7 +899,7 @@ ob_start();
   </div>
 
   <?php if ($showAirMissedConnection): ?>
-  <div class="tc6-card">
+  <div class="tc6-card" data-progressive-group="missed-connection" data-progressive-fields="protected_connection_missed" data-progressive-clear="missed_connection_station,connection_protection_basis">
     <div class="tc6-section-label">Missed connection</div>
     <div class="tc6-field">
       <label class="tc6-label">Mistede du en videre forbindelse pga. haendelsen?</label>
@@ -913,7 +914,7 @@ ob_start();
         </label>
       </div>
     </div>
-    <div id="t6aiMissedConnectionDetailWrap" class="t6ai-subsection <?= $protectedConnectionMissed === 'yes' ? '' : 't6ai-hidden' ?>">
+    <div id="t6aiMissedConnectionDetailWrap" class="t6ai-subsection" data-progressive-group="missed-connection-details" data-progressive-show-if="protected_connection_missed:yes"<?= $airConnectionNeedsFallback ? ' data-progressive-fields="connection_protection_basis"' : ' data-progressive-complete="always"' ?> data-progressive-clear="missed_connection_station,connection_protection_basis">
       <?php if ($airMissedConnectionOptions !== []): ?>
       <div class="tc6-field">
         <label class="tc6-label" for="t6aiMissedConnectionStation">Hvor mistede du forbindelsen?</label>
@@ -925,7 +926,7 @@ ob_start();
       </div>
       <?php endif; ?>
       <?php if ($airConnectionNeedsFallback): ?>
-      <div id="t6aiConnectionProtectionWrap" class="tc6-field <?= $protectedConnectionMissed === 'yes' ? '' : 't6ai-hidden' ?>" style="margin-top:16px">
+      <div id="t6aiConnectionProtectionWrap" class="tc6-field" style="margin-top:16px">
         <label class="tc6-label" for="t6aiConnectionProtectionBasis">Hvad bygger forbindelsen paa?</label>
         <select id="t6aiConnectionProtectionBasis" name="connection_protection_basis" class="tc6-input">
           <option value="">- Vaelg grundlag -</option>
@@ -946,7 +947,7 @@ ob_start();
   <input type="hidden" name="connection_protection_basis" value="" />
   <?php endif; ?>
 
-  <div class="tc6-card">
+  <div class="tc6-card" data-progressive-group="extraordinary" data-progressive-fields="operatorExceptionalCircumstances">
     <div class="tc6-section-label">Ekstraordinaere omstaendigheder</div>
     <div class="tc6-field">
       <label class="tc6-label">Har flyselskabet henvist til ekstraordinaere omstaendigheder, fx vejr, strejke eller sikkerhed?</label>
@@ -972,7 +973,7 @@ ob_start();
           </span>
         </label>
       </div>
-      <div id="t6aiExceptionalTypeWrap" class="t6ai-subsection <?= $excValue === 'yes' ? '' : 't6ai-hidden' ?>">
+      <div id="t6aiExceptionalTypeWrap" class="t6ai-subsection" data-progressive-group="extraordinary" data-progressive-show-if="operatorExceptionalCircumstances:yes" data-progressive-fields="operatorExceptionalType" data-progressive-clear="operatorExceptionalType">
         <label class="tc6-label" for="t6aiExceptionalType">Hvilken grund oplyste flyselskabet?</label>
         <select id="t6aiExceptionalType" name="operatorExceptionalType" class="tc6-input">
           <option value="">- Vaelg grund -</option>
@@ -991,7 +992,7 @@ ob_start();
   <input type="hidden" name="extraordinary_circumstances" value="" />
 
   <?php if ($art9On): ?>
-  <div class="tc6-card">
+  <div class="tc6-card" data-progressive-group="pmr" data-progressive-fields="pmr_user">
     <div class="tc6-section-label">PMR / saerlig assistance (Art. 11)</div>
     <div class="tc6-field">
       <label class="tc6-label">Har den rejsende nedsat mobilitet eller behov for saerlig assistance?</label>
@@ -1015,6 +1016,7 @@ ob_start();
 
 </fieldset>
 
+<div data-progressive-group="actions" data-progressive-complete="always">
 <?= $this->element('tc6/action_bar', [
     'backUrl' => $backUrl,
     'backLabel' => $uiLanguage === 'fr' ? 'Retour' : 'Tilbage',
@@ -1022,6 +1024,7 @@ ob_start();
     'nextVariant' => 'navy',
     'submitName' => '_save',
 ]) ?>
+</div>
 
 <?= $this->Form->end() ?>
 

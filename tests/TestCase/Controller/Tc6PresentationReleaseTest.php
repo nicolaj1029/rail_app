@@ -66,6 +66,28 @@ class Tc6PresentationReleaseTest extends TestCase
         $this->assertStringNotContainsString('strtr(', $body);
     }
 
+    public function testProgressiveQuestionMarkupIsScopedToAirTc6(): void
+    {
+        foreach ([
+            'air' => ['air', 'air_short', true],
+            'rail' => ['rail', 'rail_split', false],
+            'ferry' => ['ferry', 'ferry_split', false],
+        ] as [$mode, $variant, $progressive]) {
+            $this->session($this->flowSession($mode, $variant));
+            $this->get('/flow/entitlements');
+
+            $this->assertResponseOk();
+            $body = (string)$this->_response->getBody();
+            if ($progressive) {
+                $this->assertStringContainsString('data-air-progressive-form="entitlements"', $body);
+                $this->assertStringContainsString('data-progressive-group="departure"', $body);
+                $this->assertStringContainsString('/js/tc6/air-progressive.js', $body);
+            } else {
+                $this->assertStringNotContainsString('data-air-progressive-form', $body);
+            }
+        }
+    }
+
     public function testAirReservationStepPersistsTc6AndContinuesToFlightMatch(): void
     {
         $session = $this->flowSession('air', 'air_short');
@@ -108,6 +130,9 @@ class Tc6PresentationReleaseTest extends TestCase
         $this->assertResponseOk();
         $this->assertResponseContains('/css/flow-form-steps.css');
         $this->assertResponseContains('/css/flow-select-steps.css');
+        $this->assertResponseContains('data-air-progressive-form="reservation-contract"');
+        $this->assertResponseContains('data-progressive-group="seller"');
+        $this->assertResponseContains('data-progressive-group="actions"');
         $this->assertFileExists(WWW_ROOT . 'css' . DS . 'flow-form-steps.css');
         $this->assertFileExists(WWW_ROOT . 'css' . DS . 'flow-select-steps.css');
     }

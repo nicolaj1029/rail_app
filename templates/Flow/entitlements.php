@@ -1088,25 +1088,26 @@ $uploadIntroText = $isModeEntryFlow
         <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
       <?php elseif ($isAir): ?>
-      <label>Afgangslufthavn
+      <label<?= $isAirShortEntryFlow ? ' data-progressive-group="departure" data-progressive-fields="dep_station_lookup_id"' : '' ?>>Afgangslufthavn
         <input type="text" name="dep_station" data-airport-preselector="departure" value="<?= h($form['dep_station'] ?? ($meta['_auto']['dep_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Skriv by, lufthavn eller IATA" aria-describedby="airDepartureAirportHelp" required />
         <span id="airDepartureAirportHelp" class="small muted">Skriv mindst 2 tegn, og vælg en lufthavn fra listen.</span>
       </label>
-      <label>Ankomstlufthavn
+      <label<?= $isAirShortEntryFlow ? ' data-progressive-group="arrival" data-progressive-fields="arr_station_lookup_id"' : '' ?>>Ankomstlufthavn
         <input type="text" name="arr_station" data-airport-preselector="arrival" value="<?= h($form['arr_station'] ?? ($meta['_auto']['arr_station']['value'] ?? '')) ?>" autocomplete="off" placeholder="Skriv by, lufthavn eller IATA" aria-describedby="airArrivalAirportHelp" required />
         <span id="airArrivalAirportHelp" class="small muted">Skriv mindst 2 tegn, og vælg en lufthavn fra listen.</span>
       </label>
-      <?php $airRouteTypeInput = (string)($airRouteTypeSeed !== '' ? $airRouteTypeSeed : ($airStopoverSeed !== '' ? 'connecting' : 'direct')); ?>
-      <label>Rejsetype
+      <?php $airRouteTypeInput = (string)($airRouteTypeSeed !== '' ? $airRouteTypeSeed : ($airStopoverSeed !== '' ? 'connecting' : ($isAirShortEntryFlow ? '' : 'direct'))); ?>
+      <label<?= $isAirShortEntryFlow ? ' data-progressive-group="route-type" data-progressive-fields="air_route_type"' : '' ?>>Rejsetype
         <select
           name="air_route_type"
           data-air-route-context="ticketless"
           onchange="(function(sel){var ctx=sel.getAttribute('data-air-route-context')||''; var show=sel.value==='connecting'; document.querySelectorAll('select[name=&quot;air_route_type&quot;]').forEach(function(other){other.value=sel.value;}); document.querySelectorAll('[data-air-stopovers-ticketless][data-air-route-context=&quot;'+ctx+'&quot;],[data-air-connection-type-ticketless][data-air-route-context=&quot;'+ctx+'&quot;]').forEach(function(node){node.classList.toggle('hidden',!show); node.style.display=show?'':'none';});})(this)">
+          <?php if ($isAirShortEntryFlow): ?><option value="" <?= $airRouteTypeInput===''?'selected':'' ?>>Vaelg rejsetype</option><?php endif; ?>
           <option value="direct" <?= $airRouteTypeInput==='direct'?'selected':'' ?>>Direkte fly</option>
           <option value="connecting" <?= $airRouteTypeInput==='connecting'?'selected':'' ?>>Med mellemlanding(er)</option>
         </select>
       </label>
-      <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-stopovers-ticketless data-air-route-context="ticketless">Mellemlanding(er) i raekkefolge
+      <label class="<?= ($airRouteTypeInput === 'connecting' || $isAirShortEntryFlow) ? '' : 'hidden' ?>" data-air-stopovers-ticketless data-air-route-context="ticketless"<?= $isAirShortEntryFlow ? ' data-progressive-group="connection-details" data-progressive-show-if="air_route_type:connecting" data-progressive-fields="air_stopover_airports" data-progressive-clear="air_stopover_airports"' : '' ?>>Mellemlanding(er) i raekkefolge
         <textarea class="air-stopovers-textarea" name="air_stopover_airports" placeholder="Fx AMS, CDG&#10;eller en lufthavn pr. linje"><?= h($airStopoverSeed) ?></textarea>
         <div class="small muted" style="margin-top:4px;">Kun relevant hvis rejsen ikke er direkte. Skriv flere mellemlandinger i den raekkefolge, du skulle flyve dem, adskilt med komma eller ny linje.</div>
         <div class="small air-route-preview" data-air-route-preview data-air-route-context="ticketless">
@@ -1114,7 +1115,7 @@ $uploadIntroText = $isModeEntryFlow
         </div>
       </label>
       <?php $airConnectionTypeTicketless = (string)($form['air_connection_type'] ?? ''); ?>
-      <label class="<?= $airRouteTypeInput === 'connecting' ? '' : 'hidden' ?>" data-air-connection-type-ticketless data-air-route-context="ticketless">
+      <label class="<?= ($airRouteTypeInput === 'connecting' || $isAirShortEntryFlow) ? '' : 'hidden' ?>" data-air-connection-type-ticketless data-air-route-context="ticketless"<?= $isAirShortEntryFlow ? ' data-progressive-group="connection-details" data-progressive-show-if="air_route_type:connecting" data-progressive-fields="air_connection_type" data-progressive-clear="air_connection_type"' : '' ?>>
         Var videreforbindelsen del af samme booking?
         <select name="air_connection_type">
           <option value="" <?= $airConnectionTypeTicketless===''?'selected':'' ?>>Ved ikke endnu</option>
@@ -1131,21 +1132,22 @@ $uploadIntroText = $isModeEntryFlow
           <input type="text" name="operating_carrier" list="airOperatorSuggestions" value="<?= h((string)($form['operating_carrier'] ?? ($modeContract['operating_carrier'] ?? ''))) ?>" placeholder="Fx CityJet" />
       </label>
       <?php endif; ?>
-      <label class="ticketless-optional">Bookingreference / PNR (valgfri)
+      <label class="ticketless-optional"<?= $isAirShortEntryFlow ? ' data-progressive-group="travel-date"' : '' ?>>Bookingreference / PNR (valgfri)
         <input type="text" name="ticket_no" value="<?= h((string)($form['ticket_no'] ?? ($meta['_auto']['ticket_no']['value'] ?? ''))) ?>" placeholder="Fx X7YZ12" />
       </label>
-      <label>Planlagt afgangsdato
+      <label<?= $isAirShortEntryFlow ? ' data-progressive-group="travel-date" data-progressive-fields="dep_date"' : '' ?>>Planlagt afgangsdato
         <input type="date" name="dep_date" value="<?= h($form['dep_date'] ?? ($meta['_auto']['dep_date']['value'] ?? '')) ?>" placeholder="YYYY-MM-DD" />
       </label>
       <?php if ($isAirShortEntryFlow): ?>
-      <label>Antal passagerer
-        <input type="number" name="passenger_count" min="1" max="20" value="<?= h((string)max(1, (int)($form['passenger_count'] ?? ($journey['passengerCount'] ?? 1)))) ?>" />
+      <label data-progressive-group="passengers" data-progressive-fields="passenger_count">Antal passagerer
+        <?php $airPassengerSeed = $form['passenger_count'] ?? ($journey['passengerCount'] ?? ''); ?>
+        <input type="number" name="passenger_count" min="1" max="20" value="<?= h($airPassengerSeed === '' ? '' : (string)max(1, (int)$airPassengerSeed)) ?>" />
       </label>
       <?php endif; ?>
-      <label class="ticketless-optional">Planlagt afgangstid (valgfri)
+      <label class="ticketless-optional"<?= $isAirShortEntryFlow ? ' data-progressive-group="travel-date"' : '' ?>>Planlagt afgangstid (valgfri)
         <input type="time" name="dep_time" value="<?= h($form['dep_time'] ?? ($meta['_auto']['dep_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
-      <label class="ticketless-optional">Planlagt ankomsttid (valgfri)
+      <label class="ticketless-optional"<?= $isAirShortEntryFlow ? ' data-progressive-group="travel-date"' : '' ?>>Planlagt ankomsttid (valgfri)
         <input type="time" name="arr_time" value="<?= h($form['arr_time'] ?? ($meta['_auto']['arr_time']['value'] ?? '')) ?>" placeholder="HH:MM" step="60" />
       </label>
       <?php endif; ?>

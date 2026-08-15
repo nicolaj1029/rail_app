@@ -50,7 +50,9 @@ test('AIR French fresh session keeps TC6 through reservation, flight match and i
   await selectAirport(page, arrival, 'London', 'LHR');
   await expect(page.locator('input[name="dep_station_lookup_code"]')).toHaveValue('BRU');
   await expect(page.locator('input[name="arr_station_lookup_code"]')).toHaveValue('LHR');
+  await page.locator('select[name="air_route_type"]').selectOption('direct');
   await page.locator('input[name="dep_date"]').first().fill('2026-08-12');
+  await page.locator('input[name="passenger_count"]').fill('1');
   await page.locator('.tc6-action-bar button[type="submit"][name="continue"]').click();
 
   await expect(page).toHaveURL(/\/flow\/air-reservation-contract/);

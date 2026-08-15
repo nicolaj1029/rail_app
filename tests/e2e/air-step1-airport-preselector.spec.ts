@@ -4,6 +4,7 @@ const configuredBase = process.env.RAIL_APP_BASE_URL?.replace(/\/+$/, "");
 const appUrl = (path: string) => configuredBase ? `${configuredBase}${path}` : path;
 
 async function suggestionBox(page: Page, input: Locator): Promise<Locator> {
+  await expect(input).toHaveAttribute("data-airport-preselector-bound", "true");
   const id = await input.getAttribute("aria-controls");
   expect(id).toBeTruthy();
   return page.locator(`#${id}`);
@@ -66,17 +67,20 @@ test("AIR Step 1 visibly selects canonical departure and arrival airports", asyn
   await expect(arrivalBox).toBeVisible();
   await arrival.press("Tab");
   await expect(arrivalBox).toBeHidden();
+  // Let the selector's blur finalizer settle before opening a fresh query.
+  await page.waitForTimeout(220);
   await chooseWithMouse(page, arrival, "London", "LHR");
   await expect(arrival).toHaveValue("London Heathrow Airport");
   await expect(page.locator('input[name="arr_station_lookup_id"]')).not.toHaveValue("");
   await expect(page.locator('input[name="arr_station_lookup_code"]')).toHaveValue("LHR");
   await expect(page.locator('input[name="arr_station_lookup_mode"]')).toHaveValue("air");
   await expect(page.locator('input[name="arr_station_lookup_node_type"]')).toHaveValue("airport");
+  await page.locator('select[name="air_route_type"]').selectOption('direct');
+  await page.locator('input[name="dep_date"]').fill("2026-08-12");
+  await page.locator('input[name="passenger_count"]').fill("1");
 
   await departure.fill("asdfxyz");
   await expect(page.locator('input[name="dep_station_lookup_id"]')).toHaveValue("");
-  await page.locator('input[name="dep_date"]').fill("2026-08-12");
-  await page.locator('input[name="passenger_count"]').fill("1");
   await page.locator('.tc6-action-bar button[type="submit"][name="continue"]').click();
   await expect(page).toHaveURL(/\/flow\/entitlements/);
   await expect.poll(() => departure.evaluate((input: HTMLInputElement) => input.validationMessage))
@@ -152,6 +156,9 @@ test("AIR Step 1 search matrix is visible in both airport fields", async ({ page
   await page.locator('a[href*="/flow/air/completed?tc6=1"]').first().click();
   const visibleMetrics: Record<string, number> = {};
   for (const fieldName of ["dep_station", "arr_station"]) {
+    if (fieldName === "arr_station") {
+      await chooseWithMouse(page, page.locator('input[name="dep_station"]').first(), "Bruxelles", "BRU");
+    }
     const input = page.locator(`input[name="${fieldName}"]`).first();
     const box = await suggestionBox(page, input);
     for (const [query, expectedCodes] of matrix) {

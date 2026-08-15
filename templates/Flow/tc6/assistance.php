@@ -394,15 +394,19 @@ if ($isRail && isset($stats[0][0], $stats[0][1]) && $stats[0][0] === 'Flow') {
 }
 
 $nextHint = '';
-
-ob_start();
-?>
-<?= $this->Form->create(null, [
+$assistanceFormOptions = [
     'url' => ['action' => 'assistance', '?' => $flowQuery],
     'id' => 'tc6-assistance-form',
     'class' => 'tc6-form',
     'novalidate' => true,
-]) ?>
+];
+if ($isAir) {
+    $assistanceFormOptions['data-air-progressive-form'] = 'assistance';
+}
+
+ob_start();
+?>
+<?= $this->Form->create(null, $assistanceFormOptions) ?>
 <div class="tc6-assistance">
 <?php if ($captureAssistanceExpensesInBackend): ?>
 <style>
@@ -471,7 +475,7 @@ ob_start();
   <?php endif; ?>
 
   <?php if ($showMealSection): ?>
-  <div class="tc6-card">
+  <div class="tc6-card"<?= $isAir ? ' data-progressive-group="meals" data-progressive-fields="meal_offered"' : '' ?>>
     <div class="tc6-section-label">Maaltider og forfriskninger</div>
     <?php if ($isAir && $airMealsHint !== ''): ?>
     <div class="tc6-note tc6-note--blue tc6-note--keep" style="margin-bottom:14px;">
@@ -490,7 +494,7 @@ ob_start();
       </label>
     </div>
 
-    <div class="<?= $captureAssistanceExpensesInBackend ? 'tc6-field-grid--2' : 'tc6-field-grid--3' ?>" x-show="mealOffered === 'no'" x-cloak style="margin-top:14px">
+    <div class="<?= $captureAssistanceExpensesInBackend ? 'tc6-field-grid--2' : 'tc6-field-grid--3' ?>" x-show="mealOffered === 'no'"<?= $isAir ? ' data-progressive-group="meals" data-progressive-show-if="meal_offered:no" data-progressive-fields="assistance_meals_unavailable_reason" data-progressive-clear="assistance_meals_unavailable_reason"' : ' x-cloak' ?> style="margin-top:14px">
       <div class="tc6-field">
         <label class="tc6-label">Hvorfor blev maaltider ikke tilbudt?</label>
         <select class="tc6-select" name="assistance_meals_unavailable_reason">
@@ -543,7 +547,7 @@ ob_start();
   <?php endif; ?>
 
   <?php if ($showHotelSection): ?>
-  <div class="tc6-card">
+  <div class="tc6-card"<?= $isAir ? ' data-progressive-group="hotel-next-day" data-progressive-fields="air_next_day_departure"' : '' ?>>
     <div class="tc6-section-label">Hotel og overnatning</div>
     <?php if ($isAir): ?>
     <div class="tc6-field" style="margin-bottom:14px">
@@ -564,7 +568,7 @@ ob_start();
     </div>
     <?php endif; ?>
 
-    <div x-show="<?= $isAir ? 'airNextDayDeparture === \'yes\'' : 'true' ?>" x-cloak>
+    <div x-show="<?= $isAir ? 'airNextDayDeparture === \'yes\'' : 'true' ?>"<?= $isAir ? ' data-progressive-group="hotel-offer" data-progressive-show-if="air_next_day_departure:yes" data-progressive-fields="hotel_offered" data-progressive-clear="hotel_offered,assistance_hotel_transport_included"' : ' x-cloak' ?>>
     <?php if ($isAir && $airHotelHint !== ''): ?>
     <div class="tc6-note tc6-note--blue tc6-note--keep" style="margin-bottom:14px;">
       <?= h($airHotelHint) ?>
@@ -586,7 +590,7 @@ ob_start();
       </label>
     </div>
 
-    <div class="tc6-field" x-show="hotelOffered === 'yes'" x-cloak style="margin-top:14px">
+    <div class="tc6-field" x-show="hotelOffered === 'yes'"<?= $isAir ? ' data-progressive-group="hotel-offer" data-progressive-show-if="air_next_day_departure:yes;hotel_offered:yes" data-progressive-fields="assistance_hotel_transport_included" data-progressive-clear="assistance_hotel_transport_included"' : ' x-cloak' ?> style="margin-top:14px">
       <div class="tc6-label">Indgik transport til hotellet?</div>
       <div class="tc6-choice-cards tc6-choice-cards--2">
         <label class="tc6-choice-card">
@@ -693,7 +697,7 @@ ob_start();
   <?php endif; ?>
 
   <?php if ($showPmrSection): ?>
-    <div class="tc6-card">
+    <div class="tc6-card"<?= $isAir ? ' data-progressive-group="pmr-assistance" data-progressive-fields="assistance_pmr_priority_applied,assistance_pmr_companion_supported"' : '' ?>>
       <div class="tc6-section-label">PMR / saerlige hensyn</div>
       <div class="tc6-field">
         <div class="tc6-label">Blev prioriteret assistance anvendt?</div>
@@ -731,6 +735,7 @@ ob_start();
 
 </div>
 
+<?= $isAir ? '<div data-progressive-group="actions" data-progressive-complete="always">' : '' ?>
 <?= $this->element('tc6/action_bar', [
     'backUrl' => $backUrl,
     'backLabel' => $translateAssistance('Tilbage'),
@@ -738,6 +743,7 @@ ob_start();
     'nextVariant' => 'navy',
     'submitName' => '_save',
 ]) ?>
+<?= $isAir ? '</div>' : '' ?>
 
 </div>
 
