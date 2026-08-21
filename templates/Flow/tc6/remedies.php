@@ -20,6 +20,10 @@ $remediesTranslations = [
         'Tilbage' => 'Retour',
         'Naeste trin' => 'Etape suivante',
         'Billet, grunddata' => 'Billet, donnees de base',
+        'Basisrejse' => 'Trajet de base',
+        'Reservation, kontrakt' => 'Reservation, contrat',
+        'Fly-match' => 'Flight-match',
+        'Haendelse + dine muligheder nu' => 'Incident + vos options maintenant',
         'Vaelg afgang' => 'Choix du depart',
         'Vaelg fly' => 'Choix du vol',
         'Haendelse' => 'Incident',
@@ -48,6 +52,11 @@ $remediesTranslations = [
         'Aktiv' => 'Actif',
         'Afventer' => 'En attente',
         'Refusion / ombooking' => 'Remboursement / reacheminement',
+        'Refund eller ombooking' => 'Remboursement ou reacheminement',
+        'Hvad vil du goere nu?' => 'Que souhaitez-vous faire maintenant ?',
+        'Hvilken loesning endte du med?' => 'Quelle solution avez-vous finalement retenue ?',
+        'V&aelig;lg pr&aelig;cis en mulighed' => 'Choisissez exactement une option',
+        'Jeg fortsaetter rejsen og oensker ikke refusion nu' => 'Je poursuis le voyage et ne demande pas de remboursement maintenant',
         'Operatoer' => 'Operateur',
         'Ikke valgt endnu' => 'Pas encore selectionne',
         'Trin ' => 'Etape ',
@@ -288,14 +297,13 @@ if ($transportMode === 'ferry') {
     $subtitle = '';
 } elseif ($transportMode === 'air') {
     $steps = [
-        1 => 'Billet, grunddata',
-        2 => 'Vaelg fly',
-        3 => 'Haendelse',
-        4 => 'Valg efter haendelsen',
-        5 => 'Refund, ombooking',
-        6 => 'Assistance',
-        7 => 'Nedgradering',
-        8 => 'Kontakt, opret sag',
+        1 => 'Basisrejse',
+        2 => 'Reservation, kontrakt',
+        3 => 'Fly-match',
+        4 => 'Haendelse + dine muligheder nu',
+        5 => 'Valg efter haendelsen',
+        6 => 'Nedgradering',
+        7 => 'Kontakt, opret sag',
     ];
     $currentStep = 5;
     $brandName = 'AirClaim';
@@ -423,6 +431,10 @@ ob_start();
 $isTc6Preview = true;
 require __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'remedies.php';
 $legacyContent = (string)ob_get_clean();
+$legacyMarkupTools = require ROOT . DS . 'templates' . DS . 'element' . DS . 'tc6' . DS . 'legacy_markup_tools.php';
+if ($transportMode === 'air') {
+    $legacyContent = $legacyMarkupTools['stripEstimate']($legacyContent, 'airLiveEstimate', '.air-live-estimate');
+}
 $legacyContent = str_replace(
     'action="/rail_app/flow/remedies"',
     'action="' . h(html_entity_decode($this->Url->build(['action' => 'remedies', '?' => $flowQuery]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) . '"',
@@ -739,6 +751,38 @@ if ($transportMode === 'ferry') {
             .tc6-remedies-wrap #returnExpenseNow {
                 grid-template-columns: 1fr !important;
             }
+        }
+    </style>';
+} elseif ($transportMode === 'air') {
+    $transportModeCss = '<style>
+        .tc6-remedies-wrap > .tc6-subtitle,
+        .tc6-remedies-wrap .flow-wrapper.fps-step > .small,
+        .tc6-remedies-wrap .card > .small.muted,
+        .tc6-remedies-wrap .fps-panel > .small.muted,
+        .tc6-remedies-wrap .small.muted.mt4,
+        .tc6-remedies-wrap .small.muted.mt8,
+        .tc6-remedies-wrap .small.muted.ml8,
+        .tc6-remedies-wrap #remedyHint:empty,
+        .tc6-remedies-wrap #rerouteLive,
+        .tc6-remedies-wrap #returnExpensePast > .small.mt8,
+        .tc6-remedies-wrap label:has(> #advToggle),
+        .tc6-remedies-wrap #advPast,
+        .tc6-remedies-wrap #advNow {
+            display: none !important;
+        }
+        .tc6-remedies-wrap [hidden],
+        .tc6-remedies-wrap .hidden {
+            display: none !important;
+        }
+        .tc6-remedies-wrap .flow-wrapper.fps-step > h1 {
+            margin-bottom: 20px !important;
+        }
+        .tc6-remedies-wrap .flow-wrapper.fps-step > .card,
+        .tc6-remedies-wrap .flow-wrapper.fps-step > .fps-question-card,
+        .tc6-remedies-wrap .flow-wrapper.fps-step > .fps-callout {
+            border-radius: 22px !important;
+            border-color: rgba(15, 23, 42, 0.08) !important;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06) !important;
         }
     </style>';
 }

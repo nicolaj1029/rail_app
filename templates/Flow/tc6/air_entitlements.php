@@ -123,6 +123,13 @@ $legacyMarkupTools = require ROOT . DS . 'templates' . DS . 'element' . DS . 'tc
 $legacyContent = $legacyMarkupTools['stripEstimate']($legacyContent, 'airLiveEstimate', '.air-live-estimate');
 $legacyContent = $legacyMarkupTools['stripById']($legacyContent, 'ticketUploadCard');
 $legacyContent = $legacyMarkupTools['stripById']($legacyContent, 'modeJourneyFields');
+$legacyContent = preg_replace('/<div class="fe-header">.*?<\/div>/s', '', $legacyContent, 1) ?? $legacyContent;
+$legacyContent = preg_replace(
+    '/<div class="small muted" style="margin-top:6px;">\s*Auto:.*?<\/div>/s',
+    '',
+    $legacyContent,
+    1
+) ?? $legacyContent;
 $legacyContent = preg_replace(
     '/(<form\b[^>]*\bid="entitlementsForm"[^>]*)(>)/i',
     '$1 data-air-progressive-form="entitlements"$2',
@@ -151,11 +158,20 @@ ob_start();
 ?>
 <div class="tc6-legacy-wrap tc6-legacy-wrap--entitlements tc6-air-entitlements-wrap">
   <style>
-    .tc6-air-entitlements-wrap .actions-row,
-    .tc6-air-entitlements-wrap .fe-actions-row {
+    #entitlementsForm .fe-header,
+    #entitlementsForm .fe-wrapper > .card:first-of-type,
+    #entitlementsForm .fe-wrapper > .small.muted,
+    .tc6-air-entitlements-wrap .tc6-early-intro > .tc6-subtitle,
+    #entitlementsForm #ticketlessCard > .section-title,
+    #entitlementsForm #ticketlessCard > .small.muted,
+    #entitlementsForm #ticketlessFieldset > .small {
       display: none !important;
     }
-    .tc6-air-entitlements-wrap .tc6-action-bar {
+    #entitlementsForm .actions-row,
+    #entitlementsForm .fe-actions-row {
+      display: none !important;
+    }
+    #entitlementsForm .tc6-action-bar:not([hidden]) {
       display: flex !important;
       margin-top: 24px !important;
     }

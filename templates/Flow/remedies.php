@@ -28,6 +28,8 @@ $isFerry = ($transportMode === 'ferry');
 $isBus = ($transportMode === 'bus');
 $isAir = ($transportMode === 'air');
 $isRail = ($transportMode === 'rail');
+$airTc6Progressive = $isAir && !empty($isTc6Preview);
+$airTc6French = $airTc6Progressive && strtolower((string)($uiLanguage ?? 'da')) === 'fr';
 $entryVariant = strtolower((string)($flags['entry_variant'] ?? ($meta['entry_variant'] ?? '')));
 $isAirShortView = $isAir && $entryVariant === 'air_short';
 $isModeSplitView = in_array($entryVariant, ['rail_split', 'bus_split', 'ferry_split'], true);
@@ -275,6 +277,12 @@ if ($isAirShortView && !empty($flowSteps) && is_array($flowSteps)) {
         break;
     }
 }
+if ($isAir && !empty($isTc6Preview)) {
+    $remediesTitle = 'Refund eller ombooking';
+    $art18Title = $isOngoing
+        ? 'Hvad vil du goere nu?'
+        : 'Hvilken loesning endte du med?';
+}
 if ($isAir && $nextAction === 'compensation') {
     $nextAction = 'downgrade';
 }
@@ -481,7 +489,7 @@ $ferryRerouteExtraAmountEur = $toEur($ferryRerouteExtraAmountCurrent, $ferryRero
     $isPreview = !empty($flowPreview);
 ?>
 <?= $this->element('flow_locked_notice') ?>
-<?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'remedies'], 'type' => 'file', 'novalidate' => true]) ?>
+<?= $this->Form->create(null, ['url' => ['controller' => 'Flow', 'action' => 'remedies'], 'type' => 'file', 'novalidate' => true] + ($airTc6Progressive ? ['data-air-progressive-form' => 'remedies'] : [])) ?>
 <fieldset <?= $isPreview ? 'disabled' : '' ?>>
 <?php if ($isFerry): ?>
 <input type="hidden" name="ferry_remedy_choice" value="<?= h((string)($form['ferry_remedy_choice'] ?? $remedy ?? '')) ?>" />
@@ -701,11 +709,11 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
 ?>
     <div id="art18Wrapper" class="<?= (($art18Active || $ferryPmrRemedyActive || $busPmrRemedyActive) || $isPreview) ? '' : 'hidden' ?>">
         <div id="art18Flow">
-    <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)">
+    <div class="card <?= ($showArt18 && $showArt181) ? '' : 'hidden' ?>" data-art="18(1)"<?= $airTc6Progressive ? ' data-progressive-group="remedy-choice" data-progressive-fields="remedyChoice"' : '' ?>>
         <div class="card-title"><span class="icon">&#127919;</span><span><?= h($art18TitleResolved) ?></span></div>
         <div class="small muted" style="margin-top:6px;"><?= h($airDelayRefundOnly ? 'Ved forsinkelse paa mindst 5 timer kan du vælge at opgive rejsen og få refusion efter flight-reglerne. Hvis du ikke vil opgive rejsen nu, kan du fortsætte uden at vælge refusion.' : $art18Help) ?></div>
         <div id="remedyHint" class="small muted mt8"></div>
-        <div class="mt8" data-art="18(1)"><strong>V&aelig;lg pr&aelig;cis en mulighed</strong></div>
+        <div class="mt8" data-art="18(1)"><strong><?= ($isAir && !empty($isTc6Preview) && strtolower((string)($uiLanguage ?? 'da')) === 'fr') ? 'Choisissez exactement une option' : 'V&aelig;lg pr&aelig;cis en mulighed' ?></strong></div>
         <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="refund_return" <?= $remedy==='refund_return'?'checked':'' ?> /> <?= $isFerry ? 'Jeg oensker tilbagebetaling' : (($isAir && $isOngoing) ? 'Jeg vil stoppe rejsen og have refund' : 'Jeg oensker refusion') ?></label><br/>
         <?php if ($airShortDelayRefundOnly): ?>
             <label data-art="18(1a)"><input type="radio" name="remedyChoice" value="<?= h($airDelayContinueChoice) ?>" <?= $remedy===$airDelayContinueChoice?'checked':'' ?> /> Jeg fortsaetter rejsen og oensker ikke refusion nu</label>
@@ -764,7 +772,7 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
                 }
             ?>
             <div id="returnExpensePast" class="card <?= ($showArt18 && $showArt181 && $remedy==='refund_return') ? '' : 'hidden' ?>" data-art="18(1a)">
-            <div class="card-title"><span class="icon">&#8634;</span><span><?= h($refundCardTitle) ?></span></div>
+            <div class="card-title"><span class="icon">&#8634;</span><span><?= h($airTc6French ? 'Remboursement / retour au premier point de depart (art. 8)' : $refundCardTitle) ?></span></div>
             <?php if ($decisionHint !== ''): ?>
                 <div class="small muted"><?= h($decisionHint) ?></div>
             <?php endif; ?>
@@ -790,8 +798,8 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
                     <strong>Air refund scope (Article 8)</strong>
                     <div class="muted mt4">Angiv om du kraever hele billetten, kun den ubrugte del, eller ogsaa den brugte del hvis rejsen ikke laengere tjente sit formaal.</div>
                 </div>
-                <div class="grid-2 mt8">
-                    <label>Hvad vil du have refunderet?
+                <div class="grid-2 mt8"<?= $airTc6Progressive ? ' data-progressive-group="refund-scope" data-progressive-fields="air_refund_scope" data-progressive-show-if="remedyChoice:refund_return" data-progressive-clear="air_refund_scope"' : '' ?>>
+                    <label><?= $airTc6French ? 'Que souhaitez-vous faire rembourser ?' : 'Hvad vil du have refunderet?' ?>
                         <select name="air_refund_scope">
                             <option value="">Vaelg</option>
                             <option value="full_ticket" <?= $airRefundScope==='full_ticket'?'selected':'' ?>>Hele billetten</option>
@@ -860,9 +868,9 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
                     if ($retOther === '' && $retPref !== '' && $retPref !== 'unknown') { $retOther = $retPref; }
                 }
             ?>
-            <div class="grid-2 mt8" id="refundStationsPast">
+            <div class="grid-2 mt8" id="refundStationsPast"<?= $airTc6Progressive ? ' data-progressive-group="refund-route" data-progressive-fields="a18_from_station_other,a18_return_to_station_other" data-progressive-show-if="remedyChoice:refund_return"' : '' ?>>
                 <?php if ($isTicketless): ?>
-                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $placeLabelCurrent ?>
+                    <label class="station-autocomplete" data-station-select="a18_from_station" data-station-other="a18_from_station_other"><?= $airTc6French ? 'Dans quel aeroport etes-vous ?' : $placeLabelCurrent ?>
                         <select name="a18_from_station" style="display:none;">
                             <option value="other" <?= $fromSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             <option value="unknown" <?= $fromSel==='unknown'?'selected':'' ?>>Ved ikke</option>
@@ -879,7 +887,7 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
                             <div class="small muted mt4">Forslag fra Art.20: <strong><?= h($handoff) ?></strong></div>
                         <?php endif; ?>
                     </label>
-                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other"><?= $placeLabelReturn ?>
+                    <label class="station-autocomplete" data-station-select="a18_return_to_station" data-station-other="a18_return_to_station_other"><?= $airTc6French ? 'Vers quel aeroport devez-vous revenir ?' : $placeLabelReturn ?>
                         <select name="a18_return_to_station" style="display:none;">
                             <option value="other" <?= $retSel==='other'?'selected':'' ?>><?= h($placeOtherLabel) ?></option>
                             <option value="unknown" <?= $retSel==='unknown'?'selected':'' ?>>Ved ikke</option>
@@ -980,7 +988,7 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
                 elseif ($retOther !== '' && $retOther !== 'unknown') { $mapDestRefund = trim((string)$retOther); }
                 if ($mapDestRefund === '') { $mapDestRefund = $depDefault0; }
             ?>
-            <?php if (!($isFerry && $isCompleted)): ?>
+            <?php if (!($isFerry && $isCompleted) && !$airTc6Progressive): ?>
             <div class="card mt12" style="background:#f8f9fb;" data-show-if="remedyChoice:refund_return">
                 <div class="card-title"><span class="icon">MAP</span><span><?= h($mapsCardTitle) ?></span></div>
                 <div class="small muted mt4"><?= h($mapsRefundHelp) ?></div>
@@ -1046,10 +1054,10 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
             </div>
             <?php endif; ?>
 
-            <div class="mt4"><?= h($returnQuestion) ?></div>
-            <label><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
-            <label class="ml8"><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
-            <div class="grid-2 mt8" id="returnExpenseFieldsPast" style="<?= $rtFlag==='yes' ? '' : 'display:none;' ?>">
+            <div class="mt4"<?= $airTc6Progressive ? ' data-progressive-group="return-expense" data-progressive-fields="return_to_origin_expense" data-progressive-show-if="remedyChoice:refund_return" data-progressive-clear="return_to_origin_expense"' : '' ?>><?= h($airTc6French ? 'Avez-vous eu des frais supplementaires pour le reacheminement ou le retour au point de depart ?' : $returnQuestion) ?></div>
+            <label<?= $airTc6Progressive ? ' data-progressive-group="return-expense" data-progressive-show-if="remedyChoice:refund_return"' : '' ?>><input type="radio" name="return_to_origin_expense" value="no" <?= $rtFlag==='no'?'checked':'' ?> /> Nej</label>
+            <label class="ml8"<?= $airTc6Progressive ? ' data-progressive-group="return-expense" data-progressive-show-if="remedyChoice:refund_return"' : '' ?>><input type="radio" name="return_to_origin_expense" value="yes" <?= $rtFlag==='yes'?'checked':'' ?> /> Ja</label>
+            <div class="grid-2 mt8" id="returnExpenseFieldsPast" style="<?= $rtFlag==='yes' ? '' : 'display:none;' ?>"<?= $airTc6Progressive ? ' data-progressive-group="return-expense-details" data-progressive-fields="air_return_expense_items[0][type]" data-progressive-show-if="return_to_origin_expense:yes" data-progressive-clear="air_return_expense_items[0][type]"' : '' ?>>
                 <?php if ($isAir || $isFerry || $isRail): ?>
                     <?php if ($airShortCompletedBackendExpenses || (($ferryUsesBackendExpensePattern || $railUsesBackendExpensePattern) && $isCompleted)): ?>
                     <?php
@@ -2282,6 +2290,80 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
             }
         }
     }
+    function getAirExpenseItemsRoot() {
+        return document.getElementById('airExpenseItemsPast');
+    }
+    function getAirReturnExpenseItemsRoot() {
+        return document.getElementById('airReturnExpenseItemsPast');
+    }
+    function updateAirExpenseRowButtons() {
+        var root = getAirExpenseItemsRoot();
+        if (!root) return;
+        var rows = root.querySelectorAll('[data-air-expense-row]');
+        rows.forEach(function(row){
+            var btn = row.querySelector('.js-air-expense-remove');
+            if (btn) btn.disabled = rows.length <= 1;
+        });
+    }
+    function reindexAirExpenseRows() {
+        var root = getAirExpenseItemsRoot();
+        if (!root) return;
+        root.querySelectorAll('[data-air-expense-row]').forEach(function(row, idx){
+            row.setAttribute('data-air-expense-row', String(idx));
+            row.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field){
+                var name = field.getAttribute('name') || '';
+                field.setAttribute('name', name.replace(/air_reroute_expense_items\[\d+\]/, 'air_reroute_expense_items[' + idx + ']'));
+            });
+        });
+        updateAirExpenseRowButtons();
+    }
+    function addAirExpenseRow() {
+        var root = getAirExpenseItemsRoot();
+        if (!root) return;
+        var rows = root.querySelectorAll('[data-air-expense-row]');
+        var source = rows.length ? rows[rows.length - 1] : null;
+        if (!source) return;
+        var clone = source.cloneNode(true);
+        clone.querySelectorAll('select, input[type="number"], textarea').forEach(function(field){
+            field.value = '';
+        });
+        root.appendChild(clone);
+        reindexAirExpenseRows();
+    }
+    function updateAirReturnRowButtons() {
+        var root = getAirReturnExpenseItemsRoot();
+        if (!root) return;
+        var rows = root.querySelectorAll('[data-air-return-row]');
+        rows.forEach(function(row){
+            var btn = row.querySelector('.js-air-return-remove');
+            if (btn) btn.disabled = rows.length <= 1;
+        });
+    }
+    function reindexAirReturnRows() {
+        var root = getAirReturnExpenseItemsRoot();
+        if (!root) return;
+        root.querySelectorAll('[data-air-return-row]').forEach(function(row, idx){
+            row.setAttribute('data-air-return-row', String(idx));
+            row.querySelectorAll('input[name], select[name]').forEach(function(field){
+                var name = field.getAttribute('name') || '';
+                field.setAttribute('name', name.replace(/air_return_expense_items\[\d+\]/, 'air_return_expense_items[' + idx + ']'));
+            });
+        });
+        updateAirReturnRowButtons();
+    }
+    function addAirReturnRow() {
+        var root = getAirReturnExpenseItemsRoot();
+        if (!root) return;
+        var rows = root.querySelectorAll('[data-air-return-row]');
+        var source = rows.length ? rows[rows.length - 1] : null;
+        if (!source) return;
+        var clone = source.cloneNode(true);
+        clone.querySelectorAll('select, input[type="number"]').forEach(function(field){
+            field.value = '';
+        });
+        root.appendChild(clone);
+        reindexAirReturnRows();
+    }
     function s7Update() {
         function suppressAirOngoingDeniedBoardingBackendOnlyFields() {
             if (!isAirOngoingDeniedBoarding) {
@@ -2454,7 +2536,9 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             // Some blocks are server-rendered with class="hidden" and/or the HTML `hidden` attribute.
             // When we reveal progressively on the client, we must remove both, otherwise the block stays invisible.
             el.classList.remove('hidden');
-            el.hidden = false;
+            if (!(isAirMode && el.matches('[data-progressive-group]') && el.closest('[data-air-progressive-form="remedies"]'))) {
+                el.hidden = false;
+            }
             el.style.display = '';
         }
         function hideBlock(el){
@@ -2476,25 +2560,6 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
             if (disabled) { el.classList.add('disabled-block'); el.setAttribute('aria-disabled','true'); }
             else { el.classList.remove('disabled-block'); el.removeAttribute('aria-disabled'); }
         }
-        function updateAirExpenseRowButtons() {
-            if (!airExpenseItemsPast) return;
-            var rows = airExpenseItemsPast.querySelectorAll('[data-air-expense-row]');
-            rows.forEach(function(row){
-                var btn = row.querySelector('.js-air-expense-remove');
-                if (btn) btn.disabled = rows.length <= 1;
-            });
-        }
-        function reindexAirExpenseRows() {
-            if (!airExpenseItemsPast) return;
-            airExpenseItemsPast.querySelectorAll('[data-air-expense-row]').forEach(function(row, idx){
-                row.setAttribute('data-air-expense-row', String(idx));
-                row.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field){
-                    var name = field.getAttribute('name') || '';
-                    field.setAttribute('name', name.replace(/air_reroute_expense_items\[\d+\]/, 'air_reroute_expense_items[' + idx + ']'));
-                });
-            });
-            updateAirExpenseRowButtons();
-        }
         function hasAirAirportTransferItem() {
             if (!airExpenseItemsPast) return false;
             return Array.prototype.some.call(
@@ -2502,50 +2567,6 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
                 function(el){ return (el.value || '') === 'airport_transfer'; }
             );
         }
-        function addAirExpenseRow() {
-            if (!airExpenseItemsPast) return;
-            var rows = airExpenseItemsPast.querySelectorAll('[data-air-expense-row]');
-            var source = rows.length ? rows[rows.length - 1] : null;
-            if (!source) return;
-            var clone = source.cloneNode(true);
-            clone.querySelectorAll('select, input[type="number"], textarea').forEach(function(field){
-                field.value = '';
-            });
-            airExpenseItemsPast.appendChild(clone);
-            reindexAirExpenseRows();
-        }
-        function updateAirReturnRowButtons() {
-            if (!airReturnExpenseItemsPast) return;
-            var rows = airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]');
-            rows.forEach(function(row){
-                var btn = row.querySelector('.js-air-return-remove');
-                if (btn) btn.disabled = rows.length <= 1;
-            });
-        }
-        function reindexAirReturnRows() {
-            if (!airReturnExpenseItemsPast) return;
-            airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]').forEach(function(row, idx){
-                row.setAttribute('data-air-return-row', String(idx));
-                row.querySelectorAll('input[name], select[name]').forEach(function(field){
-                    var name = field.getAttribute('name') || '';
-                    field.setAttribute('name', name.replace(/air_return_expense_items\[\d+\]/, 'air_return_expense_items[' + idx + ']'));
-                });
-            });
-            updateAirReturnRowButtons();
-        }
-        function addAirReturnRow() {
-            if (!airReturnExpenseItemsPast) return;
-            var rows = airReturnExpenseItemsPast.querySelectorAll('[data-air-return-row]');
-            var source = rows.length ? rows[rows.length - 1] : null;
-            if (!source) return;
-            var clone = source.cloneNode(true);
-            clone.querySelectorAll('select, input[type="number"]').forEach(function(field){
-                field.value = '';
-            });
-            airReturnExpenseItemsPast.appendChild(clone);
-            reindexAirReturnRows();
-        }
-
         // Progressive ask-order: show one question at a time (do not clear previous answers).
         var step2Past = document.getElementById('step2Past');
         var step2Now = document.getElementById('step2Now');
@@ -4416,6 +4437,7 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
 })();
 </script>
 
+<?php if (!($isAir && !empty($isTc6Preview))): ?>
 <!-- Progressive reveal: Advanced toggle (checkbox) + optional details -->
 <div class="mt8">
     <label><input type="checkbox" id="advToggle" /> Vis alt (avanceret)</label>
@@ -4423,11 +4445,12 @@ var returnFieldsNow = document.getElementById('returnExpenseFieldsNow');
 </div>
 <details id="advPast" class="mt8"><summary>Avanceret (afsluttet rejse)</summary><div class="small muted">Supplerende overblik, valgfrit.</div></details>
 <details id="advNow" class="mt8"><summary>Avanceret (igangvaerende rejse)</summary><div class="small muted">Supplerende overblik, valgfrit.</div></details>
+<?php endif; ?>
 <div id="rerouteLive" aria-live="polite" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Init</div>
 
 </div>
 
-<div style="display:flex;gap:8px;align-items:center; margin-top:12px;">
+<div<?= (!empty($isTc6Preview) && $isAir) ? ' class="fps-actions"' : ' style="display:flex;gap:8px;align-items:center; margin-top:12px;"' ?>>
     <?= $this->Html->link('Tilbage', ['action' => $remediesPrevAction], ['class' => 'button', 'style' => 'background:#eee; color:#333;']) ?>
     <?= $this->Form->button('Fortsaet', ['id' => 'remediesSubmitBtn', 'class' => 'button', 'type' => 'submit', 'aria-label' => 'Fortsaet til naeste trin', 'formnovalidate' => true]) ?>
     <?= $this->Html->link('Spring over', ['controller' => 'Flow', 'action' => $nextAction], ['class' => 'button', 'style' => 'background:#f5f5f5; color:#333;', 'title' => 'Gaa til naeste trin uden at gemme aendringer']) ?>

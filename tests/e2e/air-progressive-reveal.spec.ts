@@ -58,6 +58,9 @@ test('AIR Step 1 reveals canonical questions progressively and clears only conne
   });
 
   await openAirStep1(page);
+  await expect(page.locator('.fe-header')).toHaveCount(0);
+  await expect(page.getByText('Flyflowet starter ticketless', { exact: true })).toBeHidden();
+  await expect(page.locator('#ticketlessCard > .section-title')).toBeHidden();
   await expect(group(page, 'departure')).toBeVisible();
   await expect(group(page, 'arrival')).toBeHidden();
   await expect(group(page, 'route-type')).toBeHidden();
@@ -147,7 +150,28 @@ test('AIR incident reveals the selected branch and clears stale cancellation ans
 
   await group(page, 'actions').locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/\/flow\/remedies/);
-
+  await expect(page.locator('.tc6-remedies-wrap .tc6-chip')).toContainText(/5\s*\/\s*7/);
+  await expect(page.locator('.tc6-remedies-wrap h1').first())
+    .toContainText(/Remboursement ou reacheminement|Refund eller ombooking/);
+  await expect(page.locator('body')).not.toContainText('Warning (2)');
+  await expect(page.locator('form[data-air-progressive-form="remedies"]'))
+    .toHaveAttribute('data-air-progressive-bound', 'true');
+  await expect(page.locator('#advToggle')).toHaveCount(0);
+  await page.locator('input[name="remedyChoice"][value="refund_return"]').check();
+  await expect(page.locator('#returnExpensePast')).toBeVisible();
+  await expect(page.locator('[data-progressive-group="refund-scope"]')).toBeVisible();
+  await expect(page.locator('[data-progressive-group="refund-route"]')).toBeHidden();
+  await expect(group(page, 'return-expense')).toBeHidden();
+  await expect(page.locator('[data-progressive-group="actions"]')).toBeHidden();
+  await page.locator('select[name="air_refund_scope"]').selectOption('full_ticket');
+  await expect(page.locator('[data-progressive-group="refund-route"]')).toBeVisible();
+  await page.locator('input[name="a18_from_station_other"]').fill('Brussels Airport');
+  await page.locator('input[name="a18_return_to_station_other"]').fill('Brussels Airport');
+  await expect(group(page, 'return-expense')).toBeVisible();
+  await page.locator('input[name="return_to_origin_expense"][value="no"]').check();
+  await expect(page.locator('.tc6-action-bar button[type="submit"]')).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(pageErrors).toEqual([]);
   await page.goBack();
   await expect(page).toHaveURL(/\/flow\/incident/);
   await expect(page.locator('input[name="incident_main"][value="delay"]')).toBeChecked();
