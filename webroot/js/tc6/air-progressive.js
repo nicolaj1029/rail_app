@@ -83,6 +83,15 @@
     }
   };
 
+  const failOpen = (root) => {
+    root.classList.remove('air-progressive-ready');
+    root.querySelectorAll(groupSelector).forEach((node) => {
+      node.hidden = false;
+      node.removeAttribute('aria-hidden');
+      node.classList.remove('air-progressive-revealing', 'air-progressive-answered');
+    });
+  };
+
   const buildGroups = (root) => {
     const ordered = [];
     const byName = new Map();
@@ -116,10 +125,7 @@
     if (!(root instanceof HTMLFormElement) || root.dataset.airProgressiveBound === 'true') return;
     const groups = buildGroups(root);
     if (!validateContract(root, groups)) {
-      root.querySelectorAll(groupSelector).forEach((node) => {
-        node.hidden = false;
-        node.removeAttribute('aria-hidden');
-      });
+      failOpen(root);
       return;
     }
 
@@ -130,6 +136,7 @@
         group.activeNodes = group.nodes.filter((node) =>
           matchesCondition(root, node.dataset.progressiveShowIf)
         );
+        if (group.activeNodes.length === 0) group.revealed = false;
         group.nodes.filter((node) => !group.activeNodes.includes(node)).forEach((node) => {
           splitList(node.dataset.progressiveClear).forEach((name) => clearField(root, name));
         });
@@ -176,9 +183,18 @@
       initialized = true;
     };
 
-    root.addEventListener('input', () => evaluate(true));
-    root.addEventListener('change', () => evaluate(true));
-    evaluate(false);
+    const safeEvaluate = (animate) => {
+      try {
+        evaluate(animate);
+      } catch (error) {
+        failOpen(root);
+        root.dataset.airProgressiveBound = 'failed-open';
+      }
+    };
+
+    root.addEventListener('input', () => safeEvaluate(true));
+    root.addEventListener('change', () => safeEvaluate(true));
+    safeEvaluate(false);
   };
 
   const boot = () => document.querySelectorAll(rootSelector).forEach(initialize);

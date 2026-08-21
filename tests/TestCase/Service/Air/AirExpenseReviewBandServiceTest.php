@@ -87,6 +87,40 @@ final class AirExpenseReviewBandServiceTest extends TestCase
         parent::tearDown();
     }
 
+    public function testStaticReviewConfigSchemaAndRepresentativeValues(): void
+    {
+        $zones = (array)include CONFIG . 'air' . DS . 'air_airport_cost_zones.php';
+        $bands = (array)include CONFIG . 'air' . DS . 'air_expense_review_bands.php';
+        $allowedZones = ['low', 'mid', 'high', 'hub', 'very_high'];
+
+        $this->assertContains($zones['default_zone'] ?? null, $allowedZones);
+        $this->assertSame('mid', $zones['airport_overrides']['BRU'] ?? null);
+        $this->assertSame('hub', $zones['airport_overrides']['LHR'] ?? null);
+        $this->assertSame('EUR', $bands['currency'] ?? null);
+        $this->assertStringContainsString('Not legal caps', (string)($bands['note'] ?? ''));
+
+        foreach (['assistance_bands_by_airport_zone', 'transport_bands_by_airport_zone'] as $section) {
+            $this->assertSame($allowedZones, array_keys((array)($bands[$section] ?? [])));
+            foreach ((array)$bands[$section] as $categories) {
+                foreach ((array)$categories as $band) {
+                    $this->assertIsNumeric($band['min'] ?? null);
+                    $this->assertIsNumeric($band['max'] ?? null);
+                    $this->assertIsNumeric($band['manual_review_above'] ?? null);
+                    $this->assertLessThanOrEqual($band['max'], $band['min']);
+                    $this->assertGreaterThanOrEqual($band['max'], $band['manual_review_above']);
+                }
+            }
+        }
+
+        foreach ((array)($bands['flight_ticket_bands'] ?? []) as $band) {
+            $this->assertIsNumeric($band['min'] ?? null);
+            $this->assertIsNumeric($band['max'] ?? null);
+            $this->assertIsNumeric($band['manual_review_above'] ?? null);
+            $this->assertLessThanOrEqual($band['max'], $band['min']);
+            $this->assertGreaterThanOrEqual($band['max'], $band['manual_review_above']);
+        }
+    }
+
     public function testAssistanceUsesVeryHighBandAtLax(): void
     {
         $service = $this->buildService();

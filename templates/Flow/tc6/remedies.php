@@ -618,6 +618,7 @@ if ($transportMode === 'ferry' && in_array($remedyPreviewChoice, ['refund_return
 }
 
 $transportModeCss = '';
+$progressiveFallbackHtml = '';
 if ($transportMode === 'ferry') {
     $transportModeCss = '<style>
         .tc6-remedies-wrap > .tc6-subtitle,
@@ -785,10 +786,24 @@ if ($transportMode === 'ferry') {
             box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06) !important;
         }
     </style>';
+    $progressiveFallbackHtml = '<noscript><style>
+        .tc6-remedies-wrap form[data-air-progressive-form="remedies"] #returnExpensePast,
+        .tc6-remedies-wrap form[data-air-progressive-form="remedies"] [data-progressive-group] {
+            display: block !important;
+        }
+        .tc6-remedies-wrap form[data-air-progressive-form="remedies"] #refundStationsPast,
+        .tc6-remedies-wrap form[data-air-progressive-form="remedies"] #returnExpenseFieldsPast {
+            display: grid !important;
+        }
+        .tc6-remedies-wrap form[data-air-progressive-form="remedies"] .tc6-action-bar {
+            display: flex !important;
+        }
+    </style></noscript>';
 }
 
 $content = '<div class="tc6-remedies-wrap">'
     . $transportModeCss
+    . $progressiveFallbackHtml
     . $railRemedyVisibilityCss
     . $ferryRemedyVisibilityCss
     . '<div class="tc6-chip">' . h($translateRemedy('Trin ')) . (int)$currentStep . ' / ' . count($steps) . '</div>'

@@ -137,6 +137,51 @@ class Tc6PresentationReleaseTest extends TestCase
         $this->assertFileExists(WWW_ROOT . 'css' . DS . 'flow-select-steps.css');
     }
 
+    public function testRailAndFerryRemediesKeepLegacyActionsWithoutAirProgressiveMarkup(): void
+    {
+        foreach ([
+            'rail' => 'rail_split',
+            'ferry' => 'ferry_split',
+        ] as $mode => $variant) {
+            $session = $this->flowSession($mode, $variant);
+            $session['flow.flags'] += [
+                'step5_done' => '1',
+                'gate_art18' => '1',
+            ];
+            $session['flow.form']['incident_main'] = 'delay';
+            $session['flow.incident'] = ['main' => 'delay'];
+            if ($mode === 'ferry') {
+                $session['flow.form'] += [
+                    'operator' => 'Example Ferry',
+                    'service_type' => 'passenger_service',
+                    'departure_from_terminal' => 'yes',
+                    'departure_port_in_eu' => 'yes',
+                    'arrival_port_in_eu' => 'yes',
+                    'carrier_is_eu' => 'yes',
+                    'vessel_passenger_capacity' => '200',
+                    'vessel_operational_crew' => '12',
+                    'route_distance_meters' => '10000',
+                    'ferry_departure_disruption_90' => 'yes',
+                    'arrival_delay_minutes' => '130',
+                    'scheduled_journey_duration_minutes' => '300',
+                ];
+            }
+            $this->session($session);
+            $this->get('/flow/remedies');
+
+            $this->assertResponseOk($mode);
+            $body = (string)$this->_response->getBody();
+            $this->assertDoesNotMatchRegularExpression(
+                '/<form\b[^>]*data-air-progressive-form="remedies"/i',
+                $body,
+                $mode
+            );
+            $this->assertStringNotContainsString('data-progressive-group="refund-scope"', $body, $mode);
+            $this->assertStringContainsString('id="remediesSubmitBtn"', $body, $mode);
+            $this->assertStringContainsString('Spring over', $body, $mode);
+        }
+    }
+
     /**
      * @return array<string,mixed>
      */

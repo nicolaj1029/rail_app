@@ -2130,6 +2130,7 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
     const isFerryCompletedFlow = <?= ($isFerry && $isCompleted) ? 'true' : 'false' ?>;
     const isBusMode = <?= $isBus ? 'true' : 'false' ?>;
     const isAirMode = <?= $isAir ? 'true' : 'false' ?>;
+    const isAirTc6Progressive = <?= $airTc6Progressive ? 'true' : 'false' ?>;
     const isRailMode = <?= $isRail ? 'true' : 'false' ?>;
     const isAirCancellation = <?= $isAirCancellation ? 'true' : 'false' ?>;
     const isAirDeniedBoarding = <?= ($isAir && $airIncidentMain === 'denied_boarding') ? 'true' : 'false' ?>;
@@ -2183,6 +2184,20 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
     function clearFields(names) {
         names.forEach(function(name){ clearField(name); });
     }
+    function clearFieldsWithin(root) {
+        if (!root) return;
+        root.querySelectorAll('[name]').forEach(function(el) {
+            if (el.type === 'radio' || el.type === 'checkbox') {
+                el.checked = false;
+            } else if (el.tagName === 'SELECT') {
+                el.value = '';
+                if (el.value !== '') { el.selectedIndex = 0; }
+            } else {
+                el.value = '';
+            }
+            if (typeof el.setCustomValidity === 'function') { el.setCustomValidity(''); }
+        });
+    }
     function getCurrentFieldValue(name) {
         var checked = document.querySelector('input[name="' + name + '"]:checked');
         if (checked) return checked.value || '';
@@ -2210,6 +2225,11 @@ $ferrySolutionTiming = match ((string)($form['ferry_first_usable_solution_timing
             }
             if (vRem !== 'refund_return') {
                 clearFields(['a18_return_to_station','a18_return_to_station_other','air_refund_scope','ferry_refund_scope']);
+                if (isAirTc6Progressive) {
+                    // The AIR TC6 refund card owns its route, return decision and expense values.
+                    // Clear only that card so independent incident/journey answers remain intact.
+                    clearFieldsWithin(document.getElementById('returnExpensePast'));
+                }
             }
         }
         if (name === 'self_purchased_new_ticket' || name === 'ferry_self_arranged_solution' || name === 'bus_self_arranged_solution' || name === 'air_self_arranged_reroute') {

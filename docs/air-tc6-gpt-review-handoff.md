@@ -49,9 +49,19 @@ wholesale-copied. The candidate lives in the clean worktree
   back/next action bar.
 - Moved AIR expense-row helper functions to stable script scope to eliminate the
   runtime `updateAirExpenseRowButtons is not defined` failure.
+- Clear every refund-only value when the user changes away from the refund
+  branch, while preserving independent incident and journey answers.
+- Reset inactive progressive groups so returning to a branch resumes the
+  intended question order, and fail open if the focused module cannot validate
+  or evaluate its markup.
+- Added an AIR-only `<noscript>` fallback on remedies so critical fields and the
+  canonical action remain available with JavaScript disabled.
 - Added the missing static, non-secret review tables:
   `config/air/air_airport_cost_zones.php` and
   `config/air/air_expense_review_bands.php`.
+- These tables contain substantive operational review thresholds in EUR and
+  airport-zone assignments. They influence estimate/manual-review guidance,
+  but are explicitly not statutory caps and do not determine legal entitlement.
 - Extended the French AIR remedies presentation and browser assertions.
 
 ## Scope and architecture
@@ -106,11 +116,19 @@ git diff --check
 
 Latest local results on this candidate:
 
-- PHPUnit: 19 tests, 99 assertions, all passing.
-- Playwright: 8 tests, all passing in 20.0 seconds.
-- Measured progressive reveal update: 0.90 ms.
+- PHPUnit: 21 tests, 410 assertions, all passing.
+- Main Playwright release suite: 8 tests, all passing in 29.7 seconds.
+- Supplemental AIR Step 1 airport suite: 4 tests, all passing in 21.2 seconds.
+- Measured progressive reveal update: 2.00 ms.
 - PHP syntax checks passed for all modified PHP/config files.
+- JavaScript syntax check passed for the modified progressive module.
 - `git diff --check` passed.
+
+The browser suite also proves that switching away from refund clears the
+hidden refund scope, airport, return-expense and expense-type values; that the
+remedies form remains usable without JavaScript; that the canonical action is
+reachable at 390 x 844 without horizontal overflow; and that browser
+`pageerror` plus AIR-progressive console-error counts are both zero.
 
 The live AIR-provider canary was run for the first candidate commit. It was not
 repeated for this follow-up because no provider or integration code changed.

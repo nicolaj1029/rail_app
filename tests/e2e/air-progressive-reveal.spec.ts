@@ -114,9 +114,16 @@ test('AIR Step 1 reveals canonical questions progressively and clears only conne
   console.log(`AIR_PROGRESSIVE_REVEAL_MS ${revealLatencyMs.toFixed(2)}`);
 });
 
-test('AIR incident reveals the selected branch and clears stale cancellation answers', async ({ page }) => {
+test('AIR incident and remedies reveal progressively, clear stale values and remain usable without JS', async ({ page, browser }) => {
+  test.setTimeout(90_000);
   const pageErrors: string[] = [];
+  const progressiveConsoleErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error' && /air.progressive|updateAirExpenseRowButtons/i.test(message.text())) {
+      progressiveConsoleErrors.push(message.text());
+    }
+  });
   await reachIncident(page);
 
   await expect(page.locator('form[data-air-progressive-form="incident"]'))
@@ -157,6 +164,9 @@ test('AIR incident reveals the selected branch and clears stale cancellation ans
   await expect(page.locator('form[data-air-progressive-form="remedies"]'))
     .toHaveAttribute('data-air-progressive-bound', 'true');
   await expect(page.locator('#advToggle')).toHaveCount(0);
+  await expect(page.locator('#airLiveEstimate')).toHaveCount(1);
+  await expect(page.locator('#remediesSubmitBtn')).toHaveCount(0);
+  await expect(page.getByText(/Google Maps/i)).toHaveCount(0);
   await page.locator('input[name="remedyChoice"][value="refund_return"]').check();
   await expect(page.locator('#returnExpensePast')).toBeVisible();
   await expect(page.locator('[data-progressive-group="refund-scope"]')).toBeVisible();
@@ -166,12 +176,62 @@ test('AIR incident reveals the selected branch and clears stale cancellation ans
   await page.locator('select[name="air_refund_scope"]').selectOption('full_ticket');
   await expect(page.locator('[data-progressive-group="refund-route"]')).toBeVisible();
   await page.locator('input[name="a18_from_station_other"]').fill('Brussels Airport');
+  await page.keyboard.press('Escape');
   await page.locator('input[name="a18_return_to_station_other"]').fill('Brussels Airport');
+  await page.keyboard.press('Escape');
   await expect(group(page, 'return-expense')).toBeVisible();
-  await page.locator('input[name="return_to_origin_expense"][value="no"]').check();
+  await page.locator('input[name="return_to_origin_expense"][value="yes"]').check({ force: true });
+  await expect(group(page, 'return-expense-details')).toBeVisible();
+  await page.locator('select[name="air_return_expense_items[0][type]"]').selectOption({ index: 1 });
+
+  await page.locator('input[name="remedyChoice"][value="no_refund_continue"]').check();
+  await expect(group(page, 'refund-scope')).toBeHidden();
+  await expect(group(page, 'refund-route')).toBeHidden();
+  await expect(group(page, 'return-expense')).toBeHidden();
+  await expect(page.locator('select[name="air_refund_scope"]')).toHaveValue('');
+  await expect(page.locator('input[name="a18_from_station_other"]')).toHaveValue('');
+  await expect(page.locator('input[name="a18_return_to_station_other"]')).toHaveValue('');
+  await expect(page.locator('input[name="return_to_origin_expense"]:checked')).toHaveCount(0);
+  await expect(page.locator('select[name="air_return_expense_items[0][type]"]')).toHaveValue('');
+
+  await page.locator('input[name="remedyChoice"][value="refund_return"]').check();
+  await expect(group(page, 'refund-scope')).toBeVisible();
+  await expect(group(page, 'refund-route')).toBeHidden();
+  await page.locator('select[name="air_refund_scope"]').selectOption('full_ticket');
+  await page.locator('input[name="a18_from_station_other"]').fill('Brussels Airport');
+  await page.keyboard.press('Escape');
+  await page.locator('input[name="a18_return_to_station_other"]').fill('Brussels Airport');
+  await page.keyboard.press('Escape');
+  await page.locator('input[name="return_to_origin_expense"][value="no"]').check({ force: true });
   await expect(page.locator('.tc6-action-bar button[type="submit"]')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.tc6-action-bar button[type="submit"]').scrollIntoViewIfNeeded();
+  await expect(page.locator('.tc6-action-bar button[type="submit"]')).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+
+  const noJsContext = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+    storageState: await page.context().storageState(),
+  });
+  const noJsPage = await noJsContext.newPage();
+  try {
+    await noJsPage.goto(appUrl('/flow/remedies?tc6=1&lang=fr'));
+    await expect(noJsPage.locator('form[data-air-progressive-form="remedies"]')).toBeVisible();
+    await expect(noJsPage.locator('[data-progressive-group="remedy-choice"]')).toBeVisible();
+    await expect(noJsPage.locator('[data-progressive-group="refund-scope"]')).toBeVisible();
+    await expect(noJsPage.locator('[data-progressive-group="refund-route"]')).toBeVisible();
+    await expect(noJsPage.locator('[data-progressive-group="return-expense"]').first()).toBeVisible();
+    await expect(noJsPage.locator('[data-progressive-group="return-expense-details"]')).toBeVisible();
+    await expect(noJsPage.locator('.tc6-action-bar button[type="submit"]')).toBeVisible();
+  } finally {
+    await noJsContext.close();
+  }
+
   await page.waitForTimeout(250);
   expect(pageErrors).toEqual([]);
+  expect(progressiveConsoleErrors).toEqual([]);
   await page.goBack();
   await expect(page).toHaveURL(/\/flow\/incident/);
   await expect(page.locator('input[name="incident_main"][value="delay"]')).toBeChecked();
@@ -221,6 +281,8 @@ test('AIR progressive initialization reveals a server-error group and its predec
 });
 
 test('RAIL and FERRY never activate AIR progressive forms', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   for (const [landing, entry] of [
     ['/tog-ny', '/flow/rail/completed?tc6=1'],
     ['/faerge-ny', '/flow/ferry/completed?tc6=1'],
@@ -228,5 +290,7 @@ test('RAIL and FERRY never activate AIR progressive forms', async ({ page }) => 
     await page.goto(appUrl(landing));
     await page.locator(`a[href*="${entry}"]`).first().click();
     await expect(page.locator('[data-air-progressive-form]')).toHaveCount(0);
+    await expect(page.locator('[data-airport-preselector]')).toHaveCount(0);
   }
+  expect(pageErrors).toEqual([]);
 });
